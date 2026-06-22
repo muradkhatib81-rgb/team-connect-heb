@@ -1,0 +1,79 @@
+export type AppRole =
+  | "main_admin"
+  | "branch_manager"
+  | "assistant_manager"
+  | "department_manager"
+  | "employee";
+
+export type Department =
+  | "dairy"
+  | "meat"
+  | "produce"
+  | "cashiers"
+  | "warehouse"
+  | "cleaning"
+  | "pricing"
+  | "general";
+
+export const ROLE_LABELS: Record<AppRole, string> = {
+  main_admin: "מנהל ראשי",
+  branch_manager: "מנהל סניף",
+  assistant_manager: "סגן מנהל",
+  department_manager: "אחראי מחלקה",
+  employee: "עובד",
+};
+
+export const ROLE_OPTIONS: AppRole[] = [
+  "main_admin",
+  "branch_manager",
+  "assistant_manager",
+  "department_manager",
+  "employee",
+];
+
+export const DEPARTMENT_LABELS: Record<Department, string> = {
+  dairy: "חלב",
+  meat: "בשר",
+  produce: "ירקות ופירות",
+  cashiers: "קופות",
+  warehouse: "מחסן",
+  cleaning: "ניקיון",
+  pricing: "מחירים",
+  general: "כללי",
+};
+
+export const DEPARTMENT_OPTIONS: Department[] = [
+  "dairy",
+  "meat",
+  "produce",
+  "cashiers",
+  "warehouse",
+  "cleaning",
+  "pricing",
+  "general",
+];
+
+export const ADMIN_ROLES: AppRole[] = ["main_admin", "branch_manager", "assistant_manager"];
+
+export function isAdmin(roles: AppRole[]): boolean {
+  return roles.some((r) => ADMIN_ROLES.includes(r));
+}
+
+export function canManageUsers(roles: AppRole[]): boolean {
+  return roles.includes("main_admin");
+}
+
+export function highestRole(roles: AppRole[]): AppRole | null {
+  const priority: AppRole[] = [
+    "main_admin",
+    "branch_manager",
+    "assistant_manager",
+    "department_manager",
+    "employee",
+  ];
+  for (const r of priority) if (roles.includes(r)) return r;
+  return null;
+}
+
+export const BRANCH_NAME = "רמי לוי שער בנימין";
+export const APP_NAME = "מערכת ניהול עובדים";
