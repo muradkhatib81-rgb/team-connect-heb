@@ -7,8 +7,21 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { toast } from "sonner";
-import { APP_NAME, BRANCH_NAME } from "@/lib/constants";
+import {
+  APP_NAME,
+  BRANCH_NAME,
+  DEPARTMENT_LABELS,
+  DEPARTMENT_OPTIONS,
+  type Department,
+} from "@/lib/constants";
 import { Store, Loader2 } from "lucide-react";
 
 const searchSchema = z.object({ redirect: z.string().optional() });
@@ -18,6 +31,13 @@ export const Route = createFileRoute("/auth")({
   head: () => ({ meta: [{ title: `התחברות | ${APP_NAME}` }] }),
   component: AuthPage,
 });
+
+// Synthetic email domain — Supabase Auth requires an email, but employees only see their ID number.
+const EMPLOYEE_EMAIL_DOMAIN = "employees.ramilevy.local";
+const idEmail = (idNumber: string) =>
+  `${idNumber.trim()}@${EMPLOYEE_EMAIL_DOMAIN}`;
+
+const ID_REGEX = /^\d{5,15}$/;
 
 function AuthPage() {
   const navigate = useNavigate();
@@ -35,17 +55,28 @@ function AuthPage() {
   async function handleSignIn(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     const form = new FormData(e.currentTarget);
-    const email = String(form.get("email") || "").trim();
+    const idNumber = String(form.get("id_number") || "").trim();
     const password = String(form.get("password") || "");
-    if (!email || !password) {
-      toast.error("יש למלא אימייל וסיסמה");
+    if (!idNumber || !password) {
+      toast.error("יש למלא מספר זהות וסיסמה");
+      return;
+    }
+    if (!ID_REGEX.test(idNumber)) {
+      toast.error("מספר זהות לא תקין");
       return;
     }
     setLoading(true);
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    const { error } = await supabase.auth.signInWithPassword({
+      email: idEmail(idNumber),
+      password,
+    });
     setLoading(false);
     if (error) {
-      toast.error(error.message === "Invalid login credentials" ? "פרטי התחברות שגויים" : error.message);
+      toast.error(
+        error.message === "Invalid login credentials"
+          ? "מספר זהות או סיסמה שגויים"
+          : error.message,
+      );
       return;
     }
     toast.success("התחברת בהצלחה");
@@ -55,29 +86,49 @@ function AuthPage() {
   async function handleSignUp(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     const form = new FormData(e.currentTarget);
-    const email = String(form.get("email") || "").trim();
-    const password = String(form.get("password") || "");
     const fullName = String(form.get("full_name") || "").trim();
-    if (!email || !password || !fullName) {
-      toast.error("יש למלא את כל השדות");
+    const idNumber = String(form.get("id_number") || "").trim();
+    const department = String(form.get("department") || "general") as Department;
+    const jobTitle = String(form.get("job_title") || "").trim();
+    const phone = String(form.get("phone") || "").trim();
+    const password = String(form.get("password") || "");
+
+    if (!fullName || !idNumber || !password) {
+      toast.error("שם, מספר זהות וסיסמה הם שדות חובה");
+      return;
+    }
+    if (!ID_REGEX.test(idNumber)) {
+      toast.error("מספר זהות חייב להכיל ספרות בלבד (5–15 ספרות)");
       return;
     }
     if (password.length < 6) {
       toast.error("הסיסמה חייבת להכיל לפחות 6 תווים");
       return;
     }
+
     setLoading(true);
     const { error } = await supabase.auth.signUp({
-      email,
+      email: idEmail(idNumber),
       password,
       options: {
         emailRedirectTo: `${window.location.origin}/dashboard`,
-        data: { full_name: fullName },
+        data: {
+          full_name: fullName,
+          id_number: idNumber,
+          department,
+          job_title: jobTitle,
+          phone,
+        },
       },
     });
     setLoading(false);
     if (error) {
-      toast.error(error.message);
+      const msg = error.message.toLowerCase();
+      if (msg.includes("already") || msg.includes("registered")) {
+        toast.error("מספר זהות זה כבר רשום במערכת");
+      } else {
+        toast.error(error.message);
+      }
       return;
     }
     toast.success("החשבון נוצר. ניתן להתחבר.");
@@ -109,18 +160,35 @@ function AuthPage() {
             <Tabs defaultValue="signin" className="w-full">
               <TabsList className="grid w-full grid-cols-2 mb-6">
                 <TabsTrigger value="signin">התחברות</TabsTrigger>
-                <TabsTrigger value="signup">חשבון חדש</TabsTrigger>
+                <TabsTrigger value="signup">עובד חדש</TabsTrigger>
               </TabsList>
 
               <TabsContent value="signin">
                 <form onSubmit={handleSignIn} className="space-y-4">
                   <div className="space-y-2">
-                    <Label htmlFor="email-in">אימייל</Label>
-                    <Input id="email-in" name="email" type="email" autoComplete="email" required dir="ltr" />
+                    <Label htmlFor="id-in">מספר זהות</Label>
+                    <Input
+                      id="id-in"
+                      name="id_number"
+                      type="text"
+                      inputMode="numeric"
+                      pattern="\d*"
+                      autoComplete="username"
+                      maxLength={15}
+                      required
+                      dir="ltr"
+                    />
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="pw-in">סיסמה</Label>
-                    <Input id="pw-in" name="password" type="password" autoComplete="current-password" required dir="ltr" />
+                    <Input
+                      id="pw-in"
+                      name="password"
+                      type="password"
+                      autoComplete="current-password"
+                      required
+                      dir="ltr"
+                    />
                   </div>
                   <Button type="submit" className="w-full" disabled={loading} size="lg">
                     {loading ? <Loader2 className="size-4 animate-spin" /> : "התחבר"}
@@ -131,22 +199,67 @@ function AuthPage() {
               <TabsContent value="signup">
                 <form onSubmit={handleSignUp} className="space-y-4">
                   <div className="space-y-2">
-                    <Label htmlFor="name-up">שם מלא</Label>
-                    <Input id="name-up" name="full_name" required />
+                    <Label htmlFor="name-up">שם עובד</Label>
+                    <Input id="name-up" name="full_name" required maxLength={100} />
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-2">
+                      <Label htmlFor="id-up">מספר זהות</Label>
+                      <Input
+                        id="id-up"
+                        name="id_number"
+                        type="text"
+                        inputMode="numeric"
+                        pattern="\d*"
+                        maxLength={15}
+                        required
+                        dir="ltr"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="phone-up">טלפון</Label>
+                      <Input
+                        id="phone-up"
+                        name="phone"
+                        type="tel"
+                        inputMode="tel"
+                        maxLength={20}
+                        dir="ltr"
+                      />
+                    </div>
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="email-up">אימייל</Label>
-                    <Input id="email-up" name="email" type="email" autoComplete="email" required dir="ltr" />
+                    <Label htmlFor="dept-up">מחלקה</Label>
+                    <Select name="department" defaultValue="general">
+                      <SelectTrigger id="dept-up"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        {DEPARTMENT_OPTIONS.map((d) => (
+                          <SelectItem key={d} value={d}>{DEPARTMENT_LABELS[d]}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="job-up">תפקיד</Label>
+                    <Input id="job-up" name="job_title" maxLength={80} placeholder="לדוגמה: קופאי, סדרן" />
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="pw-up">סיסמה</Label>
-                    <Input id="pw-up" name="password" type="password" autoComplete="new-password" minLength={6} required dir="ltr" />
+                    <Input
+                      id="pw-up"
+                      name="password"
+                      type="password"
+                      autoComplete="new-password"
+                      minLength={6}
+                      required
+                      dir="ltr"
+                    />
                   </div>
                   <Button type="submit" className="w-full" disabled={loading} size="lg">
                     {loading ? <Loader2 className="size-4 animate-spin" /> : "צור חשבון"}
                   </Button>
                   <p className="text-xs text-muted-foreground text-center">
-                    המשתמש הראשון שיירשם הופך אוטומטית למנהל ראשי.
+                    מספר הזהות הוא מזהה ההתחברות שלך — שמור עליו.
                   </p>
                 </form>
               </TabsContent>
