@@ -190,7 +190,105 @@ function EmployeesPage() {
           onClose={() => setEditing(null)}
         />
       )}
+
+      {creating && isMainAdmin && (
+        <CreateEmployeeDialog onClose={() => setCreating(false)} />
+      )}
     </div>
+  );
+}
+
+function CreateEmployeeDialog({ onClose }: { onClose: () => void }) {
+  const qc = useQueryClient();
+  const createFn = useServerFn(createEmployee);
+  const [form, setForm] = useState({
+    full_name: "",
+    id_number: "",
+    department: "general" as Department,
+    job_title: "",
+    phone: "",
+    password: "",
+    role: "employee" as AppRole,
+  });
+  const mutation = useMutation({
+    mutationFn: async () => {
+      if (!/^\d{5,15}$/.test(form.id_number)) throw new Error("מספר זהות חייב להכיל 5–15 ספרות");
+      if (form.password.length < 6) throw new Error("סיסמה ראשונית של 6 תווים לפחות");
+      if (!form.full_name.trim()) throw new Error("יש למלא שם עובד");
+      await createFn({ data: form });
+    },
+    onSuccess: () => {
+      toast.success("העובד נוצר. סיסמה ראשונית — העובד יחויב להחליפה בכניסה הראשונה.");
+      qc.invalidateQueries({ queryKey: ["employees"] });
+      qc.invalidateQueries({ queryKey: ["all-roles"] });
+      qc.invalidateQueries({ queryKey: ["dashboard", "stats"] });
+      onClose();
+    },
+    onError: (e: any) => toast.error(e?.message ?? "שגיאה ביצירת עובד"),
+  });
+
+  return (
+    <Dialog open onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="max-w-lg">
+        <DialogHeader>
+          <DialogTitle>הוספת עובד חדש</DialogTitle>
+        </DialogHeader>
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            mutation.mutate();
+          }}
+          className="space-y-4"
+        >
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <Field label="שם עובד">
+              <Input value={form.full_name} onChange={(e) => setForm({ ...form, full_name: e.target.value })} required maxLength={100} />
+            </Field>
+            <Field label="מספר זהות">
+              <Input value={form.id_number} onChange={(e) => setForm({ ...form, id_number: e.target.value })} required dir="ltr" inputMode="numeric" pattern="\d*" maxLength={15} />
+            </Field>
+            <Field label="מחלקה">
+              <Select value={form.department} onValueChange={(v) => setForm({ ...form, department: v as Department })}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {DEPARTMENT_OPTIONS.map((d) => (
+                    <SelectItem key={d} value={d}>{DEPARTMENT_LABELS[d]}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </Field>
+            <Field label="תפקיד (טקסט חופשי)">
+              <Input value={form.job_title} onChange={(e) => setForm({ ...form, job_title: e.target.value })} maxLength={80} placeholder="לדוגמה: קופאי" />
+            </Field>
+            <Field label="טלפון">
+              <Input value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} dir="ltr" maxLength={20} />
+            </Field>
+            <Field label="הרשאה">
+              <Select value={form.role} onValueChange={(v) => setForm({ ...form, role: v as AppRole })}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {ROLE_OPTIONS.map((r) => (
+                    <SelectItem key={r} value={r}>{ROLE_LABELS[r]}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </Field>
+            <Field label="סיסמה ראשונית">
+              <Input type="password" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} required minLength={6} dir="ltr" />
+            </Field>
+          </div>
+          <p className="text-xs text-muted-foreground">
+            העובד יחויב להחליף את הסיסמה הראשונית בכניסה הראשונה למערכת.
+          </p>
+          <DialogFooter className="gap-2 sm:gap-2">
+            <Button type="button" variant="outline" onClick={onClose}>ביטול</Button>
+            <Button type="submit" disabled={mutation.isPending}>
+              {mutation.isPending ? <Loader2 className="size-4 animate-spin" /> : "צור עובד"}
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
   );
 }
 
