@@ -6,37 +6,21 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card } from "@/components/ui/card";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { toast } from "sonner";
-import {
-  APP_NAME,
-  BRANCH_NAME,
-  DEPARTMENT_LABELS,
-  DEPARTMENT_OPTIONS,
-  type Department,
-} from "@/lib/constants";
+import { APP_NAME, BRANCH_NAME } from "@/lib/constants";
 import { Store, Loader2 } from "lucide-react";
 
 const searchSchema = z.object({ redirect: z.string().optional() });
 
 export const Route = createFileRoute("/auth")({
+  ssr: false,
   validateSearch: searchSchema,
   head: () => ({ meta: [{ title: `התחברות | ${APP_NAME}` }] }),
   component: AuthPage,
 });
 
-// Synthetic email domain — Supabase Auth requires an email, but employees only see their ID number.
 const EMPLOYEE_EMAIL_DOMAIN = "employees.ramilevy.local";
-const idEmail = (idNumber: string) =>
-  `${idNumber.trim()}@${EMPLOYEE_EMAIL_DOMAIN}`;
-
+const idEmail = (idNumber: string) => `${idNumber.trim()}@${EMPLOYEE_EMAIL_DOMAIN}`;
 const ID_REGEX = /^\d{5,15}$/;
 
 function AuthPage() {
@@ -44,12 +28,28 @@ function AuthPage() {
   const search = useSearch({ from: "/auth" });
   const [loading, setLoading] = useState(false);
   const [checking, setChecking] = useState(true);
+  const [hasUsers, setHasUsers] = useState<boolean | null>(null);
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data }) => {
-      if (data.session) navigate({ to: (search.redirect as any) || "/dashboard", replace: true });
-      else setChecking(false);
-    });
+    let cancelled = false;
+    (async () => {
+      const { data } = await supabase.auth.getSession();
+      if (cancelled) return;
+      if (data.session) {
+        navigate({ to: (search.redirect as any) || "/dashboard", replace: true });
+        return;
+      }
+      // Check if any user exists — if none, allow bootstrapping the first main admin.
+      const { count } = await supabase
+        .from("profiles")
+        .select("id", { count: "exact", head: true });
+      if (cancelled) return;
+      setHasUsers((count ?? 0) > 0);
+      setChecking(false);
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, [navigate, search.redirect]);
 
   async function handleSignIn(e: React.FormEvent<HTMLFormElement>) {
@@ -83,18 +83,14 @@ function AuthPage() {
     navigate({ to: (search.redirect as any) || "/dashboard", replace: true });
   }
 
-  async function handleSignUp(e: React.FormEvent<HTMLFormElement>) {
+  async function handleBootstrap(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     const form = new FormData(e.currentTarget);
     const fullName = String(form.get("full_name") || "").trim();
     const idNumber = String(form.get("id_number") || "").trim();
-    const department = String(form.get("department") || "general") as Department;
-    const jobTitle = String(form.get("job_title") || "").trim();
-    const phone = String(form.get("phone") || "").trim();
     const password = String(form.get("password") || "");
-
     if (!fullName || !idNumber || !password) {
-      toast.error("שם, מספר זהות וסיסמה הם שדות חובה");
+      toast.error("יש למלא את כל השדות");
       return;
     }
     if (!ID_REGEX.test(idNumber)) {
@@ -105,33 +101,35 @@ function AuthPage() {
       toast.error("הסיסמה חייבת להכיל לפחות 6 תווים");
       return;
     }
-
     setLoading(true);
     const { error } = await supabase.auth.signUp({
       email: idEmail(idNumber),
       password,
       options: {
-        emailRedirectTo: `${window.location.origin}/dashboard`,
         data: {
           full_name: fullName,
           id_number: idNumber,
-          department,
-          job_title: jobTitle,
-          phone,
+          department: "general",
         },
       },
     });
-    setLoading(false);
     if (error) {
-      const msg = error.message.toLowerCase();
-      if (msg.includes("already") || msg.includes("registered")) {
-        toast.error("מספר זהות זה כבר רשום במערכת");
-      } else {
-        toast.error(error.message);
-      }
+      setLoading(false);
+      toast.error(error.message);
       return;
     }
-    toast.success("החשבון נוצר. ניתן להתחבר.");
+    // Auto-confirm is on — sign in immediately.
+    const { error: signInErr } = await supabase.auth.signInWithPassword({
+      email: idEmail(idNumber),
+      password,
+    });
+    setLoading(false);
+    if (signInErr) {
+      toast.error(signInErr.message);
+      return;
+    }
+    toast.success("נוצר מנהל ראשי. ברוך הבא!");
+    navigate({ to: "/dashboard", replace: true });
   }
 
   if (checking) {
@@ -141,6 +139,8 @@ function AuthPage() {
       </div>
     );
   }
+
+  const showBootstrap = hasUsers === false;
 
   return (
     <div className="min-h-screen flex flex-col bg-background">
@@ -157,91 +157,31 @@ function AuthPage() {
           </div>
 
           <Card className="card-elevated p-6">
-            <Tabs defaultValue="signin" className="w-full">
-              <TabsList className="grid w-full grid-cols-2 mb-6">
-                <TabsTrigger value="signin">התחברות</TabsTrigger>
-                <TabsTrigger value="signup">עובד חדש</TabsTrigger>
-              </TabsList>
-
-              <TabsContent value="signin">
-                <form onSubmit={handleSignIn} className="space-y-4">
+            {showBootstrap ? (
+              <>
+                <div className="mb-5 text-center">
+                  <h2 className="text-lg font-semibold">הקמת מנהל ראשי</h2>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    אין משתמשים במערכת. צור את חשבון המנהל הראשי הראשון.
+                  </p>
+                </div>
+                <form onSubmit={handleBootstrap} className="space-y-4">
                   <div className="space-y-2">
-                    <Label htmlFor="id-in">מספר זהות</Label>
+                    <Label htmlFor="name-up">שם מלא</Label>
+                    <Input id="name-up" name="full_name" required maxLength={100} />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="id-up">מספר זהות</Label>
                     <Input
-                      id="id-in"
+                      id="id-up"
                       name="id_number"
                       type="text"
                       inputMode="numeric"
                       pattern="\d*"
-                      autoComplete="username"
                       maxLength={15}
                       required
                       dir="ltr"
                     />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="pw-in">סיסמה</Label>
-                    <Input
-                      id="pw-in"
-                      name="password"
-                      type="password"
-                      autoComplete="current-password"
-                      required
-                      dir="ltr"
-                    />
-                  </div>
-                  <Button type="submit" className="w-full" disabled={loading} size="lg">
-                    {loading ? <Loader2 className="size-4 animate-spin" /> : "התחבר"}
-                  </Button>
-                </form>
-              </TabsContent>
-
-              <TabsContent value="signup">
-                <form onSubmit={handleSignUp} className="space-y-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="name-up">שם עובד</Label>
-                    <Input id="name-up" name="full_name" required maxLength={100} />
-                  </div>
-                  <div className="grid grid-cols-2 gap-3">
-                    <div className="space-y-2">
-                      <Label htmlFor="id-up">מספר זהות</Label>
-                      <Input
-                        id="id-up"
-                        name="id_number"
-                        type="text"
-                        inputMode="numeric"
-                        pattern="\d*"
-                        maxLength={15}
-                        required
-                        dir="ltr"
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="phone-up">טלפון</Label>
-                      <Input
-                        id="phone-up"
-                        name="phone"
-                        type="tel"
-                        inputMode="tel"
-                        maxLength={20}
-                        dir="ltr"
-                      />
-                    </div>
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="dept-up">מחלקה</Label>
-                    <Select name="department" defaultValue="general">
-                      <SelectTrigger id="dept-up"><SelectValue /></SelectTrigger>
-                      <SelectContent>
-                        {DEPARTMENT_OPTIONS.map((d) => (
-                          <SelectItem key={d} value={d}>{DEPARTMENT_LABELS[d]}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="job-up">תפקיד</Label>
-                    <Input id="job-up" name="job_title" maxLength={80} placeholder="לדוגמה: קופאי, סדרן" />
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="pw-up">סיסמה</Label>
@@ -256,14 +196,45 @@ function AuthPage() {
                     />
                   </div>
                   <Button type="submit" className="w-full" disabled={loading} size="lg">
-                    {loading ? <Loader2 className="size-4 animate-spin" /> : "צור חשבון"}
+                    {loading ? <Loader2 className="size-4 animate-spin" /> : "צור מנהל ראשי"}
                   </Button>
-                  <p className="text-xs text-muted-foreground text-center">
-                    מספר הזהות הוא מזהה ההתחברות שלך — שמור עליו.
-                  </p>
                 </form>
-              </TabsContent>
-            </Tabs>
+              </>
+            ) : (
+              <form onSubmit={handleSignIn} className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="id-in">מספר זהות</Label>
+                  <Input
+                    id="id-in"
+                    name="id_number"
+                    type="text"
+                    inputMode="numeric"
+                    pattern="\d*"
+                    autoComplete="username"
+                    maxLength={15}
+                    required
+                    dir="ltr"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="pw-in">סיסמה</Label>
+                  <Input
+                    id="pw-in"
+                    name="password"
+                    type="password"
+                    autoComplete="current-password"
+                    required
+                    dir="ltr"
+                  />
+                </div>
+                <Button type="submit" className="w-full" disabled={loading} size="lg">
+                  {loading ? <Loader2 className="size-4 animate-spin" /> : "התחבר"}
+                </Button>
+                <p className="text-xs text-muted-foreground text-center pt-2">
+                  אין לך חשבון? פנה למנהל הראשי לקבלת פרטי גישה.
+                </p>
+              </form>
+            )}
           </Card>
 
           <p className="text-xs text-muted-foreground text-center mt-6">

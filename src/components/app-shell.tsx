@@ -1,5 +1,5 @@
 import { Link, useNavigate, useRouterState } from "@tanstack/react-router";
-import { useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import {
   LayoutDashboard,
   Users,
@@ -41,6 +41,15 @@ export function AppShell({ children }: { children: ReactNode }) {
   const navigate = useNavigate();
   const qc = useQueryClient();
   const pathname = useRouterState({ select: (s) => s.location.pathname });
+
+  useEffect(() => {
+    if (
+      profile?.must_change_password &&
+      pathname !== "/change-password"
+    ) {
+      navigate({ to: "/change-password", replace: true });
+    }
+  }, [profile?.must_change_password, pathname, navigate]);
 
   if (isLoading || !profile) {
     return (

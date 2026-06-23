@@ -23,6 +23,7 @@ export type Database = {
           id_number: string | null
           is_active: boolean
           job_title: string | null
+          must_change_password: boolean
           phone: string | null
           updated_at: string
         }
@@ -34,6 +35,7 @@ export type Database = {
           id_number?: string | null
           is_active?: boolean
           job_title?: string | null
+          must_change_password?: boolean
           phone?: string | null
           updated_at?: string
         }
@@ -45,6 +47,7 @@ export type Database = {
           id_number?: string | null
           is_active?: boolean
           job_title?: string | null
+          must_change_password?: boolean
           phone?: string | null
           updated_at?: string
         }
