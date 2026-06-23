@@ -12,6 +12,7 @@ export interface AuthProfile {
   job_title: string | null;
   phone: string | null;
   is_active: boolean;
+  must_change_password: boolean;
   roles: AppRole[];
 }
 
@@ -34,6 +35,7 @@ async function fetchSessionAndProfile(): Promise<AuthProfile | null> {
     job_title: profile?.job_title ?? null,
     phone: profile?.phone ?? null,
     is_active: profile?.is_active ?? true,
+    must_change_password: (profile as any)?.must_change_password ?? false,
     roles: (roles ?? []).map((r) => r.role as AppRole),
   };
 }
