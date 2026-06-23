@@ -1,7 +1,9 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useServerFn } from "@tanstack/react-start";
 import { useState, useMemo } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { createEmployee, resetEmployeePassword } from "@/lib/employees.functions";
 import { useAuth } from "@/lib/use-auth";
 import {
   DEPARTMENT_LABELS,
@@ -56,8 +58,10 @@ function EmployeesPage() {
   const [search, setSearch] = useState("");
   const [deptFilter, setDeptFilter] = useState<Department | "all">("all");
   const [editing, setEditing] = useState<ProfileRow | null>(null);
+  const [creating, setCreating] = useState(false);
 
   const allowed = me ? isAdmin(me.roles) : false;
+  const isMainAdmin = me ? canManageUsers(me.roles) : false;
 
   const employeesQuery = useQuery({
     enabled: allowed,
@@ -125,10 +129,12 @@ function EmployeesPage() {
             {filtered.length} מתוך {employeesQuery.data?.length ?? 0} עובדים
           </p>
         </div>
-        <Button variant="outline" className="gap-2" onClick={() => toast.info("כדי להוסיף עובד חדש, יש לבקש ממנו להירשם במסך ההתחברות. לאחר מכן ניתן לעדכן כאן את פרטיו והרשאותיו.") }>
-          <UserPlus className="size-4" />
-          הוספת עובד
-        </Button>
+        {isMainAdmin && (
+          <Button className="gap-2" onClick={() => setCreating(true)}>
+            <UserPlus className="size-4" />
+            הוספת עובד
+          </Button>
+        )}
       </header>
 
       <Card className="card-elevated p-4">
