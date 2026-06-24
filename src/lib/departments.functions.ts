@@ -51,7 +51,10 @@ export const updateDepartment = createServerFn({ method: "POST" })
   .inputValidator((data: unknown) => updateSchema.parse(data))
   .handler(async ({ data, context }) => {
     await assertMainAdmin(context.supabase, context.userId);
-    const patch: Record<string, any> = { name: data.name, manager_id: data.manager_id ?? null };
+    const patch: { name: string; manager_id: string | null; is_active?: boolean } = {
+      name: data.name,
+      manager_id: data.manager_id ?? null,
+    };
     if (typeof data.is_active === "boolean") patch.is_active = data.is_active;
     const { error } = await context.supabase.from("departments").update(patch).eq("id", data.id);
     if (error) throw new Error(error.message);
