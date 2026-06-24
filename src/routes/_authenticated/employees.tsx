@@ -6,14 +6,11 @@ import { supabase } from "@/integrations/supabase/client";
 import { createEmployee } from "@/lib/employees.functions";
 import { useAuth } from "@/lib/use-auth";
 import {
-  DEPARTMENT_LABELS,
-  DEPARTMENT_OPTIONS,
   ROLE_LABELS,
   ROLE_OPTIONS,
   isAdmin,
   canManageUsers,
   type AppRole,
-  type Department,
 } from "@/lib/constants";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -42,11 +39,17 @@ export const Route = createFileRoute("/_authenticated/employees")({
   component: EmployeesPage,
 });
 
+interface DeptOption {
+  id: string;
+  name: string;
+  code: string;
+}
+
 interface ProfileRow {
   id: string;
   full_name: string;
   id_number: string | null;
-  department: Department;
+  department_id: string | null;
   job_title: string | null;
   phone: string | null;
   is_active: boolean;
@@ -56,12 +59,33 @@ function EmployeesPage() {
   const navigate = useNavigate();
   const { data: me, isLoading: meLoading } = useAuth();
   const [search, setSearch] = useState("");
-  const [deptFilter, setDeptFilter] = useState<Department | "all">("all");
+  const [deptFilter, setDeptFilter] = useState<string>("all");
   const [editing, setEditing] = useState<ProfileRow | null>(null);
   const [creating, setCreating] = useState(false);
 
-  const allowed = me ? isAdmin(me.roles) : false;
+  const allowedAdmin = me ? isAdmin(me.roles) : false;
+  const isDeptManager = me ? me.roles.includes("department_manager") : false;
+  const allowed = allowedAdmin || isDeptManager;
   const isMainAdmin = me ? canManageUsers(me.roles) : false;
+
+  const deptsQuery = useQuery({
+    enabled: allowed,
+    queryKey: ["departments", "options"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("departments")
+        .select("id, name, code")
+        .order("name");
+      if (error) throw error;
+      return (data ?? []) as DeptOption[];
+    },
+  });
+
+  const deptMap = useMemo(() => {
+    const map: Record<string, string> = {};
+    (deptsQuery.data ?? []).forEach((d) => (map[d.id] = d.name));
+    return map;
+  }, [deptsQuery.data]);
 
   const employeesQuery = useQuery({
     enabled: allowed,
@@ -69,7 +93,7 @@ function EmployeesPage() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("profiles")
-        .select("id, full_name, id_number, department, job_title, phone, is_active")
+        .select("id, full_name, id_number, department_id, job_title, phone, is_active")
         .order("full_name");
       if (error) throw error;
       return data as ProfileRow[];
@@ -95,7 +119,7 @@ function EmployeesPage() {
     const data = employeesQuery.data ?? [];
     const term = search.trim().toLowerCase();
     return data.filter((e) => {
-      if (deptFilter !== "all" && e.department !== deptFilter) return false;
+      if (deptFilter !== "all" && e.department_id !== deptFilter) return false;
       if (!term) return true;
       return (
         e.full_name.toLowerCase().includes(term) ||
@@ -114,7 +138,7 @@ function EmployeesPage() {
     return (
       <Card className="card-elevated p-8 text-center">
         <h2 className="text-lg font-semibold">אין הרשאה</h2>
-        <p className="text-sm text-muted-foreground mt-2">העמוד הזה זמין רק למנהלים.</p>
+        <p className="text-sm text-muted-foreground mt-2">העמוד הזה זמין למנהלים ולאחראי מחלקות.</p>
         <Button className="mt-4" onClick={() => navigate({ to: "/dashboard" })}>חזרה</Button>
       </Card>
     );
@@ -127,6 +151,7 @@ function EmployeesPage() {
           <h1 className="text-2xl sm:text-3xl font-bold">ניהול עובדים</h1>
           <p className="text-sm text-muted-foreground mt-1">
             {filtered.length} מתוך {employeesQuery.data?.length ?? 0} עובדים
+            {isDeptManager && !allowedAdmin ? " במחלקה שלך" : ""}
           </p>
         </div>
         {isMainAdmin && (
@@ -150,12 +175,12 @@ function EmployeesPage() {
           </div>
           <div className="flex items-center gap-2">
             <Filter className="size-4 text-muted-foreground" />
-            <Select value={deptFilter} onValueChange={(v) => setDeptFilter(v as any)}>
+            <Select value={deptFilter} onValueChange={setDeptFilter}>
               <SelectTrigger className="w-44"><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">כל המחלקות</SelectItem>
-                {DEPARTMENT_OPTIONS.map((d) => (
-                  <SelectItem key={d} value={d}>{DEPARTMENT_LABELS[d]}</SelectItem>
+                {(deptsQuery.data ?? []).map((d) => (
+                  <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
@@ -175,16 +200,19 @@ function EmployeesPage() {
             <EmployeeRow
               key={emp.id}
               emp={emp}
+              deptName={emp.department_id ? deptMap[emp.department_id] : null}
               roles={rolesQuery.data?.[emp.id] ?? []}
               onEdit={() => setEditing(emp)}
+              canEdit={isMainAdmin}
             />
           ))}
         </div>
       )}
 
-      {editing && me && (
+      {editing && me && isMainAdmin && (
         <EditEmployeeDialog
           employee={editing}
+          depts={deptsQuery.data ?? []}
           currentRoles={rolesQuery.data?.[editing.id] ?? []}
           canEditRoles={canManageUsers(me.roles)}
           onClose={() => setEditing(null)}
@@ -192,19 +220,20 @@ function EmployeesPage() {
       )}
 
       {creating && isMainAdmin && (
-        <CreateEmployeeDialog onClose={() => setCreating(false)} />
+        <CreateEmployeeDialog depts={deptsQuery.data ?? []} onClose={() => setCreating(false)} />
       )}
     </div>
   );
 }
 
-function CreateEmployeeDialog({ onClose }: { onClose: () => void }) {
+function CreateEmployeeDialog({ depts, onClose }: { depts: DeptOption[]; onClose: () => void }) {
   const qc = useQueryClient();
   const createFn = useServerFn(createEmployee);
+  const defaultDept = depts[0]?.id ?? "";
   const [form, setForm] = useState({
     full_name: "",
     id_number: "",
-    department: "general" as Department,
+    department_id: defaultDept,
     job_title: "",
     phone: "",
     password: "",
@@ -212,6 +241,7 @@ function CreateEmployeeDialog({ onClose }: { onClose: () => void }) {
   });
   const mutation = useMutation({
     mutationFn: async () => {
+      if (!form.department_id) throw new Error("יש לבחור מחלקה");
       if (!/^\d{5,15}$/.test(form.id_number)) throw new Error("מספר זהות חייב להכיל 5–15 ספרות");
       if (form.password.length < 6) throw new Error("סיסמה ראשונית של 6 תווים לפחות");
       if (!form.full_name.trim()) throw new Error("יש למלא שם עובד");
@@ -221,6 +251,7 @@ function CreateEmployeeDialog({ onClose }: { onClose: () => void }) {
       toast.success("העובד נוצר. סיסמה ראשונית — העובד יחויב להחליפה בכניסה הראשונה.");
       qc.invalidateQueries({ queryKey: ["employees"] });
       qc.invalidateQueries({ queryKey: ["all-roles"] });
+      qc.invalidateQueries({ queryKey: ["departments"] });
       qc.invalidateQueries({ queryKey: ["dashboard", "stats"] });
       onClose();
     },
@@ -248,11 +279,11 @@ function CreateEmployeeDialog({ onClose }: { onClose: () => void }) {
               <Input value={form.id_number} onChange={(e) => setForm({ ...form, id_number: e.target.value })} required dir="ltr" inputMode="numeric" pattern="\d*" maxLength={15} />
             </Field>
             <Field label="מחלקה">
-              <Select value={form.department} onValueChange={(v) => setForm({ ...form, department: v as Department })}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
+              <Select value={form.department_id} onValueChange={(v) => setForm({ ...form, department_id: v })}>
+                <SelectTrigger><SelectValue placeholder="בחר מחלקה" /></SelectTrigger>
                 <SelectContent>
-                  {DEPARTMENT_OPTIONS.map((d) => (
-                    <SelectItem key={d} value={d}>{DEPARTMENT_LABELS[d]}</SelectItem>
+                  {depts.map((d) => (
+                    <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
@@ -294,12 +325,16 @@ function CreateEmployeeDialog({ onClose }: { onClose: () => void }) {
 
 function EmployeeRow({
   emp,
+  deptName,
   roles,
   onEdit,
+  canEdit,
 }: {
   emp: ProfileRow;
+  deptName: string | null;
   roles: AppRole[];
   onEdit: () => void;
+  canEdit: boolean;
 }) {
   return (
     <Card className="card-elevated p-4">
@@ -313,7 +348,7 @@ function EmployeeRow({
             {!emp.is_active && <Badge variant="destructive" className="rounded-full text-xs">לא פעיל</Badge>}
           </div>
           <p className="text-xs text-muted-foreground mt-0.5 truncate">
-            {emp.job_title || "—"} · {DEPARTMENT_LABELS[emp.department]}
+            {emp.job_title || "—"} · {deptName ?? "ללא מחלקה"}
             {emp.phone ? ` · ${emp.phone}` : ""}
           </p>
           {roles.length > 0 && (
@@ -324,9 +359,11 @@ function EmployeeRow({
             </div>
           )}
         </div>
-        <Button variant="ghost" size="icon" onClick={onEdit} aria-label="עריכה">
-          <Pencil className="size-4" />
-        </Button>
+        {canEdit && (
+          <Button variant="ghost" size="icon" onClick={onEdit} aria-label="עריכה">
+            <Pencil className="size-4" />
+          </Button>
+        )}
       </div>
     </Card>
   );
@@ -334,11 +371,13 @@ function EmployeeRow({
 
 function EditEmployeeDialog({
   employee,
+  depts,
   currentRoles,
   canEditRoles,
   onClose,
 }: {
   employee: ProfileRow;
+  depts: DeptOption[];
   currentRoles: AppRole[];
   canEditRoles: boolean;
   onClose: () => void;
@@ -347,7 +386,7 @@ function EditEmployeeDialog({
   const [form, setForm] = useState({
     full_name: employee.full_name,
     id_number: employee.id_number ?? "",
-    department: employee.department,
+    department_id: employee.department_id ?? "",
     job_title: employee.job_title ?? "",
     phone: employee.phone ?? "",
     is_active: employee.is_active,
@@ -356,12 +395,16 @@ function EditEmployeeDialog({
 
   const mutation = useMutation({
     mutationFn: async () => {
+      if (!form.department_id) throw new Error("יש לבחור מחלקה");
+      const selected = depts.find((d) => d.id === form.department_id);
+      if (!selected) throw new Error("מחלקה לא נמצאה");
       const { error: pErr } = await supabase
         .from("profiles")
         .update({
           full_name: form.full_name,
           id_number: form.id_number || null,
-          department: form.department,
+          department_id: form.department_id,
+          department: selected.code as any,
           job_title: form.job_title || null,
           phone: form.phone || null,
           is_active: form.is_active,
@@ -382,6 +425,7 @@ function EditEmployeeDialog({
       toast.success("העובד עודכן");
       qc.invalidateQueries({ queryKey: ["employees"] });
       qc.invalidateQueries({ queryKey: ["all-roles"] });
+      qc.invalidateQueries({ queryKey: ["departments"] });
       qc.invalidateQueries({ queryKey: ["dashboard", "stats"] });
       onClose();
     },
@@ -417,11 +461,11 @@ function EditEmployeeDialog({
               <Input value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} dir="ltr" />
             </Field>
             <Field label="מחלקה">
-              <Select value={form.department} onValueChange={(v) => setForm({ ...form, department: v as Department })}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
+              <Select value={form.department_id} onValueChange={(v) => setForm({ ...form, department_id: v })}>
+                <SelectTrigger><SelectValue placeholder="בחר מחלקה" /></SelectTrigger>
                 <SelectContent>
-                  {DEPARTMENT_OPTIONS.map((d) => (
-                    <SelectItem key={d} value={d}>{DEPARTMENT_LABELS[d]}</SelectItem>
+                  {depts.map((d) => (
+                    <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
