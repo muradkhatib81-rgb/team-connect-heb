@@ -29,7 +29,7 @@ const DEPARTMENTS = [
 const createEmployeeSchema = z.object({
   full_name: z.string().trim().min(1).max(100),
   id_number: z.string().regex(ID_REGEX, "מספר זהות לא תקין"),
-  department: z.enum(DEPARTMENTS),
+  department_id: z.string().uuid("יש לבחור מחלקה"),
   job_title: z.string().trim().max(80).optional().default(""),
   phone: z.string().trim().max(20).optional().default(""),
   password: z.string().min(6).max(72),
@@ -53,6 +53,16 @@ export const createEmployee = createServerFn({ method: "POST" })
   .inputValidator((data: unknown) => createEmployeeSchema.parse(data))
   .handler(async ({ data, context }) => {
     await assertMainAdmin(context.supabase, context.userId);
+
+    // Resolve department code to feed into the handle_new_user trigger
+    const { data: dept, error: dErr } = await context.supabase
+      .from("departments")
+      .select("code")
+      .eq("id", data.department_id)
+      .maybeSingle();
+    if (dErr) throw new Error(dErr.message);
+    if (!dept) throw new Error("מחלקה לא נמצאה");
+
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
 
     const { data: created, error } = await supabaseAdmin.auth.admin.createUser({
@@ -62,7 +72,7 @@ export const createEmployee = createServerFn({ method: "POST" })
       user_metadata: {
         full_name: data.full_name,
         id_number: data.id_number,
-        department: data.department,
+        department: dept.code,
         job_title: data.job_title,
         phone: data.phone,
         role: data.role,
@@ -75,8 +85,18 @@ export const createEmployee = createServerFn({ method: "POST" })
       }
       throw new Error(error.message || "שגיאה ביצירת עובד");
     }
+
+    // Ensure department_id is set explicitly (in case the trigger lookup differed)
+    if (created.user?.id) {
+      await supabaseAdmin
+        .from("profiles")
+        .update({ department_id: data.department_id })
+        .eq("id", created.user.id);
+    }
+
     return { id: created.user?.id ?? null };
   });
+
 
 const resetSchema = z.object({
   user_id: z.string().uuid(),
