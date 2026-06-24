@@ -15,16 +15,6 @@ const APP_ROLES = [
   "employee",
 ] as const;
 
-const DEPARTMENTS = [
-  "dairy",
-  "meat",
-  "produce",
-  "cashiers",
-  "warehouse",
-  "cleaning",
-  "pricing",
-  "general",
-] as const;
 
 const createEmployeeSchema = z.object({
   full_name: z.string().trim().min(1).max(100),
