@@ -14,10 +14,41 @@ export type Database = {
   }
   public: {
     Tables: {
+      departments: {
+        Row: {
+          code: string
+          created_at: string
+          id: string
+          is_active: boolean
+          manager_id: string | null
+          name: string
+          updated_at: string
+        }
+        Insert: {
+          code: string
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          manager_id?: string | null
+          name: string
+          updated_at?: string
+        }
+        Update: {
+          code?: string
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          manager_id?: string | null
+          name?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       profiles: {
         Row: {
           created_at: string
           department: Database["public"]["Enums"]["department"]
+          department_id: string | null
           full_name: string
           id: string
           id_number: string | null
@@ -30,6 +61,7 @@ export type Database = {
         Insert: {
           created_at?: string
           department?: Database["public"]["Enums"]["department"]
+          department_id?: string | null
           full_name?: string
           id: string
           id_number?: string | null
@@ -42,6 +74,7 @@ export type Database = {
         Update: {
           created_at?: string
           department?: Database["public"]["Enums"]["department"]
+          department_id?: string | null
           full_name?: string
           id?: string
           id_number?: string | null
@@ -51,7 +84,15 @@ export type Database = {
           phone?: string | null
           updated_at?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "profiles_department_id_fkey"
+            columns: ["department_id"]
+            isOneToOne: false
+            referencedRelation: "departments"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       user_roles: {
         Row: {
