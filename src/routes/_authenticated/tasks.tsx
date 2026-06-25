@@ -940,14 +940,20 @@ function TaskFormDialog({
           </div>
           <div>
             <Label>מחלקה</Label>
-            <Select value={departmentId} onValueChange={(v) => setDepartmentId(v)}>
-              <SelectTrigger><SelectValue /></SelectTrigger>
-              <SelectContent>
-                {deps.departments.map((d) => (
-                  <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            {canPickAnyDept ? (
+              <Select value={departmentId} onValueChange={(v) => setDepartmentId(v)}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {allowedDepartments.map((d) => (
+                    <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            ) : (
+              <div className="px-3 py-2 rounded-md border bg-muted text-sm">
+                {allowedDepartments.find((d) => d.id === departmentId)?.name ?? "—"}
+              </div>
+            )}
             <p className="text-xs text-muted-foreground mt-1">
               המשימה תהיה זמינה לכל עובדי המחלקה
             </p>
