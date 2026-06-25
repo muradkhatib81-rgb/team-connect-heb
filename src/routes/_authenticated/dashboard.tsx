@@ -72,9 +72,30 @@ function DashboardPage() {
     },
   });
 
-  // Realtime: refresh when departments or profiles change
+  // Tasks stats (visible to anyone who can see at least their dept tasks)
+  const tasksStatsQuery = useQuery({
+    enabled: !!profile,
+    queryKey: ["dashboard", "tasks-stats"],
+    refetchOnMount: "always",
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("tasks")
+        .select("id, status, due_at, completed_at");
+      if (error) throw error;
+      const rows = (data ?? []) as { id: string; status: string; due_at: string | null; completed_at: string | null }[];
+      const now = Date.now();
+      return {
+        open: rows.filter((r) => r.status === "new").length,
+        in_progress: rows.filter((r) => r.status === "in_progress").length,
+        completed: rows.filter((r) => r.status === "completed").length,
+        overdue: rows.filter((r) => r.due_at && r.status !== "completed" && new Date(r.due_at).getTime() < now).length,
+      };
+    },
+  });
+
+  // Realtime: refresh when departments or profiles or tasks change
   useEffect(() => {
-    if (!admin && !isDeptManager) return;
+    if (!admin && !isDeptManager && !profile) return;
     const channel = supabase
       .channel("dashboard-realtime")
       .on("postgres_changes", { event: "*", schema: "public", table: "departments" }, () => {
@@ -84,11 +105,14 @@ function DashboardPage() {
       .on("postgres_changes", { event: "*", schema: "public", table: "profiles" }, () => {
         queryClient.invalidateQueries({ queryKey: ["dashboard"] });
       })
+      .on("postgres_changes", { event: "*", schema: "public", table: "tasks" }, () => {
+        queryClient.invalidateQueries({ queryKey: ["dashboard", "tasks-stats"] });
+      })
       .subscribe();
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [admin, isDeptManager, queryClient]);
+  }, [admin, isDeptManager, profile, queryClient]);
 
   if (!profile) return null;
   const top = highestRole(profile.roles);
