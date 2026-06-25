@@ -45,10 +45,18 @@ async function getCallerCaps(supabase: any, userId: string) {
 }
 
 function canCreateForDept(caps: Awaited<ReturnType<typeof getCallerCaps>>, deptId: string) {
-  return caps.canCreateTasks || caps.managedDeptIds.includes(deptId);
+  return (
+    caps.canCreateTasks ||
+    caps.managedDeptIds.includes(deptId) ||
+    (caps.isDeptManager && caps.departmentId === deptId)
+  );
 }
 function canEditForDept(caps: Awaited<ReturnType<typeof getCallerCaps>>, deptId: string) {
-  return caps.canEditTasks || caps.managedDeptIds.includes(deptId);
+  return (
+    caps.canEditTasks ||
+    caps.managedDeptIds.includes(deptId) ||
+    (caps.isDeptManager && caps.departmentId === deptId)
+  );
 }
 
 // ---------- CREATE task ----------
