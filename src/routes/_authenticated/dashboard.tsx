@@ -1,5 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/use-auth";
 import {
@@ -7,7 +8,6 @@ import {
   DEPARTMENT_LABELS,
   highestRole,
   isAdmin,
-  DEPARTMENT_OPTIONS,
 } from "@/lib/constants";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -18,27 +18,54 @@ export const Route = createFileRoute("/_authenticated/dashboard")({
   component: DashboardPage,
 });
 
+type DeptRow = { id: string; name: string; is_active: boolean };
+
 function DashboardPage() {
   const { data: profile } = useAuth();
   const admin = profile ? isAdmin(profile.roles) : false;
+  const queryClient = useQueryClient();
 
   const statsQuery = useQuery({
     enabled: admin,
     queryKey: ["dashboard", "stats"],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("profiles")
-        .select("id, is_active, department");
-      if (error) throw error;
-      const total = data.length;
-      const active = data.filter((d) => d.is_active).length;
+      const [{ data: profs, error: pErr }, { data: depts, error: dErr }] = await Promise.all([
+        supabase.from("profiles").select("id, is_active, department_id"),
+        supabase.from("departments").select("id, name, is_active").order("name"),
+      ]);
+      if (pErr) throw pErr;
+      if (dErr) throw dErr;
+      const total = profs!.length;
+      const active = profs!.filter((d) => d.is_active).length;
       const inactive = total - active;
       const byDept: Record<string, number> = {};
-      DEPARTMENT_OPTIONS.forEach((d) => (byDept[d] = 0));
-      data.forEach((d) => (byDept[d.department] = (byDept[d.department] || 0) + 1));
-      return { total, active, inactive, byDept };
+      (depts as DeptRow[]).forEach((d) => (byDept[d.id] = 0));
+      profs!.forEach((p) => {
+        if (p.department_id && byDept[p.department_id] !== undefined) {
+          byDept[p.department_id] += 1;
+        }
+      });
+      return { total, active, inactive, byDept, departments: depts as DeptRow[] };
     },
   });
+
+  // Realtime: refresh when departments or profiles change
+  useEffect(() => {
+    if (!admin) return;
+    const channel = supabase
+      .channel("dashboard-realtime")
+      .on("postgres_changes", { event: "*", schema: "public", table: "departments" }, () => {
+        queryClient.invalidateQueries({ queryKey: ["dashboard", "stats"] });
+        queryClient.invalidateQueries({ queryKey: ["departments"] });
+      })
+      .on("postgres_changes", { event: "*", schema: "public", table: "profiles" }, () => {
+        queryClient.invalidateQueries({ queryKey: ["dashboard", "stats"] });
+      })
+      .subscribe();
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [admin, queryClient]);
 
   if (!profile) return null;
   const top = highestRole(profile.roles);
@@ -72,7 +99,7 @@ function AdminDashboard({
   stats,
   loading,
 }: {
-  stats?: { total: number; active: number; inactive: number; byDept: Record<string, number> };
+  stats?: { total: number; active: number; inactive: number; byDept: Record<string, number>; departments: DeptRow[] };
   loading: boolean;
 }) {
   if (loading || !stats) {
@@ -100,14 +127,20 @@ function AdminDashboard({
             לכל העובדים ←
           </Link>
         </div>
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
-          {DEPARTMENT_OPTIONS.map((d) => (
-            <Card key={d} className="card-elevated p-4">
-              <p className="text-xs text-muted-foreground">{DEPARTMENT_LABELS[d]}</p>
-              <p className="text-2xl font-bold mt-1">{stats.byDept[d] ?? 0}</p>
-            </Card>
-          ))}
-        </div>
+        {stats.departments.length === 0 ? (
+          <Card className="card-elevated p-6 text-sm text-muted-foreground">
+            עדיין לא הוגדרו מחלקות. ניתן להוסיף דרך מסך ניהול המחלקות.
+          </Card>
+        ) : (
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+            {stats.departments.map((d) => (
+              <Card key={d.id} className="card-elevated p-4">
+                <p className="text-xs text-muted-foreground truncate">{d.name}</p>
+                <p className="text-2xl font-bold mt-1">{stats.byDept[d.id] ?? 0}</p>
+              </Card>
+            ))}
+          </div>
+        )}
       </section>
     </>
   );
