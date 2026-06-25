@@ -1155,11 +1155,13 @@ function RecurringSection({
 function RecurrenceFormDialog({
   mode,
   deps,
+  caps,
   rec,
   onClose,
 }: {
   mode: "create" | "edit";
   deps: { departments: DeptOption[]; employees: EmpOption[] };
+  caps: ReturnType<typeof useTaskCaps>;
   rec?: RecRow;
   onClose: () => void;
 }) {
@@ -1167,9 +1169,14 @@ function RecurrenceFormDialog({
   const create = useServerFn(createRecurrence);
   const update = useServerFn(updateRecurrence);
 
+  const canPickAnyDept = caps.canCreateTasks;
+  const allowedDepartments = canPickAnyDept
+    ? deps.departments
+    : deps.departments.filter((d) => d.id === caps.profile?.department_id);
+
   const [title, setTitle] = useState(rec?.title ?? "");
   const [description, setDescription] = useState(rec?.description ?? "");
-  const [departmentId, setDepartmentId] = useState(rec?.department_id ?? deps.departments[0]?.id ?? "");
+  const [departmentId, setDepartmentId] = useState(rec?.department_id ?? allowedDepartments[0]?.id ?? "");
   const [priority, setPriority] = useState<TaskPriority>(rec?.priority ?? "medium");
   const [frequency, setFrequency] = useState<RecRow["frequency"]>(rec?.frequency ?? "daily");
   const [dows, setDows] = useState<number[]>(rec?.days_of_week ?? []);
