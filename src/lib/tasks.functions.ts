@@ -95,7 +95,7 @@ export const updateTask = createServerFn({ method: "POST" })
     const { id, ...patch } = data;
     const cleaned: Record<string, any> = {};
     for (const [k, v] of Object.entries(patch)) if (v !== undefined) cleaned[k] = v;
-    const { error } = await context.supabase.from("tasks").update(cleaned).eq("id", id);
+    const { error } = await context.supabase.from("tasks").update(cleaned as any).eq("id", id);
     if (error) throw new Error(error.message);
     return { ok: true };
   });
