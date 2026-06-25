@@ -504,30 +504,75 @@ function TaskDetailDialog({
 }) {
   const qc = useQueryClient();
   const upd = useServerFn(updateTask);
-  const [status, setStatus] = useState<TaskStatus>(task.status);
-  const [notes, setNotes] = useState(task.notes ?? "");
-  const isAssignee = caps.profile?.id === task.assignee_id;
-  const canEditMeta = caps.canManageTasks || caps.isDeptMgr;
-  const canUpdateStatus = canEditMeta || isAssignee;
+  const markPending = useServerFn(markTaskPendingApproval);
+  const approve = useServerFn(approveTask);
+  const reject = useServerFn(rejectTask);
 
-  const saveStatus = useMutation({
-    mutationFn: () => upd({ data: { id: task.id, status, notes } }),
+  const isMember = caps.profile?.department_id === task.department_id;
+  const canApprove = caps.canEditTasks || caps.isDeptMgr || caps.isMainAdmin;
+  // Employees in the same department can mark "done" — but not on already-pending/completed.
+  const canMarkDone =
+    isMember && (task.status === "new" || task.status === "in_progress");
+
+  const [employeeNote, setEmployeeNote] = useState(task.employee_note ?? "");
+  const [rejectNote, setRejectNote] = useState("");
+  const [showReject, setShowReject] = useState(false);
+
+  const startProgress = useMutation({
+    mutationFn: () => upd({ data: { id: task.id, status: "in_progress" } }),
     onSuccess: () => {
-      toast.success("עודכן");
+      toast.success("המשימה הועברה לביצוע");
+      qc.invalidateQueries({ queryKey: ["tasks"] });
+    },
+    onError: (e: any) => toast.error(e?.message ?? "שגיאה"),
+  });
+
+  const submitDone = useMutation({
+    mutationFn: () =>
+      markPending({ data: { id: task.id, employee_note: employeeNote || undefined } }),
+    onSuccess: () => {
+      toast.success("נשלח לאישור אחראי המחלקה");
       qc.invalidateQueries({ queryKey: ["tasks"] });
       onClose();
     },
-    onError: (e: any) => toast.error(e?.message ?? "שגיאה בעדכון"),
+    onError: (e: any) => toast.error(e?.message ?? "שגיאה"),
+  });
+
+  const approveM = useMutation({
+    mutationFn: () => approve({ data: { id: task.id } }),
+    onSuccess: () => {
+      toast.success("המשימה אושרה");
+      qc.invalidateQueries({ queryKey: ["tasks"] });
+      onClose();
+    },
+    onError: (e: any) => toast.error(e?.message ?? "שגיאה"),
+  });
+
+  const rejectM = useMutation({
+    mutationFn: () =>
+      reject({ data: { id: task.id, rejection_note: rejectNote || undefined } }),
+    onSuccess: () => {
+      toast.success("המשימה הוחזרה לביצוע");
+      qc.invalidateQueries({ queryKey: ["tasks"] });
+      onClose();
+    },
+    onError: (e: any) => toast.error(e?.message ?? "שגיאה"),
   });
 
   const dept = deps?.departments.find((d) => d.id === task.department_id);
-  const assignee = deps?.employees.find((e) => e.id === task.assignee_id);
+  const completedBy = deps?.employees.find((e) => e.id === task.completed_by);
+  const approvedBy = deps?.employees.find((e) => e.id === task.approved_by);
 
   return (
     <Dialog open onOpenChange={(v) => !v && onClose()}>
       <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>{task.title}</DialogTitle>
+          <DialogTitle className="flex items-center gap-2 flex-wrap">
+            {task.title}
+            <Badge variant={statusVariant(task.status)} className="rounded-full text-xs">
+              {STATUS_LABEL[task.status]}
+            </Badge>
+          </DialogTitle>
         </DialogHeader>
         <div className="space-y-4">
           {task.description && (
@@ -542,71 +587,155 @@ function TaskDetailDialog({
               <p>{dept?.name ?? "—"}</p>
             </div>
             <div>
-              <Label className="text-xs text-muted-foreground">אחראי</Label>
-              <p>{assignee?.full_name ?? "ללא"}</p>
-            </div>
-            <div>
               <Label className="text-xs text-muted-foreground">עדיפות</Label>
               <p>{PRIORITY_LABEL[task.priority]}</p>
             </div>
             <div>
               <Label className="text-xs text-muted-foreground">תאריך יצירה</Label>
-              <p>{new Date(task.created_at).toLocaleString("he-IL")}</p>
+              <p>{formatHeDateTime(task.created_at)}</p>
             </div>
             {task.due_at && (
               <div>
                 <Label className="text-xs text-muted-foreground">תאריך יעד</Label>
-                <p>{new Date(task.due_at).toLocaleString("he-IL")}</p>
+                <p>{formatHeDateTime(task.due_at)}</p>
               </div>
             )}
             {task.completed_at && (
               <div>
-                <Label className="text-xs text-muted-foreground">הושלם בתאריך</Label>
-                <p>{new Date(task.completed_at).toLocaleString("he-IL")}</p>
+                <Label className="text-xs text-muted-foreground">סומן כבוצע</Label>
+                <p>{formatHeDateTime(task.completed_at)}</p>
+              </div>
+            )}
+            {completedBy && (
+              <div>
+                <Label className="text-xs text-muted-foreground">בוצע ע״י</Label>
+                <p>{completedBy.full_name}</p>
+              </div>
+            )}
+            {task.approved_at && (
+              <div>
+                <Label className="text-xs text-muted-foreground">אושר בתאריך</Label>
+                <p>{formatHeDateTime(task.approved_at)}</p>
+              </div>
+            )}
+            {approvedBy && (
+              <div>
+                <Label className="text-xs text-muted-foreground">אושר ע״י</Label>
+                <p>{approvedBy.full_name}</p>
               </div>
             )}
           </div>
 
-          <div className="border-t pt-4 space-y-3">
-            <div>
-              <Label>סטטוס</Label>
-              <Select
-                value={status}
-                onValueChange={(v) => setStatus(v as TaskStatus)}
-                disabled={!canUpdateStatus}
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="new">חדש</SelectItem>
-                  <SelectItem value="in_progress">בביצוע</SelectItem>
-                  <SelectItem value="completed">הושלם</SelectItem>
-                </SelectContent>
-              </Select>
+          {task.employee_note && (
+            <div className="border-t pt-3">
+              <Label className="text-xs text-muted-foreground">הערת מבצע</Label>
+              <p className="text-sm whitespace-pre-wrap mt-1">{task.employee_note}</p>
             </div>
-            <div>
-              <Label>הערות</Label>
+          )}
+
+          {task.rejection_note && (
+            <div className="border-t pt-3">
+              <Label className="text-xs text-destructive">הוחזר עם הערה</Label>
+              <p className="text-sm whitespace-pre-wrap mt-1">{task.rejection_note}</p>
+              {task.rejected_at && (
+                <p className="text-xs text-muted-foreground mt-1">
+                  {formatHeDateTime(task.rejected_at)}
+                </p>
+              )}
+            </div>
+          )}
+
+          {/* Mark-done input area: visible to dept members while task is active */}
+          {canMarkDone && (
+            <div className="border-t pt-4 space-y-3">
+              <Label>הערה על הביצוע (לא חובה)</Label>
               <Textarea
-                value={notes}
-                onChange={(e) => setNotes(e.target.value)}
-                disabled={!canUpdateStatus}
+                value={employeeNote}
+                onChange={(e) => setEmployeeNote(e.target.value)}
                 rows={3}
+                placeholder="פרט/י מה בוצע..."
+              />
+              <Label className="text-xs text-muted-foreground">
+                ניתן לצרף עד 5 תמונות כהוכחת ביצוע
+              </Label>
+              <TaskImagesSection
+                taskId={task.id}
+                canEdit={true}
+                userId={caps.profile?.id}
               />
             </div>
-          </div>
+          )}
 
-          {/* Images: show only when completed; allow assignee/managers to upload */}
-          {status === "completed" && (
-            <TaskImagesSection taskId={task.id} canEdit={canUpdateStatus} userId={caps.profile?.id} />
+          {/* Existing images for non-active states */}
+          {!canMarkDone && (task.status === "pending_approval" || task.status === "completed") && (
+            <div className="border-t pt-4">
+              <Label className="text-xs text-muted-foreground mb-2 block">תמונות</Label>
+              <TaskImagesSection
+                taskId={task.id}
+                canEdit={false}
+                userId={caps.profile?.id}
+              />
+            </div>
+          )}
+
+          {/* Approval section */}
+          {task.status === "pending_approval" && canApprove && (
+            <div className="border-t pt-4 space-y-3">
+              {showReject ? (
+                <>
+                  <Label>הערה להחזרה</Label>
+                  <Textarea
+                    value={rejectNote}
+                    onChange={(e) => setRejectNote(e.target.value)}
+                    rows={3}
+                    placeholder="מדוע יש לבצע שוב?"
+                  />
+                  <div className="flex gap-2">
+                    <Button
+                      variant="destructive"
+                      onClick={() => rejectM.mutate()}
+                      disabled={rejectM.isPending}
+                    >
+                      {rejectM.isPending && <Loader2 className="size-4 animate-spin ml-2" />}
+                      החזר לביצוע
+                    </Button>
+                    <Button variant="outline" onClick={() => setShowReject(false)}>
+                      ביטול
+                    </Button>
+                  </div>
+                </>
+              ) : (
+                <div className="flex gap-2 flex-wrap">
+                  <Button
+                    onClick={() => approveM.mutate()}
+                    disabled={approveM.isPending}
+                  >
+                    {approveM.isPending && <Loader2 className="size-4 animate-spin ml-2" />}
+                    אשר השלמה
+                  </Button>
+                  <Button variant="outline" onClick={() => setShowReject(true)}>
+                    החזר לביצוע
+                  </Button>
+                </div>
+              )}
+            </div>
           )}
         </div>
-        <DialogFooter>
+        <DialogFooter className="gap-2 flex-wrap">
           <Button variant="outline" onClick={onClose}>סגירה</Button>
-          {canUpdateStatus && (
-            <Button onClick={() => saveStatus.mutate()} disabled={saveStatus.isPending}>
-              {saveStatus.isPending && <Loader2 className="size-4 animate-spin ml-2" />}
-              שמירה
+          {canMarkDone && task.status === "new" && (
+            <Button
+              variant="secondary"
+              onClick={() => startProgress.mutate()}
+              disabled={startProgress.isPending}
+            >
+              התחל בביצוע
+            </Button>
+          )}
+          {canMarkDone && (
+            <Button onClick={() => submitDone.mutate()} disabled={submitDone.isPending}>
+              {submitDone.isPending && <Loader2 className="size-4 animate-spin ml-2" />}
+              סיימתי - שלח לאישור
             </Button>
           )}
         </DialogFooter>
