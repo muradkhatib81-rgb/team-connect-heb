@@ -1064,7 +1064,6 @@ function RecurringSection({
       ) : (
         recsQuery.data.map((r) => {
           const dept = deps?.departments.find((d) => d.id === r.department_id);
-          const assignee = deps?.employees.find((e) => e.id === r.assignee_id);
           return (
             <Card key={r.id} className="card-elevated p-4">
               <div className="flex items-start justify-between gap-3">
@@ -1080,7 +1079,6 @@ function RecurringSection({
                   </div>
                   <div className="text-xs text-muted-foreground mt-1.5 flex flex-wrap gap-x-3 gap-y-1">
                     {dept && <span>מחלקה: {dept.name}</span>}
-                    {assignee && <span>אחראי: {assignee.full_name}</span>}
                     <span>שעה: {r.time_of_day}</span>
                     {r.frequency === "weekly" && r.days_of_week.length > 0 && (
                       <span>ימים: {r.days_of_week.map((d) => DOW_LABELS[d]).join(", ")}</span>
@@ -1089,7 +1087,7 @@ function RecurringSection({
                       <span>יום בחודש: {r.day_of_month}</span>
                     )}
                     {r.next_run_at && (
-                      <span>ריצה הבאה: {new Date(r.next_run_at).toLocaleString("he-IL")}</span>
+                      <span>ריצה הבאה: {formatHeDateTime(r.next_run_at)}</span>
                     )}
                   </div>
                 </div>
