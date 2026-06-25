@@ -100,6 +100,169 @@ export type Database = {
           },
         ]
       }
+      task_images: {
+        Row: {
+          created_at: string
+          id: string
+          storage_path: string
+          task_id: string
+          uploaded_by: string | null
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          storage_path: string
+          task_id: string
+          uploaded_by?: string | null
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          storage_path?: string
+          task_id?: string
+          uploaded_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "task_images_task_id_fkey"
+            columns: ["task_id"]
+            isOneToOne: false
+            referencedRelation: "tasks"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      task_recurrences: {
+        Row: {
+          assignee_id: string | null
+          created_at: string
+          created_by: string | null
+          day_of_month: number | null
+          days_of_week: number[]
+          department_id: string
+          description: string | null
+          frequency: Database["public"]["Enums"]["task_recurrence_frequency"]
+          id: string
+          is_active: boolean
+          last_generated_at: string | null
+          next_run_at: string | null
+          priority: Database["public"]["Enums"]["task_priority"]
+          time_of_day: string
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          assignee_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          day_of_month?: number | null
+          days_of_week?: number[]
+          department_id: string
+          description?: string | null
+          frequency: Database["public"]["Enums"]["task_recurrence_frequency"]
+          id?: string
+          is_active?: boolean
+          last_generated_at?: string | null
+          next_run_at?: string | null
+          priority?: Database["public"]["Enums"]["task_priority"]
+          time_of_day?: string
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          assignee_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          day_of_month?: number | null
+          days_of_week?: number[]
+          department_id?: string
+          description?: string | null
+          frequency?: Database["public"]["Enums"]["task_recurrence_frequency"]
+          id?: string
+          is_active?: boolean
+          last_generated_at?: string | null
+          next_run_at?: string | null
+          priority?: Database["public"]["Enums"]["task_priority"]
+          time_of_day?: string
+          title?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "task_recurrences_department_id_fkey"
+            columns: ["department_id"]
+            isOneToOne: false
+            referencedRelation: "departments"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      tasks: {
+        Row: {
+          assignee_id: string | null
+          completed_at: string | null
+          created_at: string
+          created_by: string | null
+          department_id: string
+          description: string | null
+          due_at: string | null
+          id: string
+          notes: string | null
+          priority: Database["public"]["Enums"]["task_priority"]
+          recurrence_id: string | null
+          status: Database["public"]["Enums"]["task_status"]
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          assignee_id?: string | null
+          completed_at?: string | null
+          created_at?: string
+          created_by?: string | null
+          department_id: string
+          description?: string | null
+          due_at?: string | null
+          id?: string
+          notes?: string | null
+          priority?: Database["public"]["Enums"]["task_priority"]
+          recurrence_id?: string | null
+          status?: Database["public"]["Enums"]["task_status"]
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          assignee_id?: string | null
+          completed_at?: string | null
+          created_at?: string
+          created_by?: string | null
+          department_id?: string
+          description?: string | null
+          due_at?: string | null
+          id?: string
+          notes?: string | null
+          priority?: Database["public"]["Enums"]["task_priority"]
+          recurrence_id?: string | null
+          status?: Database["public"]["Enums"]["task_status"]
+          title?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tasks_department_id_fkey"
+            columns: ["department_id"]
+            isOneToOne: false
+            referencedRelation: "departments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tasks_recurrence_id_fkey"
+            columns: ["recurrence_id"]
+            isOneToOne: false
+            referencedRelation: "task_recurrences"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       user_roles: {
         Row: {
           created_at: string
@@ -121,6 +284,33 @@ export type Database = {
         }
         Relationships: []
       }
+      user_task_permissions: {
+        Row: {
+          can_manage_tasks: boolean
+          created_at: string
+          granted_by: string | null
+          id: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          can_manage_tasks?: boolean
+          created_at?: string
+          granted_by?: string | null
+          id?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          can_manage_tasks?: boolean
+          created_at?: string
+          granted_by?: string | null
+          id?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
@@ -134,6 +324,7 @@ export type Database = {
         }
         Returns: boolean
       }
+      has_task_management_perm: { Args: { _user_id: string }; Returns: boolean }
       is_admin: { Args: { _user_id: string }; Returns: boolean }
     }
     Enums: {
@@ -152,6 +343,9 @@ export type Database = {
         | "cleaning"
         | "pricing"
         | "general"
+      task_priority: "low" | "medium" | "high"
+      task_recurrence_frequency: "daily" | "weekly" | "monthly"
+      task_status: "new" | "in_progress" | "completed"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -296,6 +490,9 @@ export const Constants = {
         "pricing",
         "general",
       ],
+      task_priority: ["low", "medium", "high"],
+      task_recurrence_frequency: ["daily", "weekly", "monthly"],
+      task_status: ["new", "in_progress", "completed"],
     },
   },
 } as const

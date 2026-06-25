@@ -11,7 +11,7 @@ import {
 } from "@/lib/constants";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Users, UserCheck, UserX, Building2, Loader2, Plane } from "lucide-react";
+import { Users, UserCheck, UserX, Building2, Loader2, Plane, ListTodo, Clock, CheckCircle2, AlertTriangle } from "lucide-react";
 import { Link, useNavigate } from "@tanstack/react-router";
 
 export const Route = createFileRoute("/_authenticated/dashboard")({
@@ -72,9 +72,30 @@ function DashboardPage() {
     },
   });
 
-  // Realtime: refresh when departments or profiles change
+  // Tasks stats (visible to anyone who can see at least their dept tasks)
+  const tasksStatsQuery = useQuery({
+    enabled: !!profile,
+    queryKey: ["dashboard", "tasks-stats"],
+    refetchOnMount: "always",
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("tasks")
+        .select("id, status, due_at, completed_at");
+      if (error) throw error;
+      const rows = (data ?? []) as { id: string; status: string; due_at: string | null; completed_at: string | null }[];
+      const now = Date.now();
+      return {
+        open: rows.filter((r) => r.status === "new").length,
+        in_progress: rows.filter((r) => r.status === "in_progress").length,
+        completed: rows.filter((r) => r.status === "completed").length,
+        overdue: rows.filter((r) => r.due_at && r.status !== "completed" && new Date(r.due_at).getTime() < now).length,
+      };
+    },
+  });
+
+  // Realtime: refresh when departments or profiles or tasks change
   useEffect(() => {
-    if (!admin && !isDeptManager) return;
+    if (!admin && !isDeptManager && !profile) return;
     const channel = supabase
       .channel("dashboard-realtime")
       .on("postgres_changes", { event: "*", schema: "public", table: "departments" }, () => {
@@ -84,11 +105,14 @@ function DashboardPage() {
       .on("postgres_changes", { event: "*", schema: "public", table: "profiles" }, () => {
         queryClient.invalidateQueries({ queryKey: ["dashboard"] });
       })
+      .on("postgres_changes", { event: "*", schema: "public", table: "tasks" }, () => {
+        queryClient.invalidateQueries({ queryKey: ["dashboard", "tasks-stats"] });
+      })
       .subscribe();
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [admin, isDeptManager, queryClient]);
+  }, [admin, isDeptManager, profile, queryClient]);
 
   if (!profile) return null;
   const top = highestRole(profile.roles);
@@ -109,6 +133,8 @@ function DashboardPage() {
         </div>
       </header>
 
+      <TasksStatsSection stats={tasksStatsQuery.data} loading={tasksStatsQuery.isLoading} />
+
       {admin ? (
         <AdminDashboard stats={statsQuery.data} loading={statsQuery.isLoading} />
       ) : isDeptManager ? (
@@ -117,6 +143,37 @@ function DashboardPage() {
         <EmployeeDashboard />
       )}
     </div>
+  );
+}
+
+function TasksStatsSection({
+  stats,
+  loading,
+}: {
+  stats?: { open: number; in_progress: number; completed: number; overdue: number };
+  loading: boolean;
+}) {
+  const navigate = useNavigate();
+  if (loading || !stats) return null;
+  const go = (status: string) => navigate({ to: "/tasks", search: { status } as any });
+  return (
+    <section>
+      <div className="flex items-center justify-between mb-4">
+        <h2 className="text-lg font-semibold flex items-center gap-2">
+          <ListTodo className="size-5 text-primary" />
+          משימות
+        </h2>
+        <Link to="/tasks" className="text-sm text-primary hover:underline">
+          לכל המשימות ←
+        </Link>
+      </div>
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <StatCard label="פתוחות" value={stats.open} icon={ListTodo} tone="primary" onClick={() => go("new")} />
+        <StatCard label="בביצוע" value={stats.in_progress} icon={Clock} tone="success" onClick={() => go("in_progress")} />
+        <StatCard label="הושלמו" value={stats.completed} icon={CheckCircle2} tone="muted" onClick={() => go("completed")} />
+        <StatCard label="באיחור" value={stats.overdue} icon={AlertTriangle} tone="warning" onClick={() => go("overdue")} />
+      </div>
+    </section>
   );
 }
 

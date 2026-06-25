@@ -11,6 +11,8 @@ import {
   Loader2,
   ShieldCheck,
   UserCircle,
+  ListTodo,
+
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
@@ -76,6 +78,7 @@ export function AppShell({ children }: { children: ReactNode }) {
 
   const nav: { to: string; label: string; icon: typeof LayoutDashboard; visible: boolean }[] = [
     { to: "/dashboard", label: "לוח בקרה", icon: LayoutDashboard, visible: !isPlainEmployee },
+    { to: "/tasks", label: "משימות", icon: ListTodo, visible: true },
     { to: "/employees", label: "ניהול עובדים", icon: Users, visible: admin },
     { to: "/departments", label: "מחלקות", icon: Building2, visible: admin },
     { to: "/permissions", label: "הרשאות", icon: ShieldCheck, visible: canManageUsers(profile.roles) },
