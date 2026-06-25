@@ -24,6 +24,7 @@ const createEmployeeSchema = z.object({
   phone: z.string().trim().max(20).optional().default(""),
   password: z.string().min(6).max(72),
   role: z.enum(APP_ROLES).default("employee"),
+  avatar_url: z.string().trim().max(500).optional().nullable(),
 });
 
 async function assertMainAdmin(supabase: any, userId: string) {
@@ -44,7 +45,6 @@ export const createEmployee = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     await assertMainAdmin(context.supabase, context.userId);
 
-    // Resolve department code to feed into the handle_new_user trigger
     const { data: dept, error: dErr } = await context.supabase
       .from("departments")
       .select("code")
@@ -76,15 +76,25 @@ export const createEmployee = createServerFn({ method: "POST" })
       throw new Error(error.message || "שגיאה ביצירת עובד");
     }
 
-    // Ensure department_id is set explicitly (in case the trigger lookup differed)
-    if (created.user?.id) {
+    const newUserId = created.user?.id ?? null;
+    if (newUserId) {
       await supabaseAdmin
         .from("profiles")
-        .update({ department_id: data.department_id })
-        .eq("id", created.user.id);
+        .update({
+          department_id: data.department_id,
+          avatar_url: data.avatar_url ?? null,
+        })
+        .eq("id", newUserId);
+
+      if (data.role === "department_manager") {
+        await supabaseAdmin
+          .from("departments")
+          .update({ manager_id: newUserId })
+          .eq("id", data.department_id);
+      }
     }
 
-    return { id: created.user?.id ?? null };
+    return { id: newUserId };
   });
 
 
