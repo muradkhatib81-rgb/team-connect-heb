@@ -14,29 +14,39 @@ async function assertMainAdmin(supabase: any, userId: string) {
   }
 }
 
-const codeRegex = /^[a-z0-9_]{2,40}$/;
-
 const createSchema = z.object({
   name: z.string().trim().min(1).max(80),
-  code: z.string().trim().regex(codeRegex, "קוד באנגלית בלבד, אותיות קטנות/מספרים/קו תחתון"),
   manager_id: z.string().uuid().nullable().optional(),
 });
+
+function generateCode(name: string): string {
+  const base = name
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "")
+    .slice(0, 20);
+  const suffix = Math.random().toString(36).slice(2, 8);
+  return base ? `${base}_${suffix}` : `dept_${suffix}`;
+}
 
 export const createDepartment = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((data: unknown) => createSchema.parse(data))
   .handler(async ({ data, context }) => {
     await assertMainAdmin(context.supabase, context.userId);
-    const { error } = await context.supabase.from("departments").insert({
-      name: data.name,
-      code: data.code,
-      manager_id: data.manager_id ?? null,
-    });
-    if (error) {
-      if (error.code === "23505") throw new Error("קוד מחלקה כבר קיים");
-      throw new Error(error.message);
+    let lastErr: any = null;
+    for (let i = 0; i < 5; i++) {
+      const code = generateCode(data.name);
+      const { error } = await context.supabase.from("departments").insert({
+        name: data.name,
+        code,
+        manager_id: data.manager_id ?? null,
+      });
+      if (!error) return { ok: true };
+      lastErr = error;
+      if (error.code !== "23505") break;
     }
-    return { ok: true };
+    throw new Error(lastErr?.message ?? "שגיאה ביצירת מחלקה");
   });
 
 const updateSchema = z.object({

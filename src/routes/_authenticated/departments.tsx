@@ -157,8 +157,7 @@ function DepartmentsPage() {
               <Card key={d.id} className="card-elevated p-5">
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
-                    <p className="text-xs text-muted-foreground">קוד: {d.code}</p>
-                    <h2 className="text-lg font-semibold mt-1 truncate">{d.name}</h2>
+                    <h2 className="text-lg font-semibold truncate">{d.name}</h2>
                     <p className="text-xs text-muted-foreground mt-1">
                       אחראי: {mgr?.full_name ?? "לא הוגדר"}
                     </p>
@@ -233,13 +232,12 @@ function CreateDialog({
 }) {
   const qc = useQueryClient();
   const fn = useServerFn(createDepartment);
-  const [form, setForm] = useState({ name: "", code: "", manager_id: "" as string });
+  const [form, setForm] = useState({ name: "", manager_id: "" as string });
   const mutation = useMutation({
     mutationFn: async () => {
       await fn({
         data: {
           name: form.name.trim(),
-          code: form.code.trim().toLowerCase(),
           manager_id: form.manager_id || null,
         },
       });
@@ -267,16 +265,6 @@ function CreateDialog({
         >
           <Field label="שם המחלקה">
             <Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required maxLength={80} />
-          </Field>
-          <Field label="קוד (אנגלית, ייחודי)">
-            <Input
-              value={form.code}
-              onChange={(e) => setForm({ ...form, code: e.target.value })}
-              required
-              dir="ltr"
-              pattern="[a-z0-9_]{2,40}"
-              placeholder="bakery"
-            />
           </Field>
           <Field label="אחראי מחלקה (אופציונלי)">
             <Select value={form.manager_id || "none"} onValueChange={(v) => setForm({ ...form, manager_id: v === "none" ? "" : v })}>
@@ -350,9 +338,6 @@ function EditDialog({
         >
           <Field label="שם המחלקה">
             <Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required maxLength={80} />
-          </Field>
-          <Field label="קוד">
-            <Input value={dept.code} disabled dir="ltr" />
           </Field>
           <Field label="אחראי מחלקה">
             <Select value={form.manager_id || "none"} onValueChange={(v) => setForm({ ...form, manager_id: v === "none" ? "" : v })}>
