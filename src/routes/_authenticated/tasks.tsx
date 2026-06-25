@@ -884,10 +884,14 @@ function TaskFormDialog({
   const create = useServerFn(createTask);
   const update = useServerFn(updateTask);
 
+  const canPickAnyDept = caps.canCreateTasks; // main_admin or branch/assistant manager with perm
+  const allowedDepartments = canPickAnyDept
+    ? deps.departments
+    : deps.departments.filter((d) => d.id === caps.profile?.department_id);
   const [title, setTitle] = useState(task?.title ?? "");
   const [description, setDescription] = useState(task?.description ?? "");
   const [departmentId, setDepartmentId] = useState(
-    task?.department_id ?? deps.departments[0]?.id ?? "",
+    task?.department_id ?? allowedDepartments[0]?.id ?? "",
   );
   const initSplit = splitForInputs(task?.due_at ?? null);
   const [dueDate, setDueDate] = useState<string>(initSplit.date);
