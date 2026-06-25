@@ -889,22 +889,20 @@ function TaskFormDialog({
   const [departmentId, setDepartmentId] = useState(
     task?.department_id ?? deps.departments[0]?.id ?? "",
   );
-  const [assigneeId, setAssigneeId] = useState<string>(task?.assignee_id ?? "");
-  const [dueAt, setDueAt] = useState<string>(task?.due_at ? task.due_at.slice(0, 16) : "");
+  const initSplit = splitForInputs(task?.due_at ?? null);
+  const [dueDate, setDueDate] = useState<string>(initSplit.date);
+  const [dueTime, setDueTime] = useState<string>(initSplit.time);
   const [priority, setPriority] = useState<TaskPriority>(task?.priority ?? "medium");
-
-  const empsForDept = deps.employees.filter(
-    (e) => !departmentId || e.department_id === departmentId,
-  );
 
   const submit = useMutation({
     mutationFn: async () => {
+      const dueIso = dueDate && dueTime ? combineToIso(dueDate, dueTime) : null;
       const payload = {
         title,
         description: description || null,
         department_id: departmentId,
-        assignee_id: assigneeId || null,
-        due_at: dueAt ? new Date(dueAt).toISOString() : null,
+        assignee_id: null,
+        due_at: dueIso,
         priority,
       };
       if (mode === "create") {
@@ -938,7 +936,7 @@ function TaskFormDialog({
           </div>
           <div>
             <Label>מחלקה</Label>
-            <Select value={departmentId} onValueChange={(v) => { setDepartmentId(v); setAssigneeId(""); }}>
+            <Select value={departmentId} onValueChange={(v) => setDepartmentId(v)}>
               <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
                 {deps.departments.map((d) => (
@@ -946,26 +944,27 @@ function TaskFormDialog({
                 ))}
               </SelectContent>
             </Select>
+            <p className="text-xs text-muted-foreground mt-1">
+              המשימה תהיה זמינה לכל עובדי המחלקה
+            </p>
           </div>
-          <div>
-            <Label>עובד אחראי</Label>
-            <Select value={assigneeId || "none"} onValueChange={(v) => setAssigneeId(v === "none" ? "" : v)}>
-              <SelectTrigger><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="none">ללא</SelectItem>
-                {empsForDept.map((e) => (
-                  <SelectItem key={e.id} value={e.id}>{e.full_name}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-3 gap-3">
             <div>
               <Label>תאריך יעד</Label>
               <Input
-                type="datetime-local"
-                value={dueAt}
-                onChange={(e) => setDueAt(e.target.value)}
+                type="date"
+                lang="he"
+                value={dueDate}
+                onChange={(e) => setDueDate(e.target.value)}
+              />
+            </div>
+            <div>
+              <Label>שעה</Label>
+              <Input
+                type="time"
+                lang="he"
+                value={dueTime}
+                onChange={(e) => setDueTime(e.target.value)}
               />
             </div>
             <div>
@@ -980,6 +979,11 @@ function TaskFormDialog({
               </Select>
             </div>
           </div>
+          {dueDate && dueTime && (
+            <p className="text-xs text-muted-foreground">
+              תצוגה: {formatHeDateTime(combineToIso(dueDate, dueTime))}
+            </p>
+          )}
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={onClose}>ביטול</Button>
