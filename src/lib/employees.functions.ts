@@ -55,6 +55,15 @@ export const createEmployee = createServerFn({ method: "POST" })
 
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
 
+    // Pre-check: prevent duplicate ID numbers with a clear Hebrew message
+    const { data: existing, error: exErr } = await supabaseAdmin
+      .from("profiles")
+      .select("id")
+      .eq("id_number", data.id_number)
+      .maybeSingle();
+    if (exErr) throw new Error(exErr.message);
+    if (existing) throw new Error("כבר קיים עובד עם מספר זהות זה.");
+
     const { data: created, error } = await supabaseAdmin.auth.admin.createUser({
       email: idEmail(data.id_number),
       password: data.password,
@@ -70,8 +79,8 @@ export const createEmployee = createServerFn({ method: "POST" })
     });
     if (error) {
       const msg = error.message?.toLowerCase() ?? "";
-      if (msg.includes("already") || msg.includes("registered") || msg.includes("exists")) {
-        throw new Error("מספר זהות זה כבר רשום במערכת");
+      if (msg.includes("already") || msg.includes("registered") || msg.includes("exists") || msg.includes("duplicate")) {
+        throw new Error("כבר קיים עובד עם מספר זהות זה.");
       }
       throw new Error(error.message || "שגיאה ביצירת עובד");
     }
@@ -95,6 +104,43 @@ export const createEmployee = createServerFn({ method: "POST" })
     }
 
     return { id: newUserId };
+  });
+
+const deleteSchema = z.object({ user_id: z.string().uuid() });
+
+export const deleteEmployee = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((data: unknown) => deleteSchema.parse(data))
+  .handler(async ({ data, context }) => {
+    await assertMainAdmin(context.supabase, context.userId);
+    if (data.user_id === context.userId) {
+      throw new Error("לא ניתן למחוק את החשבון של עצמך");
+    }
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+
+    // 1. Delete avatar files from storage (entire user folder)
+    try {
+      const { data: files } = await supabaseAdmin.storage.from("avatars").list(data.user_id);
+      if (files && files.length > 0) {
+        const paths = files.map((f) => `${data.user_id}/${f.name}`);
+        await supabaseAdmin.storage.from("avatars").remove(paths);
+      }
+    } catch {
+      // non-fatal
+    }
+
+    // 2. Unlink department manager assignments
+    await supabaseAdmin.from("departments").update({ manager_id: null }).eq("manager_id", data.user_id);
+
+    // 3. Delete user_roles + profile rows explicitly (in case no FK cascade)
+    await supabaseAdmin.from("user_roles").delete().eq("user_id", data.user_id);
+    await supabaseAdmin.from("profiles").delete().eq("id", data.user_id);
+
+    // 4. Delete auth user (permanent)
+    const { error } = await supabaseAdmin.auth.admin.deleteUser(data.user_id);
+    if (error) throw new Error(error.message);
+
+    return { ok: true };
   });
 
 
