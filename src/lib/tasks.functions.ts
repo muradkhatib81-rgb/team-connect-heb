@@ -447,7 +447,7 @@ export const markTaskPendingApproval = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     const patch: Record<string, any> = { status: "pending_approval" };
     if (data.employee_note !== undefined) patch.employee_note = data.employee_note;
-    const { error } = await context.supabase.from("tasks").update(patch).eq("id", data.id);
+    const { error } = await context.supabase.from("tasks").update(patch as any).eq("id", data.id);
     if (error) throw new Error(error.message);
     return { ok: true };
   });
