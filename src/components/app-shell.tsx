@@ -10,6 +10,7 @@ import {
   Store,
   Loader2,
   ShieldCheck,
+  UserCircle,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
@@ -61,12 +62,16 @@ export function AppShell({ children }: { children: ReactNode }) {
 
   const top = highestRole(profile.roles);
   const admin = isAdmin(profile.roles);
+  const isDeptManager = profile.roles.includes("department_manager");
+  // עובד רגיל = אין הרשאות ניהול ואינו אחראי מחלקה
+  const isPlainEmployee = !admin && !isDeptManager;
 
   const nav: { to: string; label: string; icon: typeof LayoutDashboard; visible: boolean }[] = [
-    { to: "/dashboard", label: "לוח בקרה", icon: LayoutDashboard, visible: true },
+    { to: "/dashboard", label: "לוח בקרה", icon: LayoutDashboard, visible: !isPlainEmployee },
     { to: "/employees", label: "ניהול עובדים", icon: Users, visible: admin },
     { to: "/departments", label: "מחלקות", icon: Building2, visible: admin },
     { to: "/permissions", label: "הרשאות", icon: ShieldCheck, visible: canManageUsers(profile.roles) },
+    { to: "/profile", label: "הפרופיל שלי", icon: UserCircle, visible: isPlainEmployee },
   ].filter((n) => n.visible);
 
   async function handleSignOut() {
