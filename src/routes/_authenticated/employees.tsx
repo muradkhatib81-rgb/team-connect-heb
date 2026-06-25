@@ -527,16 +527,17 @@ function EmployeeRow({
   emp,
   deptName,
   roles,
+  avatarUrl,
   onEdit,
   canEdit,
 }: {
   emp: ProfileRow;
   deptName: string | null;
   roles: AppRole[];
+  avatarUrl: string | null;
   onEdit: () => void;
   canEdit: boolean;
 }) {
-  const avatarUrl = avatarUrlFor(emp.avatar_url);
   return (
     <Card className="card-elevated p-4">
       <div className="flex items-center gap-4">
