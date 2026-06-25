@@ -611,8 +611,9 @@ function EmployeeRow({
             </Button>
           )}
           {canDelete && (
-            <Button variant="ghost" size="icon" onClick={onDelete} aria-label="מחיקת עובד" className="text-destructive hover:text-destructive">
+            <Button variant="ghost" size="sm" className="gap-1.5 text-destructive hover:text-destructive hover:bg-destructive/10" onClick={onDelete} aria-label="מחק עובד לצמיתות">
               <Trash2 className="size-4" />
+              <span className="hidden sm:inline">מחק לצמיתות</span>
             </Button>
           )}
         </div>
