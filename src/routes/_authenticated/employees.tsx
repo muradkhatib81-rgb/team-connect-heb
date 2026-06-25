@@ -206,7 +206,8 @@ function EmployeesPage() {
   }, [employeesQuery.data, searchTerm, deptFilter, filterMode]);
 
   // Populate signed URL cache for avatars in current list
-  useSignedAvatarUrls((employeesQuery.data ?? []).map((e) => e.avatar_url));
+  const avatarsQ = useSignedAvatarUrls((employeesQuery.data ?? []).map((e) => e.avatar_url));
+  const avatarMap = avatarsQ.data ?? {};
 
   if (meLoading) {
     return <div className="flex justify-center py-12"><Loader2 className="size-6 animate-spin text-primary" /></div>;
