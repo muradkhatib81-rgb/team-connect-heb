@@ -18,8 +18,13 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Loader2, ShieldCheck } from "lucide-react";
+import { Switch } from "@/components/ui/switch";
+import { Label } from "@/components/ui/label";
+import { Loader2, ShieldCheck, Settings2 } from "lucide-react";
 import { toast } from "sonner";
+import { useServerFn } from "@tanstack/react-start";
+import { setUserPermissions } from "@/lib/tasks.functions";
+import { useEffect, useState } from "react";
 
 export const Route = createFileRoute("/_authenticated/permissions")({
   component: PermissionsPage,
@@ -32,9 +37,23 @@ interface Row {
   role: AppRole;
 }
 
+const GRANULAR_PERMS = [
+  { key: "can_create_tasks", label: "יצירת משימות" },
+  { key: "can_edit_tasks", label: "עריכת משימות" },
+  { key: "can_delete_tasks", label: "מחיקת משימות" },
+  { key: "can_create_schedule", label: "יצירת סידור עבודה" },
+  { key: "can_approve_schedule", label: "אישור סידור עבודה" },
+  { key: "can_approve_leave", label: "אישור בקשות חופשה" },
+  { key: "can_view_breaks", label: "צפייה בעובדים בהפסקה" },
+  { key: "can_send_messages", label: "שליחת הודעות" },
+] as const;
+
+type PermKey = (typeof GRANULAR_PERMS)[number]["key"];
+
 function PermissionsPage() {
   const qc = useQueryClient();
   const { data: me } = useAuth();
+  const isMainAdmin = !!me?.roles.includes("main_admin");
   const allowed = me ? canManageUsers(me.roles) : false;
 
   const query = useQuery({
@@ -83,6 +102,10 @@ function PermissionsPage() {
     );
   }
 
+  const managers = (query.data ?? []).filter(
+    (r) => r.role === "branch_manager" || r.role === "assistant_manager",
+  );
+
   return (
     <div className="space-y-6">
       <header className="flex items-center gap-3">
@@ -129,6 +152,132 @@ function PermissionsPage() {
           ))}
         </div>
       )}
+
+      {isMainAdmin && (
+        <section className="space-y-3">
+          <div className="flex items-center gap-3 mt-8">
+            <div className="size-10 rounded-xl bg-primary/10 text-primary flex items-center justify-center">
+              <Settings2 className="size-5" />
+            </div>
+            <div>
+              <h2 className="text-xl font-bold">הרשאות מפורטות למנהלים</h2>
+              <p className="text-sm text-muted-foreground mt-1">
+                הענקה/הסרה של הרשאות פעולה למנהל סניף וסגן מנהל. השינוי נכנס לתוקף מיד.
+              </p>
+            </div>
+          </div>
+          {managers.length === 0 ? (
+            <Card className="card-elevated p-6 text-sm text-muted-foreground text-center">
+              אין מנהלי סניף או סגני מנהל להגדרה.
+            </Card>
+          ) : (
+            <div className="grid gap-3">
+              {managers.map((m) => (
+                <ManagerPermsCard key={m.id} userId={m.id} name={m.full_name} role={m.role} />
+              ))}
+            </div>
+          )}
+        </section>
+      )}
     </div>
   );
 }
+
+function ManagerPermsCard({
+  userId,
+  name,
+  role,
+}: {
+  userId: string;
+  name: string;
+  role: AppRole;
+}) {
+  const qc = useQueryClient();
+  const save = useServerFn(setUserPermissions);
+
+  const q = useQuery({
+    queryKey: ["user-perms", userId],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("user_task_permissions")
+        .select("*")
+        .eq("user_id", userId)
+        .maybeSingle();
+      if (error) throw error;
+      return data;
+    },
+  });
+
+  const [state, setState] = useState<Record<PermKey, boolean>>({
+    can_create_tasks: false,
+    can_edit_tasks: false,
+    can_delete_tasks: false,
+    can_create_schedule: false,
+    can_approve_schedule: false,
+    can_approve_leave: false,
+    can_view_breaks: false,
+    can_send_messages: false,
+  });
+
+  useEffect(() => {
+    if (!q.data) return;
+    const d: any = q.data;
+    setState({
+      can_create_tasks: !!(d.can_create_tasks || d.can_manage_tasks),
+      can_edit_tasks: !!(d.can_edit_tasks || d.can_manage_tasks),
+      can_delete_tasks: !!(d.can_delete_tasks || d.can_manage_tasks),
+      can_create_schedule: !!d.can_create_schedule,
+      can_approve_schedule: !!d.can_approve_schedule,
+      can_approve_leave: !!d.can_approve_leave,
+      can_view_breaks: !!d.can_view_breaks,
+      can_send_messages: !!d.can_send_messages,
+    });
+  }, [q.data]);
+
+  const mut = useMutation({
+    mutationFn: (next: Record<PermKey, boolean>) =>
+      save({ data: { user_id: userId, perms: next } }),
+    onSuccess: () => {
+      toast.success("ההרשאות עודכנו");
+      qc.invalidateQueries({ queryKey: ["user-perms", userId] });
+      qc.invalidateQueries({ queryKey: ["task-perm"] });
+    },
+    onError: (e: any) => toast.error(e?.message ?? "שגיאה"),
+  });
+
+  function toggle(k: PermKey, v: boolean) {
+    const next = { ...state, [k]: v };
+    setState(next);
+    mut.mutate(next);
+  }
+
+  return (
+    <Card className="card-elevated p-4">
+      <div className="flex items-center justify-between gap-3 mb-3">
+        <div>
+          <p className="font-semibold">{name}</p>
+          <p className="text-xs text-muted-foreground">{ROLE_LABELS[role]}</p>
+        </div>
+        {mut.isPending && <Loader2 className="size-4 animate-spin text-primary" />}
+      </div>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+        {GRANULAR_PERMS.map((p) => (
+          <div
+            key={p.key}
+            className="flex items-center justify-between gap-2 px-3 py-2 rounded-md border"
+          >
+            <Label htmlFor={`${userId}-${p.key}`} className="text-sm cursor-pointer">
+              {p.label}
+            </Label>
+            <Switch
+              id={`${userId}-${p.key}`}
+              checked={state[p.key]}
+              onCheckedChange={(v) => toggle(p.key, v)}
+            />
+          </div>
+        ))}
+      </div>
+    </Card>
+  );
+}
+

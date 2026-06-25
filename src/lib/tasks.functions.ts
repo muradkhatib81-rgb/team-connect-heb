@@ -11,23 +11,33 @@ async function getCallerCaps(supabase: any, userId: string) {
   const [{ data: roles }, { data: perm }, { data: profile }, { data: managedDepts }] =
     await Promise.all([
       supabase.from("user_roles").select("role").eq("user_id", userId),
-      supabase.from("user_task_permissions").select("can_manage_tasks").eq("user_id", userId).maybeSingle(),
+      supabase
+        .from("user_task_permissions")
+        .select("*")
+        .eq("user_id", userId)
+        .maybeSingle(),
       supabase.from("profiles").select("department_id").eq("id", userId).maybeSingle(),
       supabase.from("departments").select("id").eq("manager_id", userId),
     ]);
   const roleSet = new Set((roles ?? []).map((r: any) => r.role));
   const isMainAdmin = roleSet.has("main_admin");
-  const isAdmin =
-    isMainAdmin || roleSet.has("branch_manager") || roleSet.has("assistant_manager");
-  const canManageTasks =
-    isMainAdmin ||
-    ((roleSet.has("branch_manager") || roleSet.has("assistant_manager")) &&
-      !!perm?.can_manage_tasks);
+  const isManager = roleSet.has("branch_manager") || roleSet.has("assistant_manager");
+  const isAdmin = isMainAdmin || isManager;
+  const p: any = perm ?? {};
+  const canCreateTasks =
+    isMainAdmin || (isManager && (!!p.can_manage_tasks || !!p.can_create_tasks));
+  const canEditTasks =
+    isMainAdmin || (isManager && (!!p.can_manage_tasks || !!p.can_edit_tasks));
+  const canDeleteTasks =
+    isMainAdmin || (isManager && (!!p.can_manage_tasks || !!p.can_delete_tasks));
   const isDeptManager = roleSet.has("department_manager");
   return {
     isMainAdmin,
     isAdmin,
-    canManageTasks,
+    canCreateTasks,
+    canEditTasks,
+    canDeleteTasks,
+    canManageTasks: canEditTasks, // legacy alias used elsewhere
     isDeptManager,
     departmentId: profile?.department_id ?? null,
     managedDeptIds: (managedDepts ?? []).map((d: any) => d.id) as string[],
@@ -35,7 +45,10 @@ async function getCallerCaps(supabase: any, userId: string) {
 }
 
 function canCreateForDept(caps: Awaited<ReturnType<typeof getCallerCaps>>, deptId: string) {
-  return caps.canManageTasks || caps.managedDeptIds.includes(deptId);
+  return caps.canCreateTasks || caps.managedDeptIds.includes(deptId);
+}
+function canEditForDept(caps: Awaited<ReturnType<typeof getCallerCaps>>, deptId: string) {
+  return caps.canEditTasks || caps.managedDeptIds.includes(deptId);
 }
 
 // ---------- CREATE task ----------
@@ -106,7 +119,7 @@ export const deleteTask = createServerFn({ method: "POST" })
   .inputValidator((d: unknown) => z.object({ id: z.string().uuid() }).parse(d))
   .handler(async ({ data, context }) => {
     const caps = await getCallerCaps(context.supabase, context.userId);
-    if (!caps.canManageTasks) throw new Error("רק בעלי הרשאת ניהול משימות יכולים למחוק");
+    if (!caps.canDeleteTasks) throw new Error("רק בעלי הרשאת מחיקת משימות יכולים למחוק");
     // Remove image files first
     const { data: imgs } = await context.supabase
       .from("task_images")
@@ -416,6 +429,122 @@ export const setTaskManagementPermission = createServerFn({ method: "POST" })
         },
         { onConflict: "user_id" },
       );
+    if (error) throw new Error(error.message);
+    return { ok: true };
+  });
+
+// ---------- APPROVAL WORKFLOW ----------
+export const markTaskPendingApproval = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) =>
+    z
+      .object({
+        id: z.string().uuid(),
+        employee_note: z.string().trim().max(2000).optional().nullable(),
+      })
+      .parse(d),
+  )
+  .handler(async ({ data, context }) => {
+    const patch: Record<string, any> = { status: "pending_approval" };
+    if (data.employee_note !== undefined) patch.employee_note = data.employee_note;
+    const { error } = await context.supabase.from("tasks").update(patch as any).eq("id", data.id);
+    if (error) throw new Error(error.message);
+    return { ok: true };
+  });
+
+export const approveTask = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) => z.object({ id: z.string().uuid() }).parse(d))
+  .handler(async ({ data, context }) => {
+    const { data: t } = await context.supabase
+      .from("tasks")
+      .select("department_id")
+      .eq("id", data.id)
+      .maybeSingle();
+    if (!t) throw new Error("המשימה לא נמצאה");
+    const caps = await getCallerCaps(context.supabase, context.userId);
+    if (!canEditForDept(caps, t.department_id))
+      throw new Error("אין הרשאה לאשר משימה זו");
+    const { error } = await context.supabase
+      .from("tasks")
+      .update({ status: "completed", rejection_note: null, rejected_at: null })
+      .eq("id", data.id);
+    if (error) throw new Error(error.message);
+    return { ok: true };
+  });
+
+export const rejectTask = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) =>
+    z
+      .object({
+        id: z.string().uuid(),
+        rejection_note: z.string().trim().min(1, "נדרשת הערה").max(2000),
+      })
+      .parse(d),
+  )
+  .handler(async ({ data, context }) => {
+    const { data: t } = await context.supabase
+      .from("tasks")
+      .select("department_id")
+      .eq("id", data.id)
+      .maybeSingle();
+    if (!t) throw new Error("המשימה לא נמצאה");
+    const caps = await getCallerCaps(context.supabase, context.userId);
+    if (!canEditForDept(caps, t.department_id))
+      throw new Error("אין הרשאה להחזיר משימה זו");
+    const { error } = await context.supabase
+      .from("tasks")
+      .update({
+        status: "in_progress",
+        rejection_note: data.rejection_note,
+        rejected_at: new Date().toISOString(),
+      })
+      .eq("id", data.id);
+    if (error) throw new Error(error.message);
+    return { ok: true };
+  });
+
+// ---------- GRANULAR USER PERMISSIONS (main admin only) ----------
+export const PERMISSION_KEYS = [
+  "can_create_tasks",
+  "can_edit_tasks",
+  "can_delete_tasks",
+  "can_create_schedule",
+  "can_approve_schedule",
+  "can_approve_leave",
+  "can_view_breaks",
+  "can_send_messages",
+] as const;
+
+const setPermsSchema = z.object({
+  user_id: z.string().uuid(),
+  perms: z.object(
+    Object.fromEntries(PERMISSION_KEYS.map((k) => [k, z.boolean()])) as Record<
+      (typeof PERMISSION_KEYS)[number],
+      z.ZodBoolean
+    >,
+  ),
+});
+
+export const setUserPermissions = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) => setPermsSchema.parse(d))
+  .handler(async ({ data, context }) => {
+    const caps = await getCallerCaps(context.supabase, context.userId);
+    if (!caps.isMainAdmin) throw new Error("רק מנהל ראשי יכול לנהל הרשאות");
+    const row: Record<string, any> = {
+      user_id: data.user_id,
+      granted_by: context.userId,
+      updated_at: new Date().toISOString(),
+      ...data.perms,
+    };
+    // Maintain legacy can_manage_tasks consistent with full task control
+    row.can_manage_tasks =
+      data.perms.can_create_tasks && data.perms.can_edit_tasks && data.perms.can_delete_tasks;
+    const { error } = await context.supabase
+      .from("user_task_permissions")
+      .upsert(row as any, { onConflict: "user_id" });
     if (error) throw new Error(error.message);
     return { ok: true };
   });

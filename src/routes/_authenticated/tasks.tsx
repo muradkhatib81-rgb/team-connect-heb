@@ -14,7 +14,11 @@ import {
   createRecurrence,
   updateRecurrence,
   deleteRecurrence,
+  markTaskPendingApproval,
+  approveTask,
+  rejectTask,
 } from "@/lib/tasks.functions";
+import { formatHeDateTime, splitForInputs, combineToIso } from "@/lib/date-format";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -64,7 +68,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 
-type TaskStatus = "new" | "in_progress" | "completed";
+type TaskStatus = "new" | "in_progress" | "pending_approval" | "completed";
 type TaskPriority = "low" | "medium" | "high";
 
 interface TaskRow {
@@ -78,7 +82,13 @@ interface TaskRow {
   priority: TaskPriority;
   status: TaskStatus;
   notes: string | null;
+  employee_note: string | null;
   completed_at: string | null;
+  completed_by: string | null;
+  approved_at: string | null;
+  approved_by: string | null;
+  rejection_note: string | null;
+  rejected_at: string | null;
   recurrence_id: string | null;
   created_at: string;
   updated_at: string;
@@ -106,7 +116,8 @@ interface EmpOption { id: string; full_name: string; department_id: string | nul
 const STATUS_LABEL: Record<TaskStatus, string> = {
   new: "חדש",
   in_progress: "בביצוע",
-  completed: "הושלם",
+  pending_approval: "ממתין לאישור",
+  completed: "הושלמה",
 };
 const PRIORITY_LABEL: Record<TaskPriority, string> = {
   low: "נמוכה",
@@ -138,17 +149,29 @@ function useTaskCaps() {
     queryFn: async () => {
       const { data } = await supabase
         .from("user_task_permissions")
-        .select("can_manage_tasks")
+        .select("*")
         .eq("user_id", profile!.id)
         .maybeSingle();
-      return !!data?.can_manage_tasks;
+      return data;
     },
   });
-  const grantedTaskMgr = !!permQuery.data;
-  const canManageTasks =
-    isMainAdmin ||
-    ((roles.includes("branch_manager") || roles.includes("assistant_manager")) && grantedTaskMgr);
-  return { profile, isMainAdmin, isAdm, isDeptMgr, canManageTasks };
+  const p: any = permQuery.data ?? {};
+  const isManager = roles.includes("branch_manager") || roles.includes("assistant_manager");
+  const canCreateTasks = isMainAdmin || (isManager && (!!p.can_manage_tasks || !!p.can_create_tasks));
+  const canEditTasks = isMainAdmin || (isManager && (!!p.can_manage_tasks || !!p.can_edit_tasks));
+  const canDeleteTasks = isMainAdmin || (isManager && (!!p.can_manage_tasks || !!p.can_delete_tasks));
+  // Legacy alias
+  const canManageTasks = canEditTasks;
+  return {
+    profile,
+    isMainAdmin,
+    isAdm,
+    isDeptMgr,
+    canCreateTasks,
+    canEditTasks,
+    canDeleteTasks,
+    canManageTasks,
+  };
 }
 
 function TasksPage() {
@@ -348,17 +371,12 @@ function TaskCard({
 }) {
   const [open, setOpen] = useState(false);
   const dept = deps?.departments.find((d) => d.id === task.department_id);
-  const assignee = deps?.employees.find((e) => e.id === task.assignee_id);
+  const completedBy = deps?.employees.find((e) => e.id === task.completed_by);
   const overdue =
     task.due_at && task.status !== "completed" && new Date(task.due_at).getTime() < Date.now();
-  const isAssignee = caps.profile?.id === task.assignee_id;
-  const isDeptOfThis =
-    caps.isDeptMgr &&
-    deps?.departments.find((d) => d.id === task.department_id) &&
-    // dept manager-only edit if managing this dept (best-effort UI; RLS enforces)
-    true;
-  const canEdit = caps.canManageTasks || isDeptOfThis;
-  const canDelete = caps.canManageTasks;
+  const isDeptOfThis = caps.isDeptMgr && true;
+  const canEdit = caps.canEditTasks || isDeptOfThis;
+  const canDelete = caps.canDeleteTasks;
 
   return (
     <>
@@ -389,14 +407,13 @@ function TaskCard({
             </div>
             <div className="text-xs text-muted-foreground mt-1.5 flex flex-wrap gap-x-3 gap-y-1">
               {dept && <span>מחלקה: {dept.name}</span>}
-              {assignee && <span>אחראי: {assignee.full_name}</span>}
               {task.due_at && (
                 <span className="flex items-center gap-1">
                   <Clock className="size-3" />
-                  יעד: {new Date(task.due_at).toLocaleString("he-IL")}
+                  יעד: {formatHeDateTime(task.due_at)}
                 </span>
               )}
-              {isAssignee && <Badge variant="secondary" className="rounded-full text-[10px]">שלי</Badge>}
+              {completedBy && <span>בוצע ע״י: {completedBy.full_name}</span>}
             </div>
           </div>
           <div className="flex items-center gap-1 shrink-0" onClick={(e) => e.stopPropagation()}>
@@ -428,6 +445,7 @@ function priorityVariant(p: TaskPriority): "default" | "secondary" | "destructiv
 }
 function statusVariant(s: TaskStatus): "default" | "secondary" | "destructive" | "outline" {
   if (s === "completed") return "secondary";
+  if (s === "pending_approval") return "destructive";
   if (s === "in_progress") return "default";
   return "outline";
 }
@@ -486,30 +504,75 @@ function TaskDetailDialog({
 }) {
   const qc = useQueryClient();
   const upd = useServerFn(updateTask);
-  const [status, setStatus] = useState<TaskStatus>(task.status);
-  const [notes, setNotes] = useState(task.notes ?? "");
-  const isAssignee = caps.profile?.id === task.assignee_id;
-  const canEditMeta = caps.canManageTasks || caps.isDeptMgr;
-  const canUpdateStatus = canEditMeta || isAssignee;
+  const markPending = useServerFn(markTaskPendingApproval);
+  const approve = useServerFn(approveTask);
+  const reject = useServerFn(rejectTask);
 
-  const saveStatus = useMutation({
-    mutationFn: () => upd({ data: { id: task.id, status, notes } }),
+  const isMember = caps.profile?.department_id === task.department_id;
+  const canApprove = caps.canEditTasks || caps.isDeptMgr || caps.isMainAdmin;
+  // Employees in the same department can mark "done" — but not on already-pending/completed.
+  const canMarkDone =
+    isMember && (task.status === "new" || task.status === "in_progress");
+
+  const [employeeNote, setEmployeeNote] = useState(task.employee_note ?? "");
+  const [rejectNote, setRejectNote] = useState("");
+  const [showReject, setShowReject] = useState(false);
+
+  const startProgress = useMutation({
+    mutationFn: () => upd({ data: { id: task.id, status: "in_progress" } }),
     onSuccess: () => {
-      toast.success("עודכן");
+      toast.success("המשימה הועברה לביצוע");
+      qc.invalidateQueries({ queryKey: ["tasks"] });
+    },
+    onError: (e: any) => toast.error(e?.message ?? "שגיאה"),
+  });
+
+  const submitDone = useMutation({
+    mutationFn: () =>
+      markPending({ data: { id: task.id, employee_note: employeeNote || undefined } }),
+    onSuccess: () => {
+      toast.success("נשלח לאישור אחראי המחלקה");
       qc.invalidateQueries({ queryKey: ["tasks"] });
       onClose();
     },
-    onError: (e: any) => toast.error(e?.message ?? "שגיאה בעדכון"),
+    onError: (e: any) => toast.error(e?.message ?? "שגיאה"),
+  });
+
+  const approveM = useMutation({
+    mutationFn: () => approve({ data: { id: task.id } }),
+    onSuccess: () => {
+      toast.success("המשימה אושרה");
+      qc.invalidateQueries({ queryKey: ["tasks"] });
+      onClose();
+    },
+    onError: (e: any) => toast.error(e?.message ?? "שגיאה"),
+  });
+
+  const rejectM = useMutation({
+    mutationFn: () =>
+      reject({ data: { id: task.id, rejection_note: rejectNote || undefined } }),
+    onSuccess: () => {
+      toast.success("המשימה הוחזרה לביצוע");
+      qc.invalidateQueries({ queryKey: ["tasks"] });
+      onClose();
+    },
+    onError: (e: any) => toast.error(e?.message ?? "שגיאה"),
   });
 
   const dept = deps?.departments.find((d) => d.id === task.department_id);
-  const assignee = deps?.employees.find((e) => e.id === task.assignee_id);
+  const completedBy = deps?.employees.find((e) => e.id === task.completed_by);
+  const approvedBy = deps?.employees.find((e) => e.id === task.approved_by);
 
   return (
     <Dialog open onOpenChange={(v) => !v && onClose()}>
       <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>{task.title}</DialogTitle>
+          <DialogTitle className="flex items-center gap-2 flex-wrap">
+            {task.title}
+            <Badge variant={statusVariant(task.status)} className="rounded-full text-xs">
+              {STATUS_LABEL[task.status]}
+            </Badge>
+          </DialogTitle>
         </DialogHeader>
         <div className="space-y-4">
           {task.description && (
@@ -524,71 +587,155 @@ function TaskDetailDialog({
               <p>{dept?.name ?? "—"}</p>
             </div>
             <div>
-              <Label className="text-xs text-muted-foreground">אחראי</Label>
-              <p>{assignee?.full_name ?? "ללא"}</p>
-            </div>
-            <div>
               <Label className="text-xs text-muted-foreground">עדיפות</Label>
               <p>{PRIORITY_LABEL[task.priority]}</p>
             </div>
             <div>
               <Label className="text-xs text-muted-foreground">תאריך יצירה</Label>
-              <p>{new Date(task.created_at).toLocaleString("he-IL")}</p>
+              <p>{formatHeDateTime(task.created_at)}</p>
             </div>
             {task.due_at && (
               <div>
                 <Label className="text-xs text-muted-foreground">תאריך יעד</Label>
-                <p>{new Date(task.due_at).toLocaleString("he-IL")}</p>
+                <p>{formatHeDateTime(task.due_at)}</p>
               </div>
             )}
             {task.completed_at && (
               <div>
-                <Label className="text-xs text-muted-foreground">הושלם בתאריך</Label>
-                <p>{new Date(task.completed_at).toLocaleString("he-IL")}</p>
+                <Label className="text-xs text-muted-foreground">סומן כבוצע</Label>
+                <p>{formatHeDateTime(task.completed_at)}</p>
+              </div>
+            )}
+            {completedBy && (
+              <div>
+                <Label className="text-xs text-muted-foreground">בוצע ע״י</Label>
+                <p>{completedBy.full_name}</p>
+              </div>
+            )}
+            {task.approved_at && (
+              <div>
+                <Label className="text-xs text-muted-foreground">אושר בתאריך</Label>
+                <p>{formatHeDateTime(task.approved_at)}</p>
+              </div>
+            )}
+            {approvedBy && (
+              <div>
+                <Label className="text-xs text-muted-foreground">אושר ע״י</Label>
+                <p>{approvedBy.full_name}</p>
               </div>
             )}
           </div>
 
-          <div className="border-t pt-4 space-y-3">
-            <div>
-              <Label>סטטוס</Label>
-              <Select
-                value={status}
-                onValueChange={(v) => setStatus(v as TaskStatus)}
-                disabled={!canUpdateStatus}
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="new">חדש</SelectItem>
-                  <SelectItem value="in_progress">בביצוע</SelectItem>
-                  <SelectItem value="completed">הושלם</SelectItem>
-                </SelectContent>
-              </Select>
+          {task.employee_note && (
+            <div className="border-t pt-3">
+              <Label className="text-xs text-muted-foreground">הערת מבצע</Label>
+              <p className="text-sm whitespace-pre-wrap mt-1">{task.employee_note}</p>
             </div>
-            <div>
-              <Label>הערות</Label>
+          )}
+
+          {task.rejection_note && (
+            <div className="border-t pt-3">
+              <Label className="text-xs text-destructive">הוחזר עם הערה</Label>
+              <p className="text-sm whitespace-pre-wrap mt-1">{task.rejection_note}</p>
+              {task.rejected_at && (
+                <p className="text-xs text-muted-foreground mt-1">
+                  {formatHeDateTime(task.rejected_at)}
+                </p>
+              )}
+            </div>
+          )}
+
+          {/* Mark-done input area: visible to dept members while task is active */}
+          {canMarkDone && (
+            <div className="border-t pt-4 space-y-3">
+              <Label>הערה על הביצוע (לא חובה)</Label>
               <Textarea
-                value={notes}
-                onChange={(e) => setNotes(e.target.value)}
-                disabled={!canUpdateStatus}
+                value={employeeNote}
+                onChange={(e) => setEmployeeNote(e.target.value)}
                 rows={3}
+                placeholder="פרט/י מה בוצע..."
+              />
+              <Label className="text-xs text-muted-foreground">
+                ניתן לצרף עד 5 תמונות כהוכחת ביצוע
+              </Label>
+              <TaskImagesSection
+                taskId={task.id}
+                canEdit={true}
+                userId={caps.profile?.id}
               />
             </div>
-          </div>
+          )}
 
-          {/* Images: show only when completed; allow assignee/managers to upload */}
-          {status === "completed" && (
-            <TaskImagesSection taskId={task.id} canEdit={canUpdateStatus} userId={caps.profile?.id} />
+          {/* Existing images for non-active states */}
+          {!canMarkDone && (task.status === "pending_approval" || task.status === "completed") && (
+            <div className="border-t pt-4">
+              <Label className="text-xs text-muted-foreground mb-2 block">תמונות</Label>
+              <TaskImagesSection
+                taskId={task.id}
+                canEdit={false}
+                userId={caps.profile?.id}
+              />
+            </div>
+          )}
+
+          {/* Approval section */}
+          {task.status === "pending_approval" && canApprove && (
+            <div className="border-t pt-4 space-y-3">
+              {showReject ? (
+                <>
+                  <Label>הערה להחזרה</Label>
+                  <Textarea
+                    value={rejectNote}
+                    onChange={(e) => setRejectNote(e.target.value)}
+                    rows={3}
+                    placeholder="מדוע יש לבצע שוב?"
+                  />
+                  <div className="flex gap-2">
+                    <Button
+                      variant="destructive"
+                      onClick={() => rejectM.mutate()}
+                      disabled={rejectM.isPending}
+                    >
+                      {rejectM.isPending && <Loader2 className="size-4 animate-spin ml-2" />}
+                      החזר לביצוע
+                    </Button>
+                    <Button variant="outline" onClick={() => setShowReject(false)}>
+                      ביטול
+                    </Button>
+                  </div>
+                </>
+              ) : (
+                <div className="flex gap-2 flex-wrap">
+                  <Button
+                    onClick={() => approveM.mutate()}
+                    disabled={approveM.isPending}
+                  >
+                    {approveM.isPending && <Loader2 className="size-4 animate-spin ml-2" />}
+                    אשר השלמה
+                  </Button>
+                  <Button variant="outline" onClick={() => setShowReject(true)}>
+                    החזר לביצוע
+                  </Button>
+                </div>
+              )}
+            </div>
           )}
         </div>
-        <DialogFooter>
+        <DialogFooter className="gap-2 flex-wrap">
           <Button variant="outline" onClick={onClose}>סגירה</Button>
-          {canUpdateStatus && (
-            <Button onClick={() => saveStatus.mutate()} disabled={saveStatus.isPending}>
-              {saveStatus.isPending && <Loader2 className="size-4 animate-spin ml-2" />}
-              שמירה
+          {canMarkDone && task.status === "new" && (
+            <Button
+              variant="secondary"
+              onClick={() => startProgress.mutate()}
+              disabled={startProgress.isPending}
+            >
+              התחל בביצוע
+            </Button>
+          )}
+          {canMarkDone && (
+            <Button onClick={() => submitDone.mutate()} disabled={submitDone.isPending}>
+              {submitDone.isPending && <Loader2 className="size-4 animate-spin ml-2" />}
+              סיימתי - שלח לאישור
             </Button>
           )}
         </DialogFooter>
@@ -742,22 +889,20 @@ function TaskFormDialog({
   const [departmentId, setDepartmentId] = useState(
     task?.department_id ?? deps.departments[0]?.id ?? "",
   );
-  const [assigneeId, setAssigneeId] = useState<string>(task?.assignee_id ?? "");
-  const [dueAt, setDueAt] = useState<string>(task?.due_at ? task.due_at.slice(0, 16) : "");
+  const initSplit = splitForInputs(task?.due_at ?? null);
+  const [dueDate, setDueDate] = useState<string>(initSplit.date);
+  const [dueTime, setDueTime] = useState<string>(initSplit.time);
   const [priority, setPriority] = useState<TaskPriority>(task?.priority ?? "medium");
-
-  const empsForDept = deps.employees.filter(
-    (e) => !departmentId || e.department_id === departmentId,
-  );
 
   const submit = useMutation({
     mutationFn: async () => {
+      const dueIso = dueDate && dueTime ? combineToIso(dueDate, dueTime) : null;
       const payload = {
         title,
         description: description || null,
         department_id: departmentId,
-        assignee_id: assigneeId || null,
-        due_at: dueAt ? new Date(dueAt).toISOString() : null,
+        assignee_id: null,
+        due_at: dueIso,
         priority,
       };
       if (mode === "create") {
@@ -791,7 +936,7 @@ function TaskFormDialog({
           </div>
           <div>
             <Label>מחלקה</Label>
-            <Select value={departmentId} onValueChange={(v) => { setDepartmentId(v); setAssigneeId(""); }}>
+            <Select value={departmentId} onValueChange={(v) => setDepartmentId(v)}>
               <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
                 {deps.departments.map((d) => (
@@ -799,26 +944,27 @@ function TaskFormDialog({
                 ))}
               </SelectContent>
             </Select>
+            <p className="text-xs text-muted-foreground mt-1">
+              המשימה תהיה זמינה לכל עובדי המחלקה
+            </p>
           </div>
-          <div>
-            <Label>עובד אחראי</Label>
-            <Select value={assigneeId || "none"} onValueChange={(v) => setAssigneeId(v === "none" ? "" : v)}>
-              <SelectTrigger><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="none">ללא</SelectItem>
-                {empsForDept.map((e) => (
-                  <SelectItem key={e.id} value={e.id}>{e.full_name}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-3 gap-3">
             <div>
               <Label>תאריך יעד</Label>
               <Input
-                type="datetime-local"
-                value={dueAt}
-                onChange={(e) => setDueAt(e.target.value)}
+                type="date"
+                lang="he"
+                value={dueDate}
+                onChange={(e) => setDueDate(e.target.value)}
+              />
+            </div>
+            <div>
+              <Label>שעה</Label>
+              <Input
+                type="time"
+                lang="he"
+                value={dueTime}
+                onChange={(e) => setDueTime(e.target.value)}
               />
             </div>
             <div>
@@ -833,6 +979,11 @@ function TaskFormDialog({
               </Select>
             </div>
           </div>
+          {dueDate && dueTime && (
+            <p className="text-xs text-muted-foreground">
+              תצוגה: {formatHeDateTime(combineToIso(dueDate, dueTime))}
+            </p>
+          )}
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={onClose}>ביטול</Button>
@@ -913,7 +1064,6 @@ function RecurringSection({
       ) : (
         recsQuery.data.map((r) => {
           const dept = deps?.departments.find((d) => d.id === r.department_id);
-          const assignee = deps?.employees.find((e) => e.id === r.assignee_id);
           return (
             <Card key={r.id} className="card-elevated p-4">
               <div className="flex items-start justify-between gap-3">
@@ -929,7 +1079,6 @@ function RecurringSection({
                   </div>
                   <div className="text-xs text-muted-foreground mt-1.5 flex flex-wrap gap-x-3 gap-y-1">
                     {dept && <span>מחלקה: {dept.name}</span>}
-                    {assignee && <span>אחראי: {assignee.full_name}</span>}
                     <span>שעה: {r.time_of_day}</span>
                     {r.frequency === "weekly" && r.days_of_week.length > 0 && (
                       <span>ימים: {r.days_of_week.map((d) => DOW_LABELS[d]).join(", ")}</span>
@@ -938,7 +1087,7 @@ function RecurringSection({
                       <span>יום בחודש: {r.day_of_month}</span>
                     )}
                     {r.next_run_at && (
-                      <span>ריצה הבאה: {new Date(r.next_run_at).toLocaleString("he-IL")}</span>
+                      <span>ריצה הבאה: {formatHeDateTime(r.next_run_at)}</span>
                     )}
                   </div>
                 </div>
@@ -1009,7 +1158,6 @@ function RecurrenceFormDialog({
   const [title, setTitle] = useState(rec?.title ?? "");
   const [description, setDescription] = useState(rec?.description ?? "");
   const [departmentId, setDepartmentId] = useState(rec?.department_id ?? deps.departments[0]?.id ?? "");
-  const [assigneeId, setAssigneeId] = useState(rec?.assignee_id ?? "");
   const [priority, setPriority] = useState<TaskPriority>(rec?.priority ?? "medium");
   const [frequency, setFrequency] = useState<RecRow["frequency"]>(rec?.frequency ?? "daily");
   const [dows, setDows] = useState<number[]>(rec?.days_of_week ?? []);
@@ -1017,15 +1165,13 @@ function RecurrenceFormDialog({
   const [time, setTime] = useState(rec?.time_of_day ?? "08:00");
   const [active, setActive] = useState(rec?.is_active ?? true);
 
-  const empsForDept = deps.employees.filter((e) => !departmentId || e.department_id === departmentId);
-
   const submit = useMutation({
     mutationFn: async () => {
       const payload: any = {
         title,
         description: description || null,
         department_id: departmentId,
-        assignee_id: assigneeId || null,
+        assignee_id: null,
         priority,
         frequency,
         days_of_week: frequency === "weekly" ? dows : [],
@@ -1065,30 +1211,19 @@ function RecurrenceFormDialog({
             <Label>תיאור</Label>
             <Textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={2} />
           </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <Label>מחלקה</Label>
-              <Select value={departmentId} onValueChange={(v) => { setDepartmentId(v); setAssigneeId(""); }}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  {deps.departments.map((d) => (
-                    <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div>
-              <Label>עובד אחראי</Label>
-              <Select value={assigneeId || "none"} onValueChange={(v) => setAssigneeId(v === "none" ? "" : v)}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="none">ללא</SelectItem>
-                  {empsForDept.map((e) => (
-                    <SelectItem key={e.id} value={e.id}>{e.full_name}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
+          <div>
+            <Label>מחלקה</Label>
+            <Select value={departmentId} onValueChange={(v) => setDepartmentId(v)}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                {deps.departments.map((d) => (
+                  <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <p className="text-xs text-muted-foreground mt-1">
+              המשימה תייוצר עבור כל עובדי המחלקה
+            </p>
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
@@ -1147,7 +1282,7 @@ function RecurrenceFormDialog({
           <div className="grid grid-cols-2 gap-3 items-end">
             <div>
               <Label>שעה</Label>
-              <Input type="time" value={time} onChange={(e) => setTime(e.target.value)} />
+              <Input type="time" lang="he" value={time} onChange={(e) => setTime(e.target.value)} />
             </div>
             <div className="flex items-center gap-2">
               <Switch checked={active} onCheckedChange={setActive} />
