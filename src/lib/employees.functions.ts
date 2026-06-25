@@ -115,7 +115,7 @@ export const resetEmployeePassword = createServerFn({ method: "POST" })
     if (error) throw new Error(error.message);
     await supabaseAdmin
       .from("profiles")
-      .update({ must_change_password: true })
+      .update({ must_change_password: false })
       .eq("id", data.user_id);
     return { ok: true };
   });
