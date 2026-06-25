@@ -46,6 +46,7 @@ export type Database = {
       }
       profiles: {
         Row: {
+          avatar_url: string | null
           created_at: string
           department: Database["public"]["Enums"]["department"]
           department_id: string | null
@@ -55,10 +56,12 @@ export type Database = {
           is_active: boolean
           job_title: string | null
           must_change_password: boolean
+          on_leave: boolean
           phone: string | null
           updated_at: string
         }
         Insert: {
+          avatar_url?: string | null
           created_at?: string
           department?: Database["public"]["Enums"]["department"]
           department_id?: string | null
@@ -68,10 +71,12 @@ export type Database = {
           is_active?: boolean
           job_title?: string | null
           must_change_password?: boolean
+          on_leave?: boolean
           phone?: string | null
           updated_at?: string
         }
         Update: {
+          avatar_url?: string | null
           created_at?: string
           department?: Database["public"]["Enums"]["department"]
           department_id?: string | null
@@ -81,6 +86,7 @@ export type Database = {
           is_active?: boolean
           job_title?: string | null
           must_change_password?: boolean
+          on_leave?: boolean
           phone?: string | null
           updated_at?: string
         }
