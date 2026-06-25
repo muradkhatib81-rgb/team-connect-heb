@@ -432,3 +432,119 @@ export const setTaskManagementPermission = createServerFn({ method: "POST" })
     if (error) throw new Error(error.message);
     return { ok: true };
   });
+
+// ---------- APPROVAL WORKFLOW ----------
+export const markTaskPendingApproval = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) =>
+    z
+      .object({
+        id: z.string().uuid(),
+        employee_note: z.string().trim().max(2000).optional().nullable(),
+      })
+      .parse(d),
+  )
+  .handler(async ({ data, context }) => {
+    const patch: Record<string, any> = { status: "pending_approval" };
+    if (data.employee_note !== undefined) patch.employee_note = data.employee_note;
+    const { error } = await context.supabase.from("tasks").update(patch).eq("id", data.id);
+    if (error) throw new Error(error.message);
+    return { ok: true };
+  });
+
+export const approveTask = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) => z.object({ id: z.string().uuid() }).parse(d))
+  .handler(async ({ data, context }) => {
+    const { data: t } = await context.supabase
+      .from("tasks")
+      .select("department_id")
+      .eq("id", data.id)
+      .maybeSingle();
+    if (!t) throw new Error("המשימה לא נמצאה");
+    const caps = await getCallerCaps(context.supabase, context.userId);
+    if (!canEditForDept(caps, t.department_id))
+      throw new Error("אין הרשאה לאשר משימה זו");
+    const { error } = await context.supabase
+      .from("tasks")
+      .update({ status: "completed", rejection_note: null, rejected_at: null })
+      .eq("id", data.id);
+    if (error) throw new Error(error.message);
+    return { ok: true };
+  });
+
+export const rejectTask = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) =>
+    z
+      .object({
+        id: z.string().uuid(),
+        rejection_note: z.string().trim().min(1, "נדרשת הערה").max(2000),
+      })
+      .parse(d),
+  )
+  .handler(async ({ data, context }) => {
+    const { data: t } = await context.supabase
+      .from("tasks")
+      .select("department_id")
+      .eq("id", data.id)
+      .maybeSingle();
+    if (!t) throw new Error("המשימה לא נמצאה");
+    const caps = await getCallerCaps(context.supabase, context.userId);
+    if (!canEditForDept(caps, t.department_id))
+      throw new Error("אין הרשאה להחזיר משימה זו");
+    const { error } = await context.supabase
+      .from("tasks")
+      .update({
+        status: "in_progress",
+        rejection_note: data.rejection_note,
+        rejected_at: new Date().toISOString(),
+      })
+      .eq("id", data.id);
+    if (error) throw new Error(error.message);
+    return { ok: true };
+  });
+
+// ---------- GRANULAR USER PERMISSIONS (main admin only) ----------
+export const PERMISSION_KEYS = [
+  "can_create_tasks",
+  "can_edit_tasks",
+  "can_delete_tasks",
+  "can_create_schedule",
+  "can_approve_schedule",
+  "can_approve_leave",
+  "can_view_breaks",
+  "can_send_messages",
+] as const;
+
+const setPermsSchema = z.object({
+  user_id: z.string().uuid(),
+  perms: z.object(
+    Object.fromEntries(PERMISSION_KEYS.map((k) => [k, z.boolean()])) as Record<
+      (typeof PERMISSION_KEYS)[number],
+      z.ZodBoolean
+    >,
+  ),
+});
+
+export const setUserPermissions = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) => setPermsSchema.parse(d))
+  .handler(async ({ data, context }) => {
+    const caps = await getCallerCaps(context.supabase, context.userId);
+    if (!caps.isMainAdmin) throw new Error("רק מנהל ראשי יכול לנהל הרשאות");
+    const row: Record<string, any> = {
+      user_id: data.user_id,
+      granted_by: context.userId,
+      updated_at: new Date().toISOString(),
+      ...data.perms,
+    };
+    // Maintain legacy can_manage_tasks consistent with full task control
+    row.can_manage_tasks =
+      data.perms.can_create_tasks && data.perms.can_edit_tasks && data.perms.can_delete_tasks;
+    const { error } = await context.supabase
+      .from("user_task_permissions")
+      .upsert(row, { onConflict: "user_id" });
+    if (error) throw new Error(error.message);
+    return { ok: true };
+  });
