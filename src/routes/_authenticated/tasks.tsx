@@ -371,17 +371,12 @@ function TaskCard({
 }) {
   const [open, setOpen] = useState(false);
   const dept = deps?.departments.find((d) => d.id === task.department_id);
-  const assignee = deps?.employees.find((e) => e.id === task.assignee_id);
+  const completedBy = deps?.employees.find((e) => e.id === task.completed_by);
   const overdue =
     task.due_at && task.status !== "completed" && new Date(task.due_at).getTime() < Date.now();
-  const isAssignee = caps.profile?.id === task.assignee_id;
-  const isDeptOfThis =
-    caps.isDeptMgr &&
-    deps?.departments.find((d) => d.id === task.department_id) &&
-    // dept manager-only edit if managing this dept (best-effort UI; RLS enforces)
-    true;
-  const canEdit = caps.canManageTasks || isDeptOfThis;
-  const canDelete = caps.canManageTasks;
+  const isDeptOfThis = caps.isDeptMgr && true;
+  const canEdit = caps.canEditTasks || isDeptOfThis;
+  const canDelete = caps.canDeleteTasks;
 
   return (
     <>
@@ -412,14 +407,13 @@ function TaskCard({
             </div>
             <div className="text-xs text-muted-foreground mt-1.5 flex flex-wrap gap-x-3 gap-y-1">
               {dept && <span>מחלקה: {dept.name}</span>}
-              {assignee && <span>אחראי: {assignee.full_name}</span>}
               {task.due_at && (
                 <span className="flex items-center gap-1">
                   <Clock className="size-3" />
-                  יעד: {new Date(task.due_at).toLocaleString("he-IL")}
+                  יעד: {formatHeDateTime(task.due_at)}
                 </span>
               )}
-              {isAssignee && <Badge variant="secondary" className="rounded-full text-[10px]">שלי</Badge>}
+              {completedBy && <span>בוצע ע״י: {completedBy.full_name}</span>}
             </div>
           </div>
           <div className="flex items-center gap-1 shrink-0" onClick={(e) => e.stopPropagation()}>
