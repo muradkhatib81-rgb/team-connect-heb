@@ -88,10 +88,36 @@ async function uploadAvatar(file: File, userId: string): Promise<string> {
   return path;
 }
 
-function avatarPublicUrl(path: string | null): string | null {
+// Cache signed URLs per path for the lifetime of the page (signed URLs live ~1h)
+const signedUrlCache = new Map<string, string>();
+
+function useSignedAvatarUrls(paths: (string | null | undefined)[]) {
+  const unique = useMemo(() => {
+    const set = new Set<string>();
+    paths.forEach((p) => p && !signedUrlCache.has(p) && set.add(p));
+    return Array.from(set);
+  }, [paths]);
+
+  return useQuery({
+    queryKey: ["avatar-signed-urls", unique.sort().join("|")],
+    enabled: unique.length > 0,
+    staleTime: 1000 * 60 * 30,
+    queryFn: async () => {
+      const results = await Promise.all(
+        unique.map(async (p) => {
+          const { data } = await supabase.storage.from("avatars").createSignedUrl(p, 60 * 60);
+          return [p, data?.signedUrl ?? ""] as const;
+        }),
+      );
+      results.forEach(([p, url]) => url && signedUrlCache.set(p, url));
+      return Object.fromEntries(results);
+    },
+  });
+}
+
+function avatarUrlFor(path: string | null | undefined): string | null {
   if (!path) return null;
-  const { data } = supabase.storage.from("avatars").getPublicUrl(path);
-  return data.publicUrl;
+  return signedUrlCache.get(path) ?? null;
 }
 
 function EmployeesPage() {
