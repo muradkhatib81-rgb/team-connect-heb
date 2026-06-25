@@ -676,7 +676,7 @@ function EditEmployeeDialog({
         >
           <Field label="תמונת פרופיל">
             <AvatarPicker
-              initialUrl={avatarPublicUrl(form.avatar_url)}
+              initialUrl={avatarUrlFor(form.avatar_url)}
               onFileSelected={(f) => {
                 setAvatarFile(f);
                 setRemoveAvatar(false);
