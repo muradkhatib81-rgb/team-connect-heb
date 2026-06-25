@@ -40,7 +40,7 @@ function AuthPage() {
         return;
       }
       // Check if a main admin already exists — if so, only show login.
-      const { data: hasAdmin, error: rpcErr } = await supabase.rpc("has_main_admin");
+      const { data: hasAdmin, error: rpcErr } = await (supabase as any).rpc("has_main_admin");
       if (cancelled) return;
       if (rpcErr) {
         // Fail safe: assume admin exists so we don't allow accidental bootstrap.
