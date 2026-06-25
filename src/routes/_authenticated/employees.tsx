@@ -127,6 +127,7 @@ function EmployeesPage() {
   const [searchTerm, setSearchTerm] = useState("");
   const [editing, setEditing] = useState<ProfileRow | null>(null);
   const [creating, setCreating] = useState(false);
+  const [resetting, setResetting] = useState<ProfileRow | null>(null);
 
   const filterMode: FilterMode = search.filter ?? "all";
   const deptFilter = search.dept ?? "all";
