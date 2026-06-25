@@ -9,6 +9,7 @@ export interface AuthProfile {
   full_name: string;
   id_number: string | null;
   department: Department;
+  department_id: string | null;
   job_title: string | null;
   phone: string | null;
   is_active: boolean;
