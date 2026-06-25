@@ -554,8 +554,10 @@ function EmployeeRow({
   avatarUrl,
   onEdit,
   onResetPassword,
+  onDelete,
   canEdit,
   canResetPassword,
+  canDelete,
 }: {
   emp: ProfileRow;
   deptName: string | null;
@@ -563,8 +565,10 @@ function EmployeeRow({
   avatarUrl: string | null;
   onEdit: () => void;
   onResetPassword: () => void;
+  onDelete: () => void;
   canEdit: boolean;
   canResetPassword: boolean;
+  canDelete: boolean;
 }) {
   return (
     <Card className="card-elevated p-4">
@@ -606,9 +610,59 @@ function EmployeeRow({
               <Pencil className="size-4" />
             </Button>
           )}
+          {canDelete && (
+            <Button variant="ghost" size="icon" onClick={onDelete} aria-label="מחיקת עובד" className="text-destructive hover:text-destructive">
+              <Trash2 className="size-4" />
+            </Button>
+          )}
         </div>
       </div>
     </Card>
+  );
+}
+
+function DeleteEmployeeDialog({ employee, onClose }: { employee: ProfileRow; onClose: () => void }) {
+  const qc = useQueryClient();
+  const deleteFn = useServerFn(deleteEmployee);
+  const mutation = useMutation({
+    mutationFn: async () => {
+      await deleteFn({ data: { user_id: employee.id } });
+    },
+    onSuccess: () => {
+      toast.success("העובד נמחק לצמיתות מהמערכת");
+      qc.invalidateQueries({ queryKey: ["employees"] });
+      qc.invalidateQueries({ queryKey: ["all-roles"] });
+      qc.invalidateQueries({ queryKey: ["departments"] });
+      qc.invalidateQueries({ queryKey: ["dashboard", "stats"] });
+      onClose();
+    },
+    onError: (e: any) => toast.error(e?.message ?? "שגיאה במחיקת העובד"),
+  });
+
+  return (
+    <AlertDialog open onOpenChange={(o) => !o && !mutation.isPending && onClose()}>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>מחיקת עובד לצמיתות</AlertDialogTitle>
+          <AlertDialogDescription>
+            פעולה זו תמחק את <strong>{employee.full_name || "העובד"}</strong> לצמיתות: חשבון ההתחברות, פרטי המחלקה, ההרשאות, תמונת הפרופיל וכל הנתונים. לא ניתן לבטל פעולה זו.
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel disabled={mutation.isPending}>ביטול</AlertDialogCancel>
+          <AlertDialogAction
+            disabled={mutation.isPending}
+            onClick={(e) => {
+              e.preventDefault();
+              mutation.mutate();
+            }}
+            className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+          >
+            {mutation.isPending ? <Loader2 className="size-4 animate-spin" /> : "מחק לצמיתות"}
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
   );
 }
 
