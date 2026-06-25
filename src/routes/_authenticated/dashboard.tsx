@@ -133,6 +133,8 @@ function DashboardPage() {
         </div>
       </header>
 
+      <TasksStatsSection stats={tasksStatsQuery.data} loading={tasksStatsQuery.isLoading} />
+
       {admin ? (
         <AdminDashboard stats={statsQuery.data} loading={statsQuery.isLoading} />
       ) : isDeptManager ? (
@@ -141,6 +143,37 @@ function DashboardPage() {
         <EmployeeDashboard />
       )}
     </div>
+  );
+}
+
+function TasksStatsSection({
+  stats,
+  loading,
+}: {
+  stats?: { open: number; in_progress: number; completed: number; overdue: number };
+  loading: boolean;
+}) {
+  const navigate = useNavigate();
+  if (loading || !stats) return null;
+  const go = (status: string) => navigate({ to: "/tasks", search: { status } as any });
+  return (
+    <section>
+      <div className="flex items-center justify-between mb-4">
+        <h2 className="text-lg font-semibold flex items-center gap-2">
+          <ListTodo className="size-5 text-primary" />
+          משימות
+        </h2>
+        <Link to="/tasks" className="text-sm text-primary hover:underline">
+          לכל המשימות ←
+        </Link>
+      </div>
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <StatCard label="פתוחות" value={stats.open} icon={ListTodo} tone="primary" onClick={() => go("new")} />
+        <StatCard label="בביצוע" value={stats.in_progress} icon={Clock} tone="success" onClick={() => go("in_progress")} />
+        <StatCard label="הושלמו" value={stats.completed} icon={CheckCircle2} tone="muted" onClick={() => go("completed")} />
+        <StatCard label="באיחור" value={stats.overdue} icon={AlertTriangle} tone="warning" onClick={() => go("overdue")} />
+      </div>
+    </section>
   );
 }
 
