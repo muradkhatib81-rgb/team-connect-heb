@@ -544,7 +544,7 @@ export const setUserPermissions = createServerFn({ method: "POST" })
       data.perms.can_create_tasks && data.perms.can_edit_tasks && data.perms.can_delete_tasks;
     const { error } = await context.supabase
       .from("user_task_permissions")
-      .upsert(row, { onConflict: "user_id" });
+      .upsert(row as any, { onConflict: "user_id" });
     if (error) throw new Error(error.message);
     return { ok: true };
   });
