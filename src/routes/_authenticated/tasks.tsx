@@ -149,17 +149,29 @@ function useTaskCaps() {
     queryFn: async () => {
       const { data } = await supabase
         .from("user_task_permissions")
-        .select("can_manage_tasks")
+        .select("*")
         .eq("user_id", profile!.id)
         .maybeSingle();
-      return !!data?.can_manage_tasks;
+      return data;
     },
   });
-  const grantedTaskMgr = !!permQuery.data;
-  const canManageTasks =
-    isMainAdmin ||
-    ((roles.includes("branch_manager") || roles.includes("assistant_manager")) && grantedTaskMgr);
-  return { profile, isMainAdmin, isAdm, isDeptMgr, canManageTasks };
+  const p: any = permQuery.data ?? {};
+  const isManager = roles.includes("branch_manager") || roles.includes("assistant_manager");
+  const canCreateTasks = isMainAdmin || (isManager && (!!p.can_manage_tasks || !!p.can_create_tasks));
+  const canEditTasks = isMainAdmin || (isManager && (!!p.can_manage_tasks || !!p.can_edit_tasks));
+  const canDeleteTasks = isMainAdmin || (isManager && (!!p.can_manage_tasks || !!p.can_delete_tasks));
+  // Legacy alias
+  const canManageTasks = canEditTasks;
+  return {
+    profile,
+    isMainAdmin,
+    isAdm,
+    isDeptMgr,
+    canCreateTasks,
+    canEditTasks,
+    canDeleteTasks,
+    canManageTasks,
+  };
 }
 
 function TasksPage() {
