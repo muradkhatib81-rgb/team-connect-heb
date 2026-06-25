@@ -536,14 +536,18 @@ function EmployeeRow({
   roles,
   avatarUrl,
   onEdit,
+  onResetPassword,
   canEdit,
+  canResetPassword,
 }: {
   emp: ProfileRow;
   deptName: string | null;
   roles: AppRole[];
   avatarUrl: string | null;
   onEdit: () => void;
+  onResetPassword: () => void;
   canEdit: boolean;
+  canResetPassword: boolean;
 }) {
   return (
     <Card className="card-elevated p-4">
@@ -573,13 +577,95 @@ function EmployeeRow({
             </div>
           )}
         </div>
-        {canEdit && (
-          <Button variant="ghost" size="icon" onClick={onEdit} aria-label="עריכה">
-            <Pencil className="size-4" />
-          </Button>
-        )}
+        <div className="flex items-center gap-1 shrink-0">
+          {canResetPassword && (
+            <Button variant="ghost" size="sm" className="gap-1.5" onClick={onResetPassword} aria-label="איפוס סיסמה">
+              <KeyRound className="size-4" />
+              <span className="hidden sm:inline">איפוס סיסמה</span>
+            </Button>
+          )}
+          {canEdit && (
+            <Button variant="ghost" size="icon" onClick={onEdit} aria-label="עריכה">
+              <Pencil className="size-4" />
+            </Button>
+          )}
+        </div>
       </div>
     </Card>
+  );
+}
+
+function ResetPasswordDialog({ employee, onClose }: { employee: ProfileRow; onClose: () => void }) {
+  const resetFn = useServerFn(resetEmployeePassword);
+  const [password, setPassword] = useState("");
+  const [confirm, setConfirm] = useState("");
+
+  const mutation = useMutation({
+    mutationFn: async () => {
+      if (password.length < 6) throw new Error("סיסמה חייבת להכיל לפחות 6 תווים");
+      if (password !== confirm) throw new Error("הסיסמאות אינן תואמות");
+      await resetFn({ data: { user_id: employee.id, password } });
+    },
+    onSuccess: () => {
+      toast.success("הסיסמה אופסה. העובד יכול להתחבר עם הסיסמה החדשה.");
+      onClose();
+    },
+    onError: (e: any) => toast.error(e?.message ?? "שגיאה באיפוס הסיסמה"),
+  });
+
+  return (
+    <Dialog open onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle>איפוס סיסמה — {employee.full_name || "עובד"}</DialogTitle>
+        </DialogHeader>
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            mutation.mutate();
+          }}
+          className="space-y-4"
+          autoComplete="off"
+        >
+          <input type="text" name="username" autoComplete="username" className="hidden" tabIndex={-1} />
+          <input type="password" name="password" autoComplete="current-password" className="hidden" tabIndex={-1} />
+
+          <Field label="סיסמה חדשה">
+            <Input
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              required
+              minLength={6}
+              dir="ltr"
+              autoComplete="new-password"
+              name="reset_new_password"
+            />
+          </Field>
+          <Field label="אימות סיסמה">
+            <Input
+              type="password"
+              value={confirm}
+              onChange={(e) => setConfirm(e.target.value)}
+              required
+              minLength={6}
+              dir="ltr"
+              autoComplete="new-password"
+              name="reset_confirm_password"
+            />
+          </Field>
+          <p className="text-xs text-muted-foreground">
+            הסיסמה תישמר מיד והעובד יוכל להתחבר איתה — אין צורך בקישור או בתהליך נוסף.
+          </p>
+          <DialogFooter className="gap-2 sm:gap-2">
+            <Button type="button" variant="outline" onClick={onClose}>ביטול</Button>
+            <Button type="submit" disabled={mutation.isPending}>
+              {mutation.isPending ? <Loader2 className="size-4 animate-spin" /> : "אפס סיסמה"}
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
   );
 }
 
