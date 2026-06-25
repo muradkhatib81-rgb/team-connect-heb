@@ -30,22 +30,23 @@ function DashboardPage() {
     queryKey: ["dashboard", "stats"],
     queryFn: async () => {
       const [{ data: profs, error: pErr }, { data: depts, error: dErr }] = await Promise.all([
-        supabase.from("profiles").select("id, is_active, department_id"),
+        supabase.from("profiles").select("id, is_active, on_leave, department_id"),
         supabase.from("departments").select("id, name, is_active").order("name"),
       ]);
       if (pErr) throw pErr;
       if (dErr) throw dErr;
       const total = profs!.length;
-      const active = profs!.filter((d) => d.is_active).length;
-      const inactive = total - active;
+      const onLeave = profs!.filter((d: any) => d.on_leave).length;
+      const active = profs!.filter((d: any) => d.is_active && !d.on_leave).length;
+      const inactive = profs!.filter((d: any) => !d.is_active).length;
       const byDept: Record<string, number> = {};
       (depts as DeptRow[]).forEach((d) => (byDept[d.id] = 0));
-      profs!.forEach((p) => {
+      profs!.forEach((p: any) => {
         if (p.department_id && byDept[p.department_id] !== undefined) {
           byDept[p.department_id] += 1;
         }
       });
-      return { total, active, inactive, byDept, departments: depts as DeptRow[] };
+      return { total, active, inactive, onLeave, byDept, departments: depts as DeptRow[] };
     },
   });
 
