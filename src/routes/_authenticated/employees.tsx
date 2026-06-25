@@ -3,7 +3,17 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { useState, useMemo, useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { createEmployee, resetEmployeePassword } from "@/lib/employees.functions";
+import { createEmployee, resetEmployeePassword, deleteEmployee } from "@/lib/employees.functions";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { useAuth } from "@/lib/use-auth";
 import {
   ROLE_LABELS,
