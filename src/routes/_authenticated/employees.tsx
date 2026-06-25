@@ -1,7 +1,7 @@
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, useNavigate, useSearch } from "@tanstack/react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { useState, useMemo } from "react";
+import { useState, useMemo, useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { createEmployee } from "@/lib/employees.functions";
 import { useAuth } from "@/lib/use-auth";
@@ -32,11 +32,24 @@ import {
   DialogTitle,
   DialogFooter,
 } from "@/components/ui/dialog";
-import { Search, Loader2, Pencil, UserPlus, Filter } from "lucide-react";
+import { Search, Loader2, Pencil, UserPlus, Filter, ImagePlus, X } from "lucide-react";
 import { toast } from "sonner";
+
+type FilterMode = "all" | "active" | "inactive" | "on_leave";
+
+interface EmployeesSearch {
+  filter?: FilterMode;
+  dept?: string;
+}
 
 export const Route = createFileRoute("/_authenticated/employees")({
   component: EmployeesPage,
+  validateSearch: (s: Record<string, unknown>): EmployeesSearch => ({
+    filter: (["all", "active", "inactive", "on_leave"].includes(s.filter as string)
+      ? (s.filter as FilterMode)
+      : undefined),
+    dept: typeof s.dept === "string" ? s.dept : undefined,
+  }),
 });
 
 interface DeptOption {
@@ -53,15 +66,49 @@ interface ProfileRow {
   job_title: string | null;
   phone: string | null;
   is_active: boolean;
+  on_leave: boolean;
+  avatar_url: string | null;
+}
+
+const FILTER_LABELS: Record<FilterMode, string> = {
+  all: "כל העובדים",
+  active: "פעילים בלבד",
+  inactive: "לא פעילים",
+  on_leave: "בחופש",
+};
+
+async function uploadAvatar(file: File, userId: string): Promise<string> {
+  const ext = file.name.split(".").pop()?.toLowerCase() || "jpg";
+  const path = `${userId}/${Date.now()}.${ext}`;
+  const { error } = await supabase.storage.from("avatars").upload(path, file, {
+    upsert: true,
+    contentType: file.type || undefined,
+  });
+  if (error) throw new Error(error.message);
+  return path;
+}
+
+function avatarPublicUrl(path: string | null): string | null {
+  if (!path) return null;
+  const { data } = supabase.storage.from("avatars").getPublicUrl(path);
+  return data.publicUrl;
 }
 
 function EmployeesPage() {
   const navigate = useNavigate();
+  const search = useSearch({ from: "/_authenticated/employees" });
   const { data: me, isLoading: meLoading } = useAuth();
-  const [search, setSearch] = useState("");
-  const [deptFilter, setDeptFilter] = useState<string>("all");
+  const [searchTerm, setSearchTerm] = useState("");
   const [editing, setEditing] = useState<ProfileRow | null>(null);
   const [creating, setCreating] = useState(false);
+
+  const filterMode: FilterMode = search.filter ?? "all";
+  const deptFilter = search.dept ?? "all";
+
+  const setFilter = (f: FilterMode) =>
+    navigate({ to: "/employees", search: { filter: f, dept: deptFilter } as any });
+  const setDept = (d: string) =>
+    navigate({ to: "/employees", search: { filter: filterMode, dept: d } as any });
 
   const allowedAdmin = me ? isAdmin(me.roles) : false;
   const isDeptManager = me ? me.roles.includes("department_manager") : false;
@@ -93,7 +140,7 @@ function EmployeesPage() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("profiles")
-        .select("id, full_name, id_number, department_id, job_title, phone, is_active")
+        .select("id, full_name, id_number, department_id, job_title, phone, is_active, on_leave, avatar_url")
         .order("full_name");
       if (error) throw error;
       return data as ProfileRow[];
@@ -117,18 +164,20 @@ function EmployeesPage() {
 
   const filtered = useMemo(() => {
     const data = employeesQuery.data ?? [];
-    const term = search.trim().toLowerCase();
+    const term = searchTerm.trim().toLowerCase();
     return data.filter((e) => {
       if (deptFilter !== "all" && e.department_id !== deptFilter) return false;
+      if (filterMode === "active" && (!e.is_active || e.on_leave)) return false;
+      if (filterMode === "inactive" && e.is_active) return false;
+      if (filterMode === "on_leave" && !e.on_leave) return false;
       if (!term) return true;
       return (
         e.full_name.toLowerCase().includes(term) ||
         (e.id_number ?? "").includes(term) ||
-        (e.phone ?? "").includes(term) ||
-        (e.job_title ?? "").toLowerCase().includes(term)
+        (e.phone ?? "").includes(term)
       );
     });
-  }, [employeesQuery.data, search, deptFilter]);
+  }, [employeesQuery.data, searchTerm, deptFilter, filterMode]);
 
   if (meLoading) {
     return <div className="flex justify-center py-12"><Loader2 className="size-6 animate-spin text-primary" /></div>;
@@ -144,15 +193,14 @@ function EmployeesPage() {
     );
   }
 
+  const headerSubtitle = `${filtered.length} מתוך ${employeesQuery.data?.length ?? 0} עובדים · ${FILTER_LABELS[filterMode]}${deptFilter !== "all" && deptMap[deptFilter] ? ` · ${deptMap[deptFilter]}` : ""}`;
+
   return (
     <div className="space-y-6">
       <header className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <h1 className="text-2xl sm:text-3xl font-bold">ניהול עובדים</h1>
-          <p className="text-sm text-muted-foreground mt-1">
-            {filtered.length} מתוך {employeesQuery.data?.length ?? 0} עובדים
-            {isDeptManager && !allowedAdmin ? " במחלקה שלך" : ""}
-          </p>
+          <p className="text-sm text-muted-foreground mt-1">{headerSubtitle}</p>
         </div>
         {isMainAdmin && (
           <Button className="gap-2" onClick={() => setCreating(true)}>
@@ -168,14 +216,23 @@ function EmployeesPage() {
             <Search className="absolute right-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
             <Input
               placeholder="חיפוש לפי שם, ת.ז, טלפון..."
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
               className="pr-10"
             />
           </div>
           <div className="flex items-center gap-2">
             <Filter className="size-4 text-muted-foreground" />
-            <Select value={deptFilter} onValueChange={setDeptFilter}>
+            <Select value={filterMode} onValueChange={(v) => setFilter(v as FilterMode)}>
+              <SelectTrigger className="w-36"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">{FILTER_LABELS.all}</SelectItem>
+                <SelectItem value="active">{FILTER_LABELS.active}</SelectItem>
+                <SelectItem value="on_leave">{FILTER_LABELS.on_leave}</SelectItem>
+                <SelectItem value="inactive">{FILTER_LABELS.inactive}</SelectItem>
+              </SelectContent>
+            </Select>
+            <Select value={deptFilter} onValueChange={setDept}>
               <SelectTrigger className="w-44"><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">כל המחלקות</SelectItem>
@@ -226,6 +283,66 @@ function EmployeesPage() {
   );
 }
 
+function AvatarPicker({
+  initialUrl,
+  onFileSelected,
+  onCleared,
+}: {
+  initialUrl: string | null;
+  onFileSelected: (file: File) => void;
+  onCleared?: () => void;
+}) {
+  const inputRef = useRef<HTMLInputElement>(null);
+  const [preview, setPreview] = useState<string | null>(initialUrl);
+
+  return (
+    <div className="flex items-center gap-3">
+      <div className="size-16 rounded-full bg-accent overflow-hidden flex items-center justify-center shrink-0 border border-border">
+        {preview ? (
+          <img src={preview} alt="" className="w-full h-full object-cover" />
+        ) : (
+          <ImagePlus className="size-6 text-muted-foreground" />
+        )}
+      </div>
+      <div className="flex gap-2">
+        <Button type="button" variant="outline" size="sm" onClick={() => inputRef.current?.click()}>
+          {preview ? "החלפת תמונה" : "העלאת תמונה"}
+        </Button>
+        {preview && onCleared && (
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            onClick={() => {
+              setPreview(null);
+              onCleared();
+              if (inputRef.current) inputRef.current.value = "";
+            }}
+          >
+            <X className="size-4" />
+          </Button>
+        )}
+      </div>
+      <input
+        ref={inputRef}
+        type="file"
+        accept="image/*"
+        className="hidden"
+        onChange={(e) => {
+          const f = e.target.files?.[0];
+          if (!f) return;
+          if (f.size > 5 * 1024 * 1024) {
+            toast.error("הקובץ גדול מדי (מקסימום 5MB)");
+            return;
+          }
+          setPreview(URL.createObjectURL(f));
+          onFileSelected(f);
+        }}
+      />
+    </div>
+  );
+}
+
 function CreateEmployeeDialog({ depts, onClose }: { depts: DeptOption[]; onClose: () => void }) {
   const qc = useQueryClient();
   const createFn = useServerFn(createEmployee);
@@ -234,18 +351,27 @@ function CreateEmployeeDialog({ depts, onClose }: { depts: DeptOption[]; onClose
     full_name: "",
     id_number: "",
     department_id: defaultDept,
-    job_title: "",
     phone: "",
     password: "",
     role: "employee" as AppRole,
   });
+  const [avatarFile, setAvatarFile] = useState<File | null>(null);
+
   const mutation = useMutation({
     mutationFn: async () => {
       if (!form.department_id) throw new Error("יש לבחור מחלקה");
       if (!/^\d{5,15}$/.test(form.id_number)) throw new Error("מספר זהות חייב להכיל 5–15 ספרות");
       if (form.password.length < 6) throw new Error("סיסמה ראשונית של 6 תווים לפחות");
       if (!form.full_name.trim()) throw new Error("יש למלא שם עובד");
-      await createFn({ data: form });
+      const res = await createFn({ data: { ...form, job_title: "", avatar_url: null } });
+      if (avatarFile && res?.id) {
+        try {
+          const path = await uploadAvatar(avatarFile, res.id);
+          await supabase.from("profiles").update({ avatar_url: path }).eq("id", res.id);
+        } catch (e: any) {
+          toast.error("העובד נוצר אך העלאת התמונה נכשלה: " + (e?.message ?? ""));
+        }
+      }
     },
     onSuccess: () => {
       toast.success("העובד נוצר. סיסמה ראשונית — העובד יחויב להחליפה בכניסה הראשונה.");
@@ -270,13 +396,43 @@ function CreateEmployeeDialog({ depts, onClose }: { depts: DeptOption[]; onClose
             mutation.mutate();
           }}
           className="space-y-4"
+          autoComplete="off"
         >
+          {/* Honeypot fields to defeat browser autofill of admin credentials */}
+          <input type="text" name="username" autoComplete="username" className="hidden" tabIndex={-1} />
+          <input type="password" name="password" autoComplete="current-password" className="hidden" tabIndex={-1} />
+
+          <Field label="תמונת פרופיל (אופציונלי)">
+            <AvatarPicker
+              initialUrl={null}
+              onFileSelected={setAvatarFile}
+              onCleared={() => setAvatarFile(null)}
+            />
+          </Field>
+
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <Field label="שם עובד">
-              <Input value={form.full_name} onChange={(e) => setForm({ ...form, full_name: e.target.value })} required maxLength={100} />
+              <Input
+                value={form.full_name}
+                onChange={(e) => setForm({ ...form, full_name: e.target.value })}
+                required
+                maxLength={100}
+                autoComplete="off"
+                name="emp_full_name"
+              />
             </Field>
             <Field label="מספר זהות">
-              <Input value={form.id_number} onChange={(e) => setForm({ ...form, id_number: e.target.value })} required dir="ltr" inputMode="numeric" pattern="\d*" maxLength={15} />
+              <Input
+                value={form.id_number}
+                onChange={(e) => setForm({ ...form, id_number: e.target.value })}
+                required
+                dir="ltr"
+                inputMode="numeric"
+                pattern="\d*"
+                maxLength={15}
+                autoComplete="off"
+                name="emp_id_number"
+              />
             </Field>
             <Field label="מחלקה">
               <Select value={form.department_id} onValueChange={(v) => setForm({ ...form, department_id: v })}>
@@ -288,11 +444,15 @@ function CreateEmployeeDialog({ depts, onClose }: { depts: DeptOption[]; onClose
                 </SelectContent>
               </Select>
             </Field>
-            <Field label="תפקיד (טקסט חופשי)">
-              <Input value={form.job_title} onChange={(e) => setForm({ ...form, job_title: e.target.value })} maxLength={80} placeholder="לדוגמה: קופאי" />
-            </Field>
             <Field label="טלפון">
-              <Input value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} dir="ltr" maxLength={20} />
+              <Input
+                value={form.phone}
+                onChange={(e) => setForm({ ...form, phone: e.target.value })}
+                dir="ltr"
+                maxLength={20}
+                autoComplete="off"
+                name="emp_phone_new"
+              />
             </Field>
             <Field label="הרשאה">
               <Select value={form.role} onValueChange={(v) => setForm({ ...form, role: v as AppRole })}>
@@ -305,7 +465,16 @@ function CreateEmployeeDialog({ depts, onClose }: { depts: DeptOption[]; onClose
               </Select>
             </Field>
             <Field label="סיסמה ראשונית">
-              <Input type="password" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} required minLength={6} dir="ltr" />
+              <Input
+                type="password"
+                value={form.password}
+                onChange={(e) => setForm({ ...form, password: e.target.value })}
+                required
+                minLength={6}
+                dir="ltr"
+                autoComplete="new-password"
+                name="emp_new_password"
+              />
             </Field>
           </div>
           <p className="text-xs text-muted-foreground">
@@ -336,19 +505,25 @@ function EmployeeRow({
   onEdit: () => void;
   canEdit: boolean;
 }) {
+  const avatarUrl = avatarPublicUrl(emp.avatar_url);
   return (
     <Card className="card-elevated p-4">
       <div className="flex items-center gap-4">
-        <div className="size-12 rounded-full bg-accent text-accent-foreground flex items-center justify-center text-base font-semibold shrink-0">
-          {emp.full_name?.charAt(0) || "?"}
+        <div className="size-12 rounded-full bg-accent text-accent-foreground flex items-center justify-center text-base font-semibold shrink-0 overflow-hidden">
+          {avatarUrl ? (
+            <img src={avatarUrl} alt="" className="w-full h-full object-cover" />
+          ) : (
+            <span>{emp.full_name?.charAt(0) || "?"}</span>
+          )}
         </div>
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
             <p className="font-semibold truncate">{emp.full_name || "ללא שם"}</p>
             {!emp.is_active && <Badge variant="destructive" className="rounded-full text-xs">לא פעיל</Badge>}
+            {emp.on_leave && <Badge variant="secondary" className="rounded-full text-xs">בחופש</Badge>}
           </div>
           <p className="text-xs text-muted-foreground mt-0.5 truncate">
-            {emp.job_title || "—"} · {deptName ?? "ללא מחלקה"}
+            {deptName ?? "ללא מחלקה"}
             {emp.phone ? ` · ${emp.phone}` : ""}
           </p>
           {roles.length > 0 && (
@@ -387,17 +562,27 @@ function EditEmployeeDialog({
     full_name: employee.full_name,
     id_number: employee.id_number ?? "",
     department_id: employee.department_id ?? "",
-    job_title: employee.job_title ?? "",
     phone: employee.phone ?? "",
     is_active: employee.is_active,
+    on_leave: employee.on_leave,
     role: (currentRoles[0] ?? "employee") as AppRole,
+    avatar_url: employee.avatar_url,
   });
+  const [avatarFile, setAvatarFile] = useState<File | null>(null);
+  const [removeAvatar, setRemoveAvatar] = useState(false);
 
   const mutation = useMutation({
     mutationFn: async () => {
       if (!form.department_id) throw new Error("יש לבחור מחלקה");
       const selected = depts.find((d) => d.id === form.department_id);
       if (!selected) throw new Error("מחלקה לא נמצאה");
+
+      let avatar_url: string | null = form.avatar_url;
+      if (removeAvatar) avatar_url = null;
+      if (avatarFile) {
+        avatar_url = await uploadAvatar(avatarFile, employee.id);
+      }
+
       const { error: pErr } = await supabase
         .from("profiles")
         .update({
@@ -405,9 +590,10 @@ function EditEmployeeDialog({
           id_number: form.id_number || null,
           department_id: form.department_id,
           department: selected.code as any,
-          job_title: form.job_title || null,
           phone: form.phone || null,
           is_active: form.is_active,
+          on_leave: form.on_leave,
+          avatar_url,
         })
         .eq("id", employee.id);
       if (pErr) throw pErr;
@@ -419,6 +605,20 @@ function EditEmployeeDialog({
           .from("user_roles")
           .insert({ user_id: employee.id, role: form.role });
         if (iErr) throw iErr;
+      }
+
+      // Auto-link department manager
+      if (canEditRoles && form.role === "department_manager") {
+        await supabase
+          .from("departments")
+          .update({ manager_id: employee.id })
+          .eq("id", form.department_id);
+      } else if (canEditRoles && currentRoles[0] === "department_manager" && form.role !== "department_manager") {
+        // Unlink if previously managed
+        await supabase
+          .from("departments")
+          .update({ manager_id: null })
+          .eq("manager_id", employee.id);
       }
     },
     onSuccess: () => {
@@ -446,19 +646,31 @@ function EditEmployeeDialog({
             mutation.mutate();
           }}
           className="space-y-4"
+          autoComplete="off"
         >
+          <Field label="תמונת פרופיל">
+            <AvatarPicker
+              initialUrl={avatarPublicUrl(form.avatar_url)}
+              onFileSelected={(f) => {
+                setAvatarFile(f);
+                setRemoveAvatar(false);
+              }}
+              onCleared={() => {
+                setAvatarFile(null);
+                setRemoveAvatar(true);
+              }}
+            />
+          </Field>
+
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <Field label="שם עובד">
-              <Input value={form.full_name} onChange={(e) => setForm({ ...form, full_name: e.target.value })} required />
+              <Input value={form.full_name} onChange={(e) => setForm({ ...form, full_name: e.target.value })} required autoComplete="off" />
             </Field>
             <Field label="מספר זהות">
-              <Input value={form.id_number} onChange={(e) => setForm({ ...form, id_number: e.target.value })} dir="ltr" />
-            </Field>
-            <Field label="תפקיד">
-              <Input value={form.job_title} onChange={(e) => setForm({ ...form, job_title: e.target.value })} />
+              <Input value={form.id_number} onChange={(e) => setForm({ ...form, id_number: e.target.value })} dir="ltr" autoComplete="off" />
             </Field>
             <Field label="טלפון">
-              <Input value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} dir="ltr" />
+              <Input value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} dir="ltr" autoComplete="off" />
             </Field>
             <Field label="מחלקה">
               <Select value={form.department_id} onValueChange={(v) => setForm({ ...form, department_id: v })}>
@@ -494,6 +706,19 @@ function EditEmployeeDialog({
             <Switch
               checked={form.is_active}
               onCheckedChange={(v) => setForm({ ...form, is_active: v })}
+            />
+          </div>
+
+          <div className="flex items-center justify-between rounded-lg border border-border p-3">
+            <div>
+              <p className="text-sm font-medium">בחופש</p>
+              <p className="text-xs text-muted-foreground">
+                {form.on_leave ? "העובד נמצא כעת בחופש" : "העובד אינו בחופש"}
+              </p>
+            </div>
+            <Switch
+              checked={form.on_leave}
+              onCheckedChange={(v) => setForm({ ...form, on_leave: v })}
             />
           </div>
 
