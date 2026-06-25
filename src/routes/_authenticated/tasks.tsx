@@ -884,10 +884,14 @@ function TaskFormDialog({
   const create = useServerFn(createTask);
   const update = useServerFn(updateTask);
 
+  const canPickAnyDept = caps.canCreateTasks; // main_admin or branch/assistant manager with perm
+  const allowedDepartments = canPickAnyDept
+    ? deps.departments
+    : deps.departments.filter((d) => d.id === caps.profile?.department_id);
   const [title, setTitle] = useState(task?.title ?? "");
   const [description, setDescription] = useState(task?.description ?? "");
   const [departmentId, setDepartmentId] = useState(
-    task?.department_id ?? deps.departments[0]?.id ?? "",
+    task?.department_id ?? allowedDepartments[0]?.id ?? "",
   );
   const initSplit = splitForInputs(task?.due_at ?? null);
   const [dueDate, setDueDate] = useState<string>(initSplit.date);
@@ -936,14 +940,20 @@ function TaskFormDialog({
           </div>
           <div>
             <Label>מחלקה</Label>
-            <Select value={departmentId} onValueChange={(v) => setDepartmentId(v)}>
-              <SelectTrigger><SelectValue /></SelectTrigger>
-              <SelectContent>
-                {deps.departments.map((d) => (
-                  <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            {canPickAnyDept ? (
+              <Select value={departmentId} onValueChange={(v) => setDepartmentId(v)}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {allowedDepartments.map((d) => (
+                    <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            ) : (
+              <div className="px-3 py-2 rounded-md border bg-muted text-sm">
+                {allowedDepartments.find((d) => d.id === departmentId)?.name ?? "—"}
+              </div>
+            )}
             <p className="text-xs text-muted-foreground mt-1">
               המשימה תהיה זמינה לכל עובדי המחלקה
             </p>
@@ -1125,6 +1135,7 @@ function RecurringSection({
         <RecurrenceFormDialog
           mode="create"
           deps={deps}
+          caps={caps}
           onClose={() => setOpenCreate(false)}
         />
       )}
@@ -1132,6 +1143,7 @@ function RecurringSection({
         <RecurrenceFormDialog
           mode="edit"
           deps={deps}
+          caps={caps}
           rec={edit}
           onClose={() => setEdit(null)}
         />
@@ -1143,11 +1155,13 @@ function RecurringSection({
 function RecurrenceFormDialog({
   mode,
   deps,
+  caps,
   rec,
   onClose,
 }: {
   mode: "create" | "edit";
   deps: { departments: DeptOption[]; employees: EmpOption[] };
+  caps: ReturnType<typeof useTaskCaps>;
   rec?: RecRow;
   onClose: () => void;
 }) {
@@ -1155,9 +1169,14 @@ function RecurrenceFormDialog({
   const create = useServerFn(createRecurrence);
   const update = useServerFn(updateRecurrence);
 
+  const canPickAnyDept = caps.canCreateTasks;
+  const allowedDepartments = canPickAnyDept
+    ? deps.departments
+    : deps.departments.filter((d) => d.id === caps.profile?.department_id);
+
   const [title, setTitle] = useState(rec?.title ?? "");
   const [description, setDescription] = useState(rec?.description ?? "");
-  const [departmentId, setDepartmentId] = useState(rec?.department_id ?? deps.departments[0]?.id ?? "");
+  const [departmentId, setDepartmentId] = useState(rec?.department_id ?? allowedDepartments[0]?.id ?? "");
   const [priority, setPriority] = useState<TaskPriority>(rec?.priority ?? "medium");
   const [frequency, setFrequency] = useState<RecRow["frequency"]>(rec?.frequency ?? "daily");
   const [dows, setDows] = useState<number[]>(rec?.days_of_week ?? []);
@@ -1213,14 +1232,20 @@ function RecurrenceFormDialog({
           </div>
           <div>
             <Label>מחלקה</Label>
-            <Select value={departmentId} onValueChange={(v) => setDepartmentId(v)}>
-              <SelectTrigger><SelectValue /></SelectTrigger>
-              <SelectContent>
-                {deps.departments.map((d) => (
-                  <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            {canPickAnyDept ? (
+              <Select value={departmentId} onValueChange={(v) => setDepartmentId(v)}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {allowedDepartments.map((d) => (
+                    <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            ) : (
+              <div className="px-3 py-2 rounded-md border bg-muted text-sm">
+                {allowedDepartments.find((d) => d.id === departmentId)?.name ?? "—"}
+              </div>
+            )}
             <p className="text-xs text-muted-foreground mt-1">
               המשימה תייוצר עבור כל עובדי המחלקה
             </p>
