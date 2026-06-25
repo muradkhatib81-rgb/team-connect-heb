@@ -39,12 +39,15 @@ function AuthPage() {
         navigate({ to: (search.redirect as any) || "/dashboard", replace: true });
         return;
       }
-      // Check if any user exists — if none, allow bootstrapping the first main admin.
-      const { count } = await supabase
-        .from("profiles")
-        .select("id", { count: "exact", head: true });
+      // Check if a main admin already exists — if so, only show login.
+      const { data: hasAdmin, error: rpcErr } = await supabase.rpc("has_main_admin");
       if (cancelled) return;
-      setHasUsers((count ?? 0) > 0);
+      if (rpcErr) {
+        // Fail safe: assume admin exists so we don't allow accidental bootstrap.
+        setHasUsers(true);
+      } else {
+        setHasUsers(!!hasAdmin);
+      }
       setChecking(false);
     })();
     return () => {
