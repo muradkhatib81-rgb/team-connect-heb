@@ -3,7 +3,17 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { useState, useMemo, useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { createEmployee, resetEmployeePassword } from "@/lib/employees.functions";
+import { createEmployee, resetEmployeePassword, deleteEmployee } from "@/lib/employees.functions";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { useAuth } from "@/lib/use-auth";
 import {
   ROLE_LABELS,
@@ -32,7 +42,7 @@ import {
   DialogTitle,
   DialogFooter,
 } from "@/components/ui/dialog";
-import { Search, Loader2, Pencil, UserPlus, Filter, ImagePlus, X, KeyRound } from "lucide-react";
+import { Search, Loader2, Pencil, UserPlus, Filter, ImagePlus, X, KeyRound, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
 type FilterMode = "all" | "active" | "inactive" | "on_leave";
@@ -128,6 +138,7 @@ function EmployeesPage() {
   const [editing, setEditing] = useState<ProfileRow | null>(null);
   const [creating, setCreating] = useState(false);
   const [resetting, setResetting] = useState<ProfileRow | null>(null);
+  const [deleting, setDeleting] = useState<ProfileRow | null>(null);
 
   const filterMode: FilterMode = search.filter ?? "all";
   const deptFilter = search.dept ?? "all";
@@ -293,8 +304,10 @@ function EmployeesPage() {
               avatarUrl={emp.avatar_url ? (avatarMap[emp.avatar_url] ?? avatarUrlFor(emp.avatar_url)) : null}
               onEdit={() => setEditing(emp)}
               onResetPassword={() => setResetting(emp)}
+              onDelete={() => setDeleting(emp)}
               canEdit={isMainAdmin}
               canResetPassword={isMainAdmin}
+              canDelete={isMainAdmin && emp.id !== me?.id}
             />
           ))}
         </div>
@@ -302,6 +315,10 @@ function EmployeesPage() {
 
       {resetting && isMainAdmin && (
         <ResetPasswordDialog employee={resetting} onClose={() => setResetting(null)} />
+      )}
+
+      {deleting && isMainAdmin && (
+        <DeleteEmployeeDialog employee={deleting} onClose={() => setDeleting(null)} />
       )}
 
       {editing && me && isMainAdmin && (
@@ -537,8 +554,10 @@ function EmployeeRow({
   avatarUrl,
   onEdit,
   onResetPassword,
+  onDelete,
   canEdit,
   canResetPassword,
+  canDelete,
 }: {
   emp: ProfileRow;
   deptName: string | null;
@@ -546,8 +565,10 @@ function EmployeeRow({
   avatarUrl: string | null;
   onEdit: () => void;
   onResetPassword: () => void;
+  onDelete: () => void;
   canEdit: boolean;
   canResetPassword: boolean;
+  canDelete: boolean;
 }) {
   return (
     <Card className="card-elevated p-4">
@@ -589,9 +610,59 @@ function EmployeeRow({
               <Pencil className="size-4" />
             </Button>
           )}
+          {canDelete && (
+            <Button variant="ghost" size="icon" onClick={onDelete} aria-label="מחיקת עובד" className="text-destructive hover:text-destructive">
+              <Trash2 className="size-4" />
+            </Button>
+          )}
         </div>
       </div>
     </Card>
+  );
+}
+
+function DeleteEmployeeDialog({ employee, onClose }: { employee: ProfileRow; onClose: () => void }) {
+  const qc = useQueryClient();
+  const deleteFn = useServerFn(deleteEmployee);
+  const mutation = useMutation({
+    mutationFn: async () => {
+      await deleteFn({ data: { user_id: employee.id } });
+    },
+    onSuccess: () => {
+      toast.success("העובד נמחק לצמיתות מהמערכת");
+      qc.invalidateQueries({ queryKey: ["employees"] });
+      qc.invalidateQueries({ queryKey: ["all-roles"] });
+      qc.invalidateQueries({ queryKey: ["departments"] });
+      qc.invalidateQueries({ queryKey: ["dashboard", "stats"] });
+      onClose();
+    },
+    onError: (e: any) => toast.error(e?.message ?? "שגיאה במחיקת העובד"),
+  });
+
+  return (
+    <AlertDialog open onOpenChange={(o) => !o && !mutation.isPending && onClose()}>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>מחיקת עובד לצמיתות</AlertDialogTitle>
+          <AlertDialogDescription>
+            פעולה זו תמחק את <strong>{employee.full_name || "העובד"}</strong> לצמיתות: חשבון ההתחברות, פרטי המחלקה, ההרשאות, תמונת הפרופיל וכל הנתונים. לא ניתן לבטל פעולה זו.
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel disabled={mutation.isPending}>ביטול</AlertDialogCancel>
+          <AlertDialogAction
+            disabled={mutation.isPending}
+            onClick={(e) => {
+              e.preventDefault();
+              mutation.mutate();
+            }}
+            className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+          >
+            {mutation.isPending ? <Loader2 className="size-4 animate-spin" /> : "מחק לצמיתות"}
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
   );
 }
 
