@@ -1135,6 +1135,7 @@ function RecurringSection({
         <RecurrenceFormDialog
           mode="create"
           deps={deps}
+          caps={caps}
           onClose={() => setOpenCreate(false)}
         />
       )}
@@ -1142,6 +1143,7 @@ function RecurringSection({
         <RecurrenceFormDialog
           mode="edit"
           deps={deps}
+          caps={caps}
           rec={edit}
           onClose={() => setEdit(null)}
         />
