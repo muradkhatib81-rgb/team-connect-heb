@@ -1158,7 +1158,6 @@ function RecurrenceFormDialog({
   const [title, setTitle] = useState(rec?.title ?? "");
   const [description, setDescription] = useState(rec?.description ?? "");
   const [departmentId, setDepartmentId] = useState(rec?.department_id ?? deps.departments[0]?.id ?? "");
-  const [assigneeId, setAssigneeId] = useState(rec?.assignee_id ?? "");
   const [priority, setPriority] = useState<TaskPriority>(rec?.priority ?? "medium");
   const [frequency, setFrequency] = useState<RecRow["frequency"]>(rec?.frequency ?? "daily");
   const [dows, setDows] = useState<number[]>(rec?.days_of_week ?? []);
@@ -1166,15 +1165,13 @@ function RecurrenceFormDialog({
   const [time, setTime] = useState(rec?.time_of_day ?? "08:00");
   const [active, setActive] = useState(rec?.is_active ?? true);
 
-  const empsForDept = deps.employees.filter((e) => !departmentId || e.department_id === departmentId);
-
   const submit = useMutation({
     mutationFn: async () => {
       const payload: any = {
         title,
         description: description || null,
         department_id: departmentId,
-        assignee_id: assigneeId || null,
+        assignee_id: null,
         priority,
         frequency,
         days_of_week: frequency === "weekly" ? dows : [],
@@ -1214,30 +1211,19 @@ function RecurrenceFormDialog({
             <Label>תיאור</Label>
             <Textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={2} />
           </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <Label>מחלקה</Label>
-              <Select value={departmentId} onValueChange={(v) => { setDepartmentId(v); setAssigneeId(""); }}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  {deps.departments.map((d) => (
-                    <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div>
-              <Label>עובד אחראי</Label>
-              <Select value={assigneeId || "none"} onValueChange={(v) => setAssigneeId(v === "none" ? "" : v)}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="none">ללא</SelectItem>
-                  {empsForDept.map((e) => (
-                    <SelectItem key={e.id} value={e.id}>{e.full_name}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
+          <div>
+            <Label>מחלקה</Label>
+            <Select value={departmentId} onValueChange={(v) => setDepartmentId(v)}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                {deps.departments.map((d) => (
+                  <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <p className="text-xs text-muted-foreground mt-1">
+              המשימה תייוצר עבור כל עובדי המחלקה
+            </p>
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
@@ -1296,7 +1282,7 @@ function RecurrenceFormDialog({
           <div className="grid grid-cols-2 gap-3 items-end">
             <div>
               <Label>שעה</Label>
-              <Input type="time" value={time} onChange={(e) => setTime(e.target.value)} />
+              <Input type="time" lang="he" value={time} onChange={(e) => setTime(e.target.value)} />
             </div>
             <div className="flex items-center gap-2">
               <Switch checked={active} onCheckedChange={setActive} />
