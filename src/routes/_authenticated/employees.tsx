@@ -289,6 +289,7 @@ function EmployeesPage() {
               emp={emp}
               deptName={emp.department_id ? deptMap[emp.department_id] : null}
               roles={rolesQuery.data?.[emp.id] ?? []}
+              avatarUrl={emp.avatar_url ? (avatarMap[emp.avatar_url] ?? avatarUrlFor(emp.avatar_url)) : null}
               onEdit={() => setEditing(emp)}
               canEdit={isMainAdmin}
             />
