@@ -531,7 +531,7 @@ function EmployeeRow({
   onEdit: () => void;
   canEdit: boolean;
 }) {
-  const avatarUrl = avatarPublicUrl(emp.avatar_url);
+  const avatarUrl = avatarUrlFor(emp.avatar_url);
   return (
     <Card className="card-elevated p-4">
       <div className="flex items-center gap-4">
