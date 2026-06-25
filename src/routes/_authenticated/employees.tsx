@@ -292,10 +292,16 @@ function EmployeesPage() {
               roles={rolesQuery.data?.[emp.id] ?? []}
               avatarUrl={emp.avatar_url ? (avatarMap[emp.avatar_url] ?? avatarUrlFor(emp.avatar_url)) : null}
               onEdit={() => setEditing(emp)}
+              onResetPassword={() => setResetting(emp)}
               canEdit={isMainAdmin}
+              canResetPassword={isMainAdmin}
             />
           ))}
         </div>
+      )}
+
+      {resetting && isMainAdmin && (
+        <ResetPasswordDialog employee={resetting} onClose={() => setResetting(null)} />
       )}
 
       {editing && me && isMainAdmin && (
