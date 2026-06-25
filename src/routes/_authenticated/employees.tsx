@@ -32,7 +32,7 @@ import {
   DialogTitle,
   DialogFooter,
 } from "@/components/ui/dialog";
-import { Search, Loader2, Pencil, UserPlus, Filter, ImagePlus, X } from "lucide-react";
+import { Search, Loader2, Pencil, UserPlus, Filter, ImagePlus, X, KeyRound } from "lucide-react";
 import { toast } from "sonner";
 
 type FilterMode = "all" | "active" | "inactive" | "on_leave";
