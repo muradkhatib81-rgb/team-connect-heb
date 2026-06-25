@@ -11,23 +11,33 @@ async function getCallerCaps(supabase: any, userId: string) {
   const [{ data: roles }, { data: perm }, { data: profile }, { data: managedDepts }] =
     await Promise.all([
       supabase.from("user_roles").select("role").eq("user_id", userId),
-      supabase.from("user_task_permissions").select("can_manage_tasks").eq("user_id", userId).maybeSingle(),
+      supabase
+        .from("user_task_permissions")
+        .select("*")
+        .eq("user_id", userId)
+        .maybeSingle(),
       supabase.from("profiles").select("department_id").eq("id", userId).maybeSingle(),
       supabase.from("departments").select("id").eq("manager_id", userId),
     ]);
   const roleSet = new Set((roles ?? []).map((r: any) => r.role));
   const isMainAdmin = roleSet.has("main_admin");
-  const isAdmin =
-    isMainAdmin || roleSet.has("branch_manager") || roleSet.has("assistant_manager");
-  const canManageTasks =
-    isMainAdmin ||
-    ((roleSet.has("branch_manager") || roleSet.has("assistant_manager")) &&
-      !!perm?.can_manage_tasks);
+  const isManager = roleSet.has("branch_manager") || roleSet.has("assistant_manager");
+  const isAdmin = isMainAdmin || isManager;
+  const p: any = perm ?? {};
+  const canCreateTasks =
+    isMainAdmin || (isManager && (!!p.can_manage_tasks || !!p.can_create_tasks));
+  const canEditTasks =
+    isMainAdmin || (isManager && (!!p.can_manage_tasks || !!p.can_edit_tasks));
+  const canDeleteTasks =
+    isMainAdmin || (isManager && (!!p.can_manage_tasks || !!p.can_delete_tasks));
   const isDeptManager = roleSet.has("department_manager");
   return {
     isMainAdmin,
     isAdmin,
-    canManageTasks,
+    canCreateTasks,
+    canEditTasks,
+    canDeleteTasks,
+    canManageTasks: canEditTasks, // legacy alias used elsewhere
     isDeptManager,
     departmentId: profile?.department_id ?? null,
     managedDeptIds: (managedDepts ?? []).map((d: any) => d.id) as string[],
@@ -35,7 +45,10 @@ async function getCallerCaps(supabase: any, userId: string) {
 }
 
 function canCreateForDept(caps: Awaited<ReturnType<typeof getCallerCaps>>, deptId: string) {
-  return caps.canManageTasks || caps.managedDeptIds.includes(deptId);
+  return caps.canCreateTasks || caps.managedDeptIds.includes(deptId);
+}
+function canEditForDept(caps: Awaited<ReturnType<typeof getCallerCaps>>, deptId: string) {
+  return caps.canEditTasks || caps.managedDeptIds.includes(deptId);
 }
 
 // ---------- CREATE task ----------
