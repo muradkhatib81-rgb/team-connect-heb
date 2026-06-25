@@ -68,7 +68,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 
-type TaskStatus = "new" | "in_progress" | "completed";
+type TaskStatus = "new" | "in_progress" | "pending_approval" | "completed";
 type TaskPriority = "low" | "medium" | "high";
 
 interface TaskRow {
@@ -82,7 +82,13 @@ interface TaskRow {
   priority: TaskPriority;
   status: TaskStatus;
   notes: string | null;
+  employee_note: string | null;
   completed_at: string | null;
+  completed_by: string | null;
+  approved_at: string | null;
+  approved_by: string | null;
+  rejection_note: string | null;
+  rejected_at: string | null;
   recurrence_id: string | null;
   created_at: string;
   updated_at: string;
@@ -110,7 +116,8 @@ interface EmpOption { id: string; full_name: string; department_id: string | nul
 const STATUS_LABEL: Record<TaskStatus, string> = {
   new: "חדש",
   in_progress: "בביצוע",
-  completed: "הושלם",
+  pending_approval: "ממתין לאישור",
+  completed: "הושלמה",
 };
 const PRIORITY_LABEL: Record<TaskPriority, string> = {
   low: "נמוכה",
