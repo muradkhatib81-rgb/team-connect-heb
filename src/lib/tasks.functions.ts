@@ -335,7 +335,7 @@ export const updateRecurrence = createServerFn({ method: "POST" })
     for (const [k, v] of Object.entries(patch)) if (v !== undefined) cleaned[k] = v;
     const { error } = await context.supabase
       .from("task_recurrences")
-      .update(cleaned)
+      .update(cleaned as any)
       .eq("id", id);
     if (error) throw new Error(error.message);
     return { ok: true };
