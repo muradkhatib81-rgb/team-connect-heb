@@ -100,9 +100,10 @@ function AdminDashboard({
   stats,
   loading,
 }: {
-  stats?: { total: number; active: number; inactive: number; byDept: Record<string, number>; departments: DeptRow[] };
+  stats?: { total: number; active: number; inactive: number; onLeave: number; byDept: Record<string, number>; departments: DeptRow[] };
   loading: boolean;
 }) {
+  const navigate = useNavigate();
   if (loading || !stats) {
     return (
       <div className="flex justify-center py-12">
@@ -110,12 +111,18 @@ function AdminDashboard({
       </div>
     );
   }
+  const go = (filter: string) =>
+    navigate({ to: "/employees", search: { filter, dept: "all" } as any });
+  const goDept = (id: string) =>
+    navigate({ to: "/employees", search: { filter: "all", dept: id } as any });
+
   return (
     <>
-      <section className="grid grid-cols-2 lg:grid-cols-3 gap-4">
-        <StatCard label="סך עובדים" value={stats.total} icon={Users} tone="primary" />
-        <StatCard label="עובדים פעילים" value={stats.active} icon={UserCheck} tone="success" />
-        <StatCard label="לא פעילים" value={stats.inactive} icon={UserX} tone="muted" />
+      <section className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <StatCard label="סך עובדים" value={stats.total} icon={Users} tone="primary" onClick={() => go("all")} />
+        <StatCard label="עובדים פעילים" value={stats.active} icon={UserCheck} tone="success" onClick={() => go("active")} />
+        <StatCard label="בחופש" value={stats.onLeave} icon={Plane} tone="warning" onClick={() => go("on_leave")} />
+        <StatCard label="לא פעילים" value={stats.inactive} icon={UserX} tone="muted" onClick={() => go("inactive")} />
       </section>
 
       <section>
@@ -135,10 +142,17 @@ function AdminDashboard({
         ) : (
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
             {stats.departments.map((d) => (
-              <Card key={d.id} className="card-elevated p-4">
-                <p className="text-xs text-muted-foreground truncate">{d.name}</p>
-                <p className="text-2xl font-bold mt-1">{stats.byDept[d.id] ?? 0}</p>
-              </Card>
+              <button
+                key={d.id}
+                type="button"
+                onClick={() => goDept(d.id)}
+                className="text-right"
+              >
+                <Card className="card-elevated p-4 cursor-pointer hover:bg-accent/30 transition-colors">
+                  <p className="text-xs text-muted-foreground truncate">{d.name}</p>
+                  <p className="text-2xl font-bold mt-1">{stats.byDept[d.id] ?? 0}</p>
+                </Card>
+              </button>
             ))}
           </div>
         )}
@@ -164,19 +178,22 @@ function StatCard({
   value,
   icon: Icon,
   tone,
+  onClick,
 }: {
   label: string;
   value: number;
   icon: typeof Users;
-  tone: "primary" | "success" | "muted";
+  tone: "primary" | "success" | "muted" | "warning";
+  onClick?: () => void;
 }) {
   const toneClass = {
     primary: "bg-primary/10 text-primary",
     success: "bg-success/10 text-success",
     muted: "bg-muted text-muted-foreground",
+    warning: "bg-orange-500/10 text-orange-600",
   }[tone];
-  return (
-    <Card className="card-elevated p-5">
+  const inner = (
+    <Card className="card-elevated p-5 cursor-pointer hover:bg-accent/30 transition-colors">
       <div className="flex items-center justify-between">
         <div>
           <p className="text-sm text-muted-foreground">{label}</p>
@@ -187,5 +204,11 @@ function StatCard({
         </div>
       </div>
     </Card>
+  );
+  if (!onClick) return inner;
+  return (
+    <button type="button" onClick={onClick} className="text-right w-full">
+      {inner}
+    </button>
   );
 }
