@@ -33,6 +33,7 @@ async function fetchSessionAndProfile(): Promise<AuthProfile | null> {
     full_name: profile?.full_name ?? "",
     id_number: profile?.id_number ?? null,
     department: (profile?.department ?? "general") as Department,
+    department_id: (profile as any)?.department_id ?? null,
     job_title: profile?.job_title ?? null,
     phone: profile?.phone ?? null,
     is_active: profile?.is_active ?? true,
