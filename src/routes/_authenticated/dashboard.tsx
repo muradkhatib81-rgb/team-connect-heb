@@ -23,6 +23,7 @@ type DeptRow = { id: string; name: string; is_active: boolean };
 function DashboardPage() {
   const { data: profile } = useAuth();
   const admin = profile ? isAdmin(profile.roles) : false;
+  const isDeptManager = profile ? profile.roles.includes("department_manager") : false;
   const queryClient = useQueryClient();
 
   const statsQuery = useQuery({
@@ -50,23 +51,44 @@ function DashboardPage() {
     },
   });
 
+  // Department manager: always reload their department employees on mount
+  const deptManagerQuery = useQuery({
+    enabled: !admin && isDeptManager && !!profile,
+    queryKey: ["dashboard", "dept-manager", profile?.id],
+    refetchOnMount: "always",
+    queryFn: async () => {
+      const { data: dept, error: dErr } = await supabase
+        .from("departments")
+        .select("id, name")
+        .eq("manager_id", profile!.id)
+        .maybeSingle();
+      if (dErr) throw dErr;
+      const { data: emps, error: eErr } = await supabase
+        .from("profiles")
+        .select("id, full_name, phone, is_active, on_leave, avatar_url, department_id")
+        .order("full_name");
+      if (eErr) throw eErr;
+      return { dept, employees: (emps ?? []) as DeptEmp[] };
+    },
+  });
+
   // Realtime: refresh when departments or profiles change
   useEffect(() => {
-    if (!admin) return;
+    if (!admin && !isDeptManager) return;
     const channel = supabase
       .channel("dashboard-realtime")
       .on("postgres_changes", { event: "*", schema: "public", table: "departments" }, () => {
-        queryClient.invalidateQueries({ queryKey: ["dashboard", "stats"] });
+        queryClient.invalidateQueries({ queryKey: ["dashboard"] });
         queryClient.invalidateQueries({ queryKey: ["departments"] });
       })
       .on("postgres_changes", { event: "*", schema: "public", table: "profiles" }, () => {
-        queryClient.invalidateQueries({ queryKey: ["dashboard", "stats"] });
+        queryClient.invalidateQueries({ queryKey: ["dashboard"] });
       })
       .subscribe();
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [admin, queryClient]);
+  }, [admin, isDeptManager, queryClient]);
 
   if (!profile) return null;
   const top = highestRole(profile.roles);
@@ -89,10 +111,107 @@ function DashboardPage() {
 
       {admin ? (
         <AdminDashboard stats={statsQuery.data} loading={statsQuery.isLoading} />
+      ) : isDeptManager ? (
+        <DeptManagerDashboard data={deptManagerQuery.data} loading={deptManagerQuery.isLoading} />
       ) : (
         <EmployeeDashboard />
       )}
     </div>
+  );
+}
+
+type DeptEmp = {
+  id: string;
+  full_name: string;
+  phone: string | null;
+  is_active: boolean;
+  on_leave: boolean;
+  avatar_url: string | null;
+  department_id: string | null;
+};
+
+function DeptManagerDashboard({
+  data,
+  loading,
+}: {
+  data?: { dept: { id: string; name: string } | null; employees: DeptEmp[] };
+  loading: boolean;
+}) {
+  const navigate = useNavigate();
+  if (loading || !data) {
+    return (
+      <div className="flex justify-center py-12">
+        <Loader2 className="size-6 animate-spin text-primary" />
+      </div>
+    );
+  }
+  if (!data.dept) {
+    return (
+      <Card className="card-elevated p-6 text-sm text-muted-foreground">
+        עדיין לא שויכת כאחראי מחלקה. פנה למנהל הראשי.
+      </Card>
+    );
+  }
+  const emps = data.employees.filter((e) => e.department_id === data.dept!.id);
+  const total = emps.length;
+  const active = emps.filter((e) => e.is_active && !e.on_leave).length;
+  const onLeave = emps.filter((e) => e.on_leave).length;
+  const inactive = emps.filter((e) => !e.is_active).length;
+  const go = () =>
+    navigate({ to: "/employees", search: { filter: "all", dept: data.dept!.id } as any });
+
+  return (
+    <>
+      <section className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <StatCard label="עובדי המחלקה" value={total} icon={Users} tone="primary" onClick={go} />
+        <StatCard label="פעילים" value={active} icon={UserCheck} tone="success" onClick={go} />
+        <StatCard label="בחופש" value={onLeave} icon={Plane} tone="warning" onClick={go} />
+        <StatCard label="לא פעילים" value={inactive} icon={UserX} tone="muted" onClick={go} />
+      </section>
+
+      <section>
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-lg font-semibold flex items-center gap-2">
+            <Building2 className="size-5 text-primary" />
+            עובדי {data.dept.name}
+          </h2>
+          <Link to="/employees" className="text-sm text-primary hover:underline">
+            לרשימה המלאה ←
+          </Link>
+        </div>
+        {emps.length === 0 ? (
+          <Card className="card-elevated p-6 text-sm text-muted-foreground">
+            עדיין אין עובדים משויכים למחלקה זו.
+          </Card>
+        ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            {emps.map((e) => (
+              <Card key={e.id} className="card-elevated p-4">
+                <div className="flex items-center gap-3">
+                  <div className="size-10 rounded-full bg-accent text-accent-foreground flex items-center justify-center text-sm font-semibold shrink-0 overflow-hidden">
+                    <span>{e.full_name?.charAt(0) || "?"}</span>
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <p className="font-medium truncate">{e.full_name || "ללא שם"}</p>
+                      {!e.is_active && (
+                        <Badge variant="destructive" className="rounded-full text-xs">לא פעיל</Badge>
+                      )}
+                      {e.on_leave && (
+                        <Badge variant="secondary" className="rounded-full text-xs">בחופש</Badge>
+                      )}
+                    </div>
+                    {e.phone && (
+                      <p className="text-xs text-muted-foreground mt-0.5 truncate">{e.phone}</p>
+                    )}
+                  </div>
+                </div>
+              </Card>
+            ))}
+          </div>
+        )}
+      </section>
+    </>
   );
 }
 
