@@ -10,6 +10,7 @@ import {
   Store,
   Loader2,
   ShieldCheck,
+  UserCircle,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
@@ -48,8 +49,16 @@ export function AppShell({ children }: { children: ReactNode }) {
       pathname !== "/change-password"
     ) {
       navigate({ to: "/change-password", replace: true });
+      return;
     }
-  }, [profile?.must_change_password, pathname, navigate]);
+    if (profile && pathname === "/dashboard") {
+      const admin2 = isAdmin(profile.roles);
+      const deptMgr = profile.roles.includes("department_manager");
+      if (!admin2 && !deptMgr) {
+        navigate({ to: "/profile", replace: true });
+      }
+    }
+  }, [profile?.must_change_password, profile, pathname, navigate]);
 
   if (isLoading || !profile) {
     return (
@@ -61,12 +70,16 @@ export function AppShell({ children }: { children: ReactNode }) {
 
   const top = highestRole(profile.roles);
   const admin = isAdmin(profile.roles);
+  const isDeptManager = profile.roles.includes("department_manager");
+  // עובד רגיל = אין הרשאות ניהול ואינו אחראי מחלקה
+  const isPlainEmployee = !admin && !isDeptManager;
 
   const nav: { to: string; label: string; icon: typeof LayoutDashboard; visible: boolean }[] = [
-    { to: "/dashboard", label: "לוח בקרה", icon: LayoutDashboard, visible: true },
+    { to: "/dashboard", label: "לוח בקרה", icon: LayoutDashboard, visible: !isPlainEmployee },
     { to: "/employees", label: "ניהול עובדים", icon: Users, visible: admin },
     { to: "/departments", label: "מחלקות", icon: Building2, visible: admin },
     { to: "/permissions", label: "הרשאות", icon: ShieldCheck, visible: canManageUsers(profile.roles) },
+    { to: "/profile", label: "הפרופיל שלי", icon: UserCircle, visible: isPlainEmployee },
   ].filter((n) => n.visible);
 
   async function handleSignOut() {
