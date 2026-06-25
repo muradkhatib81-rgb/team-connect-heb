@@ -304,8 +304,10 @@ function EmployeesPage() {
               avatarUrl={emp.avatar_url ? (avatarMap[emp.avatar_url] ?? avatarUrlFor(emp.avatar_url)) : null}
               onEdit={() => setEditing(emp)}
               onResetPassword={() => setResetting(emp)}
+              onDelete={() => setDeleting(emp)}
               canEdit={isMainAdmin}
               canResetPassword={isMainAdmin}
+              canDelete={isMainAdmin && emp.id !== me?.id}
             />
           ))}
         </div>
@@ -313,6 +315,10 @@ function EmployeesPage() {
 
       {resetting && isMainAdmin && (
         <ResetPasswordDialog employee={resetting} onClose={() => setResetting(null)} />
+      )}
+
+      {deleting && isMainAdmin && (
+        <DeleteEmployeeDialog employee={deleting} onClose={() => setDeleting(null)} />
       )}
 
       {editing && me && isMainAdmin && (
