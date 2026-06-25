@@ -119,7 +119,7 @@ export const deleteTask = createServerFn({ method: "POST" })
   .inputValidator((d: unknown) => z.object({ id: z.string().uuid() }).parse(d))
   .handler(async ({ data, context }) => {
     const caps = await getCallerCaps(context.supabase, context.userId);
-    if (!caps.canManageTasks) throw new Error("רק בעלי הרשאת ניהול משימות יכולים למחוק");
+    if (!caps.canDeleteTasks) throw new Error("רק בעלי הרשאת מחיקת משימות יכולים למחוק");
     // Remove image files first
     const { data: imgs } = await context.supabase
       .from("task_images")
