@@ -100,6 +100,186 @@ export type Database = {
           },
         ]
       }
+      schedule_audit_log: {
+        Row: {
+          action: Database["public"]["Enums"]["schedule_audit_action"]
+          actor_id: string | null
+          created_at: string
+          id: string
+          note: string | null
+          schedule_id: string
+        }
+        Insert: {
+          action: Database["public"]["Enums"]["schedule_audit_action"]
+          actor_id?: string | null
+          created_at?: string
+          id?: string
+          note?: string | null
+          schedule_id: string
+        }
+        Update: {
+          action?: Database["public"]["Enums"]["schedule_audit_action"]
+          actor_id?: string | null
+          created_at?: string
+          id?: string
+          note?: string | null
+          schedule_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "schedule_audit_log_schedule_id_fkey"
+            columns: ["schedule_id"]
+            isOneToOne: false
+            referencedRelation: "schedules"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      schedule_notifications: {
+        Row: {
+          created_at: string
+          id: string
+          message: string
+          read_at: string | null
+          schedule_id: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          message: string
+          read_at?: string | null
+          schedule_id: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          message?: string
+          read_at?: string | null
+          schedule_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "schedule_notifications_schedule_id_fkey"
+            columns: ["schedule_id"]
+            isOneToOne: false
+            referencedRelation: "schedules"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      schedule_shifts: {
+        Row: {
+          created_at: string
+          day_date: string
+          employee_id: string
+          id: string
+          schedule_id: string
+          shift: Database["public"]["Enums"]["shift_type"]
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          day_date: string
+          employee_id: string
+          id?: string
+          schedule_id: string
+          shift: Database["public"]["Enums"]["shift_type"]
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          day_date?: string
+          employee_id?: string
+          id?: string
+          schedule_id?: string
+          shift?: Database["public"]["Enums"]["shift_type"]
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "schedule_shifts_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "schedule_shifts_schedule_id_fkey"
+            columns: ["schedule_id"]
+            isOneToOne: false
+            referencedRelation: "schedules"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      schedules: {
+        Row: {
+          approved_at: string | null
+          approved_by: string | null
+          created_at: string
+          created_by: string | null
+          department_id: string
+          id: string
+          published_at: string | null
+          rejected_at: string | null
+          rejected_by: string | null
+          rejection_note: string | null
+          status: Database["public"]["Enums"]["schedule_status"]
+          submitted_at: string | null
+          submitted_by: string | null
+          updated_at: string
+          week_end: string
+          week_start: string
+        }
+        Insert: {
+          approved_at?: string | null
+          approved_by?: string | null
+          created_at?: string
+          created_by?: string | null
+          department_id: string
+          id?: string
+          published_at?: string | null
+          rejected_at?: string | null
+          rejected_by?: string | null
+          rejection_note?: string | null
+          status?: Database["public"]["Enums"]["schedule_status"]
+          submitted_at?: string | null
+          submitted_by?: string | null
+          updated_at?: string
+          week_end: string
+          week_start: string
+        }
+        Update: {
+          approved_at?: string | null
+          approved_by?: string | null
+          created_at?: string
+          created_by?: string | null
+          department_id?: string
+          id?: string
+          published_at?: string | null
+          rejected_at?: string | null
+          rejected_by?: string | null
+          rejection_note?: string | null
+          status?: Database["public"]["Enums"]["schedule_status"]
+          submitted_at?: string | null
+          submitted_by?: string | null
+          updated_at?: string
+          week_end?: string
+          week_start?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "schedules_department_id_fkey"
+            columns: ["department_id"]
+            isOneToOne: false
+            referencedRelation: "departments"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       task_images: {
         Row: {
           created_at: string
@@ -411,6 +591,11 @@ export type Database = {
         }
         Returns: boolean
       }
+      has_schedule_approve_perm: {
+        Args: { _user_id: string }
+        Returns: boolean
+      }
+      has_schedule_create_perm: { Args: { _user_id: string }; Returns: boolean }
       has_task_approve_perm: { Args: { _user_id: string }; Returns: boolean }
       has_task_close_perm: { Args: { _user_id: string }; Returns: boolean }
       has_task_create_perm: { Args: { _user_id: string }; Returns: boolean }
@@ -435,6 +620,16 @@ export type Database = {
         | "cleaning"
         | "pricing"
         | "general"
+      schedule_audit_action:
+        | "created"
+        | "updated"
+        | "submitted"
+        | "approved"
+        | "rejected"
+        | "copied"
+        | "published"
+      schedule_status: "draft" | "pending_approval" | "approved" | "rejected"
+      shift_type: "morning" | "evening" | "off"
       task_priority: "low" | "medium" | "high"
       task_recurrence_frequency: "daily" | "weekly" | "monthly"
       task_status:
@@ -588,6 +783,17 @@ export const Constants = {
         "pricing",
         "general",
       ],
+      schedule_audit_action: [
+        "created",
+        "updated",
+        "submitted",
+        "approved",
+        "rejected",
+        "copied",
+        "published",
+      ],
+      schedule_status: ["draft", "pending_approval", "approved", "rejected"],
+      shift_type: ["morning", "evening", "off"],
       task_priority: ["low", "medium", "high"],
       task_recurrence_frequency: ["daily", "weekly", "monthly"],
       task_status: [
