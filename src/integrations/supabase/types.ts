@@ -203,6 +203,13 @@ export type Database = {
             foreignKeyName: "schedule_shifts_employee_id_fkey"
             columns: ["employee_id"]
             isOneToOne: false
+            referencedRelation: "department_coworkers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "schedule_shifts_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: false
             referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
@@ -579,7 +586,44 @@ export type Database = {
       }
     }
     Views: {
-      [_ in never]: never
+      department_coworkers: {
+        Row: {
+          avatar_url: string | null
+          department_id: string | null
+          full_name: string | null
+          id: string | null
+          is_active: boolean | null
+          job_title: string | null
+          on_leave: boolean | null
+        }
+        Insert: {
+          avatar_url?: string | null
+          department_id?: string | null
+          full_name?: string | null
+          id?: string | null
+          is_active?: boolean | null
+          job_title?: string | null
+          on_leave?: boolean | null
+        }
+        Update: {
+          avatar_url?: string | null
+          department_id?: string | null
+          full_name?: string | null
+          id?: string | null
+          is_active?: boolean | null
+          job_title?: string | null
+          on_leave?: boolean | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "profiles_department_id_fkey"
+            columns: ["department_id"]
+            isOneToOne: false
+            referencedRelation: "departments"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Functions: {
       can_approve_task: {
