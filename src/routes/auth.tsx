@@ -112,7 +112,6 @@ function AuthPage() {
         data: {
           full_name: fullName,
           id_number: idNumber,
-          department: "general",
         },
       },
     });
