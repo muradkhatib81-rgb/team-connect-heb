@@ -200,7 +200,6 @@ function TasksStatsSection({
 type DeptEmp = {
   id: string;
   full_name: string;
-  phone: string | null;
   is_active: boolean;
   on_leave: boolean;
   avatar_url: string | null;
