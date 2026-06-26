@@ -107,7 +107,7 @@ function addDaysISO(iso: string, days: number): string {
 }
 
 function SchedulesPage() {
-  const { data: me } = useAuth();
+  const { data: me, isLoading: meLoading } = useAuth();
   const qc = useQueryClient();
   const search = Route.useSearch();
 
@@ -116,6 +116,13 @@ function SchedulesPage() {
     !!me?.roles.includes("branch_manager") || !!me?.roles.includes("assistant_manager");
   const isDeptMgr = !!me?.roles.includes("department_manager");
   const isEmployee = !isMainAdmin && !isBranchMgr && !isDeptMgr;
+
+  // Employees always see the current week only
+  useEffect(() => {
+    if (!meLoading && isEmployee) {
+      setWeekStart(getWeekStart(new Date()));
+    }
+  }, [meLoading, isEmployee]);
 
   // Granular flags from user_task_permissions
   const permsQ = useQuery({
