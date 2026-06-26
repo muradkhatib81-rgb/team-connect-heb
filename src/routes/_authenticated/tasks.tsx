@@ -307,7 +307,9 @@ function TasksPage() {
                 <SelectItem value="all">הכול</SelectItem>
                 <SelectItem value="new">חדש</SelectItem>
                 <SelectItem value="in_progress">בביצוע</SelectItem>
-                <SelectItem value="completed">הושלם</SelectItem>
+                <SelectItem value="pending_approval">ממתין לאישור</SelectItem>
+                <SelectItem value="completed">הושלמה</SelectItem>
+                <SelectItem value="closed">נסגרה (ארכיון)</SelectItem>
                 <SelectItem value="overdue">באיחור</SelectItem>
               </SelectContent>
             </Select>
