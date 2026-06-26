@@ -287,9 +287,9 @@ function BreaksPage() {
         </div>
       </header>
 
-      <Tabs defaultValue="request" className="space-y-4">
+      <Tabs defaultValue={canRequest ? "request" : canManage ? "approve" : "mine"} className="space-y-4">
         <TabsList>
-          <TabsTrigger value="request">בקשת הפסקה</TabsTrigger>
+          {canRequest && <TabsTrigger value="request">בקשת הפסקה</TabsTrigger>}
           <TabsTrigger value="mine">הבקשות שלי</TabsTrigger>
           {canManage && <TabsTrigger value="approve">אישור בקשות</TabsTrigger>}
         </TabsList>
