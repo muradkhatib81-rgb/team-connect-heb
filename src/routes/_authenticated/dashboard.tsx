@@ -291,9 +291,11 @@ function DeptManagerDashboard({
 function AdminDashboard({
   stats,
   loading,
+  onSelectDept,
 }: {
   stats?: { total: number; active: number; inactive: number; onLeave: number; byDept: Record<string, number>; departments: DeptRow[] };
   loading: boolean;
+  onSelectDept?: (id: string) => void;
 }) {
   const navigate = useNavigate();
   if (loading || !stats) {
