@@ -193,12 +193,52 @@ export const submitSchedule = createServerFn({ method: "POST" })
       throw err;
     }
 
+    const caps = await getCaps(context.supabase, context.userId);
+    const nowIso = new Date().toISOString();
+
+    if (caps.canPublishDirect) {
+      const { error } = await context.supabase
+        .from("schedules")
+        .update({
+          status: "approved",
+          submitted_by: context.userId,
+          submitted_at: nowIso,
+          approved_by: context.userId,
+          approved_at: nowIso,
+          published_at: nowIso,
+          rejection_note: null,
+          rejected_at: null,
+          rejected_by: null,
+        })
+        .eq("id", data.schedule_id);
+      if (error) throw new Error(error.message);
+
+      await context.supabase
+        .from("schedule_audit_log")
+        .insert({ schedule_id: data.schedule_id, actor_id: context.userId, action: "published_direct" });
+
+      const { data: emps } = await context.supabase
+        .from("profiles")
+        .select("id")
+        .eq("department_id", sched.department_id);
+      if (emps?.length) {
+        await context.supabase.from("schedule_notifications").insert(
+          emps.map((e: any) => ({
+            schedule_id: data.schedule_id,
+            user_id: e.id,
+            message: "סידור העבודה החדש פורסם.",
+          })),
+        );
+      }
+      return { ok: true, published: true };
+    }
+
     const { error } = await context.supabase
       .from("schedules")
       .update({
         status: "pending_approval",
         submitted_by: context.userId,
-        submitted_at: new Date().toISOString(),
+        submitted_at: nowIso,
         rejection_note: null,
         rejected_at: null,
         rejected_by: null,
@@ -209,8 +249,9 @@ export const submitSchedule = createServerFn({ method: "POST" })
     await context.supabase
       .from("schedule_audit_log")
       .insert({ schedule_id: data.schedule_id, actor_id: context.userId, action: "submitted" });
-    return { ok: true };
+    return { ok: true, published: false };
   });
+
 
 // ---------- APPROVE ----------
 export const approveSchedule = createServerFn({ method: "POST" })
