@@ -388,18 +388,36 @@ export const generateDueRecurringTasks = createServerFn({ method: "POST" }).hand
   if (error) throw new Error(error.message);
   let generated = 0;
   for (const rec of due ?? []) {
-    const { error: insErr } = await supabaseAdmin.from("tasks").insert({
-      title: rec.title,
-      description: rec.description,
-      department_id: rec.department_id,
-      assignee_id: rec.assignee_id,
-      priority: rec.priority,
-      status: "new",
-      due_at: rec.next_run_at,
-      recurrence_id: rec.id,
-      created_by: rec.created_by,
-    });
-    if (insErr) continue;
+    const { data: newTask, error: insErr } = await supabaseAdmin
+      .from("tasks")
+      .insert({
+        title: rec.title,
+        description: rec.description,
+        department_id: rec.department_id,
+        assignee_id: rec.assignee_id,
+        priority: rec.priority,
+        status: "new",
+        due_at: rec.next_run_at,
+        recurrence_id: rec.id,
+        created_by: rec.created_by,
+      })
+      .select("id")
+      .single();
+    if (insErr || !newTask) continue;
+    // Copy recurrence instruction images into the generated task
+    const { data: recImgs } = await supabaseAdmin
+      .from("task_recurrence_images")
+      .select("storage_path, uploaded_by")
+      .eq("recurrence_id", rec.id);
+    if (recImgs && recImgs.length) {
+      await supabaseAdmin.from("task_images").insert(
+        recImgs.slice(0, 5).map((img: any) => ({
+          task_id: newTask.id,
+          storage_path: img.storage_path,
+          uploaded_by: img.uploaded_by,
+        })),
+      );
+    }
     const next = computeNextRunAt(
       rec.frequency,
       rec.days_of_week ?? [],
