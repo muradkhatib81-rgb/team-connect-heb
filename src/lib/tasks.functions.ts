@@ -30,6 +30,7 @@ async function getCallerCaps(supabase: any, userId: string) {
     isMainAdmin || (isManager && (!!p.can_manage_tasks || !!p.can_edit_tasks));
   const canDeleteTasks =
     isMainAdmin || (isManager && (!!p.can_manage_tasks || !!p.can_delete_tasks));
+  const canCloseTasks = isMainAdmin || (isManager && !!p.can_manage_tasks);
   const isDeptManager = roleSet.has("department_manager");
   return {
     isMainAdmin,
@@ -37,6 +38,7 @@ async function getCallerCaps(supabase: any, userId: string) {
     canCreateTasks,
     canEditTasks,
     canDeleteTasks,
+    canCloseTasks,
     canManageTasks: canEditTasks, // legacy alias used elsewhere
     isDeptManager,
     departmentId: profile?.department_id ?? null,
