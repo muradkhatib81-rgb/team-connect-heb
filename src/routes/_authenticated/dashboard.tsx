@@ -135,6 +135,9 @@ function DashboardPage() {
 
       <TasksStatsSection stats={tasksStatsQuery.data} loading={tasksStatsQuery.isLoading} />
 
+      <SchedulesStatsSection profile={profile} />
+
+
       {admin ? (
         <AdminDashboard stats={statsQuery.data} loading={statsQuery.isLoading} />
       ) : isDeptManager ? (
