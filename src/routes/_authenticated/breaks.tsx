@@ -247,6 +247,22 @@ function BreaksPage() {
       if (!timeStr) throw new Error("יש לבחור שעה");
       const setting = settingsQ.data?.find((s) => s.id === settingId);
       if (!setting) throw new Error("סוג הפסקה לא קיים");
+      // Enforce: one request per break type per calendar day (local time).
+      const now = new Date();
+      const dayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      const dayEnd = new Date(dayStart.getTime() + 24 * 60 * 60 * 1000);
+      const { data: existing, error: exErr } = await supabase
+        .from("break_requests")
+        .select("id, status")
+        .eq("user_id", me!.id)
+        .eq("break_setting_id", settingId)
+        .gte("created_at", dayStart.toISOString())
+        .lt("created_at", dayEnd.toISOString())
+        .limit(1);
+      if (exErr) throw exErr;
+      if ((existing ?? []).length > 0) {
+        throw new Error("כבר שלחת בקשה עבור סוג הפסקה זה היום.");
+      }
       const { error } = await supabase.from("break_requests").insert({
         user_id: me!.id,
         department_id: me!.department_id ?? null,
