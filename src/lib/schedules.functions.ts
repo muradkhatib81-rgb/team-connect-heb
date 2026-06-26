@@ -113,6 +113,20 @@ export const saveScheduleShifts = createServerFn({ method: "POST" })
     } else if (!["draft", "rejected"].includes(sched.status)) {
       throw new Error("לא ניתן לערוך סידור בסטטוס זה");
     }
+    // Snapshot existing shifts for change detection
+    const { data: existingShifts } = await context.supabase
+      .from("schedule_shifts")
+      .select("employee_id, day_date, shift")
+      .eq("schedule_id", data.schedule_id);
+    const keyOf = (s: { employee_id: string; day_date: string; shift: string }) =>
+      `${s.employee_id}|${s.day_date}|${s.shift}`;
+    const beforeSet = new Set((existingShifts ?? []).map(keyOf));
+    const afterSet = new Set(data.shifts.map(keyOf));
+    const changed =
+      beforeSet.size !== afterSet.size ||
+      [...beforeSet].some((k) => !afterSet.has(k)) ||
+      [...afterSet].some((k) => !beforeSet.has(k));
+
     // Replace all shifts for the schedule (simpler + atomic-ish)
     const { error: delErr } = await context.supabase
       .from("schedule_shifts")
@@ -136,22 +150,35 @@ export const saveScheduleShifts = createServerFn({ method: "POST" })
         action: "updated",
       });
 
-    if (isApproved) {
-      const { data: emps } = await context.supabase
-        .from("profiles")
-        .select("id")
-        .eq("department_id", sched.department_id);
-      if (emps?.length) {
-        await context.supabase.from("schedule_notifications").insert(
-          emps.map((e: any) => ({
-            schedule_id: data.schedule_id,
-            user_id: e.id,
-            message: "סידור העבודה השבועי עודכן. נא לעיין בשינויים.",
-          })),
-        );
+    if (isApproved && changed) {
+      // All department employees + the department manager (in case they're not in the dept)
+      const [{ data: emps }, { data: dept }] = await Promise.all([
+        context.supabase
+          .from("profiles")
+          .select("id")
+          .eq("department_id", sched.department_id),
+        context.supabase
+          .from("departments")
+          .select("manager_id")
+          .eq("id", sched.department_id)
+          .maybeSingle(),
+      ]);
+      const recipientIds = new Set<string>((emps ?? []).map((e: any) => e.id));
+      if (dept?.manager_id) recipientIds.add(dept.manager_id);
+      if (recipientIds.size) {
+        const { error: notifErr } = await context.supabase
+          .from("schedule_notifications")
+          .insert(
+            [...recipientIds].map((uid) => ({
+              schedule_id: data.schedule_id,
+              user_id: uid,
+              message: "סידור העבודה השבועי עודכן. נא לעיין בשינויים.",
+            })),
+          );
+        if (notifErr) throw new Error(notifErr.message);
       }
     }
-    return { ok: true };
+    return { ok: true, notified: isApproved && changed };
   });
 
 // ---------- SUBMIT for approval ----------
