@@ -460,19 +460,20 @@ export const markTaskPendingApproval = createServerFn({ method: "POST" })
     return { ok: true };
   });
 
+async function assertCanApprove(supabase: any, userId: string, taskId: string) {
+  const { data, error } = await supabase.rpc("can_approve_task", {
+    _task_id: taskId,
+    _approver_id: userId,
+  });
+  if (error) throw new Error(error.message);
+  if (!data) throw new Error("אין לך הרשאה לאשר משימה זו");
+}
+
 export const approveTask = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: unknown) => z.object({ id: z.string().uuid() }).parse(d))
   .handler(async ({ data, context }) => {
-    const { data: t } = await context.supabase
-      .from("tasks")
-      .select("department_id")
-      .eq("id", data.id)
-      .maybeSingle();
-    if (!t) throw new Error("המשימה לא נמצאה");
-    const caps = await getCallerCaps(context.supabase, context.userId);
-    if (!canEditForDept(caps, t.department_id))
-      throw new Error("אין הרשאה לאשר משימה זו");
+    await assertCanApprove(context.supabase, context.userId, data.id);
     const { error } = await context.supabase
       .from("tasks")
       .update({ status: "completed", rejection_note: null, rejected_at: null })
@@ -492,15 +493,7 @@ export const rejectTask = createServerFn({ method: "POST" })
       .parse(d),
   )
   .handler(async ({ data, context }) => {
-    const { data: t } = await context.supabase
-      .from("tasks")
-      .select("department_id")
-      .eq("id", data.id)
-      .maybeSingle();
-    if (!t) throw new Error("המשימה לא נמצאה");
-    const caps = await getCallerCaps(context.supabase, context.userId);
-    if (!canEditForDept(caps, t.department_id))
-      throw new Error("אין הרשאה להחזיר משימה זו");
+    await assertCanApprove(context.supabase, context.userId, data.id);
     const { error } = await context.supabase
       .from("tasks")
       .update({
@@ -518,6 +511,7 @@ export const PERMISSION_KEYS = [
   "can_create_tasks",
   "can_edit_tasks",
   "can_delete_tasks",
+  "can_approve_tasks",
   "can_create_schedule",
   "can_approve_schedule",
   "can_approve_leave",

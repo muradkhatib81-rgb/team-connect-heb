@@ -306,6 +306,7 @@ export type Database = {
         Row: {
           can_approve_leave: boolean
           can_approve_schedule: boolean
+          can_approve_tasks: boolean
           can_create_schedule: boolean
           can_create_tasks: boolean
           can_delete_tasks: boolean
@@ -322,6 +323,7 @@ export type Database = {
         Insert: {
           can_approve_leave?: boolean
           can_approve_schedule?: boolean
+          can_approve_tasks?: boolean
           can_create_schedule?: boolean
           can_create_tasks?: boolean
           can_delete_tasks?: boolean
@@ -338,6 +340,7 @@ export type Database = {
         Update: {
           can_approve_leave?: boolean
           can_approve_schedule?: boolean
+          can_approve_tasks?: boolean
           can_create_schedule?: boolean
           can_create_tasks?: boolean
           can_delete_tasks?: boolean
@@ -358,6 +361,10 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      can_approve_task: {
+        Args: { _approver_id: string; _task_id: string }
+        Returns: boolean
+      }
       has_main_admin: { Args: never; Returns: boolean }
       has_role: {
         Args: {
@@ -366,6 +373,7 @@ export type Database = {
         }
         Returns: boolean
       }
+      has_task_approve_perm: { Args: { _user_id: string }; Returns: boolean }
       has_task_create_perm: { Args: { _user_id: string }; Returns: boolean }
       has_task_delete_perm: { Args: { _user_id: string }; Returns: boolean }
       has_task_edit_perm: { Args: { _user_id: string }; Returns: boolean }
