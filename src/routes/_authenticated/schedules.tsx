@@ -56,15 +56,15 @@ import {
   copyPreviousWeek,
   deleteSchedule,
 } from "@/lib/schedules.functions";
-import { formatHeDate } from "@/lib/date-format";
+import { formatHeDate, formatHeDateTime } from "@/lib/date-format";
 
-type SchedulesSearch = { dept?: string; week?: string; view?: "pending" | "editor" };
+type SchedulesSearch = { dept?: string; week?: string; view?: "pending" | "editor" | "approved" };
 export const Route = createFileRoute("/_authenticated/schedules")({
   component: SchedulesPage,
   validateSearch: (s: Record<string, unknown>): SchedulesSearch => ({
     dept: typeof s.dept === "string" ? s.dept : undefined,
     week: typeof s.week === "string" ? s.week : undefined,
-    view: s.view === "pending" || s.view === "editor" ? s.view : undefined,
+    view: s.view === "pending" || s.view === "editor" || s.view === "approved" ? s.view : undefined,
   }),
 });
 
@@ -176,7 +176,7 @@ function SchedulesPage() {
   );
 
   // Default view for approvers = pending approvals list across all departments they can see.
-  const [view, setView] = useState<"pending" | "editor">(
+  const [view, setView] = useState<"pending" | "editor" | "approved">(
     search.view ?? (search.dept || search.week ? "editor" : canApprove ? "pending" : "editor"),
   );
   useEffect(() => {
@@ -200,14 +200,34 @@ function SchedulesPage() {
     },
   });
 
+  const approvedQ = useQuery({
+    enabled: canApprove,
+    queryKey: ["schedules-approved"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("schedules")
+        .select(
+          "id, department_id, week_start, week_end, status, created_by, approved_at, approved_by",
+        )
+        .eq("status", "approved")
+        .order("week_start", { ascending: false });
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
+
   const pendingCreatorIds = useMemo(() => {
     const s = new Set<string>();
     for (const p of pendingQ.data ?? []) {
       if (p.created_by) s.add(p.created_by);
       if (p.submitted_by) s.add(p.submitted_by);
     }
+    for (const a of approvedQ.data ?? []) {
+      if (a.created_by) s.add(a.created_by);
+      if (a.approved_by) s.add(a.approved_by);
+    }
     return Array.from(s);
-  }, [pendingQ.data]);
+  }, [pendingQ.data, approvedQ.data]);
 
   const pendingPeopleQ = useQuery({
     enabled: pendingCreatorIds.length > 0,
@@ -307,6 +327,7 @@ function SchedulesPage() {
       .on("postgres_changes", { event: "*", schema: "public", table: "schedules" }, () => {
         qc.invalidateQueries({ queryKey: ["schedule"] });
         qc.invalidateQueries({ queryKey: ["schedules-pending"] });
+        qc.invalidateQueries({ queryKey: ["schedules-approved"] });
         qc.invalidateQueries({ queryKey: ["dashboard-schedules"] });
       })
 
@@ -488,6 +509,8 @@ function SchedulesPage() {
           <p className="text-sm text-muted-foreground mt-1">
             {view === "pending" && canApprove
               ? "ממתינים לאישור — כל המחלקות"
+              : view === "approved" && canApprove
+              ? "סידורים מאושרים — כל המחלקות"
               : `${formatHeDate(weekStart)} – ${formatHeDate(weekEnd)}`}
           </p>
         </div>
@@ -504,6 +527,18 @@ function SchedulesPage() {
             {pendingQ.data && pendingQ.data.length > 0 && (
               <Badge variant="secondary" className="mr-2">
                 {pendingQ.data.length}
+              </Badge>
+            )}
+          </Button>
+          <Button
+            size="sm"
+            variant={view === "approved" ? "default" : "outline"}
+            onClick={() => setView("approved")}
+          >
+            סידורים מאושרים
+            {approvedQ.data && approvedQ.data.length > 0 && (
+              <Badge variant="secondary" className="mr-2">
+                {approvedQ.data.length}
               </Badge>
             )}
           </Button>
@@ -574,8 +609,75 @@ function SchedulesPage() {
             </table>
           )}
         </Card>
+      ) : canApprove && view === "approved" ? (
+        <Card className="card-elevated p-0 overflow-hidden">
+          {approvedQ.isLoading ? (
+            <div className="flex justify-center py-12">
+              <Loader2 className="size-6 animate-spin text-primary" />
+            </div>
+          ) : !approvedQ.data || approvedQ.data.length === 0 ? (
+            <div className="p-8 text-center text-sm text-muted-foreground">
+              אין סידורי עבודה מאושרים להצגה.
+            </div>
+          ) : (
+            <table className="w-full text-sm">
+              <thead className="bg-muted/50">
+                <tr>
+                  <th className="text-right p-3">מחלקה</th>
+                  <th className="text-right p-3">טווח תאריכים</th>
+                  <th className="text-right p-3">נוצר ע״י</th>
+                  <th className="text-right p-3">אושר ע״י</th>
+                  <th className="text-right p-3">תאריך אישור</th>
+                  <th className="text-right p-3">סטטוס</th>
+                  <th className="text-right p-3" />
+                </tr>
+              </thead>
+              <tbody>
+                {approvedQ.data.map((a) => (
+                  <tr key={a.id} className="border-t hover:bg-muted/30">
+                    <td className="p-3 font-medium">
+                      {deptNameById[a.department_id] ?? "—"}
+                    </td>
+                    <td className="p-3">
+                      {formatHeDate(a.week_start)} – {formatHeDate(a.week_end)}
+                    </td>
+                    <td className="p-3">
+                      {pendingPeopleQ.data?.[a.created_by ?? ""] ?? "—"}
+                    </td>
+                    <td className="p-3">
+                      {pendingPeopleQ.data?.[a.approved_by ?? ""] ?? "—"}
+                    </td>
+                    <td className="p-3 text-xs text-muted-foreground">
+                      {a.approved_at ? formatHeDateTime(a.approved_at) : "—"}
+                    </td>
+                    <td className="p-3">
+                      <Badge variant={STATUS_VARIANT[a.status]}>
+                        {STATUS_LABEL[a.status as keyof typeof STATUS_LABEL]}
+                      </Badge>
+                    </td>
+                    <td className="p-3 text-left">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() =>
+                          openScheduleFromPending({
+                            department_id: a.department_id,
+                            week_start: a.week_start,
+                          })
+                        }
+                      >
+                        פתח סידור
+                      </Button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </Card>
       ) : (
         <>
+
 
 
       <Card className="card-elevated p-4 flex flex-col sm:flex-row gap-3 items-stretch sm:items-center">
