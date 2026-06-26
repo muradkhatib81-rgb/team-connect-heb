@@ -283,17 +283,17 @@ function EmployeesPage() {
                 <SelectItem value="inactive">{FILTER_LABELS.inactive}</SelectItem>
               </SelectContent>
             </Select>
-            <Select value={deptFilter} onValueChange={setDept} disabled={isDeptManagerOnly}>
-              <SelectTrigger className="w-44"><SelectValue /></SelectTrigger>
-              <SelectContent>
-                {!isDeptManagerOnly && <SelectItem value="all">כל המחלקות</SelectItem>}
-                {(deptsQuery.data ?? [])
-                  .filter((d) => !isDeptManagerOnly || d.id === me?.department_id)
-                  .map((d) => (
+            {!isDeptManagerOnly && (
+              <Select value={deptFilter} onValueChange={setDept}>
+                <SelectTrigger className="w-44"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">כל המחלקות</SelectItem>
+                  {(deptsQuery.data ?? []).map((d) => (
                     <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>
                   ))}
-              </SelectContent>
-            </Select>
+                </SelectContent>
+              </Select>
+            )}
           </div>
         </div>
       </Card>
