@@ -121,6 +121,8 @@ function BreaksPage() {
   const { data: me } = useAuth();
   const qc = useQueryClient();
   const isMainAdmin = !!me?.roles.includes("main_admin");
+  const isBranchOrAssistant =
+    !!me?.roles.includes("branch_manager") || !!me?.roles.includes("assistant_manager");
 
   const permQ = useQuery({
     enabled: !!me?.id,
@@ -136,6 +138,8 @@ function BreaksPage() {
     },
   });
   const canManage = !!permQ.data;
+  // Only regular employees and department managers (without break-management perm) may submit requests.
+  const canRequest = !isMainAdmin && !isBranchOrAssistant && !canManage;
 
   const settingsQ = useQuery({
     queryKey: ["break-settings-active"],
