@@ -397,21 +397,19 @@ export const approveSchedule = createServerFn({ method: "POST" })
       .eq("id", data.schedule_id);
     if (error) throw new Error(error.message);
 
-    // Detect changes vs the submitted snapshot (published_shift).
-    // IMPORTANT: do NOT refresh the snapshot — keep the dept-manager's
-    // submitted version as the baseline so the "modified" marker (orange ring)
-    // remains visible after publication for every viewer.
-    let editedBeforeApproval = false;
+    // Refresh published_shift snapshot to the final approved version, so the
+    // published view shows exactly what the approver published (no leftover
+    // "modified after publish" markers from pre-approval edits).
     {
       const { data: cur } = await context.supabase
         .from("schedule_shifts")
-        .select("id, shift, published_shift")
+        .select("id, shift")
         .eq("schedule_id", data.schedule_id);
       for (const row of cur ?? []) {
-        if ((row as any).published_shift !== row.shift) {
-          editedBeforeApproval = true;
-          break;
-        }
+        await context.supabase
+          .from("schedule_shifts")
+          .update({ published_shift: row.shift })
+          .eq("id", row.id);
       }
     }
 
@@ -421,7 +419,6 @@ export const approveSchedule = createServerFn({ method: "POST" })
         schedule_id: data.schedule_id,
         actor_id: context.userId,
         action: "approved",
-        note: editedBeforeApproval ? "אושר עם שינויים" : null,
       });
 
     // Notify department employees + department manager (creator/approver too).
@@ -440,9 +437,7 @@ export const approveSchedule = createServerFn({ method: "POST" })
     if (dept?.manager_id) recipientIds.add(dept.manager_id);
     if (sched.created_by) recipientIds.add(sched.created_by);
     if (recipientIds.size) {
-      const message = editedBeforeApproval
-        ? "סידור העבודה השבועי אושר עם שינויים. נא לעיין בסידור המעודכן."
-        : "סידור העבודה החדש פורסם.";
+      const message = "סידור העבודה השבועי עודכן ופורסם. נא לעיין בסידור המעודכן.";
       await context.supabase.from("schedule_notifications").insert(
         [...recipientIds].map((uid) => ({
           schedule_id: data.schedule_id,
@@ -451,7 +446,7 @@ export const approveSchedule = createServerFn({ method: "POST" })
         })),
       );
     }
-    return { ok: true, editedBeforeApproval };
+    return { ok: true };
   });
 
 // ---------- REJECT ----------

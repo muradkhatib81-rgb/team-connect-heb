@@ -39,7 +39,7 @@ import {
   Copy,
   Send,
   CheckCircle2,
-  XCircle,
+  
   Loader2,
   Save,
   AlertTriangle,
@@ -52,7 +52,7 @@ import {
   saveScheduleShifts,
   submitSchedule,
   approveSchedule,
-  rejectSchedule,
+  
   copyPreviousWeek,
   deleteSchedule,
 } from "@/lib/schedules.functions";
@@ -368,7 +368,7 @@ function SchedulesPage() {
   const saveFn = useServerFn(saveScheduleShifts);
   const submitFn = useServerFn(submitSchedule);
   const approveFn = useServerFn(approveSchedule);
-  const rejectFn = useServerFn(rejectSchedule);
+  
   const copyFn = useServerFn(copyPreviousWeek);
 
   const createMut = useMutation({
@@ -421,23 +421,24 @@ function SchedulesPage() {
 
 
   const approveMut = useMutation({
-    mutationFn: () => approveFn({ data: { schedule_id: visible!.id } }),
+    mutationFn: async () => {
+      // Persist any current edits made by the approver before publishing,
+      // so the published version reflects exactly what's on screen.
+      const list: { employee_id: string; day_date: string; shift: Shift }[] = [];
+      for (const [emp, m] of Object.entries(edits)) {
+        for (const [day, shift] of Object.entries(m)) {
+          list.push({ employee_id: emp, day_date: day, shift });
+        }
+      }
+      await saveFn({ data: { schedule_id: visible!.id, shifts: list } });
+      return approveFn({ data: { schedule_id: visible!.id } });
+    },
     onSuccess: () => {
       toast.success("הסידור אושר ופורסם");
       qc.invalidateQueries({ queryKey: ["schedule"] });
-    },
-    onError: (e: any) => toast.error(e?.message ?? "שגיאה"),
-  });
-
-  const [rejectOpen, setRejectOpen] = useState(false);
-  const [rejectNote, setRejectNote] = useState("");
-  const rejectMut = useMutation({
-    mutationFn: () => rejectFn({ data: { schedule_id: visible!.id, note: rejectNote } }),
-    onSuccess: () => {
-      toast.success("הסידור נדחה");
-      setRejectOpen(false);
-      setRejectNote("");
-      qc.invalidateQueries({ queryKey: ["schedule"] });
+      qc.invalidateQueries({ queryKey: ["schedule-shifts", visible?.id] });
+      qc.invalidateQueries({ queryKey: ["schedules-pending"] });
+      qc.invalidateQueries({ queryKey: ["schedules-approved"] });
     },
     onError: (e: any) => toast.error(e?.message ?? "שגיאה"),
   });
@@ -834,24 +835,14 @@ function SchedulesPage() {
             )}
 
             {canShowApprove && (
-              <>
-                <Button
-                  onClick={() => approveMut.mutate()}
-                  disabled={approveMut.isPending}
-                  size="sm"
-                >
-                  <CheckCircle2 className="size-4" />
-                  אשר ופרסם
-                </Button>
-                <Button
-                  onClick={() => setRejectOpen(true)}
-                  size="sm"
-                  variant="destructive"
-                >
-                  <XCircle className="size-4" />
-                  דחה עם הערות
-                </Button>
-              </>
+              <Button
+                onClick={() => approveMut.mutate()}
+                disabled={approveMut.isPending || saveMut.isPending}
+                size="sm"
+              >
+                <CheckCircle2 className="size-4" />
+                אשר ופרסם
+              </Button>
             )}
             {canDelete && (
               <Button
@@ -966,32 +957,6 @@ function SchedulesPage() {
       )}
 
 
-      <Dialog open={rejectOpen} onOpenChange={setRejectOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>דחיית הסידור</DialogTitle>
-          </DialogHeader>
-          <Textarea
-            placeholder="הערות לאחראי המחלקה (חובה)"
-            value={rejectNote}
-            onChange={(e) => setRejectNote(e.target.value)}
-            rows={4}
-          />
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setRejectOpen(false)}>
-              ביטול
-            </Button>
-            <Button
-              variant="destructive"
-              disabled={!rejectNote.trim() || rejectMut.isPending}
-              onClick={() => rejectMut.mutate()}
-            >
-              {rejectMut.isPending && <Loader2 className="size-4 animate-spin" />}
-              דחה
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
 
       <AlertDialog open={copyOpen} onOpenChange={setCopyOpen}>
         <AlertDialogContent>
