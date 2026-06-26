@@ -1302,7 +1302,7 @@ function OnBreakSection({ profile }: { profile: any }) {
           value={pendingCountQ.data ?? 0}
           icon={Clock}
           tone="warning"
-          onClick={() => navigate({ to: "/breaks" })}
+          onClick={() => navigate({ to: "/breaks-admin" })}
         />
         <StatCard
           label="עובדים בהפסקה כעת"
@@ -1320,7 +1320,7 @@ function OnBreakSection({ profile }: { profile: any }) {
         />
         <Card
           className="card-elevated p-4 flex items-center justify-between cursor-pointer hover:bg-muted/40"
-          onClick={() => navigate({ to: "/breaks" })}
+          onClick={() => navigate({ to: "/breaks-admin" })}
         >
           <div>
             <p className="text-xs text-muted-foreground">ניהול בקשות הפסקה</p>
