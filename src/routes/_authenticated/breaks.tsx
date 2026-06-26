@@ -294,7 +294,7 @@ function BreaksPage() {
           {canManage && <TabsTrigger value="approve">אישור בקשות</TabsTrigger>}
         </TabsList>
 
-        <TabsContent value="request">
+        {canRequest && <TabsContent value="request">
           <Card className="card-elevated p-5 space-y-4">
             <div className="grid sm:grid-cols-2 gap-4">
               <div className="space-y-1.5">
