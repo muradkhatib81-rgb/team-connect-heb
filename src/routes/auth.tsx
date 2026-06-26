@@ -1,4 +1,4 @@
-import { createFileRoute, useNavigate, useSearch } from "@tanstack/react-router";
+import { createFileRoute, useNavigate, useRouter, useSearch } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { z } from "zod";
 import { supabase } from "@/integrations/supabase/client";
@@ -25,6 +25,7 @@ const ID_REGEX = /^\d{5,15}$/;
 
 function AuthPage() {
   const navigate = useNavigate();
+  const router = useRouter();
   const search = useSearch({ from: "/auth" });
   const [loading, setLoading] = useState(false);
   const [checking, setChecking] = useState(true);
@@ -36,7 +37,8 @@ function AuthPage() {
       const { data } = await supabase.auth.getSession();
       if (cancelled) return;
       if (data.session) {
-        navigate({ to: (search.redirect as any) || "/dashboard", replace: true });
+        const target = (search.redirect as string) || "/dashboard";
+        router.history.replace(target.startsWith("/") ? target : "/dashboard");
         return;
       }
       // Check if a main admin already exists — if so, only show login.
@@ -83,7 +85,8 @@ function AuthPage() {
       return;
     }
     toast.success("התחברת בהצלחה");
-    navigate({ to: (search.redirect as any) || "/dashboard", replace: true });
+    const target = (search.redirect as string) || "/dashboard";
+    router.history.replace(target.startsWith("/") ? target : "/dashboard");
   }
 
   async function handleBootstrap(e: React.FormEvent<HTMLFormElement>) {
