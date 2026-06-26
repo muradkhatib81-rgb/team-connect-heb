@@ -9,10 +9,11 @@ import {
   DEPARTMENT_LABELS,
   highestRole,
   isAdmin,
+  type AppRole,
 } from "@/lib/constants";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Users, UserCheck, UserX, Building2, Loader2, Plane, ListTodo, Clock, CheckCircle2, AlertTriangle, CalendarDays, Sun, Moon } from "lucide-react";
+import { Users, UserCheck, UserX, Building2, Loader2, Plane, ListTodo, Clock, CheckCircle2, AlertTriangle, CalendarDays, Sun, Moon, User } from "lucide-react";
 import { Link, useNavigate } from "@tanstack/react-router";
 
 export const Route = createFileRoute("/_authenticated/dashboard")({
@@ -26,6 +27,8 @@ function DashboardPage() {
   const admin = profile ? isAdmin(profile.roles) : false;
   const isDeptManager = profile ? profile.roles.includes("department_manager") : false;
   const queryClient = useQueryClient();
+  const [deptDialogId, setDeptDialogId] = useState<string | null>(null);
+  const [empDialogId, setEmpDialogId] = useState<string | null>(null);
 
   const statsQuery = useQuery({
     enabled: admin,
@@ -140,12 +143,22 @@ function DashboardPage() {
 
 
       {admin ? (
-        <AdminDashboard stats={statsQuery.data} loading={statsQuery.isLoading} />
+        <AdminDashboard stats={statsQuery.data} loading={statsQuery.isLoading} onSelectDept={setDeptDialogId} />
       ) : isDeptManager ? (
         <DeptManagerDashboard data={deptManagerQuery.data} loading={deptManagerQuery.isLoading} />
       ) : (
         <EmployeeDashboard />
       )}
+
+      <DepartmentEmployeesDialog
+        deptId={deptDialogId}
+        onClose={() => setDeptDialogId(null)}
+        onSelectEmployee={setEmpDialogId}
+      />
+      <EmployeeProfileDialog
+        employeeId={empDialogId}
+        onClose={() => setEmpDialogId(null)}
+      />
     </div>
   );
 }
@@ -279,9 +292,11 @@ function DeptManagerDashboard({
 function AdminDashboard({
   stats,
   loading,
+  onSelectDept,
 }: {
   stats?: { total: number; active: number; inactive: number; onLeave: number; byDept: Record<string, number>; departments: DeptRow[] };
   loading: boolean;
+  onSelectDept?: (id: string) => void;
 }) {
   const navigate = useNavigate();
   if (loading || !stats) {
@@ -325,7 +340,7 @@ function AdminDashboard({
               <button
                 key={d.id}
                 type="button"
-                onClick={() => goDept(d.id)}
+                onClick={() => onSelectDept?.(d.id)}
                 className="text-right"
               >
                 <Card className="card-elevated p-4 cursor-pointer hover:bg-accent/30 transition-colors">
@@ -821,6 +836,208 @@ function ShiftCellDialog({
         )}
       </DialogContent>
     </Dialog>
+  );
+}
+
+function DepartmentEmployeesDialog({
+  deptId,
+  onClose,
+  onSelectEmployee,
+}: {
+  deptId: string | null;
+  onClose: () => void;
+  onSelectEmployee: (id: string) => void;
+}) {
+  const open = deptId !== null;
+  const q = useQuery({
+    enabled: open && !!deptId,
+    queryKey: ["dept-employees-dialog", deptId],
+    queryFn: async () => {
+      if (!deptId) return null;
+      const { data: dept, error: dErr } = await supabase
+        .from("departments")
+        .select("id, name, manager_id")
+        .eq("id", deptId)
+        .single();
+      if (dErr) throw dErr;
+      const { data: emps, error: eErr } = await supabase
+        .from("profiles")
+        .select("id, full_name, is_active, on_leave, avatar_url, department_id")
+        .eq("department_id", deptId)
+        .order("full_name");
+      if (eErr) throw eErr;
+      const empIds = (emps ?? []).map((e: any) => e.id);
+      const [{ data: roles }, { data: manager }] = await Promise.all([
+        empIds.length
+          ? supabase.from("user_roles").select("user_id, role").in("user_id", empIds)
+          : Promise.resolve({ data: [] as any[] }),
+        dept.manager_id
+          ? supabase.from("profiles").select("full_name").eq("id", dept.manager_id).maybeSingle()
+          : Promise.resolve({ data: null as any }),
+      ]);
+      const roleMap: Record<string, string> = {};
+      (roles ?? []).forEach((r: any) => {
+        roleMap[r.user_id] = ROLE_LABELS[r.role as AppRole] ?? r.role;
+      });
+      return {
+        deptName: dept.name,
+        managerName: manager?.full_name ?? null,
+        managerId: dept.manager_id,
+        employees: (emps ?? []).map((e: any) => ({
+          ...e,
+          roleLabel: roleMap[e.id] ?? "עובד",
+          isManager: e.id === dept.manager_id,
+        })),
+      };
+    },
+  });
+
+  return (
+    <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
+      <DialogContent className="max-w-lg">
+        <DialogHeader>
+          <DialogTitle>עובדי {q.data?.deptName ?? "—"}</DialogTitle>
+        </DialogHeader>
+        {q.isLoading ? (
+          <div className="flex justify-center py-8">
+            <Loader2 className="size-5 animate-spin text-primary" />
+          </div>
+        ) : !q.data || q.data.employees.length === 0 ? (
+          <p className="text-sm text-muted-foreground py-6 text-center">אין עובדים במחלקה זו.</p>
+        ) : (
+          <ul className="divide-y max-h-[60vh] overflow-auto">
+            {q.data.employees.map((emp: any) => (
+              <li key={emp.id}>
+                <button
+                  type="button"
+                  onClick={() => onSelectEmployee(emp.id)}
+                  className="w-full text-right py-3 px-2 hover:bg-accent/30 rounded-md"
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="min-w-0">
+                      <p className="font-medium truncate">{emp.full_name || "ללא שם"}</p>
+                      <p className="text-xs text-muted-foreground mt-0.5">
+                        {emp.roleLabel}
+                        {emp.isManager && (
+                          <span className="text-primary font-semibold mr-1">· אחראי מחלקה</span>
+                        )}
+                      </p>
+                    </div>
+                    <div className="flex gap-1 shrink-0">
+                      {!emp.is_active && (
+                        <Badge variant="destructive" className="rounded-full text-xs">לא פעיל</Badge>
+                      )}
+                      {emp.on_leave && (
+                        <Badge variant="secondary" className="rounded-full text-xs">בחופש</Badge>
+                      )}
+                      {emp.is_active && !emp.on_leave && (
+                        <Badge variant="outline" className="rounded-full text-xs">פעיל</Badge>
+                      )}
+                    </div>
+                  </div>
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function EmployeeProfileDialog({
+  employeeId,
+  onClose,
+}: {
+  employeeId: string | null;
+  onClose: () => void;
+}) {
+  const open = employeeId !== null;
+  const q = useQuery({
+    enabled: open && !!employeeId,
+    queryKey: ["employee-profile-dialog", employeeId],
+    queryFn: async () => {
+      if (!employeeId) return null;
+      const { data: profile, error: pErr } = await supabase
+        .from("profiles")
+        .select("*, departments(name)")
+        .eq("id", employeeId)
+        .maybeSingle();
+      if (pErr) throw pErr;
+      const { data: roles } = await supabase
+        .from("user_roles")
+        .select("role")
+        .eq("user_id", employeeId);
+      const roleLabel = (roles ?? []).map((r: any) => ROLE_LABELS[r.role as AppRole]).filter(Boolean).join(", ") || "—";
+      let avatarUrl: string | null = null;
+      if (profile?.avatar_url) {
+        const { data: urlData } = await supabase.storage.from("avatars").createSignedUrl(profile.avatar_url, 60 * 60);
+        avatarUrl = urlData?.signedUrl ?? null;
+      }
+      return {
+        ...profile,
+        departmentName: profile?.departments?.name ?? "—",
+        roleLabel,
+        avatarUrl,
+      };
+    },
+  });
+
+  return (
+    <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle>פרטי עובד</DialogTitle>
+        </DialogHeader>
+        {q.isLoading ? (
+          <div className="flex justify-center py-8">
+            <Loader2 className="size-5 animate-spin text-primary" />
+          </div>
+        ) : !q.data ? (
+          <p className="text-sm text-muted-foreground py-6 text-center">לא נמצאו פרטי עובד.</p>
+        ) : (
+          <div className="space-y-4">
+            <div className="flex items-center gap-4">
+              <div className="size-16 rounded-full bg-accent text-accent-foreground flex items-center justify-center text-xl font-bold shrink-0 overflow-hidden">
+                {q.data.avatarUrl ? (
+                  <img src={q.data.avatarUrl} alt="" className="w-full h-full object-cover" />
+                ) : (
+                  <User className="size-7" />
+                )}
+              </div>
+              <div>
+                <p className="font-semibold text-lg">{q.data.full_name || "ללא שם"}</p>
+                <p className="text-sm text-muted-foreground">{q.data.roleLabel}</p>
+              </div>
+            </div>
+            <Card className="p-4 space-y-3">
+              <ProfileRow label="מספר זהות" value={q.data.id_number ?? "—"} />
+              <ProfileRow label="מחלקה" value={q.data.departmentName} />
+              <ProfileRow label="טלפון" value={q.data.phone ?? "—"} />
+              <ProfileRow
+                label="סטטוס"
+                value={
+                  q.data.on_leave
+                    ? "בחופש"
+                    : q.data.is_active
+                    ? "פעיל"
+                    : "לא פעיל"
+                }
+              />
+            </Card>
+          </div>
+        )}
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function ProfileRow({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex items-center justify-between gap-3 border-b border-border/60 pb-2 last:border-0 last:pb-0">
+      <span className="text-sm text-muted-foreground">{label}</span>
+      <span className="text-sm font-medium">{value}</span>
+    </div>
   );
 }
 
