@@ -518,8 +518,9 @@ function SchedulesPage() {
                   variant="default"
                 >
                   {submitMut.isPending ? <Loader2 className="size-4 animate-spin" /> : <Send className="size-4" />}
-                  שלח לאישור
+                  {canPublishDirect ? "אשר ופרסם" : "שלח לאישור"}
                 </Button>
+
                 <Button
                   onClick={() => setCopyOpen(true)}
                   size="sm"
