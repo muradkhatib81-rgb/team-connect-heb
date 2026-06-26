@@ -41,6 +41,7 @@ const GRANULAR_PERMS = [
   { key: "can_create_tasks", label: "יצירת משימות" },
   { key: "can_edit_tasks", label: "עריכת משימות" },
   { key: "can_delete_tasks", label: "מחיקת משימות" },
+  { key: "can_approve_tasks", label: "אישור משימות (כשהיוצר הוא אחראי מחלקה)" },
   { key: "can_create_schedule", label: "יצירת סידור עבודה" },
   { key: "can_approve_schedule", label: "אישור סידור עבודה" },
   { key: "can_approve_leave", label: "אישור בקשות חופשה" },
