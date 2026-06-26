@@ -166,6 +166,7 @@ function useTaskCaps() {
   const canCreateTasks = isMainAdmin || (isManager && (!!p.can_manage_tasks || !!p.can_create_tasks));
   const canEditTasks = isMainAdmin || (isManager && (!!p.can_manage_tasks || !!p.can_edit_tasks));
   const canDeleteTasks = isMainAdmin || (isManager && (!!p.can_manage_tasks || !!p.can_delete_tasks));
+  const canCloseTasks = isMainAdmin || (isManager && !!p.can_manage_tasks);
   // Legacy alias
   const canManageTasks = canEditTasks;
   return {
@@ -176,6 +177,7 @@ function useTaskCaps() {
     canCreateTasks,
     canEditTasks,
     canDeleteTasks,
+    canCloseTasks,
     canManageTasks,
   };
 }
