@@ -12,7 +12,7 @@ import {
 } from "@/lib/constants";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Users, UserCheck, UserX, Building2, Loader2, Plane, ListTodo, Clock, CheckCircle2, AlertTriangle, CalendarDays, Sun, Moon } from "lucide-react";
+import { Users, UserCheck, UserX, Building2, Loader2, Plane, ListTodo, Clock, CheckCircle2, AlertTriangle, CalendarDays, Sun, Moon, User } from "lucide-react";
 import { Link, useNavigate } from "@tanstack/react-router";
 
 export const Route = createFileRoute("/_authenticated/dashboard")({
