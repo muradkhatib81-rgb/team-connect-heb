@@ -132,6 +132,38 @@ export type Database = {
           },
         ]
       }
+      task_recurrence_images: {
+        Row: {
+          created_at: string
+          id: string
+          recurrence_id: string
+          storage_path: string
+          uploaded_by: string | null
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          recurrence_id: string
+          storage_path: string
+          uploaded_by?: string | null
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          recurrence_id?: string
+          storage_path?: string
+          uploaded_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "task_recurrence_images_recurrence_id_fkey"
+            columns: ["recurrence_id"]
+            isOneToOne: false
+            referencedRelation: "task_recurrences"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       task_recurrences: {
         Row: {
           assignee_id: string | null
@@ -202,6 +234,8 @@ export type Database = {
           approved_at: string | null
           approved_by: string | null
           assignee_id: string | null
+          closed_at: string | null
+          closed_by: string | null
           completed_at: string | null
           completed_by: string | null
           created_at: string
@@ -224,6 +258,8 @@ export type Database = {
           approved_at?: string | null
           approved_by?: string | null
           assignee_id?: string | null
+          closed_at?: string | null
+          closed_by?: string | null
           completed_at?: string | null
           completed_by?: string | null
           created_at?: string
@@ -246,6 +282,8 @@ export type Database = {
           approved_at?: string | null
           approved_by?: string | null
           assignee_id?: string | null
+          closed_at?: string | null
+          closed_by?: string | null
           completed_at?: string | null
           completed_by?: string | null
           created_at?: string
@@ -374,6 +412,7 @@ export type Database = {
         Returns: boolean
       }
       has_task_approve_perm: { Args: { _user_id: string }; Returns: boolean }
+      has_task_close_perm: { Args: { _user_id: string }; Returns: boolean }
       has_task_create_perm: { Args: { _user_id: string }; Returns: boolean }
       has_task_delete_perm: { Args: { _user_id: string }; Returns: boolean }
       has_task_edit_perm: { Args: { _user_id: string }; Returns: boolean }
@@ -398,7 +437,12 @@ export type Database = {
         | "general"
       task_priority: "low" | "medium" | "high"
       task_recurrence_frequency: "daily" | "weekly" | "monthly"
-      task_status: "new" | "in_progress" | "pending_approval" | "completed"
+      task_status:
+        | "new"
+        | "in_progress"
+        | "pending_approval"
+        | "completed"
+        | "closed"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -545,7 +589,13 @@ export const Constants = {
       ],
       task_priority: ["low", "medium", "high"],
       task_recurrence_frequency: ["daily", "weekly", "monthly"],
-      task_status: ["new", "in_progress", "pending_approval", "completed"],
+      task_status: [
+        "new",
+        "in_progress",
+        "pending_approval",
+        "completed",
+        "closed",
+      ],
     },
   },
 } as const

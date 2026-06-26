@@ -141,14 +141,18 @@ function EmployeesPage() {
   const [deleting, setDeleting] = useState<ProfileRow | null>(null);
 
   const filterMode: FilterMode = search.filter ?? "all";
-  const deptFilter = search.dept ?? "all";
+  const allowedAdmin = me ? isAdmin(me.roles) : false;
+  const isDeptManagerOnly =
+    me ? me.roles.includes("department_manager") && !allowedAdmin : false;
+  // Department managers are forced to their own department (server RLS also enforces).
+  const forcedDept = isDeptManagerOnly ? (me?.department_id ?? "all") : null;
+  const deptFilter = forcedDept ?? (search.dept ?? "all");
 
   const setFilter = (f: FilterMode) =>
     navigate({ to: "/employees", search: { filter: f, dept: deptFilter } as any });
   const setDept = (d: string) =>
     navigate({ to: "/employees", search: { filter: filterMode, dept: d } as any });
 
-  const allowedAdmin = me ? isAdmin(me.roles) : false;
   const isDeptManager = me ? me.roles.includes("department_manager") : false;
   const allowed = allowedAdmin || isDeptManager;
   const isMainAdmin = me ? canManageUsers(me.roles) : false;
@@ -242,6 +246,11 @@ function EmployeesPage() {
       <header className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <h1 className="text-2xl sm:text-3xl font-bold">ניהול עובדים</h1>
+          {isDeptManagerOnly && me?.department_id && deptMap[me.department_id] && (
+            <p className="text-sm font-medium text-primary mt-1">
+              מחלקה: {deptMap[me.department_id]}
+            </p>
+          )}
           <p className="text-sm text-muted-foreground mt-1">{headerSubtitle}</p>
         </div>
         {isMainAdmin && (
@@ -274,15 +283,17 @@ function EmployeesPage() {
                 <SelectItem value="inactive">{FILTER_LABELS.inactive}</SelectItem>
               </SelectContent>
             </Select>
-            <Select value={deptFilter} onValueChange={setDept}>
-              <SelectTrigger className="w-44"><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">כל המחלקות</SelectItem>
-                {(deptsQuery.data ?? []).map((d) => (
-                  <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            {!isDeptManagerOnly && (
+              <Select value={deptFilter} onValueChange={setDept}>
+                <SelectTrigger className="w-44"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">כל המחלקות</SelectItem>
+                  {(deptsQuery.data ?? []).map((d) => (
+                    <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
           </div>
         </div>
       </Card>

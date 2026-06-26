@@ -17,9 +17,13 @@ import {
   markTaskPendingApproval,
   approveTask,
   rejectTask,
+  closeTask,
+  addRecurrenceImage,
+  deleteRecurrenceImage,
 } from "@/lib/tasks.functions";
 import { formatHeDateTime, splitForInputs, combineToIso } from "@/lib/date-format";
 import { HebrewDateInput, HebrewTimeInput } from "@/components/hebrew-datetime";
+import { ImageLightbox, type LightboxImage } from "@/components/image-lightbox";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -69,7 +73,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 
-type TaskStatus = "new" | "in_progress" | "pending_approval" | "completed";
+type TaskStatus = "new" | "in_progress" | "pending_approval" | "completed" | "closed";
 type TaskPriority = "low" | "medium" | "high";
 
 interface TaskRow {
@@ -119,6 +123,7 @@ const STATUS_LABEL: Record<TaskStatus, string> = {
   in_progress: "בביצוע",
   pending_approval: "ממתין לאישור",
   completed: "הושלמה",
+  closed: "נסגרה",
 };
 const PRIORITY_LABEL: Record<TaskPriority, string> = {
   low: "נמוכה",
@@ -161,6 +166,7 @@ function useTaskCaps() {
   const canCreateTasks = isMainAdmin || (isManager && (!!p.can_manage_tasks || !!p.can_create_tasks));
   const canEditTasks = isMainAdmin || (isManager && (!!p.can_manage_tasks || !!p.can_edit_tasks));
   const canDeleteTasks = isMainAdmin || (isManager && (!!p.can_manage_tasks || !!p.can_delete_tasks));
+  const canCloseTasks = isMainAdmin || (isManager && !!p.can_manage_tasks);
   // Legacy alias
   const canManageTasks = canEditTasks;
   return {
@@ -171,6 +177,7 @@ function useTaskCaps() {
     canCreateTasks,
     canEditTasks,
     canDeleteTasks,
+    canCloseTasks,
     canManageTasks,
   };
 }
@@ -302,7 +309,9 @@ function TasksPage() {
                 <SelectItem value="all">הכול</SelectItem>
                 <SelectItem value="new">חדש</SelectItem>
                 <SelectItem value="in_progress">בביצוע</SelectItem>
-                <SelectItem value="completed">הושלם</SelectItem>
+                <SelectItem value="pending_approval">ממתין לאישור</SelectItem>
+                <SelectItem value="completed">הושלמה</SelectItem>
+                <SelectItem value="closed">נסגרה (ארכיון)</SelectItem>
                 <SelectItem value="overdue">באיחור</SelectItem>
               </SelectContent>
             </Select>
@@ -445,6 +454,7 @@ function priorityVariant(p: TaskPriority): "default" | "secondary" | "destructiv
   return "secondary";
 }
 function statusVariant(s: TaskStatus): "default" | "secondary" | "destructive" | "outline" {
+  if (s === "closed") return "outline";
   if (s === "completed") return "secondary";
   if (s === "pending_approval") return "destructive";
   if (s === "in_progress") return "default";
@@ -508,6 +518,7 @@ function TaskDetailDialog({
   const markPending = useServerFn(markTaskPendingApproval);
   const approve = useServerFn(approveTask);
   const reject = useServerFn(rejectTask);
+  const close = useServerFn(closeTask);
 
   const isMember = caps.profile?.department_id === task.department_id;
   const approveRpc = useQuery({
@@ -571,9 +582,21 @@ function TaskDetailDialog({
     onError: (e: any) => toast.error(e?.message ?? "שגיאה"),
   });
 
+
+  const closeM = useMutation({
+    mutationFn: () => close({ data: { id: task.id } }),
+    onSuccess: () => {
+      toast.success("המשימה נסגרה והועברה לארכיון");
+      qc.invalidateQueries({ queryKey: ["tasks"] });
+      onClose();
+    },
+    onError: (e: any) => toast.error(e?.message ?? "שגיאה בסגירה"),
+  });
+
   const dept = deps?.departments.find((d) => d.id === task.department_id);
   const completedBy = deps?.employees.find((e) => e.id === task.completed_by);
   const approvedBy = deps?.employees.find((e) => e.id === task.approved_by);
+  const closedBy = deps?.employees.find((e) => e.id === (task as any).closed_by);
 
   return (
     <Dialog open onOpenChange={(v) => !v && onClose()}>
@@ -636,6 +659,18 @@ function TaskDetailDialog({
                 <p>{approvedBy.full_name}</p>
               </div>
             )}
+            {(task as any).closed_at && (
+              <div>
+                <Label className="text-xs text-muted-foreground">נסגרה בתאריך</Label>
+                <p>{formatHeDateTime((task as any).closed_at)}</p>
+              </div>
+            )}
+            {closedBy && (
+              <div>
+                <Label className="text-xs text-muted-foreground">נסגרה ע״י</Label>
+                <p>{closedBy.full_name}</p>
+              </div>
+            )}
           </div>
 
           {task.employee_note && (
@@ -679,16 +714,19 @@ function TaskDetailDialog({
           )}
 
           {/* Existing images for non-active states */}
-          {!canMarkDone && (task.status === "pending_approval" || task.status === "completed") && (
-            <div className="border-t pt-4">
-              <Label className="text-xs text-muted-foreground mb-2 block">תמונות</Label>
-              <TaskImagesSection
-                taskId={task.id}
-                canEdit={false}
-                userId={caps.profile?.id}
-              />
-            </div>
-          )}
+          {!canMarkDone &&
+            (task.status === "pending_approval" ||
+              task.status === "completed" ||
+              task.status === "closed") && (
+              <div className="border-t pt-4">
+                <TaskImagesSection
+                  taskId={task.id}
+                  canEdit={false}
+                  userId={caps.profile?.id}
+                  title="תמונות המשימה"
+                />
+              </div>
+            )}
 
           {/* Approval section */}
           {task.status === "pending_approval" && canApprove && (
@@ -750,6 +788,16 @@ function TaskDetailDialog({
               סיימתי - שלח לאישור
             </Button>
           )}
+          {task.status === "completed" && caps.canCloseTasks && (
+            <Button
+              variant="default"
+              onClick={() => closeM.mutate()}
+              disabled={closeM.isPending}
+            >
+              {closeM.isPending && <Loader2 className="size-4 animate-spin ml-2" />}
+              סגור משימה (ארכיון)
+            </Button>
+          )}
         </DialogFooter>
       </DialogContent>
     </Dialog>
@@ -762,15 +810,18 @@ function TaskImagesSection({
   taskId,
   canEdit,
   userId,
+  title = "תמונות",
 }: {
   taskId: string;
   canEdit: boolean;
   userId?: string;
+  title?: string;
 }) {
   const qc = useQueryClient();
   const fileRef = useRef<HTMLInputElement>(null);
   const add = useServerFn(addTaskImage);
   const del = useServerFn(deleteTaskImage);
+  const [lightboxIdx, setLightboxIdx] = useState<number | null>(null);
 
   const imagesQuery = useQuery({
     queryKey: ["task-images", taskId],
@@ -781,7 +832,6 @@ function TaskImagesSection({
         .eq("task_id", taskId)
         .order("created_at");
       if (error) throw error;
-      // sign urls
       const signed = await Promise.all(
         (data ?? []).map(async (img: any) => {
           const { data: s } = await supabase.storage
@@ -820,10 +870,14 @@ function TaskImagesSection({
     },
   });
 
+  const lightboxImages: LightboxImage[] = (imagesQuery.data ?? [])
+    .filter((i) => i.url)
+    .map((i) => ({ url: i.url as string }));
+
   return (
-    <div className="border-t pt-4 space-y-2">
+    <div className="space-y-2">
       <div className="flex items-center justify-between">
-        <Label>תמונות ביצוע ({imagesQuery.data?.length ?? 0}/5)</Label>
+        <Label>{title} ({imagesQuery.data?.length ?? 0}/5)</Label>
         {canEdit && (imagesQuery.data?.length ?? 0) < 5 && (
           <>
             <input
@@ -854,10 +908,15 @@ function TaskImagesSection({
         <Loader2 className="size-4 animate-spin" />
       ) : (
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-          {imagesQuery.data?.map((img) => (
-            <div key={img.id} className="relative aspect-square rounded-lg overflow-hidden border bg-muted">
+          {imagesQuery.data?.map((img, idx) => (
+            <div key={img.id} className="relative aspect-square rounded-lg overflow-hidden border bg-muted group">
               {img.url && (
-                <img src={img.url} alt="task" className="w-full h-full object-cover" />
+                <img
+                  src={img.url}
+                  alt="task"
+                  className="w-full h-full object-cover cursor-zoom-in"
+                  onClick={() => setLightboxIdx(idx)}
+                />
               )}
               {canEdit && (
                 <button
@@ -872,6 +931,220 @@ function TaskImagesSection({
             </div>
           ))}
         </div>
+      )}
+      {lightboxIdx !== null && lightboxImages.length > 0 && (
+        <ImageLightbox
+          images={lightboxImages}
+          initialIndex={lightboxIdx}
+          onClose={() => setLightboxIdx(null)}
+        />
+      )}
+    </div>
+  );
+}
+
+// ----- Recurrence instruction images (edit mode) -----
+function RecurrenceImagesSection({
+  recurrenceId,
+  canEdit,
+  userId,
+}: {
+  recurrenceId: string;
+  canEdit: boolean;
+  userId?: string;
+}) {
+  const qc = useQueryClient();
+  const fileRef = useRef<HTMLInputElement>(null);
+  const add = useServerFn(addRecurrenceImage);
+  const del = useServerFn(deleteRecurrenceImage);
+  const [lightboxIdx, setLightboxIdx] = useState<number | null>(null);
+
+  const imagesQuery = useQuery({
+    queryKey: ["rec-images", recurrenceId],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("task_recurrence_images")
+        .select("id, storage_path")
+        .eq("recurrence_id", recurrenceId)
+        .order("created_at");
+      const signed = await Promise.all(
+        (data ?? []).map(async (img: any) => {
+          const { data: s } = await supabase.storage
+            .from("task-images")
+            .createSignedUrl(img.storage_path, 60 * 60);
+          return { ...img, url: s?.signedUrl ?? null };
+        }),
+      );
+      return signed as { id: string; storage_path: string; url: string | null }[];
+    },
+  });
+
+  const upload = useMutation({
+    mutationFn: async (file: File) => {
+      if (!userId) throw new Error("חסר משתמש");
+      if ((imagesQuery.data?.length ?? 0) >= 5)
+        throw new Error("ניתן להעלות עד 5 תמונות הסבר");
+      const ext = file.name.split(".").pop() || "jpg";
+      const path = `${userId}/recurrences/${recurrenceId}/${crypto.randomUUID()}.${ext}`;
+      const { error } = await supabase.storage.from("task-images").upload(path, file);
+      if (error) throw error;
+      await add({ data: { recurrence_id: recurrenceId, storage_path: path } });
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["rec-images", recurrenceId] });
+    },
+    onError: (e: any) => toast.error(e?.message ?? "שגיאה בהעלאה"),
+  });
+
+  const remove = useMutation({
+    mutationFn: (id: string) => del({ data: { id } }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["rec-images", recurrenceId] }),
+  });
+
+  const lightboxImages: LightboxImage[] = (imagesQuery.data ?? [])
+    .filter((i) => i.url)
+    .map((i) => ({ url: i.url as string }));
+
+  return (
+    <div className="space-y-2">
+      <div className="flex items-center justify-between">
+        <Label>תמונות הסבר ({imagesQuery.data?.length ?? 0}/5)</Label>
+        {canEdit && (imagesQuery.data?.length ?? 0) < 5 && (
+          <>
+            <input
+              ref={fileRef}
+              type="file"
+              accept="image/*"
+              hidden
+              onChange={(e) => {
+                const f = e.target.files?.[0];
+                if (f) upload.mutate(f);
+                e.target.value = "";
+              }}
+            />
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => fileRef.current?.click()}
+              disabled={upload.isPending}
+              className="gap-2"
+            >
+              {upload.isPending ? <Loader2 className="size-4 animate-spin" /> : <ImagePlus className="size-4" />}
+              הוסף תמונה
+            </Button>
+          </>
+        )}
+      </div>
+      <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+        {imagesQuery.data?.map((img, idx) => (
+          <div key={img.id} className="relative aspect-square rounded-lg overflow-hidden border bg-muted">
+            {img.url && (
+              <img
+                src={img.url}
+                alt="instruction"
+                className="w-full h-full object-cover cursor-zoom-in"
+                onClick={() => setLightboxIdx(idx)}
+              />
+            )}
+            {canEdit && (
+              <button
+                type="button"
+                onClick={() => remove.mutate(img.id)}
+                className="absolute top-1 left-1 bg-destructive text-destructive-foreground rounded-full p-1"
+                aria-label="מחק תמונה"
+              >
+                <X className="size-3" />
+              </button>
+            )}
+          </div>
+        ))}
+      </div>
+      {lightboxIdx !== null && lightboxImages.length > 0 && (
+        <ImageLightbox
+          images={lightboxImages}
+          initialIndex={lightboxIdx}
+          onClose={() => setLightboxIdx(null)}
+        />
+      )}
+    </div>
+  );
+}
+
+// Staged-files picker used in CREATE dialogs (before the parent record exists).
+function StagedImagesPicker({
+  files,
+  onChange,
+  max = 5,
+}: {
+  files: File[];
+  onChange: (files: File[]) => void;
+  max?: number;
+}) {
+  const fileRef = useRef<HTMLInputElement>(null);
+  const previews = useMemo(() => files.map((f) => URL.createObjectURL(f)), [files]);
+  const [lightboxIdx, setLightboxIdx] = useState<number | null>(null);
+  return (
+    <div className="space-y-2">
+      <div className="flex items-center justify-between">
+        <Label>תמונות הסבר ({files.length}/{max})</Label>
+        {files.length < max && (
+          <>
+            <input
+              ref={fileRef}
+              type="file"
+              accept="image/*"
+              hidden
+              onChange={(e) => {
+                const f = e.target.files?.[0];
+                if (!f) return;
+                if (f.size > 10 * 1024 * 1024) {
+                  toast.error("קובץ גדול מדי (עד 10MB)");
+                  return;
+                }
+                onChange([...files, f]);
+                e.target.value = "";
+              }}
+            />
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="gap-2"
+              onClick={() => fileRef.current?.click()}
+            >
+              <ImagePlus className="size-4" /> הוסף תמונה
+            </Button>
+          </>
+        )}
+      </div>
+      {files.length > 0 && (
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+          {files.map((_, idx) => (
+            <div key={idx} className="relative aspect-square rounded-lg overflow-hidden border bg-muted">
+              <img
+                src={previews[idx]}
+                alt=""
+                className="w-full h-full object-cover cursor-zoom-in"
+                onClick={() => setLightboxIdx(idx)}
+              />
+              <button
+                type="button"
+                onClick={() => onChange(files.filter((_, i) => i !== idx))}
+                className="absolute top-1 left-1 bg-destructive text-destructive-foreground rounded-full p-1"
+                aria-label="הסר"
+              >
+                <X className="size-3" />
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+      {lightboxIdx !== null && previews.length > 0 && (
+        <ImageLightbox
+          images={previews.map((url) => ({ url }))}
+          initialIndex={lightboxIdx}
+          onClose={() => setLightboxIdx(null)}
+        />
       )}
     </div>
   );
@@ -895,6 +1168,7 @@ function TaskFormDialog({
   const qc = useQueryClient();
   const create = useServerFn(createTask);
   const update = useServerFn(updateTask);
+  const addImg = useServerFn(addTaskImage);
 
   const canPickAnyDept = caps.canCreateTasks; // main_admin or branch/assistant manager with perm
   const allowedDepartments = canPickAnyDept
@@ -909,6 +1183,7 @@ function TaskFormDialog({
   const [dueDate, setDueDate] = useState<string>(initSplit.date);
   const [dueTime, setDueTime] = useState<string>(initSplit.time);
   const [priority, setPriority] = useState<TaskPriority>(task?.priority ?? "medium");
+  const [stagedImages, setStagedImages] = useState<File[]>([]);
 
   const submit = useMutation({
     mutationFn: async () => {
@@ -922,7 +1197,23 @@ function TaskFormDialog({
         priority,
       };
       if (mode === "create") {
-        await create({ data: payload as any });
+        const created: any = await create({ data: payload as any });
+        const newId = created?.id;
+        if (newId && stagedImages.length && caps.profile?.id) {
+          for (const file of stagedImages) {
+            try {
+              const ext = file.name.split(".").pop() || "jpg";
+              const path = `${caps.profile.id}/${newId}/${crypto.randomUUID()}.${ext}`;
+              const { error: upErr } = await supabase.storage
+                .from("task-images")
+                .upload(path, file);
+              if (upErr) throw upErr;
+              await addImg({ data: { task_id: newId, storage_path: path } });
+            } catch (e: any) {
+              toast.error(`שגיאה בהעלאת תמונה: ${e?.message ?? ""}`);
+            }
+          }
+        }
       } else if (task) {
         await update({ data: { id: task.id, ...payload } as any });
       }
@@ -996,6 +1287,18 @@ function TaskFormDialog({
               תצוגה: {formatHeDateTime(combineToIso(dueDate, dueTime))}
             </p>
           )}
+          <div className="border-t pt-3">
+            {mode === "create" ? (
+              <StagedImagesPicker files={stagedImages} onChange={setStagedImages} />
+            ) : task ? (
+              <TaskImagesSection
+                taskId={task.id}
+                canEdit={true}
+                userId={caps.profile?.id}
+                title="תמונות הסבר"
+              />
+            ) : null}
+          </div>
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={onClose}>ביטול</Button>
@@ -1170,6 +1473,7 @@ function RecurrenceFormDialog({
   const qc = useQueryClient();
   const create = useServerFn(createRecurrence);
   const update = useServerFn(updateRecurrence);
+  const addRecImg = useServerFn(addRecurrenceImage);
 
   const canPickAnyDept = caps.canCreateTasks;
   const allowedDepartments = canPickAnyDept
@@ -1185,6 +1489,7 @@ function RecurrenceFormDialog({
   const [dom, setDom] = useState<number>(rec?.day_of_month ?? 1);
   const [time, setTime] = useState(rec?.time_of_day ?? "08:00");
   const [active, setActive] = useState(rec?.is_active ?? true);
+  const [stagedImages, setStagedImages] = useState<File[]>([]);
 
   const submit = useMutation({
     mutationFn: async () => {
@@ -1200,8 +1505,25 @@ function RecurrenceFormDialog({
         time_of_day: time,
         is_active: active,
       };
-      if (mode === "create") await create({ data: payload });
-      else if (rec) await update({ data: { id: rec.id, ...payload } });
+      if (mode === "create") {
+        const created: any = await create({ data: payload });
+        const newId = created?.id;
+        if (newId && stagedImages.length && caps.profile?.id) {
+          for (const file of stagedImages) {
+            try {
+              const ext = file.name.split(".").pop() || "jpg";
+              const path = `${caps.profile.id}/recurrences/${newId}/${crypto.randomUUID()}.${ext}`;
+              const { error: upErr } = await supabase.storage
+                .from("task-images")
+                .upload(path, file);
+              if (upErr) throw upErr;
+              await addRecImg({ data: { recurrence_id: newId, storage_path: path } });
+            } catch (e: any) {
+              toast.error(`שגיאה בהעלאת תמונה: ${e?.message ?? ""}`);
+            }
+          }
+        }
+      } else if (rec) await update({ data: { id: rec.id, ...payload } });
     },
     onSuccess: () => {
       toast.success(mode === "create" ? "משימה חוזרת נוצרה" : "עודכן");
@@ -1311,10 +1633,21 @@ function RecurrenceFormDialog({
               <Label>שעה</Label>
               <HebrewTimeInput value={time || "08:00"} onChange={setTime} />
             </div>
-            <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2">
               <Switch checked={active} onCheckedChange={setActive} />
               <Label>פעיל</Label>
             </div>
+          </div>
+          <div className="border-t pt-3">
+            {mode === "create" ? (
+              <StagedImagesPicker files={stagedImages} onChange={setStagedImages} />
+            ) : rec ? (
+              <RecurrenceImagesSection
+                recurrenceId={rec.id}
+                canEdit={true}
+                userId={caps.profile?.id}
+              />
+            ) : null}
           </div>
         </div>
         <DialogFooter>

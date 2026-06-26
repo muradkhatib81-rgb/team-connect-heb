@@ -30,6 +30,7 @@ async function getCallerCaps(supabase: any, userId: string) {
     isMainAdmin || (isManager && (!!p.can_manage_tasks || !!p.can_edit_tasks));
   const canDeleteTasks =
     isMainAdmin || (isManager && (!!p.can_manage_tasks || !!p.can_delete_tasks));
+  const canCloseTasks = isMainAdmin || (isManager && !!p.can_manage_tasks);
   const isDeptManager = roleSet.has("department_manager");
   return {
     isMainAdmin,
@@ -37,6 +38,7 @@ async function getCallerCaps(supabase: any, userId: string) {
     canCreateTasks,
     canEditTasks,
     canDeleteTasks,
+    canCloseTasks,
     canManageTasks: canEditTasks, // legacy alias used elsewhere
     isDeptManager,
     departmentId: profile?.department_id ?? null,
@@ -386,18 +388,36 @@ export const generateDueRecurringTasks = createServerFn({ method: "POST" }).hand
   if (error) throw new Error(error.message);
   let generated = 0;
   for (const rec of due ?? []) {
-    const { error: insErr } = await supabaseAdmin.from("tasks").insert({
-      title: rec.title,
-      description: rec.description,
-      department_id: rec.department_id,
-      assignee_id: rec.assignee_id,
-      priority: rec.priority,
-      status: "new",
-      due_at: rec.next_run_at,
-      recurrence_id: rec.id,
-      created_by: rec.created_by,
-    });
-    if (insErr) continue;
+    const { data: newTask, error: insErr } = await supabaseAdmin
+      .from("tasks")
+      .insert({
+        title: rec.title,
+        description: rec.description,
+        department_id: rec.department_id,
+        assignee_id: rec.assignee_id,
+        priority: rec.priority,
+        status: "new",
+        due_at: rec.next_run_at,
+        recurrence_id: rec.id,
+        created_by: rec.created_by,
+      })
+      .select("id")
+      .single();
+    if (insErr || !newTask) continue;
+    // Copy recurrence instruction images into the generated task
+    const { data: recImgs } = await supabaseAdmin
+      .from("task_recurrence_images")
+      .select("storage_path, uploaded_by")
+      .eq("recurrence_id", rec.id);
+    if (recImgs && recImgs.length) {
+      await supabaseAdmin.from("task_images").insert(
+        recImgs.slice(0, 5).map((img: any) => ({
+          task_id: newTask.id,
+          storage_path: img.storage_path,
+          uploaded_by: img.uploaded_by,
+        })),
+      );
+    }
     const next = computeNextRunAt(
       rec.frequency,
       rec.days_of_week ?? [],
@@ -548,5 +568,64 @@ export const setUserPermissions = createServerFn({ method: "POST" })
       .from("user_task_permissions")
       .upsert(row as any, { onConflict: "user_id" });
     if (error) throw new Error(error.message);
+    return { ok: true };
+  });
+
+// ---------- FINAL CLOSURE ----------
+export const closeTask = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) => z.object({ id: z.string().uuid() }).parse(d))
+  .handler(async ({ data, context }) => {
+    const caps = await getCallerCaps(context.supabase, context.userId);
+    if (!caps.canCloseTasks) throw new Error("רק מנהל ראשי או בעלי הרשאת ניהול משימות יכולים לסגור משימה");
+    const { error } = await context.supabase
+      .from("tasks")
+      .update({ status: "closed" } as any)
+      .eq("id", data.id);
+    if (error) throw new Error(error.message);
+    return { ok: true };
+  });
+
+// ---------- RECURRENCE INSTRUCTION IMAGES ----------
+export const addRecurrenceImage = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) =>
+    z.object({
+      recurrence_id: z.string().uuid(),
+      storage_path: z.string().min(1).max(500),
+    }).parse(d),
+  )
+  .handler(async ({ data, context }) => {
+    const { data: row, error } = await context.supabase
+      .from("task_recurrence_images")
+      .insert({
+        recurrence_id: data.recurrence_id,
+        storage_path: data.storage_path,
+        uploaded_by: context.userId,
+      })
+      .select("*")
+      .single();
+    if (error) throw new Error(error.message);
+    return row;
+  });
+
+export const deleteRecurrenceImage = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) => z.object({ id: z.string().uuid() }).parse(d))
+  .handler(async ({ data, context }) => {
+    const { data: img } = await context.supabase
+      .from("task_recurrence_images")
+      .select("storage_path")
+      .eq("id", data.id)
+      .maybeSingle();
+    const { error } = await context.supabase
+      .from("task_recurrence_images")
+      .delete()
+      .eq("id", data.id);
+    if (error) throw new Error(error.message);
+    if (img?.storage_path) {
+      const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+      await supabaseAdmin.storage.from("task-images").remove([img.storage_path]);
+    }
     return { ok: true };
   });
