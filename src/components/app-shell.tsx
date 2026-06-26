@@ -131,9 +131,6 @@ export function AppShell({ children }: { children: ReactNode }) {
         })}
       </nav>
 
-      <div className="px-3 pb-2 hidden lg:flex justify-end">
-        <NotificationsBell />
-      </div>
       <div className="border-t border-sidebar-border p-4 space-y-3">
         <div className="flex items-center gap-3">
           <div className="size-9 rounded-full bg-accent text-accent-foreground flex items-center justify-center text-sm font-semibold shrink-0">
