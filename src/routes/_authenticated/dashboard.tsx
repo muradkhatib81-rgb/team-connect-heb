@@ -514,12 +514,12 @@ function SchedulesStatsSection({ profile }: { profile: any }) {
       return {
         pending,
         approved,
-        rejected,
         weekCounts,
         hasAnyApproved: ids.length > 0,
         notSubmittedCount: notSubmittedDepts.length,
         notSubmittedDepts,
       };
+
     },
   });
 
