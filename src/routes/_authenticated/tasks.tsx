@@ -516,6 +516,7 @@ function TaskDetailDialog({
   const markPending = useServerFn(markTaskPendingApproval);
   const approve = useServerFn(approveTask);
   const reject = useServerFn(rejectTask);
+  const close = useServerFn(closeTask);
 
   const isMember = caps.profile?.department_id === task.department_id;
   const approveRpc = useQuery({
