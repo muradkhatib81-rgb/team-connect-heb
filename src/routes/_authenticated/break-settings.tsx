@@ -52,12 +52,13 @@ export function BreakSettingsPage() {
   const qc = useQueryClient();
   const { data: me } = useAuth();
   const isMainAdmin = !!me?.roles.includes("main_admin");
+  const isBranchOrAssistant =
+    !!me?.roles.includes("branch_manager") || !!me?.roles.includes("assistant_manager");
 
   const permQ = useQuery({
-    enabled: !!me?.id,
+    enabled: !!me?.id && !isMainAdmin && !isBranchOrAssistant,
     queryKey: ["my-break-manage-perm", me?.id],
     queryFn: async () => {
-      if (isMainAdmin) return true;
       const { data } = await supabase
         .from("user_task_permissions")
         .select("can_manage_breaks")
@@ -67,7 +68,8 @@ export function BreakSettingsPage() {
     },
   });
 
-  const canManage = !!permQ.data;
+  const canManage = isMainAdmin || isBranchOrAssistant || !!permQ.data;
+
 
   const listQ = useQuery({
     queryKey: ["break-settings"],
