@@ -78,6 +78,8 @@ export function AppShell({ children }: { children: ReactNode }) {
   // עובד רגיל = אין הרשאות ניהול ואינו אחראי מחלקה
   const isPlainEmployee = !admin && !isDeptManager;
   const isMainAdmin = profile.roles.includes("main_admin");
+  const isBranchOrAssistant =
+    profile.roles.includes("branch_manager") || profile.roles.includes("assistant_manager");
 
   const breakPermQ = useQuery({
     enabled: !!profile.id && !isMainAdmin,
@@ -91,20 +93,24 @@ export function AppShell({ children }: { children: ReactNode }) {
       return !!(data as any)?.can_manage_breaks;
     },
   });
-  const canManageBreaks = isMainAdmin || !!breakPermQ.data;
+  // Managers of breaks: main admin, branch/assistant manager, or any user with the explicit perm.
+  const isBreaksManager = isMainAdmin || isBranchOrAssistant || !!breakPermQ.data;
+  // Only employees and department managers (without manager role / breaks perm) can request a break.
+  const canRequestBreak = !isBreaksManager;
 
   const nav: { to: string; label: string; icon: typeof LayoutDashboard; visible: boolean }[] = [
     { to: "/dashboard", label: "לוח בקרה", icon: LayoutDashboard, visible: !isPlainEmployee },
     { to: "/tasks", label: "משימות", icon: ListTodo, visible: true },
     { to: "/schedules", label: "סידורי עבודה", icon: CalendarDays, visible: true },
-    { to: "/breaks", label: "הפסקות", icon: Coffee, visible: true },
+    { to: "/breaks", label: "הפסקה", icon: Coffee, visible: canRequestBreak },
+    { to: "/breaks-admin", label: "ניהול הפסקות", icon: Coffee, visible: isBreaksManager },
 
     { to: "/employees", label: "ניהול עובדים", icon: Users, visible: admin },
     { to: "/departments", label: "מחלקות", icon: Building2, visible: admin },
     { to: "/permissions", label: "הרשאות", icon: ShieldCheck, visible: canManageUsers(profile.roles) },
-    { to: "/break-settings", label: "הגדרות הפסקות", icon: Coffee, visible: canManageBreaks },
     { to: "/profile", label: "הפרופיל שלי", icon: UserCircle, visible: isPlainEmployee },
   ].filter((n) => n.visible);
+
 
   async function handleSignOut() {
     await qc.cancelQueries();
