@@ -48,8 +48,7 @@ export type Database = {
         Row: {
           avatar_url: string | null
           created_at: string
-          department: Database["public"]["Enums"]["department"]
-          department_id: string | null
+          department_id: string
           full_name: string
           id: string
           id_number: string | null
@@ -63,8 +62,7 @@ export type Database = {
         Insert: {
           avatar_url?: string | null
           created_at?: string
-          department?: Database["public"]["Enums"]["department"]
-          department_id?: string | null
+          department_id: string
           full_name?: string
           id: string
           id_number?: string | null
@@ -78,8 +76,7 @@ export type Database = {
         Update: {
           avatar_url?: string | null
           created_at?: string
-          department?: Database["public"]["Enums"]["department"]
-          department_id?: string | null
+          department_id?: string
           full_name?: string
           id?: string
           id_number?: string | null
@@ -618,15 +615,6 @@ export type Database = {
         | "assistant_manager"
         | "department_manager"
         | "employee"
-      department:
-        | "dairy"
-        | "meat"
-        | "produce"
-        | "cashiers"
-        | "warehouse"
-        | "cleaning"
-        | "pricing"
-        | "general"
       schedule_audit_action:
         | "created"
         | "updated"
@@ -779,16 +767,6 @@ export const Constants = {
         "assistant_manager",
         "department_manager",
         "employee",
-      ],
-      department: [
-        "dairy",
-        "meat",
-        "produce",
-        "cashiers",
-        "warehouse",
-        "cleaning",
-        "pricing",
-        "general",
       ],
       schedule_audit_action: [
         "created",

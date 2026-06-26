@@ -47,7 +47,7 @@ export const createEmployee = createServerFn({ method: "POST" })
 
     const { data: dept, error: dErr } = await context.supabase
       .from("departments")
-      .select("code")
+      .select("id")
       .eq("id", data.department_id)
       .maybeSingle();
     if (dErr) throw new Error(dErr.message);
@@ -71,7 +71,7 @@ export const createEmployee = createServerFn({ method: "POST" })
       user_metadata: {
         full_name: data.full_name,
         id_number: data.id_number,
-        department: dept.code,
+        department_id: data.department_id,
         job_title: data.job_title,
         phone: data.phone,
         role: data.role,

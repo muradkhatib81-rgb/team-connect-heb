@@ -33,7 +33,7 @@ export const Route = createFileRoute("/_authenticated/permissions")({
 interface Row {
   id: string;
   full_name: string;
-  department: Department;
+  department_name: string;
   role: AppRole;
 }
 
@@ -64,17 +64,20 @@ function PermissionsPage() {
     queryKey: ["permissions-list"],
     queryFn: async () => {
       const [{ data: profiles, error: pe }, { data: roles, error: re }] = await Promise.all([
-        supabase.from("profiles").select("id, full_name, department").order("full_name"),
+        supabase
+          .from("profiles")
+          .select("id, full_name, department_id, departments(name)")
+          .order("full_name"),
         supabase.from("user_roles").select("user_id, role"),
       ]);
       if (pe) throw pe;
       if (re) throw re;
       const roleMap: Record<string, AppRole> = {};
       (roles ?? []).forEach((r) => (roleMap[r.user_id] = r.role as AppRole));
-      return (profiles ?? []).map((p) => ({
+      return (profiles ?? []).map((p: any) => ({
         id: p.id,
         full_name: p.full_name,
-        department: p.department as Department,
+        department_name: p.departments?.name ?? "—",
         role: roleMap[p.id] ?? "employee",
       })) as Row[];
     },
@@ -132,7 +135,7 @@ function PermissionsPage() {
               </div>
               <div className="flex-1 min-w-0">
                 <p className="font-medium truncate">{row.full_name || "ללא שם"}</p>
-                <p className="text-xs text-muted-foreground">{DEPARTMENT_LABELS[row.department]}</p>
+                <p className="text-xs text-muted-foreground">{row.department_name}</p>
               </div>
               <div className="w-40 shrink-0">
                 <Select
