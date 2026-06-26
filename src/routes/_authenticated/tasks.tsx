@@ -712,16 +712,19 @@ function TaskDetailDialog({
           )}
 
           {/* Existing images for non-active states */}
-          {!canMarkDone && (task.status === "pending_approval" || task.status === "completed") && (
-            <div className="border-t pt-4">
-              <Label className="text-xs text-muted-foreground mb-2 block">תמונות</Label>
-              <TaskImagesSection
-                taskId={task.id}
-                canEdit={false}
-                userId={caps.profile?.id}
-              />
-            </div>
-          )}
+          {!canMarkDone &&
+            (task.status === "pending_approval" ||
+              task.status === "completed" ||
+              task.status === "closed") && (
+              <div className="border-t pt-4">
+                <TaskImagesSection
+                  taskId={task.id}
+                  canEdit={false}
+                  userId={caps.profile?.id}
+                  title="תמונות המשימה"
+                />
+              </div>
+            )}
 
           {/* Approval section */}
           {task.status === "pending_approval" && canApprove && (
