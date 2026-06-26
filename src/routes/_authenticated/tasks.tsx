@@ -657,6 +657,18 @@ function TaskDetailDialog({
                 <p>{approvedBy.full_name}</p>
               </div>
             )}
+            {(task as any).closed_at && (
+              <div>
+                <Label className="text-xs text-muted-foreground">נסגרה בתאריך</Label>
+                <p>{formatHeDateTime((task as any).closed_at)}</p>
+              </div>
+            )}
+            {closedBy && (
+              <div>
+                <Label className="text-xs text-muted-foreground">נסגרה ע״י</Label>
+                <p>{closedBy.full_name}</p>
+              </div>
+            )}
           </div>
 
           {task.employee_note && (
