@@ -97,6 +97,8 @@ export function AppShell({ children }: { children: ReactNode }) {
     { to: "/dashboard", label: "לוח בקרה", icon: LayoutDashboard, visible: !isPlainEmployee },
     { to: "/tasks", label: "משימות", icon: ListTodo, visible: true },
     { to: "/schedules", label: "סידורי עבודה", icon: CalendarDays, visible: true },
+    { to: "/breaks", label: "הפסקות", icon: Coffee, visible: true },
+
     { to: "/employees", label: "ניהול עובדים", icon: Users, visible: admin },
     { to: "/departments", label: "מחלקות", icon: Building2, visible: admin },
     { to: "/permissions", label: "הרשאות", icon: ShieldCheck, visible: canManageUsers(profile.roles) },
