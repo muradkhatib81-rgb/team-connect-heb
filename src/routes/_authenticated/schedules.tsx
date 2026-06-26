@@ -39,7 +39,7 @@ import {
   Copy,
   Send,
   CheckCircle2,
-  XCircle,
+  
   Loader2,
   Save,
   AlertTriangle,
@@ -52,7 +52,7 @@ import {
   saveScheduleShifts,
   submitSchedule,
   approveSchedule,
-  rejectSchedule,
+  
   copyPreviousWeek,
   deleteSchedule,
 } from "@/lib/schedules.functions";
