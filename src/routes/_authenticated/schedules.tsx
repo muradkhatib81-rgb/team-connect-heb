@@ -289,6 +289,16 @@ function SchedulesPage() {
     setEdits(next);
   }, [shiftsQ.data]);
 
+  // Baseline (saved) shifts for change-detection visual marker on approved schedules
+  const baseline = useMemo(() => {
+    const m: Record<string, Record<string, Shift>> = {};
+    for (const s of shiftsQ.data ?? []) {
+      m[s.employee_id] ??= {};
+      m[s.employee_id][s.day_date] = s.shift as Shift;
+    }
+    return m;
+  }, [shiftsQ.data]);
+
   // Realtime: keep schedule list synced
   useEffect(() => {
     const ch = supabase
