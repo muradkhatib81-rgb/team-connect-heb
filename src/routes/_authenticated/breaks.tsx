@@ -475,6 +475,23 @@ function ApproveList({
     onError: (e: any) => toast.error(e?.message ?? "שגיאה"),
   });
 
+  const deleteMut = useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase.from("break_requests").delete().eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      toast.success("הבקשה נמחקה");
+      setDeleteTarget(null);
+      qc.invalidateQueries({ queryKey: ["all-break-requests"] });
+      qc.invalidateQueries({ queryKey: ["my-break-requests"] });
+      qc.invalidateQueries({ queryKey: ["dashboard-on-break"] });
+      qc.invalidateQueries({ queryKey: ["dashboard-pending-breaks"] });
+      qc.invalidateQueries({ queryKey: ["dashboard-daily-breaks"] });
+    },
+    onError: (e: any) => toast.error(e?.message ?? "שגיאה במחיקה"),
+  });
+
   if (loading) {
     return (
       <div className="flex justify-center py-12">
