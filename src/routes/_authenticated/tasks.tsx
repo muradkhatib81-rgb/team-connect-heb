@@ -73,7 +73,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 
-type TaskStatus = "new" | "in_progress" | "pending_approval" | "completed" | "closed";
+type TaskStatus = "new" | "in_progress" | "pending_approval" | "pending_closure" | "completed" | "closed";
 type TaskPriority = "low" | "medium" | "high";
 
 interface TaskRow {
@@ -121,7 +121,8 @@ interface EmpOption { id: string; full_name: string; department_id: string | nul
 const STATUS_LABEL: Record<TaskStatus, string> = {
   new: "חדש",
   in_progress: "בביצוע",
-  pending_approval: "ממתין לאישור",
+  pending_approval: "ממתין לאישור אחראי מחלקה",
+  pending_closure: "ממתין לסגירה",
   completed: "הושלמה",
   closed: "נסגרה",
 };
@@ -246,7 +247,10 @@ function TasksPage() {
     if (statusFilter === "overdue") {
       const now = Date.now();
       list = list.filter(
-        (t) => t.due_at && t.status !== "completed" && new Date(t.due_at).getTime() < now,
+        (t) =>
+          t.due_at &&
+          !["completed", "pending_closure", "closed"].includes(t.status) &&
+          new Date(t.due_at).getTime() < now,
       );
     }
     if (search2.trim()) {
@@ -309,7 +313,8 @@ function TasksPage() {
                 <SelectItem value="all">הכול</SelectItem>
                 <SelectItem value="new">חדש</SelectItem>
                 <SelectItem value="in_progress">בביצוע</SelectItem>
-                <SelectItem value="pending_approval">ממתין לאישור</SelectItem>
+                <SelectItem value="pending_approval">ממתין לאישור אחראי מחלקה</SelectItem>
+                <SelectItem value="pending_closure">ממתין לסגירה</SelectItem>
                 <SelectItem value="completed">הושלמה</SelectItem>
                 <SelectItem value="closed">נסגרה (ארכיון)</SelectItem>
                 <SelectItem value="overdue">באיחור</SelectItem>
@@ -383,7 +388,9 @@ function TaskCard({
   const dept = deps?.departments.find((d) => d.id === task.department_id);
   const completedBy = deps?.employees.find((e) => e.id === task.completed_by);
   const overdue =
-    task.due_at && task.status !== "completed" && new Date(task.due_at).getTime() < Date.now();
+    task.due_at &&
+    !["completed", "pending_closure", "closed"].includes(task.status) &&
+    new Date(task.due_at).getTime() < Date.now();
   const isDeptOfThis = caps.isDeptMgr && true;
   const canEdit = caps.canEditTasks || isDeptOfThis;
   const canDelete = caps.canDeleteTasks;
@@ -455,6 +462,7 @@ function priorityVariant(p: TaskPriority): "default" | "secondary" | "destructiv
 }
 function statusVariant(s: TaskStatus): "default" | "secondary" | "destructive" | "outline" {
   if (s === "closed") return "outline";
+  if (s === "pending_closure") return "secondary";
   if (s === "completed") return "secondary";
   if (s === "pending_approval") return "destructive";
   if (s === "in_progress") return "default";
@@ -716,6 +724,7 @@ function TaskDetailDialog({
           {/* Existing images for non-active states */}
           {!canMarkDone &&
             (task.status === "pending_approval" ||
+              task.status === "pending_closure" ||
               task.status === "completed" ||
               task.status === "closed") && (
               <div className="border-t pt-4">
@@ -788,14 +797,14 @@ function TaskDetailDialog({
               סיימתי - שלח לאישור
             </Button>
           )}
-          {task.status === "completed" && caps.canCloseTasks && (
+          {(task.status === "pending_closure" || task.status === "completed") && caps.canCloseTasks && (
             <Button
               variant="default"
               onClick={() => closeM.mutate()}
               disabled={closeM.isPending}
             >
               {closeM.isPending && <Loader2 className="size-4 animate-spin ml-2" />}
-              סגור משימה (ארכיון)
+              סגור משימה
             </Button>
           )}
         </DialogFooter>
