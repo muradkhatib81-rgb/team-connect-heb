@@ -57,8 +57,14 @@ import {
 } from "@/lib/schedules.functions";
 import { formatHeDate } from "@/lib/date-format";
 
+type SchedulesSearch = { dept?: string; week?: string; view?: "pending" | "editor" };
 export const Route = createFileRoute("/_authenticated/schedules")({
   component: SchedulesPage,
+  validateSearch: (s: Record<string, unknown>): SchedulesSearch => ({
+    dept: typeof s.dept === "string" ? s.dept : undefined,
+    week: typeof s.week === "string" ? s.week : undefined,
+    view: s.view === "pending" || s.view === "editor" ? s.view : undefined,
+  }),
 });
 
 type Shift = "morning" | "evening" | "off";
