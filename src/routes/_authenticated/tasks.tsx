@@ -786,6 +786,16 @@ function TaskDetailDialog({
               סיימתי - שלח לאישור
             </Button>
           )}
+          {task.status === "completed" && caps.canCloseTasks && (
+            <Button
+              variant="default"
+              onClick={() => closeM.mutate()}
+              disabled={closeM.isPending}
+            >
+              {closeM.isPending && <Loader2 className="size-4 animate-spin ml-2" />}
+              סגור משימה (ארכיון)
+            </Button>
+          )}
         </DialogFooter>
       </DialogContent>
     </Dialog>
