@@ -1168,6 +1168,7 @@ function TaskFormDialog({
   const qc = useQueryClient();
   const create = useServerFn(createTask);
   const update = useServerFn(updateTask);
+  const addImg = useServerFn(addTaskImage);
 
   const canPickAnyDept = caps.canCreateTasks; // main_admin or branch/assistant manager with perm
   const allowedDepartments = canPickAnyDept
@@ -1182,6 +1183,7 @@ function TaskFormDialog({
   const [dueDate, setDueDate] = useState<string>(initSplit.date);
   const [dueTime, setDueTime] = useState<string>(initSplit.time);
   const [priority, setPriority] = useState<TaskPriority>(task?.priority ?? "medium");
+  const [stagedImages, setStagedImages] = useState<File[]>([]);
 
   const submit = useMutation({
     mutationFn: async () => {
@@ -1195,7 +1197,23 @@ function TaskFormDialog({
         priority,
       };
       if (mode === "create") {
-        await create({ data: payload as any });
+        const created: any = await create({ data: payload as any });
+        const newId = created?.id;
+        if (newId && stagedImages.length && caps.profile?.id) {
+          for (const file of stagedImages) {
+            try {
+              const ext = file.name.split(".").pop() || "jpg";
+              const path = `${caps.profile.id}/${newId}/${crypto.randomUUID()}.${ext}`;
+              const { error: upErr } = await supabase.storage
+                .from("task-images")
+                .upload(path, file);
+              if (upErr) throw upErr;
+              await addImg({ data: { task_id: newId, storage_path: path } });
+            } catch (e: any) {
+              toast.error(`שגיאה בהעלאת תמונה: ${e?.message ?? ""}`);
+            }
+          }
+        }
       } else if (task) {
         await update({ data: { id: task.id, ...payload } as any });
       }
