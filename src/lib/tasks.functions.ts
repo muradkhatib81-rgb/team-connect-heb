@@ -511,6 +511,7 @@ export const PERMISSION_KEYS = [
   "can_create_tasks",
   "can_edit_tasks",
   "can_delete_tasks",
+  "can_approve_tasks",
   "can_create_schedule",
   "can_approve_schedule",
   "can_approve_leave",
