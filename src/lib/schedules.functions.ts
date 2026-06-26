@@ -133,7 +133,7 @@ export const saveScheduleShifts = createServerFn({ method: "POST" })
       .insert({
         schedule_id: data.schedule_id,
         actor_id: context.userId,
-        action: isApproved ? "edited_after_publish" : "updated",
+        action: "updated",
       });
 
     if (isApproved) {
