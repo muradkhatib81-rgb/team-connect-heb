@@ -43,6 +43,7 @@ import {
   Loader2,
   Save,
   AlertTriangle,
+  Trash2,
 } from "lucide-react";
 import { toast } from "sonner";
 import {
@@ -52,6 +53,7 @@ import {
   approveSchedule,
   rejectSchedule,
   copyPreviousWeek,
+  deleteSchedule,
 } from "@/lib/schedules.functions";
 import { formatHeDate } from "@/lib/date-format";
 
