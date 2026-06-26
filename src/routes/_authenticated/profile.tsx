@@ -21,7 +21,7 @@ function ProfilePage() {
   }
 
   const roleLabel = me.roles?.[0] ? ROLE_LABELS[me.roles[0]] : "—";
-  const deptLabel = me.department ? DEPARTMENT_LABELS[me.department as keyof typeof DEPARTMENT_LABELS] ?? "—" : "—";
+  const deptLabel = me.department_name ?? "—";
 
   return (
     <div className="space-y-6">
