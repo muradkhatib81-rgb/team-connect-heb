@@ -1,10 +1,9 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { useServerFn } from "@tanstack/react-start";
 import { useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/use-auth";
-import { canManageUsers } from "@/lib/constants";
+import { canManageUsers, ROLE_LABELS, type AppRole } from "@/lib/constants";
 import {
   createDepartment,
   updateDepartment,
@@ -27,7 +26,6 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
-  DialogFooter,
 } from "@/components/ui/dialog";
 import {
   AlertDialog,
@@ -40,7 +38,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Switch } from "@/components/ui/switch";
-import { Loader2, Building2, Plus, Pencil, Trash2 } from "lucide-react";
+import { Loader2, Building2, Plus, Pencil, Trash2, User } from "lucide-react";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/_authenticated/departments")({
@@ -68,6 +66,8 @@ function DepartmentsPage() {
   const [creating, setCreating] = useState(false);
   const [editing, setEditing] = useState<DepartmentRow | null>(null);
   const [deleting, setDeleting] = useState<DepartmentRow | null>(null);
+  const [deptDialogId, setDeptDialogId] = useState<string | null>(null);
+  const [empDialogId, setEmpDialogId] = useState<string | null>(null);
 
   const deptsQuery = useQuery({
     enabled: !!me,
@@ -154,7 +154,11 @@ function DepartmentsPage() {
             const c = countsQuery.data?.[d.id] ?? { total: 0, active: 0 };
             const mgr = managersQuery.data?.find((m) => m.id === d.manager_id);
             return (
-              <Card key={d.id} className="card-elevated p-5">
+              <Card
+                key={d.id}
+                className="card-elevated p-5 cursor-pointer hover:bg-accent/30 transition-colors"
+                onClick={() => setDeptDialogId(d.id)}
+              >
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
                     <h2 className="text-lg font-semibold truncate">{d.name}</h2>
@@ -176,10 +180,26 @@ function DepartmentsPage() {
                   )}
                   {isMainAdmin && (
                     <div className="flex gap-1 mr-auto">
-                      <Button variant="ghost" size="icon" onClick={() => setEditing(d)} aria-label="עריכה">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setEditing(d);
+                        }}
+                        aria-label="עריכה"
+                      >
                         <Pencil className="size-4" />
                       </Button>
-                      <Button variant="ghost" size="icon" onClick={() => setDeleting(d)} aria-label="מחיקה">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setDeleting(d);
+                        }}
+                        aria-label="מחיקה"
+                      >
                         <Trash2 className="size-4 text-destructive" />
                       </Button>
                     </div>
@@ -205,6 +225,16 @@ function DepartmentsPage() {
         <DeleteDialog dept={deleting} onClose={() => setDeleting(null)} />
       )}
 
+      <DeptEmployeesDialog
+        deptId={deptDialogId}
+        onClose={() => setDeptDialogId(null)}
+        onSelectEmployee={isMainAdmin ? setEmpDialogId : undefined}
+      />
+      <EmpProfileDialog
+        employeeId={empDialogId}
+        onClose={() => setEmpDialogId(null)}
+      />
+
       {!isMainAdmin && (
         <p className="text-xs text-muted-foreground text-center">
           רק מנהל ראשי יכול ליצור, לערוך או למחוק מחלקות.
@@ -223,6 +253,225 @@ function Stat({ label, value }: { label: string; value: number }) {
   );
 }
 
+function DeptEmployeesDialog({
+  deptId,
+  onClose,
+  onSelectEmployee,
+}: {
+  deptId: string | null;
+  onClose: () => void;
+  onSelectEmployee?: (id: string) => void;
+}) {
+  const open = deptId !== null;
+  const q = useQuery({
+    enabled: open && !!deptId,
+    queryKey: ["dept-employees-dialog", deptId],
+    queryFn: async () => {
+      if (!deptId) return null;
+      const { data: dept, error: dErr } = await supabase
+        .from("departments")
+        .select("id, name, manager_id")
+        .eq("id", deptId)
+        .single();
+      if (dErr) throw dErr;
+      const { data: emps, error: eErr } = await supabase
+        .from("profiles")
+        .select("id, full_name, is_active, on_leave, avatar_url, department_id")
+        .eq("department_id", deptId)
+        .order("full_name");
+      if (eErr) throw eErr;
+      const empIds = (emps ?? []).map((e: any) => e.id);
+      const [{ data: roles }, { data: manager }] = await Promise.all([
+        empIds.length
+          ? supabase.from("user_roles").select("user_id, role").in("user_id", empIds)
+          : Promise.resolve({ data: [] as any[] }),
+        dept.manager_id
+          ? supabase.from("profiles").select("full_name").eq("id", dept.manager_id).maybeSingle()
+          : Promise.resolve({ data: null as any }),
+      ]);
+      const roleMap: Record<string, string> = {};
+      (roles ?? []).forEach((r: any) => {
+        roleMap[r.user_id] = ROLE_LABELS[r.role as AppRole] ?? r.role;
+      });
+      return {
+        deptName: dept.name,
+        managerName: manager?.full_name ?? null,
+        managerId: dept.manager_id,
+        employees: (emps ?? []).map((e: any) => ({
+          ...e,
+          roleLabel: roleMap[e.id] ?? "עובד",
+          isManager: e.id === dept.manager_id,
+        })),
+      };
+    },
+  });
+
+  return (
+    <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
+      <DialogContent className="max-w-lg">
+        <DialogHeader>
+          <DialogTitle>עובדי {q.data?.deptName ?? "—"}</DialogTitle>
+        </DialogHeader>
+        {q.isLoading ? (
+          <div className="flex justify-center py-8">
+            <Loader2 className="size-5 animate-spin text-primary" />
+          </div>
+        ) : !q.data || q.data.employees.length === 0 ? (
+          <p className="text-sm text-muted-foreground py-6 text-center">אין עובדים במחלקה זו.</p>
+        ) : (
+          <ul className="divide-y max-h-[60vh] overflow-auto">
+            {q.data.employees.map((emp: any) => (
+              <li key={emp.id}>
+                {onSelectEmployee ? (
+                  <button
+                    type="button"
+                    onClick={() => onSelectEmployee(emp.id)}
+                    className="w-full text-right py-3 px-2 hover:bg-accent/30 rounded-md"
+                  >
+                    <EmployeeListItem emp={emp} />
+                  </button>
+                ) : (
+                  <div className="py-3 px-2">
+                    <EmployeeListItem emp={emp} />
+                  </div>
+                )}
+              </li>
+            ))}
+          </ul>
+        )}
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function EmployeeListItem({ emp }: { emp: any }) {
+  return (
+    <div className="flex items-center justify-between gap-2">
+      <div className="min-w-0">
+        <p className="font-medium truncate">{emp.full_name || "ללא שם"}</p>
+        <p className="text-xs text-muted-foreground mt-0.5">
+          {emp.roleLabel}
+          {emp.isManager && (
+            <span className="text-primary font-semibold mr-1">· אחראי מחלקה</span>
+          )}
+        </p>
+      </div>
+      <div className="flex gap-1 shrink-0">
+        {!emp.is_active && (
+          <Badge variant="destructive" className="rounded-full text-xs">לא פעיל</Badge>
+        )}
+        {emp.on_leave && (
+          <Badge variant="secondary" className="rounded-full text-xs">בחופש</Badge>
+        )}
+        {emp.is_active && !emp.on_leave && (
+          <Badge variant="outline" className="rounded-full text-xs">פעיל</Badge>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function EmpProfileDialog({
+  employeeId,
+  onClose,
+}: {
+  employeeId: string | null;
+  onClose: () => void;
+}) {
+  const open = employeeId !== null;
+  const q = useQuery({
+    enabled: open && !!employeeId,
+    queryKey: ["employee-profile-dialog", employeeId],
+    queryFn: async () => {
+      if (!employeeId) return null;
+      const { data: profile, error: pErr } = await supabase
+        .from("profiles")
+        .select("*, departments(name)")
+        .eq("id", employeeId)
+        .maybeSingle();
+      if (pErr) throw pErr;
+      const { data: roles } = await supabase
+        .from("user_roles")
+        .select("role")
+        .eq("user_id", employeeId);
+      const roleLabel = (roles ?? [])
+        .map((r: any) => ROLE_LABELS[r.role as AppRole])
+        .filter(Boolean)
+        .join(", ") || "—";
+      let avatarUrl: string | null = null;
+      if (profile?.avatar_url) {
+        const { data: urlData } = await supabase.storage
+          .from("avatars")
+          .createSignedUrl(profile.avatar_url, 60 * 60);
+        avatarUrl = urlData?.signedUrl ?? null;
+      }
+      return {
+        ...profile,
+        departmentName: profile?.departments?.name ?? "—",
+        roleLabel,
+        avatarUrl,
+      };
+    },
+  });
+
+  return (
+    <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle>פרטי עובד</DialogTitle>
+        </DialogHeader>
+        {q.isLoading ? (
+          <div className="flex justify-center py-8">
+            <Loader2 className="size-5 animate-spin text-primary" />
+          </div>
+        ) : !q.data ? (
+          <p className="text-sm text-muted-foreground py-6 text-center">לא נמצאו פרטי עובד.</p>
+        ) : (
+          <div className="space-y-4">
+            <div className="flex items-center gap-4">
+              <div className="size-16 rounded-full bg-accent text-accent-foreground flex items-center justify-center text-xl font-bold shrink-0 overflow-hidden">
+                {q.data.avatarUrl ? (
+                  <img src={q.data.avatarUrl} alt="" className="w-full h-full object-cover" />
+                ) : (
+                  <User className="size-7" />
+                )}
+              </div>
+              <div>
+                <p className="font-semibold text-lg">{q.data.full_name || "ללא שם"}</p>
+                <p className="text-sm text-muted-foreground">{q.data.roleLabel}</p>
+              </div>
+            </div>
+            <Card className="p-4 space-y-3">
+              <ProfileRow label="מספר זהות" value={q.data.id_number ?? "—"} />
+              <ProfileRow label="מחלקה" value={q.data.departmentName} />
+              <ProfileRow label="טלפון" value={q.data.phone ?? "—"} />
+              <ProfileRow
+                label="סטטוס"
+                value={
+                  q.data.on_leave
+                    ? "בחופש"
+                    : q.data.is_active
+                    ? "פעיל"
+                    : "לא פעיל"
+                }
+              />
+            </Card>
+          </div>
+        )}
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function ProfileRow({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex items-center justify-between gap-3 border-b border-border/60 pb-2 last:border-0 last:pb-0">
+      <span className="text-sm text-muted-foreground">{label}</span>
+      <span className="text-sm font-medium">{value}</span>
+    </div>
+  );
+}
+
 function CreateDialog({
   managers,
   onClose,
@@ -231,6 +480,7 @@ function CreateDialog({
   onClose: () => void;
 }) {
   const qc = useQueryClient();
+  const navigate = useNavigate();
   const fn = useServerFn(createDepartment);
   const [form, setForm] = useState({ name: "", manager_id: "" as string });
   const mutation = useMutation({
@@ -277,12 +527,21 @@ function CreateDialog({
               </SelectContent>
             </Select>
           </Field>
-          <DialogFooter className="gap-2 sm:gap-2">
+          <div className="flex items-center justify-between rounded-lg border border-border p-3">
+            <div>
+              <p className="text-sm font-medium">מחלקה פעילה</p>
+              <p className="text-xs text-muted-foreground">
+                ניתן להשבית מחלקה מבלי למחוק אותה
+              </p>
+            </div>
+            <Switch checked={true} disabled />
+          </div>
+          <div className="flex justify-end gap-2">
             <Button type="button" variant="outline" onClick={onClose}>ביטול</Button>
             <Button type="submit" disabled={mutation.isPending}>
               {mutation.isPending ? <Loader2 className="size-4 animate-spin" /> : "צור"}
             </Button>
-          </DialogFooter>
+          </div>
         </form>
       </DialogContent>
     </Dialog>
@@ -359,12 +618,12 @@ function EditDialog({
             </div>
             <Switch checked={form.is_active} onCheckedChange={(v) => setForm({ ...form, is_active: v })} />
           </div>
-          <DialogFooter className="gap-2 sm:gap-2">
+          <div className="flex justify-end gap-2">
             <Button type="button" variant="outline" onClick={onClose}>ביטול</Button>
             <Button type="submit" disabled={mutation.isPending}>
               {mutation.isPending ? <Loader2 className="size-4 animate-spin" /> : "שמירה"}
             </Button>
-          </DialogFooter>
+          </div>
         </form>
       </DialogContent>
     </Dialog>
