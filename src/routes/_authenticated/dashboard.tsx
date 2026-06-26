@@ -531,6 +531,9 @@ function SchedulesStatsSection({ profile }: { profile: any }) {
       .on("postgres_changes", { event: "*", schema: "public", table: "schedule_shifts" }, () =>
         qc.invalidateQueries({ queryKey: ["dashboard-schedules"] }),
       )
+      .on("postgres_changes", { event: "*", schema: "public", table: "departments" }, () =>
+        qc.invalidateQueries({ queryKey: ["dashboard-schedules"] }),
+      )
       .subscribe();
     return () => {
       supabase.removeChannel(ch);
