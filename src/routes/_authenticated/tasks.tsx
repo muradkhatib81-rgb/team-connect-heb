@@ -73,7 +73,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 
-type TaskStatus = "new" | "in_progress" | "pending_approval" | "completed";
+type TaskStatus = "new" | "in_progress" | "pending_approval" | "completed" | "closed";
 type TaskPriority = "low" | "medium" | "high";
 
 interface TaskRow {
