@@ -141,6 +141,9 @@ function DashboardPage() {
 
       <SchedulesStatsSection profile={profile} />
 
+      <OnBreakSection profile={profile} />
+
+
 
       {admin ? (
         <AdminDashboard stats={statsQuery.data} loading={statsQuery.isLoading} onSelectDept={setDeptDialogId} />
