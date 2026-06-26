@@ -396,13 +396,18 @@ export const approveSchedule = createServerFn({ method: "POST" })
       .eq("id", data.schedule_id);
     if (error) throw new Error(error.message);
 
-    // Snapshot current shifts as the published baseline.
+    // Detect changes vs the submitted snapshot (published_shift), then refresh
+    // the snapshot so the approved version becomes the new baseline.
+    let editedBeforeApproval = false;
     {
       const { data: cur } = await context.supabase
         .from("schedule_shifts")
-        .select("id, shift")
+        .select("id, shift, published_shift")
         .eq("schedule_id", data.schedule_id);
       for (const row of cur ?? []) {
+        if ((row as any).published_shift !== row.shift) {
+          editedBeforeApproval = true;
+        }
         await context.supabase
           .from("schedule_shifts")
           .update({ published_shift: row.shift })
@@ -412,23 +417,40 @@ export const approveSchedule = createServerFn({ method: "POST" })
 
     await context.supabase
       .from("schedule_audit_log")
-      .insert({ schedule_id: data.schedule_id, actor_id: context.userId, action: "approved" });
+      .insert({
+        schedule_id: data.schedule_id,
+        actor_id: context.userId,
+        action: editedBeforeApproval ? "approved_with_changes" : "approved",
+      });
 
-    // Notify department employees
-    const { data: emps } = await context.supabase
-      .from("profiles")
-      .select("id")
-      .eq("department_id", sched.department_id);
-    if (emps?.length) {
+    // Notify department employees + department manager (creator/approver too).
+    const [{ data: emps }, { data: dept }] = await Promise.all([
+      context.supabase
+        .from("profiles")
+        .select("id")
+        .eq("department_id", sched.department_id),
+      context.supabase
+        .from("departments")
+        .select("manager_id")
+        .eq("id", sched.department_id)
+        .maybeSingle(),
+    ]);
+    const recipientIds = new Set<string>((emps ?? []).map((e: any) => e.id));
+    if (dept?.manager_id) recipientIds.add(dept.manager_id);
+    if (sched.created_by) recipientIds.add(sched.created_by);
+    if (recipientIds.size) {
+      const message = editedBeforeApproval
+        ? "סידור העבודה השבועי אושר עם שינויים. נא לעיין בסידור המעודכן."
+        : "סידור העבודה החדש פורסם.";
       await context.supabase.from("schedule_notifications").insert(
-        emps.map((e: any) => ({
+        [...recipientIds].map((uid) => ({
           schedule_id: data.schedule_id,
-          user_id: e.id,
-          message: "סידור העבודה החדש פורסם.",
+          user_id: uid,
+          message,
         })),
       );
     }
-    return { ok: true };
+    return { ok: true, editedBeforeApproval };
   });
 
 // ---------- REJECT ----------
