@@ -104,8 +104,14 @@ export const saveScheduleShifts = createServerFn({ method: "POST" })
       .eq("id", data.schedule_id)
       .single();
     if (se || !sched) throw new Error("סידור לא נמצא");
-    if (!["draft", "rejected"].includes(sched.status)) {
-      throw new Error("לא ניתן לערוך סידור שאינו בטיוטה");
+    const caps = await getCaps(context.supabase, context.userId);
+    const isApproved = sched.status === "approved";
+    if (isApproved) {
+      if (!caps.isMainAdmin && !caps.canPublishDirect) {
+        throw new Error("אין הרשאה לערוך סידור מאושר");
+      }
+    } else if (!["draft", "rejected"].includes(sched.status)) {
+      throw new Error("לא ניתן לערוך סידור בסטטוס זה");
     }
     // Replace all shifts for the schedule (simpler + atomic-ish)
     const { error: delErr } = await context.supabase
@@ -124,7 +130,27 @@ export const saveScheduleShifts = createServerFn({ method: "POST" })
       .eq("id", data.schedule_id);
     await context.supabase
       .from("schedule_audit_log")
-      .insert({ schedule_id: data.schedule_id, actor_id: context.userId, action: "updated" });
+      .insert({
+        schedule_id: data.schedule_id,
+        actor_id: context.userId,
+        action: "updated",
+      });
+
+    if (isApproved) {
+      const { data: emps } = await context.supabase
+        .from("profiles")
+        .select("id")
+        .eq("department_id", sched.department_id);
+      if (emps?.length) {
+        await context.supabase.from("schedule_notifications").insert(
+          emps.map((e: any) => ({
+            schedule_id: data.schedule_id,
+            user_id: e.id,
+            message: "סידור העבודה השבועי עודכן. נא לעיין בשינויים.",
+          })),
+        );
+      }
+    }
     return { ok: true };
   });
 
