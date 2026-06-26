@@ -280,8 +280,10 @@ function SchedulesPage() {
       .channel("schedules-realtime")
       .on("postgres_changes", { event: "*", schema: "public", table: "schedules" }, () => {
         qc.invalidateQueries({ queryKey: ["schedule"] });
+        qc.invalidateQueries({ queryKey: ["schedules-pending"] });
         qc.invalidateQueries({ queryKey: ["dashboard-schedules"] });
       })
+
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "schedule_shifts" },
