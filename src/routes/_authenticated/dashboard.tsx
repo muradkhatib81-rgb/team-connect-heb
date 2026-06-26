@@ -1175,29 +1175,133 @@ function OnBreakSection({ profile }: { profile: any }) {
     },
   });
 
+  const pendingCountQ = useQuery({
+    enabled: canSee,
+    queryKey: ["dashboard-pending-breaks"],
+    queryFn: async () => {
+      const { count, error } = await supabase
+        .from("break_requests")
+        .select("id", { count: "exact", head: true })
+        .eq("status", "pending");
+      if (error) throw error;
+      return count ?? 0;
+    },
+  });
+
+  // Daily log: all break requests created today (Asia/Jerusalem)
+  const dailyLogQ = useQuery({
+    enabled: canSee,
+    queryKey: ["dashboard-daily-breaks"],
+    queryFn: async () => {
+      const now = new Date();
+      // Local Israel-day window. Use local midnight; Supabase will compare as UTC.
+      const dayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      const dayEnd = new Date(dayStart.getTime() + 24 * 60 * 60 * 1000);
+      const { data, error } = await supabase
+        .from("break_requests")
+        .select(
+          "id, user_id, department_id, break_setting_id, requested_at, approved_at_time, started_at, ends_at, completed_at, status, approved_by, duration_minutes",
+        )
+        .gte("created_at", dayStart.toISOString())
+        .lt("created_at", dayEnd.toISOString())
+        .order("created_at", { ascending: true });
+      if (error) throw error;
+      const rows = (data ?? []) as any[];
+      if (!rows.length) return [];
+      const uids = Array.from(
+        new Set(rows.flatMap((r) => [r.user_id, r.approved_by].filter(Boolean))),
+      );
+      const dids = Array.from(new Set(rows.map((r) => r.department_id).filter(Boolean)));
+      const sids = Array.from(new Set(rows.map((r) => r.break_setting_id).filter(Boolean)));
+      const [{ data: profs }, { data: depts }, { data: settings }] = await Promise.all([
+        uids.length
+          ? supabase.from("profiles").select("id, full_name").in("id", uids)
+          : Promise.resolve({ data: [] as any[] }),
+        dids.length
+          ? supabase.from("departments").select("id, name").in("id", dids)
+          : Promise.resolve({ data: [] as any[] }),
+        sids.length
+          ? supabase.from("break_settings").select("id, name").in("id", sids)
+          : Promise.resolve({ data: [] as any[] }),
+      ]);
+      const pMap = new Map((profs ?? []).map((p: any) => [p.id, p.full_name]));
+      const dMap = new Map((depts ?? []).map((d: any) => [d.id, d.name]));
+      const sMap = new Map((settings ?? []).map((s: any) => [s.id, s.name]));
+      return rows.map((r) => ({
+        id: r.id,
+        name: pMap.get(r.user_id) ?? "—",
+        department: dMap.get(r.department_id) ?? "—",
+        type: sMap.get(r.break_setting_id) ?? "הפסקה",
+        approvedTime: r.approved_at_time as string | null,
+        startedAt: r.started_at as string | null,
+        endsAt: r.ends_at as string | null,
+        completedAt: r.completed_at as string | null,
+        status: r.status as string,
+        approverName: r.approved_by ? pMap.get(r.approved_by) ?? "—" : "—",
+      }));
+    },
+  });
+
   // Realtime + minute tick for countdown
   useEffect(() => {
+    if (!canSee) return;
     const ch = supabase
       .channel("dash-on-break-rt")
-      .on("postgres_changes", { event: "*", schema: "public", table: "break_requests" }, () =>
-        qc.invalidateQueries({ queryKey: ["dashboard-on-break"] }),
-      )
+      .on("postgres_changes", { event: "*", schema: "public", table: "break_requests" }, () => {
+        qc.invalidateQueries({ queryKey: ["dashboard-on-break"] });
+        qc.invalidateQueries({ queryKey: ["dashboard-pending-breaks"] });
+        qc.invalidateQueries({ queryKey: ["dashboard-daily-breaks"] });
+      })
       .subscribe();
     const t = setInterval(() => {
       qc.invalidateQueries({ queryKey: ["dashboard-on-break"] });
+      qc.invalidateQueries({ queryKey: ["dashboard-daily-breaks"] });
     }, 30_000);
     return () => {
       supabase.removeChannel(ch);
       clearInterval(t);
     };
-  }, [qc]);
+  }, [qc, canSee]);
 
   if (!canSee) return null;
   const list = onBreakQ.data ?? [];
+  const log = dailyLogQ.data ?? [];
+
+  const fmtT = (iso: string | null) =>
+    iso
+      ? new Intl.DateTimeFormat("he-IL", {
+          timeZone: "Asia/Jerusalem",
+          hour: "2-digit",
+          minute: "2-digit",
+          hour12: false,
+        }).format(new Date(iso))
+      : "—";
+
+  const STATUS_LABEL: Record<string, string> = {
+    pending: "ממתינה לאישור",
+    approved: "טרם יצא להפסקה",
+    active: "נמצא בהפסקה",
+    completed: "סיים את ההפסקה",
+    cancelled: "בוטלה",
+  };
+  const STATUS_TONE: Record<string, "default" | "secondary" | "destructive" | "outline"> = {
+    pending: "secondary",
+    approved: "outline",
+    active: "default",
+    completed: "secondary",
+    cancelled: "destructive",
+  };
 
   return (
     <>
       <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
+        <StatCard
+          label="בקשות הפסקה ממתינות לאישור"
+          value={pendingCountQ.data ?? 0}
+          icon={Clock}
+          tone="warning"
+          onClick={() => navigate({ to: "/breaks" })}
+        />
         <StatCard
           label="עובדים בהפסקה כעת"
           value={list.length}
@@ -1217,6 +1321,67 @@ function OnBreakSection({ profile }: { profile: any }) {
         </Card>
       </div>
 
+      <section>
+        <div className="flex items-center justify-between mb-3">
+          <h2 className="text-lg font-semibold flex items-center gap-2">
+            <Coffee className="size-5 text-primary" />
+            יומן הפסקות יומי
+          </h2>
+          <span className="text-xs text-muted-foreground">
+            {new Intl.DateTimeFormat("he-IL", {
+              timeZone: "Asia/Jerusalem",
+              dateStyle: "full",
+              numberingSystem: "latn",
+              calendar: "gregory",
+            }).format(new Date())}
+          </span>
+        </div>
+        <Card className="card-elevated p-0 overflow-auto">
+          {dailyLogQ.isLoading ? (
+            <div className="flex justify-center py-8">
+              <Loader2 className="size-5 animate-spin text-primary" />
+            </div>
+          ) : log.length === 0 ? (
+            <p className="p-6 text-sm text-muted-foreground text-center">
+              עדיין אין בקשות הפסקה היום.
+            </p>
+          ) : (
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="bg-muted/40">
+                  <th className="text-right p-3">עובד</th>
+                  <th className="text-right p-3">מחלקה</th>
+                  <th className="text-right p-3">סוג</th>
+                  <th className="text-right p-3">שעה מאושרת</th>
+                  <th className="text-right p-3">התחלה</th>
+                  <th className="text-right p-3">סיום</th>
+                  <th className="text-right p-3">אישר</th>
+                  <th className="text-right p-3">סטטוס</th>
+                </tr>
+              </thead>
+              <tbody>
+                {log.map((r) => (
+                  <tr key={r.id} className="border-t">
+                    <td className="p-3 font-medium">{r.name}</td>
+                    <td className="p-3">{r.department}</td>
+                    <td className="p-3">{r.type}</td>
+                    <td className="p-3">{fmtT(r.approvedTime)}</td>
+                    <td className="p-3">{fmtT(r.startedAt)}</td>
+                    <td className="p-3">{fmtT(r.completedAt ?? r.endsAt)}</td>
+                    <td className="p-3">{r.approverName}</td>
+                    <td className="p-3">
+                      <Badge variant={STATUS_TONE[r.status] ?? "secondary"}>
+                        {STATUS_LABEL[r.status] ?? r.status}
+                      </Badge>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </Card>
+      </section>
+
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent>
           <DialogHeader>
@@ -1233,14 +1398,7 @@ function OnBreakSection({ profile }: { profile: any }) {
                   ? new Date(r.endsAt).getTime() - Date.now()
                   : 0;
                 const remMin = Math.max(0, Math.ceil(remainingMs / 60000));
-                const startStr = r.startedAt
-                  ? new Intl.DateTimeFormat("he-IL", {
-                      timeZone: "Asia/Jerusalem",
-                      hour: "2-digit",
-                      minute: "2-digit",
-                      hour12: false,
-                    }).format(new Date(r.startedAt))
-                  : "—";
+                const startStr = fmtT(r.startedAt);
                 return (
                   <li
                     key={r.id}

@@ -33,7 +33,18 @@ import {
   AlertTriangle,
   Send,
   Pencil,
+  Trash2,
 } from "lucide-react";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 export const Route = createFileRoute("/_authenticated/breaks")({
   component: BreaksPage,
@@ -110,6 +121,8 @@ function BreaksPage() {
   const { data: me } = useAuth();
   const qc = useQueryClient();
   const isMainAdmin = !!me?.roles.includes("main_admin");
+  const isBranchOrAssistant =
+    !!me?.roles.includes("branch_manager") || !!me?.roles.includes("assistant_manager");
 
   const permQ = useQuery({
     enabled: !!me?.id,
@@ -125,6 +138,8 @@ function BreaksPage() {
     },
   });
   const canManage = !!permQ.data;
+  // Only regular employees and department managers (without break-management perm) may submit requests.
+  const canRequest = !isMainAdmin && !isBranchOrAssistant && !canManage;
 
   const settingsQ = useQuery({
     queryKey: ["break-settings-active"],
@@ -272,14 +287,14 @@ function BreaksPage() {
         </div>
       </header>
 
-      <Tabs defaultValue="request" className="space-y-4">
+      <Tabs defaultValue={canRequest ? "request" : canManage ? "approve" : "mine"} className="space-y-4">
         <TabsList>
-          <TabsTrigger value="request">בקשת הפסקה</TabsTrigger>
+          {canRequest && <TabsTrigger value="request">בקשת הפסקה</TabsTrigger>}
           <TabsTrigger value="mine">הבקשות שלי</TabsTrigger>
           {canManage && <TabsTrigger value="approve">אישור בקשות</TabsTrigger>}
         </TabsList>
 
-        <TabsContent value="request">
+        {canRequest && <TabsContent value="request">
           <Card className="card-elevated p-5 space-y-4">
             <div className="grid sm:grid-cols-2 gap-4">
               <div className="space-y-1.5">
@@ -330,7 +345,7 @@ function BreaksPage() {
               שלח בקשה
             </Button>
           </Card>
-        </TabsContent>
+        </TabsContent>}
 
         <TabsContent value="mine">
           {myReqQ.isLoading ? (
@@ -407,6 +422,7 @@ function ApproveList({
 }) {
   const qc = useQueryClient();
   const [editing, setEditing] = useState<BreakRequest | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<BreakRequest | null>(null);
 
   const pending = all.filter((r) => r.status === "pending");
 
@@ -457,6 +473,23 @@ function ApproveList({
       qc.invalidateQueries({ queryKey: ["my-break-requests"] });
     },
     onError: (e: any) => toast.error(e?.message ?? "שגיאה"),
+  });
+
+  const deleteMut = useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase.from("break_requests").delete().eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      toast.success("הבקשה נמחקה");
+      setDeleteTarget(null);
+      qc.invalidateQueries({ queryKey: ["all-break-requests"] });
+      qc.invalidateQueries({ queryKey: ["my-break-requests"] });
+      qc.invalidateQueries({ queryKey: ["dashboard-on-break"] });
+      qc.invalidateQueries({ queryKey: ["dashboard-pending-breaks"] });
+      qc.invalidateQueries({ queryKey: ["dashboard-daily-breaks"] });
+    },
+    onError: (e: any) => toast.error(e?.message ?? "שגיאה במחיקה"),
   });
 
   if (loading) {
@@ -516,6 +549,14 @@ function ApproveList({
                   >
                     <CheckCircle2 className="size-4" /> אישור
                   </Button>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="gap-1 text-destructive hover:text-destructive"
+                    onClick={() => setDeleteTarget(r)}
+                  >
+                    <Trash2 className="size-4" /> מחיקה
+                  </Button>
                 </div>
               </div>
 
@@ -562,6 +603,29 @@ function ApproveList({
           />
         )}
       </Dialog>
+
+      <AlertDialog
+        open={!!deleteTarget}
+        onOpenChange={(o) => !o && setDeleteTarget(null)}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>מחיקת בקשת הפסקה</AlertDialogTitle>
+            <AlertDialogDescription>
+              הבקשה תוסר מיד אצל המנהל ואצל העובד. לא ניתן לשחזר.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>ביטול</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => deleteTarget && deleteMut.mutate(deleteTarget.id)}
+              disabled={deleteMut.isPending}
+            >
+              מחיקה
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </>
   );
 }
