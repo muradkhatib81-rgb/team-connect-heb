@@ -770,15 +770,18 @@ function TaskImagesSection({
   taskId,
   canEdit,
   userId,
+  title = "תמונות",
 }: {
   taskId: string;
   canEdit: boolean;
   userId?: string;
+  title?: string;
 }) {
   const qc = useQueryClient();
   const fileRef = useRef<HTMLInputElement>(null);
   const add = useServerFn(addTaskImage);
   const del = useServerFn(deleteTaskImage);
+  const [lightboxIdx, setLightboxIdx] = useState<number | null>(null);
 
   const imagesQuery = useQuery({
     queryKey: ["task-images", taskId],
@@ -789,7 +792,6 @@ function TaskImagesSection({
         .eq("task_id", taskId)
         .order("created_at");
       if (error) throw error;
-      // sign urls
       const signed = await Promise.all(
         (data ?? []).map(async (img: any) => {
           const { data: s } = await supabase.storage
@@ -828,10 +830,14 @@ function TaskImagesSection({
     },
   });
 
+  const lightboxImages: LightboxImage[] = (imagesQuery.data ?? [])
+    .filter((i) => i.url)
+    .map((i) => ({ url: i.url as string }));
+
   return (
-    <div className="border-t pt-4 space-y-2">
+    <div className="space-y-2">
       <div className="flex items-center justify-between">
-        <Label>תמונות ביצוע ({imagesQuery.data?.length ?? 0}/5)</Label>
+        <Label>{title} ({imagesQuery.data?.length ?? 0}/5)</Label>
         {canEdit && (imagesQuery.data?.length ?? 0) < 5 && (
           <>
             <input
@@ -862,10 +868,15 @@ function TaskImagesSection({
         <Loader2 className="size-4 animate-spin" />
       ) : (
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-          {imagesQuery.data?.map((img) => (
-            <div key={img.id} className="relative aspect-square rounded-lg overflow-hidden border bg-muted">
+          {imagesQuery.data?.map((img, idx) => (
+            <div key={img.id} className="relative aspect-square rounded-lg overflow-hidden border bg-muted group">
               {img.url && (
-                <img src={img.url} alt="task" className="w-full h-full object-cover" />
+                <img
+                  src={img.url}
+                  alt="task"
+                  className="w-full h-full object-cover cursor-zoom-in"
+                  onClick={() => setLightboxIdx(idx)}
+                />
               )}
               {canEdit && (
                 <button
@@ -880,6 +891,220 @@ function TaskImagesSection({
             </div>
           ))}
         </div>
+      )}
+      {lightboxIdx !== null && lightboxImages.length > 0 && (
+        <ImageLightbox
+          images={lightboxImages}
+          initialIndex={lightboxIdx}
+          onClose={() => setLightboxIdx(null)}
+        />
+      )}
+    </div>
+  );
+}
+
+// ----- Recurrence instruction images (edit mode) -----
+function RecurrenceImagesSection({
+  recurrenceId,
+  canEdit,
+  userId,
+}: {
+  recurrenceId: string;
+  canEdit: boolean;
+  userId?: string;
+}) {
+  const qc = useQueryClient();
+  const fileRef = useRef<HTMLInputElement>(null);
+  const add = useServerFn(addRecurrenceImage);
+  const del = useServerFn(deleteRecurrenceImage);
+  const [lightboxIdx, setLightboxIdx] = useState<number | null>(null);
+
+  const imagesQuery = useQuery({
+    queryKey: ["rec-images", recurrenceId],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("task_recurrence_images")
+        .select("id, storage_path")
+        .eq("recurrence_id", recurrenceId)
+        .order("created_at");
+      const signed = await Promise.all(
+        (data ?? []).map(async (img: any) => {
+          const { data: s } = await supabase.storage
+            .from("task-images")
+            .createSignedUrl(img.storage_path, 60 * 60);
+          return { ...img, url: s?.signedUrl ?? null };
+        }),
+      );
+      return signed as { id: string; storage_path: string; url: string | null }[];
+    },
+  });
+
+  const upload = useMutation({
+    mutationFn: async (file: File) => {
+      if (!userId) throw new Error("חסר משתמש");
+      if ((imagesQuery.data?.length ?? 0) >= 5)
+        throw new Error("ניתן להעלות עד 5 תמונות הסבר");
+      const ext = file.name.split(".").pop() || "jpg";
+      const path = `${userId}/recurrences/${recurrenceId}/${crypto.randomUUID()}.${ext}`;
+      const { error } = await supabase.storage.from("task-images").upload(path, file);
+      if (error) throw error;
+      await add({ data: { recurrence_id: recurrenceId, storage_path: path } });
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["rec-images", recurrenceId] });
+    },
+    onError: (e: any) => toast.error(e?.message ?? "שגיאה בהעלאה"),
+  });
+
+  const remove = useMutation({
+    mutationFn: (id: string) => del({ data: { id } }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["rec-images", recurrenceId] }),
+  });
+
+  const lightboxImages: LightboxImage[] = (imagesQuery.data ?? [])
+    .filter((i) => i.url)
+    .map((i) => ({ url: i.url as string }));
+
+  return (
+    <div className="space-y-2">
+      <div className="flex items-center justify-between">
+        <Label>תמונות הסבר ({imagesQuery.data?.length ?? 0}/5)</Label>
+        {canEdit && (imagesQuery.data?.length ?? 0) < 5 && (
+          <>
+            <input
+              ref={fileRef}
+              type="file"
+              accept="image/*"
+              hidden
+              onChange={(e) => {
+                const f = e.target.files?.[0];
+                if (f) upload.mutate(f);
+                e.target.value = "";
+              }}
+            />
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => fileRef.current?.click()}
+              disabled={upload.isPending}
+              className="gap-2"
+            >
+              {upload.isPending ? <Loader2 className="size-4 animate-spin" /> : <ImagePlus className="size-4" />}
+              הוסף תמונה
+            </Button>
+          </>
+        )}
+      </div>
+      <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+        {imagesQuery.data?.map((img, idx) => (
+          <div key={img.id} className="relative aspect-square rounded-lg overflow-hidden border bg-muted">
+            {img.url && (
+              <img
+                src={img.url}
+                alt="instruction"
+                className="w-full h-full object-cover cursor-zoom-in"
+                onClick={() => setLightboxIdx(idx)}
+              />
+            )}
+            {canEdit && (
+              <button
+                type="button"
+                onClick={() => remove.mutate(img.id)}
+                className="absolute top-1 left-1 bg-destructive text-destructive-foreground rounded-full p-1"
+                aria-label="מחק תמונה"
+              >
+                <X className="size-3" />
+              </button>
+            )}
+          </div>
+        ))}
+      </div>
+      {lightboxIdx !== null && lightboxImages.length > 0 && (
+        <ImageLightbox
+          images={lightboxImages}
+          initialIndex={lightboxIdx}
+          onClose={() => setLightboxIdx(null)}
+        />
+      )}
+    </div>
+  );
+}
+
+// Staged-files picker used in CREATE dialogs (before the parent record exists).
+function StagedImagesPicker({
+  files,
+  onChange,
+  max = 5,
+}: {
+  files: File[];
+  onChange: (files: File[]) => void;
+  max?: number;
+}) {
+  const fileRef = useRef<HTMLInputElement>(null);
+  const previews = useMemo(() => files.map((f) => URL.createObjectURL(f)), [files]);
+  const [lightboxIdx, setLightboxIdx] = useState<number | null>(null);
+  return (
+    <div className="space-y-2">
+      <div className="flex items-center justify-between">
+        <Label>תמונות הסבר ({files.length}/{max})</Label>
+        {files.length < max && (
+          <>
+            <input
+              ref={fileRef}
+              type="file"
+              accept="image/*"
+              hidden
+              onChange={(e) => {
+                const f = e.target.files?.[0];
+                if (!f) return;
+                if (f.size > 10 * 1024 * 1024) {
+                  toast.error("קובץ גדול מדי (עד 10MB)");
+                  return;
+                }
+                onChange([...files, f]);
+                e.target.value = "";
+              }}
+            />
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="gap-2"
+              onClick={() => fileRef.current?.click()}
+            >
+              <ImagePlus className="size-4" /> הוסף תמונה
+            </Button>
+          </>
+        )}
+      </div>
+      {files.length > 0 && (
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+          {files.map((_, idx) => (
+            <div key={idx} className="relative aspect-square rounded-lg overflow-hidden border bg-muted">
+              <img
+                src={previews[idx]}
+                alt=""
+                className="w-full h-full object-cover cursor-zoom-in"
+                onClick={() => setLightboxIdx(idx)}
+              />
+              <button
+                type="button"
+                onClick={() => onChange(files.filter((_, i) => i !== idx))}
+                className="absolute top-1 left-1 bg-destructive text-destructive-foreground rounded-full p-1"
+                aria-label="הסר"
+              >
+                <X className="size-3" />
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+      {lightboxIdx !== null && previews.length > 0 && (
+        <ImageLightbox
+          images={previews.map((url) => ({ url }))}
+          initialIndex={lightboxIdx}
+          onClose={() => setLightboxIdx(null)}
+        />
       )}
     </div>
   );
