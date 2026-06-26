@@ -1,0 +1,1 @@
+REVOKE EXECUTE ON FUNCTION public.has_task_close_perm(uuid) FROM authenticated;
