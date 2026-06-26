@@ -44,6 +44,8 @@ const GRANULAR_PERMS = [
   { key: "can_approve_tasks", label: "אישור משימות (כשהיוצר הוא אחראי מחלקה)" },
   { key: "can_create_schedule", label: "יצירת סידור עבודה" },
   { key: "can_approve_schedule", label: "אישור סידור עבודה" },
+  { key: "can_publish_schedule", label: "אישור ופרסום ישיר של סידורי עבודה" },
+
   { key: "can_approve_leave", label: "אישור בקשות חופשה" },
   { key: "can_view_breaks", label: "צפייה בעובדים בהפסקה" },
   { key: "can_send_messages", label: "שליחת הודעות" },
