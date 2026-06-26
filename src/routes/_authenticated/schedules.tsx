@@ -726,6 +726,9 @@ function SchedulesPage() {
           </Card>
         </>
       )}
+        </>
+      )}
+
 
       <Dialog open={rejectOpen} onOpenChange={setRejectOpen}>
         <DialogContent>
