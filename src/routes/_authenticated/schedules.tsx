@@ -682,6 +682,16 @@ function SchedulesPage() {
                 </Button>
               </>
             )}
+            {canDelete && (
+              <Button
+                onClick={() => setDeleteOpen(true)}
+                size="sm"
+                variant="destructive"
+              >
+                <Trash2 className="size-4" />
+                מחק סידור
+              </Button>
+            )}
           </div>
 
           {/* Grid */}
