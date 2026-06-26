@@ -106,13 +106,19 @@ export const saveScheduleShifts = createServerFn({ method: "POST" })
     if (se || !sched) throw new Error("סידור לא נמצא");
     const caps = await getCaps(context.supabase, context.userId);
     const isApproved = sched.status === "approved";
+    const isPendingApproval = sched.status === "pending_approval";
     if (isApproved) {
       if (!caps.isMainAdmin && !caps.canPublishDirect) {
         throw new Error("אין הרשאה לערוך סידור מאושר");
       }
+    } else if (isPendingApproval) {
+      if (!caps.isMainAdmin && !caps.canApprove && !caps.canPublishDirect) {
+        throw new Error("אין הרשאה לערוך סידור הממתין לאישור");
+      }
     } else if (!["draft", "rejected"].includes(sched.status)) {
       throw new Error("לא ניתן לערוך סידור בסטטוס זה");
     }
+
     // Snapshot existing shifts for change detection + preserve published_shift snapshot
     const { data: existingShifts } = await context.supabase
       .from("schedule_shifts")
