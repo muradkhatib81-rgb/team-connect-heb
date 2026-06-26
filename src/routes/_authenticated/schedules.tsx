@@ -448,11 +448,13 @@ function SchedulesPage() {
   const editable =
     !!visible &&
     !isEmployee &&
-    ((visible.status === "draft" || visible.status === "rejected") &&
+    (((visible.status === "draft" || visible.status === "rejected") &&
       (isMainAdmin ||
         (isDeptMgr && visible.department_id === myDeptId) ||
-        (isBranchMgr && !!permsQ.data?.can_create_schedule))
-      || (visible.status === "approved" && (isMainAdmin || canPublishDirect)));
+        (isBranchMgr && !!permsQ.data?.can_create_schedule)))
+      || (visible.status === "approved" && (isMainAdmin || canPublishDirect))
+      || (visible.status === "pending_approval" && (isMainAdmin || canApprove || canPublishDirect)));
+
 
   const canShowApprove =
     !!visible &&
@@ -673,13 +675,13 @@ function SchedulesPage() {
 
           {/* Actions bar */}
           <div className="flex flex-wrap gap-2">
-            {editable && visible.status === "approved" && (
+            {editable && (visible.status === "approved" || visible.status === "pending_approval") && (
               <Button onClick={() => saveMut.mutate()} disabled={saveMut.isPending} size="sm">
                 {saveMut.isPending ? <Loader2 className="size-4 animate-spin" /> : <Save className="size-4" />}
                 שמור שינויים
               </Button>
             )}
-            {editable && visible.status !== "approved" && (
+            {editable && visible.status !== "approved" && visible.status !== "pending_approval" && (
               <>
                 <Button onClick={() => saveMut.mutate()} disabled={saveMut.isPending} size="sm">
                   {saveMut.isPending ? <Loader2 className="size-4 animate-spin" /> : <Save className="size-4" />}
@@ -705,6 +707,7 @@ function SchedulesPage() {
                 </Button>
               </>
             )}
+
             {canShowApprove && (
               <>
                 <Button
