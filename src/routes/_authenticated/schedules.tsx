@@ -609,8 +609,75 @@ function SchedulesPage() {
             </table>
           )}
         </Card>
+      ) : canApprove && view === "approved" ? (
+        <Card className="card-elevated p-0 overflow-hidden">
+          {approvedQ.isLoading ? (
+            <div className="flex justify-center py-12">
+              <Loader2 className="size-6 animate-spin text-primary" />
+            </div>
+          ) : !approvedQ.data || approvedQ.data.length === 0 ? (
+            <div className="p-8 text-center text-sm text-muted-foreground">
+              אין סידורי עבודה מאושרים להצגה.
+            </div>
+          ) : (
+            <table className="w-full text-sm">
+              <thead className="bg-muted/50">
+                <tr>
+                  <th className="text-right p-3">מחלקה</th>
+                  <th className="text-right p-3">טווח תאריכים</th>
+                  <th className="text-right p-3">נוצר ע״י</th>
+                  <th className="text-right p-3">אושר ע״י</th>
+                  <th className="text-right p-3">תאריך אישור</th>
+                  <th className="text-right p-3">סטטוס</th>
+                  <th className="text-right p-3" />
+                </tr>
+              </thead>
+              <tbody>
+                {approvedQ.data.map((a) => (
+                  <tr key={a.id} className="border-t hover:bg-muted/30">
+                    <td className="p-3 font-medium">
+                      {deptNameById[a.department_id] ?? "—"}
+                    </td>
+                    <td className="p-3">
+                      {formatHeDate(a.week_start)} – {formatHeDate(a.week_end)}
+                    </td>
+                    <td className="p-3">
+                      {pendingPeopleQ.data?.[a.created_by ?? ""] ?? "—"}
+                    </td>
+                    <td className="p-3">
+                      {pendingPeopleQ.data?.[a.approved_by ?? ""] ?? "—"}
+                    </td>
+                    <td className="p-3 text-xs text-muted-foreground">
+                      {a.approved_at ? formatHeDateTime(a.approved_at) : "—"}
+                    </td>
+                    <td className="p-3">
+                      <Badge variant={STATUS_VARIANT[a.status]}>
+                        {STATUS_LABEL[a.status as keyof typeof STATUS_LABEL]}
+                      </Badge>
+                    </td>
+                    <td className="p-3 text-left">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() =>
+                          openScheduleFromPending({
+                            department_id: a.department_id,
+                            week_start: a.week_start,
+                          })
+                        }
+                      >
+                        פתח סידור
+                      </Button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </Card>
       ) : (
         <>
+
 
 
       <Card className="card-elevated p-4 flex flex-col sm:flex-row gap-3 items-stretch sm:items-center">
