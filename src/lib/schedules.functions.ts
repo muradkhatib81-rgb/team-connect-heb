@@ -462,27 +462,39 @@ export const rejectSchedule = createServerFn({ method: "POST" })
   )
   .handler(async ({ data, context }) => {
     const caps = await getCaps(context.supabase, context.userId);
-    if (!caps.canApprove) throw new Error("אין הרשאה לדחות");
-    const { data: sched } = await context.supabase
+    if (!caps.canApprove && !caps.canPublishDirect && !caps.isMainAdmin) {
+      throw new Error("אין הרשאה לדחות סידור עבודה");
+    }
+    const { data: sched, error: selErr } = await context.supabase
       .from("schedules")
       .select("*")
       .eq("id", data.schedule_id)
-      .single();
-    if (!sched) throw new Error("לא נמצא");
+      .maybeSingle();
+    if (selErr) throw new Error(selErr.message);
+    if (!sched) throw new Error("סידור לא נמצא");
+    if (sched.status !== "pending_approval")
+      throw new Error("ניתן לדחות רק סידור הממתין לאישור");
     if (sched.created_by === context.userId)
       throw new Error("יוצר הסידור אינו יכול לדחות בעצמו");
 
-    const { error } = await context.supabase
+    const nowIso = new Date().toISOString();
+    const { error: updErr } = await context.supabase
       .from("schedules")
       .update({
         status: "rejected",
         rejected_by: context.userId,
-        rejected_at: new Date().toISOString(),
+        rejected_at: nowIso,
         rejection_note: data.note,
+        // Clear approval/publish state so the schedule returns cleanly
+        // to the department manager for edits and re-submission.
+        approved_by: null,
+        approved_at: null,
+        published_at: null,
       })
       .eq("id", data.schedule_id);
-    if (error) throw new Error(error.message);
-    await context.supabase
+    if (updErr) throw new Error(updErr.message);
+
+    const { error: auditErr } = await context.supabase
       .from("schedule_audit_log")
       .insert({
         schedule_id: data.schedule_id,
@@ -490,6 +502,26 @@ export const rejectSchedule = createServerFn({ method: "POST" })
         action: "rejected",
         note: data.note,
       });
+    if (auditErr) throw new Error(auditErr.message);
+
+    // Notify the department manager / creator so they know to fix and resubmit.
+    const { data: dept } = await context.supabase
+      .from("departments")
+      .select("manager_id")
+      .eq("id", sched.department_id)
+      .maybeSingle();
+    const recipients = new Set<string>();
+    if (sched.created_by) recipients.add(sched.created_by);
+    if (dept?.manager_id) recipients.add(dept.manager_id);
+    if (recipients.size) {
+      await context.supabase.from("schedule_notifications").insert(
+        [...recipients].map((uid) => ({
+          schedule_id: data.schedule_id,
+          user_id: uid,
+          message: `סידור העבודה נדחה: ${data.note}`,
+        })),
+      );
+    }
     return { ok: true };
   });
 
