@@ -753,6 +753,7 @@ export type Database = {
       has_task_management_perm: { Args: { _user_id: string }; Returns: boolean }
       is_admin: { Args: { _user_id: string }; Returns: boolean }
       process_break_lifecycle: { Args: never; Returns: undefined }
+      reset_breaks_log_daily: { Args: never; Returns: undefined }
       set_department_manager: {
         Args: { _dept_id: string; _new_manager_id: string }
         Returns: undefined
