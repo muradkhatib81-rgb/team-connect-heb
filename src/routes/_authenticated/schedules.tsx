@@ -162,6 +162,53 @@ function SchedulesPage() {
     [weekStart],
   );
 
+  // Default view for approvers = pending approvals list across all departments they can see.
+  const [view, setView] = useState<"pending" | "editor">(canApprove ? "pending" : "editor");
+  useEffect(() => {
+    if (canApprove && view === "editor" && !selectedDept) setView("pending");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [canApprove]);
+
+  const pendingQ = useQuery({
+    enabled: canApprove,
+    queryKey: ["schedules-pending"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("schedules")
+        .select(
+          "id, department_id, week_start, week_end, status, created_by, submitted_at, submitted_by",
+        )
+        .eq("status", "pending_approval")
+        .order("submitted_at", { ascending: true });
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
+
+  const pendingCreatorIds = useMemo(() => {
+    const s = new Set<string>();
+    for (const p of pendingQ.data ?? []) {
+      if (p.created_by) s.add(p.created_by);
+      if (p.submitted_by) s.add(p.submitted_by);
+    }
+    return Array.from(s);
+  }, [pendingQ.data]);
+
+  const pendingPeopleQ = useQuery({
+    enabled: pendingCreatorIds.length > 0,
+    queryKey: ["pending-people", pendingCreatorIds.join(",")],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("profiles")
+        .select("id, full_name")
+        .in("id", pendingCreatorIds);
+      const m: Record<string, string> = {};
+      for (const r of data ?? []) m[r.id] = r.full_name;
+      return m;
+    },
+  });
+
+
   // Schedule for selected dept+week
   const schedQ = useQuery({
     enabled: !!selectedDept,
