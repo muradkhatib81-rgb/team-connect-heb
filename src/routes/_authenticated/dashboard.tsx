@@ -142,12 +142,22 @@ function DashboardPage() {
 
 
       {admin ? (
-        <AdminDashboard stats={statsQuery.data} loading={statsQuery.isLoading} />
+        <AdminDashboard stats={statsQuery.data} loading={statsQuery.isLoading} onSelectDept={setDeptDialogId} />
       ) : isDeptManager ? (
         <DeptManagerDashboard data={deptManagerQuery.data} loading={deptManagerQuery.isLoading} />
       ) : (
         <EmployeeDashboard />
       )}
+
+      <DepartmentEmployeesDialog
+        deptId={deptDialogId}
+        onClose={() => setDeptDialogId(null)}
+        onSelectEmployee={setEmpDialogId}
+      />
+      <EmployeeProfileDialog
+        employeeId={empDialogId}
+        onClose={() => setEmpDialogId(null)}
+      />
     </div>
   );
 }
