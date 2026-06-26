@@ -570,3 +570,62 @@ export const setUserPermissions = createServerFn({ method: "POST" })
     if (error) throw new Error(error.message);
     return { ok: true };
   });
+
+// ---------- FINAL CLOSURE ----------
+export const closeTask = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) => z.object({ id: z.string().uuid() }).parse(d))
+  .handler(async ({ data, context }) => {
+    const caps = await getCallerCaps(context.supabase, context.userId);
+    if (!caps.canCloseTasks) throw new Error("רק מנהל ראשי או בעלי הרשאת ניהול משימות יכולים לסגור משימה");
+    const { error } = await context.supabase
+      .from("tasks")
+      .update({ status: "closed" } as any)
+      .eq("id", data.id);
+    if (error) throw new Error(error.message);
+    return { ok: true };
+  });
+
+// ---------- RECURRENCE INSTRUCTION IMAGES ----------
+export const addRecurrenceImage = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) =>
+    z.object({
+      recurrence_id: z.string().uuid(),
+      storage_path: z.string().min(1).max(500),
+    }).parse(d),
+  )
+  .handler(async ({ data, context }) => {
+    const { data: row, error } = await context.supabase
+      .from("task_recurrence_images")
+      .insert({
+        recurrence_id: data.recurrence_id,
+        storage_path: data.storage_path,
+        uploaded_by: context.userId,
+      })
+      .select("*")
+      .single();
+    if (error) throw new Error(error.message);
+    return row;
+  });
+
+export const deleteRecurrenceImage = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) => z.object({ id: z.string().uuid() }).parse(d))
+  .handler(async ({ data, context }) => {
+    const { data: img } = await context.supabase
+      .from("task_recurrence_images")
+      .select("storage_path")
+      .eq("id", data.id)
+      .maybeSingle();
+    const { error } = await context.supabase
+      .from("task_recurrence_images")
+      .delete()
+      .eq("id", data.id);
+    if (error) throw new Error(error.message);
+    if (img?.storage_path) {
+      const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+      await supabaseAdmin.storage.from("task-images").remove([img.storage_path]);
+    }
+    return { ok: true };
+  });
