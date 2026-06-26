@@ -56,7 +56,7 @@ import {
   copyPreviousWeek,
   deleteSchedule,
 } from "@/lib/schedules.functions";
-import { formatHeDate } from "@/lib/date-format";
+import { formatHeDate, formatHeDateTime } from "@/lib/date-format";
 
 type SchedulesSearch = { dept?: string; week?: string; view?: "pending" | "editor" | "approved" };
 export const Route = createFileRoute("/_authenticated/schedules")({
