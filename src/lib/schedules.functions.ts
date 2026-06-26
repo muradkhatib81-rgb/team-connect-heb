@@ -215,7 +215,7 @@ export const submitSchedule = createServerFn({ method: "POST" })
 
       await context.supabase
         .from("schedule_audit_log")
-        .insert({ schedule_id: data.schedule_id, actor_id: context.userId, action: "published_direct" });
+        .insert({ schedule_id: data.schedule_id, actor_id: context.userId, action: "published" });
 
       const { data: emps } = await context.supabase
         .from("profiles")
