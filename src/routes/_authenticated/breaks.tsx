@@ -422,6 +422,7 @@ function ApproveList({
 }) {
   const qc = useQueryClient();
   const [editing, setEditing] = useState<BreakRequest | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<BreakRequest | null>(null);
 
   const pending = all.filter((r) => r.status === "pending");
 
