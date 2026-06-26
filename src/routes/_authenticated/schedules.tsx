@@ -532,6 +532,18 @@ function SchedulesPage() {
           </Button>
           <Button
             size="sm"
+            variant={view === "approved" ? "default" : "outline"}
+            onClick={() => setView("approved")}
+          >
+            סידורים מאושרים
+            {approvedQ.data && approvedQ.data.length > 0 && (
+              <Badge variant="secondary" className="mr-2">
+                {approvedQ.data.length}
+              </Badge>
+            )}
+          </Button>
+          <Button
+            size="sm"
             variant={view === "editor" ? "default" : "outline"}
             onClick={() => setView("editor")}
           >
