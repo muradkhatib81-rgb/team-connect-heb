@@ -13,6 +13,7 @@ import {
   UserCircle,
   ListTodo,
   CalendarDays,
+  Coffee,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
@@ -76,6 +77,8 @@ export function AppShell({ children }: { children: ReactNode }) {
   const isDeptManager = profile.roles.includes("department_manager");
   // עובד רגיל = אין הרשאות ניהול ואינו אחראי מחלקה
   const isPlainEmployee = !admin && !isDeptManager;
+  const canManageBreaks =
+    profile.roles.includes("main_admin") || !!profile.permissions?.can_manage_breaks;
 
   const nav: { to: string; label: string; icon: typeof LayoutDashboard; visible: boolean }[] = [
     { to: "/dashboard", label: "לוח בקרה", icon: LayoutDashboard, visible: !isPlainEmployee },
@@ -84,6 +87,7 @@ export function AppShell({ children }: { children: ReactNode }) {
     { to: "/employees", label: "ניהול עובדים", icon: Users, visible: admin },
     { to: "/departments", label: "מחלקות", icon: Building2, visible: admin },
     { to: "/permissions", label: "הרשאות", icon: ShieldCheck, visible: canManageUsers(profile.roles) },
+    { to: "/break-settings", label: "הגדרות הפסקות", icon: Coffee, visible: canManageBreaks },
     { to: "/profile", label: "הפרופיל שלי", icon: UserCircle, visible: isPlainEmployee },
   ].filter((n) => n.visible);
 
