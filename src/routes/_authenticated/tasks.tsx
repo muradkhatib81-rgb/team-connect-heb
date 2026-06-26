@@ -1287,6 +1287,18 @@ function TaskFormDialog({
               תצוגה: {formatHeDateTime(combineToIso(dueDate, dueTime))}
             </p>
           )}
+          <div className="border-t pt-3">
+            {mode === "create" ? (
+              <StagedImagesPicker files={stagedImages} onChange={setStagedImages} />
+            ) : task ? (
+              <TaskImagesSection
+                taskId={task.id}
+                canEdit={true}
+                userId={caps.profile?.id}
+                title="תמונות הסבר"
+              />
+            ) : null}
+          </div>
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={onClose}>ביטול</Button>
