@@ -43,6 +43,7 @@ import {
   Loader2,
   Save,
   AlertTriangle,
+  Trash2,
 } from "lucide-react";
 import { toast } from "sonner";
 import {
@@ -52,6 +53,7 @@ import {
   approveSchedule,
   rejectSchedule,
   copyPreviousWeek,
+  deleteSchedule,
 } from "@/lib/schedules.functions";
 import { formatHeDate } from "@/lib/date-format";
 
@@ -376,6 +378,33 @@ function SchedulesPage() {
     },
   });
 
+  const deleteFn = useServerFn(deleteSchedule);
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const deleteMut = useMutation({
+    mutationFn: () => deleteFn({ data: { schedule_id: visible!.id } }),
+    onSuccess: () => {
+      toast.success("סידור העבודה נמחק");
+      setDeleteOpen(false);
+      qc.invalidateQueries({ queryKey: ["schedule"] });
+      qc.invalidateQueries({ queryKey: ["schedules-pending"] });
+      qc.invalidateQueries({ queryKey: ["dashboard-schedules"] });
+    },
+    onError: (e: any) => {
+      toast.error(e?.message ?? "שגיאה");
+      setDeleteOpen(false);
+    },
+  });
+
+  const canDelete =
+    !!visible &&
+    !isEmployee &&
+    (isMainAdmin ||
+      canApprove ||
+      canPublishDirect ||
+      (isDeptMgr &&
+        visible.department_id === myDeptId &&
+        (visible.status === "draft" || visible.status === "rejected")));
+
   function setShift(empId: string, day: string, shift: Shift) {
     setEdits((prev) => ({ ...prev, [empId]: { ...(prev[empId] ?? {}), [day]: shift } }));
   }
@@ -653,6 +682,16 @@ function SchedulesPage() {
                 </Button>
               </>
             )}
+            {canDelete && (
+              <Button
+                onClick={() => setDeleteOpen(true)}
+                size="sm"
+                variant="destructive"
+              >
+                <Trash2 className="size-4" />
+                מחק סידור
+              </Button>
+            )}
           </div>
 
           {/* Grid */}
@@ -768,6 +807,30 @@ function SchedulesPage() {
           <AlertDialogFooter>
             <AlertDialogCancel>ביטול</AlertDialogCancel>
             <AlertDialogAction onClick={() => copyMut.mutate()}>העתק</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={deleteOpen} onOpenChange={setDeleteOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>האם אתה בטוח שברצונך למחוק את סידור העבודה?</AlertDialogTitle>
+            <AlertDialogDescription>
+              פעולה זו תמחק את כל השיבוצים, ההיסטוריה וההתראות של הסידור לצמיתות. לאחר המחיקה ניתן יהיה ליצור סידור חדש לאותה מחלקה ולאותו שבוע.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>ביטול</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={(e) => {
+                e.preventDefault();
+                deleteMut.mutate();
+              }}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {deleteMut.isPending && <Loader2 className="size-4 animate-spin ml-2" />}
+              מחק
+            </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
