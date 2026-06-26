@@ -37,7 +37,8 @@ function AuthPage() {
       const { data } = await supabase.auth.getSession();
       if (cancelled) return;
       if (data.session) {
-        navigate({ to: (search.redirect as any) || "/dashboard", replace: true });
+        const target = (search.redirect as string) || "/dashboard";
+        router.history.replace(target.startsWith("/") ? target : "/dashboard");
         return;
       }
       // Check if a main admin already exists — if so, only show login.
