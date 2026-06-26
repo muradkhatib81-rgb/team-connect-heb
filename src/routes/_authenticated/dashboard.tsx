@@ -339,7 +339,7 @@ function AdminDashboard({
               <button
                 key={d.id}
                 type="button"
-                onClick={() => goDept(d.id)}
+                onClick={() => onSelectDept?.(d.id)}
                 className="text-right"
               >
                 <Card className="card-elevated p-4 cursor-pointer hover:bg-accent/30 transition-colors">
