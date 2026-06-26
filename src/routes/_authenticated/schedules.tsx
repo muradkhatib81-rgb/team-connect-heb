@@ -176,7 +176,7 @@ function SchedulesPage() {
   );
 
   // Default view for approvers = pending approvals list across all departments they can see.
-  const [view, setView] = useState<"pending" | "editor">(
+  const [view, setView] = useState<"pending" | "editor" | "approved">(
     search.view ?? (search.dept || search.week ? "editor" : canApprove ? "pending" : "editor"),
   );
   useEffect(() => {
@@ -200,14 +200,34 @@ function SchedulesPage() {
     },
   });
 
+  const approvedQ = useQuery({
+    enabled: canApprove,
+    queryKey: ["schedules-approved"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("schedules")
+        .select(
+          "id, department_id, week_start, week_end, status, created_by, approved_at, approved_by",
+        )
+        .eq("status", "approved")
+        .order("week_start", { ascending: false });
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
+
   const pendingCreatorIds = useMemo(() => {
     const s = new Set<string>();
     for (const p of pendingQ.data ?? []) {
       if (p.created_by) s.add(p.created_by);
       if (p.submitted_by) s.add(p.submitted_by);
     }
+    for (const a of approvedQ.data ?? []) {
+      if (a.created_by) s.add(a.created_by);
+      if (a.approved_by) s.add(a.approved_by);
+    }
     return Array.from(s);
-  }, [pendingQ.data]);
+  }, [pendingQ.data, approvedQ.data]);
 
   const pendingPeopleQ = useQuery({
     enabled: pendingCreatorIds.length > 0,
