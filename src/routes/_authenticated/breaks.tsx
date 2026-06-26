@@ -345,7 +345,7 @@ function BreaksPage() {
               שלח בקשה
             </Button>
           </Card>
-        </TabsContent>
+        </TabsContent>}
 
         <TabsContent value="mine">
           {myReqQ.isLoading ? (
