@@ -135,7 +135,7 @@ function PermissionsPage() {
               </div>
               <div className="flex-1 min-w-0">
                 <p className="font-medium truncate">{row.full_name || "ללא שם"}</p>
-                <p className="text-xs text-muted-foreground">{DEPARTMENT_LABELS[row.department]}</p>
+                <p className="text-xs text-muted-foreground">{row.department_name}</p>
               </div>
               <div className="w-40 shrink-0">
                 <Select
