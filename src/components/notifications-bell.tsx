@@ -7,7 +7,7 @@ import { useAuth } from "@/lib/use-auth";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
-import { formatHebrewDateTime } from "@/lib/date-format";
+import { formatHeDateTime } from "@/lib/date-format";
 
 interface Notification {
   id: string;
@@ -124,7 +124,7 @@ export function NotificationsBell() {
                   >
                     <p className={cn("leading-snug", !n.read_at && "font-medium")}>{n.message}</p>
                     <p className="text-xs text-muted-foreground mt-0.5">
-                      {formatHebrewDateTime(n.created_at)}
+                      {formatHeDateTime(n.created_at)}
                     </p>
                   </Link>
                 </li>
