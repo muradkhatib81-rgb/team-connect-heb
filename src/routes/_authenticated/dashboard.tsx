@@ -1315,7 +1315,7 @@ function OnBreakSection({ profile }: { profile: any }) {
           label="יומן הפסקות"
           value={log.length}
           icon={Coffee}
-          tone="default"
+          tone="muted"
           onClick={() => setLogOpen(true)}
         />
         <Card
