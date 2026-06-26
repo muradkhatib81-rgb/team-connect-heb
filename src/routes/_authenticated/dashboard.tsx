@@ -474,7 +474,7 @@ function SchedulesStatsSection({ profile }: { profile: any }) {
 
       const pending = scoped.filter((s) => s.status === "pending_approval").length;
       const approved = scoped.filter((s) => s.status === "approved").length;
-      const rejected = scoped.filter((s) => s.status === "rejected").length;
+
 
       // Departments without a submitted schedule for the current week
       // (i.e., no schedule, or status is draft/rejected — not yet sent for approval).
