@@ -33,7 +33,7 @@ export const Route = createFileRoute("/_authenticated/permissions")({
 interface Row {
   id: string;
   full_name: string;
-  department: Department;
+  department_name: string;
   role: AppRole;
 }
 
