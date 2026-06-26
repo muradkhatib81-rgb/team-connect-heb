@@ -126,7 +126,7 @@ function DashboardPage() {
         <div className="flex flex-wrap items-center gap-2 mt-3">
           {top && <Badge variant="secondary" className="rounded-full">{ROLE_LABELS[top]}</Badge>}
           <Badge variant="outline" className="rounded-full">
-            {DEPARTMENT_LABELS[profile.department]}
+            {profile.department_name ?? "—"}
           </Badge>
           {!profile.is_active && (
             <Badge variant="destructive" className="rounded-full">לא פעיל</Badge>
