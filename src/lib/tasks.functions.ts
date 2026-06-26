@@ -30,7 +30,7 @@ async function getCallerCaps(supabase: any, userId: string) {
     isMainAdmin || (isManager && (!!p.can_manage_tasks || !!p.can_edit_tasks));
   const canDeleteTasks =
     isMainAdmin || (isManager && (!!p.can_manage_tasks || !!p.can_delete_tasks));
-  const canCloseTasks = isMainAdmin || (isManager && !!p.can_manage_tasks);
+  const canCloseTasks = isMainAdmin || (isManager && (!!p.can_manage_tasks || !!p.can_approve_tasks));
   const isDeptManager = roleSet.has("department_manager");
   return {
     isMainAdmin,
