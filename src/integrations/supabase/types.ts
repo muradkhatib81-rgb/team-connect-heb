@@ -442,6 +442,7 @@ export type Database = {
         | "in_progress"
         | "pending_approval"
         | "completed"
+        | "pending_closure"
         | "closed"
     }
     CompositeTypes: {
@@ -594,6 +595,7 @@ export const Constants = {
         "in_progress",
         "pending_approval",
         "completed",
+        "pending_closure",
         "closed",
       ],
     },
