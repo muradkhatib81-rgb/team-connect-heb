@@ -277,10 +277,8 @@ function DeptManagerDashboard({
                         <Badge variant="secondary" className="rounded-full text-xs">בחופש</Badge>
                       )}
                     </div>
-                    {e.phone && (
-                      <p className="text-xs text-muted-foreground mt-0.5 truncate">{e.phone}</p>
-                    )}
                   </div>
+                </div>
                 </div>
               </Card>
             ))}
