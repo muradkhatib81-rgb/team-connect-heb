@@ -92,12 +92,13 @@ const STATUS_VARIANT: Record<string, "default" | "secondary" | "outline" | "dest
   approved: "default",
   rejected: "destructive",
 };
-const DAY_NAMES = ["א'", "ב'", "ג'", "ד'", "ה'", "ו'", "ש'"];
+const DAY_NAMES = ["ש'", "א'", "ב'", "ג'", "ד'", "ה'", "ו'"];
 
 function getWeekStart(date: Date): string {
   const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
-  const dow = d.getUTCDay();
-  d.setUTCDate(d.getUTCDate() - dow);
+  // Week starts on Saturday. getUTCDay(): 0=Sun..6=Sat → offset = (dow + 1) % 7
+  const dowFromSat = (d.getUTCDay() + 1) % 7;
+  d.setUTCDate(d.getUTCDate() - dowFromSat);
   return d.toISOString().slice(0, 10);
 }
 function addDaysISO(iso: string, days: number): string {

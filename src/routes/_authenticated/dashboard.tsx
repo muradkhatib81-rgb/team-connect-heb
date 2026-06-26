@@ -432,12 +432,13 @@ function SchedulesStatsSection({ profile }: { profile: any }) {
   });
   const canApprove = isMainAdmin || (isBranchMgr && !!permsQ.data?.can_approve_schedule);
 
-  // Compute current week (Sunday-based) in Asia/Jerusalem-agnostic UTC slicing,
+  // Compute current week (Saturday-based) in Asia/Jerusalem-agnostic UTC slicing,
   // matching getWeekStart logic in schedules.tsx.
   const { weekStart, weekDays } = useMemo(() => {
     const now = new Date();
     const d = new Date(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate()));
-    d.setUTCDate(d.getUTCDate() - d.getUTCDay());
+    const dowFromSat = (d.getUTCDay() + 1) % 7;
+    d.setUTCDate(d.getUTCDate() - dowFromSat);
     const start = d.toISOString().slice(0, 10);
     const days = Array.from({ length: 7 }, (_, i) => {
       const x = new Date(d);
@@ -545,7 +546,7 @@ function SchedulesStatsSection({ profile }: { profile: any }) {
   const goSchedules = () => navigate({ to: "/schedules" });
   const goPending = () => navigate({ to: "/schedules", search: { view: "pending" } as any });
 
-  const DAY_NAMES = ["ראשון", "שני", "שלישי", "רביעי", "חמישי", "שישי", "שבת"];
+  const DAY_NAMES = ["שבת", "ראשון", "שני", "שלישי", "רביעי", "חמישי", "שישי"];
   const heDate = (iso: string) => {
     const d = new Date(iso + "T00:00:00Z");
     return new Intl.DateTimeFormat("he-IL", {

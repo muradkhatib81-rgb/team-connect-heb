@@ -30,9 +30,10 @@ async function getCaps(supabase: any, userId: string) {
 // Normalize a date string (YYYY-MM-DD) to the start of its ISO-week-like week (Sunday).
 function weekStartOf(dateStr: string): { start: string; end: string } {
   const d = new Date(dateStr + "T00:00:00Z");
-  const dow = d.getUTCDay(); // 0=Sun
+  // Week starts on Saturday. getUTCDay(): 0=Sun..6=Sat → days since Saturday = (dow + 1) % 7
+  const dowFromSat = (d.getUTCDay() + 1) % 7;
   const start = new Date(d);
-  start.setUTCDate(d.getUTCDate() - dow);
+  start.setUTCDate(d.getUTCDate() - dowFromSat);
   const end = new Date(start);
   end.setUTCDate(start.getUTCDate() + 6);
   const iso = (x: Date) => x.toISOString().slice(0, 10);
