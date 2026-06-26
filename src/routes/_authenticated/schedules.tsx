@@ -44,7 +44,7 @@ import {
   Save,
   AlertTriangle,
   Trash2,
-  Pencil,
+  RefreshCw,
 } from "lucide-react";
 import { toast } from "sonner";
 import {
@@ -271,7 +271,7 @@ function SchedulesPage() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("schedule_shifts")
-        .select("employee_id, day_date, shift")
+        .select("employee_id, day_date, shift, published_shift")
         .eq("schedule_id", visible!.id);
       if (error) throw error;
       return data ?? [];
@@ -289,12 +289,13 @@ function SchedulesPage() {
     setEdits(next);
   }, [shiftsQ.data]);
 
-  // Baseline (saved) shifts for change-detection visual marker on approved schedules
-  const baseline = useMemo(() => {
-    const m: Record<string, Record<string, Shift>> = {};
+  // Published-snapshot map (from DB) — drives the "modified after publish" marker
+  // and persists across refreshes for all viewers of an approved schedule.
+  const publishedMap = useMemo(() => {
+    const m: Record<string, Record<string, Shift | null>> = {};
     for (const s of shiftsQ.data ?? []) {
       m[s.employee_id] ??= {};
-      m[s.employee_id][s.day_date] = s.shift as Shift;
+      m[s.employee_id][s.day_date] = ((s as any).published_shift ?? null) as Shift | null;
     }
     return m;
   }, [shiftsQ.data]);
@@ -765,18 +766,34 @@ function SchedulesPage() {
                     <td className="p-3 sticky right-0 bg-card font-medium">{emp.full_name}</td>
                     {days.map((day) => {
                       const cur = edits[emp.id]?.[day];
+                      const pub = publishedMap[emp.id]?.[day] ?? null;
+                      // Mark as "modified after publish" only when the schedule is approved
+                      // and the current value differs from the published snapshot.
+                      const isModified =
+                        visible.status === "approved" &&
+                        (cur ?? null) !== pub;
                       if (!editable) {
                         return (
                           <td key={day} className="p-2 text-center">
-                            {cur ? (
-                              <span
-                                className={`inline-block px-2 py-1 rounded-md text-xs font-medium ${SHIFT_CLASS[cur]}`}
-                              >
-                                {SHIFT_LABEL[cur]}
-                              </span>
-                            ) : (
-                              <span className="text-muted-foreground text-xs">—</span>
-                            )}
+                            <div className="relative inline-block">
+                              {cur ? (
+                                <span
+                                  className={`inline-block px-2 py-1 rounded-md text-xs font-medium ${SHIFT_CLASS[cur]} ${
+                                    isModified ? "ring-2 ring-orange-500 border border-orange-500" : ""
+                                  }`}
+                                >
+                                  {SHIFT_LABEL[cur]}
+                                </span>
+                              ) : (
+                                <span className="text-muted-foreground text-xs">—</span>
+                              )}
+                              {isModified && (
+                                <RefreshCw
+                                  className="size-3 text-orange-600 absolute -top-1 -left-1 bg-background rounded-full p-0.5 box-content border border-orange-500"
+                                  aria-label="עודכן לאחר פרסום"
+                                />
+                              )}
+                            </div>
                           </td>
                         );
                       }
@@ -789,10 +806,7 @@ function SchedulesPage() {
                             >
                               <SelectTrigger
                                 className={`h-9 ${cur ? SHIFT_CLASS[cur] : ""} ${
-                                  visible.status === "approved" &&
-                                  (cur ?? null) !== (baseline[emp.id]?.[day] ?? null)
-                                    ? "ring-2 ring-purple-500 border-purple-500"
-                                    : ""
+                                  isModified ? "ring-2 ring-orange-500 border-orange-500" : ""
                                 }`}
                               >
                                 <SelectValue placeholder="—" />
@@ -803,13 +817,12 @@ function SchedulesPage() {
                                 <SelectItem value="off">חופש</SelectItem>
                               </SelectContent>
                             </Select>
-                            {visible.status === "approved" &&
-                              (cur ?? null) !== (baseline[emp.id]?.[day] ?? null) && (
-                                <Pencil
-                                  className="size-3 text-purple-600 absolute -top-1 -left-1 bg-background rounded-full p-0.5 box-content border border-purple-500"
-                                  aria-label="שונה"
-                                />
-                              )}
+                            {isModified && (
+                              <RefreshCw
+                                className="size-3 text-orange-600 absolute -top-1 -left-1 bg-background rounded-full p-0.5 box-content border border-orange-500"
+                                aria-label="עודכן לאחר פרסום"
+                              />
+                            )}
                           </div>
                         </td>
                       );
