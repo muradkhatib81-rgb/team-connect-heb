@@ -149,11 +149,12 @@ export const saveScheduleShifts = createServerFn({ method: "POST" })
       const rows = data.shifts.map((s) => ({
         ...s,
         schedule_id: data.schedule_id,
-        // For approved schedules, carry the published snapshot forward so the
-        // "modified after publish" marker persists. For drafts, leave null.
-        published_shift: isApproved
-          ? (pubMap.get(`${s.employee_id}|${s.day_date}`) ?? null)
-          : null,
+        // Carry the snapshot forward so the approver/published comparison
+        // survives the delete+insert. For drafts, leave null.
+        published_shift:
+          isApproved || isPendingApproval
+            ? (pubMap.get(`${s.employee_id}|${s.day_date}`) ?? null)
+            : null,
       }));
       const { error: insErr } = await context.supabase.from("schedule_shifts").insert(rows);
       if (insErr) throw new Error(insErr.message);
