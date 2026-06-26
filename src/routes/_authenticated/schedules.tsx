@@ -701,31 +701,33 @@ function SchedulesPage() {
 
 
       <Card className="card-elevated p-4 flex flex-col sm:flex-row gap-3 items-stretch sm:items-center">
-        <div className="flex items-center gap-2">
-          <Button
-            variant="outline"
-            size="icon"
-            onClick={() => setWeekStart(addDaysISO(weekStart, -7))}
-            aria-label="שבוע קודם"
-          >
-            <ChevronRight className="size-4" />
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setWeekStart(getWeekStart(new Date()))}
-          >
-            השבוע
-          </Button>
-          <Button
-            variant="outline"
-            size="icon"
-            onClick={() => setWeekStart(addDaysISO(weekStart, 7))}
-            aria-label="שבוע הבא"
-          >
-            <ChevronLeft className="size-4" />
-          </Button>
-        </div>
+        {!isEmployee && (
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="icon"
+              onClick={() => setWeekStart(addDaysISO(weekStart, -7))}
+              aria-label="שבוע קודם"
+            >
+              <ChevronRight className="size-4" />
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setWeekStart(getWeekStart(new Date()))}
+            >
+              השבוע
+            </Button>
+            <Button
+              variant="outline"
+              size="icon"
+              onClick={() => setWeekStart(addDaysISO(weekStart, 7))}
+              aria-label="שבוע הבא"
+            >
+              <ChevronLeft className="size-4" />
+            </Button>
+          </div>
+        )}
 
         <div className="flex-1">
           {isDeptMgr && !isMainAdmin && !isBranchMgr ? (
