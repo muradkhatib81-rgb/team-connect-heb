@@ -25,6 +25,7 @@ const ID_REGEX = /^\d{5,15}$/;
 
 function AuthPage() {
   const navigate = useNavigate();
+  const router = useRouter();
   const search = useSearch({ from: "/auth" });
   const [loading, setLoading] = useState(false);
   const [checking, setChecking] = useState(true);
