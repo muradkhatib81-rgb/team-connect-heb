@@ -396,8 +396,10 @@ export const approveSchedule = createServerFn({ method: "POST" })
       .eq("id", data.schedule_id);
     if (error) throw new Error(error.message);
 
-    // Detect changes vs the submitted snapshot (published_shift), then refresh
-    // the snapshot so the approved version becomes the new baseline.
+    // Detect changes vs the submitted snapshot (published_shift).
+    // IMPORTANT: do NOT refresh the snapshot — keep the dept-manager's
+    // submitted version as the baseline so the "modified" marker (orange ring)
+    // remains visible after publication for every viewer.
     let editedBeforeApproval = false;
     {
       const { data: cur } = await context.supabase
@@ -407,11 +409,8 @@ export const approveSchedule = createServerFn({ method: "POST" })
       for (const row of cur ?? []) {
         if ((row as any).published_shift !== row.shift) {
           editedBeforeApproval = true;
+          break;
         }
-        await context.supabase
-          .from("schedule_shifts")
-          .update({ published_shift: row.shift })
-          .eq("id", row.id);
       }
     }
 

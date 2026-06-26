@@ -416,6 +416,7 @@ function SchedulesStatsSection({ profile }: { profile: any }) {
   const isDeptMgr = profile.roles.includes("department_manager");
   const qc = useQueryClient();
   const [approvedOpen, setApprovedOpen] = useState(false);
+  const [notSubmittedOpen, setNotSubmittedOpen] = useState(false);
   const [shiftCell, setShiftCell] = useState<null | { day: string; shift: "morning" | "evening" | "off" }>(null);
 
   const permsQ = useQuery({
@@ -453,9 +454,10 @@ function SchedulesStatsSection({ profile }: { profile: any }) {
     enabled: !!profile,
     queryKey: ["dashboard-schedules", profile.id, weekStart],
     queryFn: async () => {
-      const { data: scheds } = await supabase
-        .from("schedules")
-        .select("id, status, department_id, week_start, week_end");
+      const [{ data: scheds }, { data: deptRows }] = await Promise.all([
+        supabase.from("schedules").select("id, status, department_id, week_start, week_end"),
+        supabase.from("departments").select("id, name, is_active").eq("is_active", true).order("name"),
+      ]);
       const all = (scheds ?? []) as {
         id: string;
         status: string;
@@ -472,6 +474,20 @@ function SchedulesStatsSection({ profile }: { profile: any }) {
       const pending = scoped.filter((s) => s.status === "pending_approval").length;
       const approved = scoped.filter((s) => s.status === "approved").length;
       const rejected = scoped.filter((s) => s.status === "rejected").length;
+
+      // Departments without a submitted schedule for the current week
+      // (i.e., no schedule, or status is draft/rejected — not yet sent for approval).
+      const allDepts = (deptRows ?? []) as { id: string; name: string }[];
+      const submittedDeptIds = new Set(
+        all
+          .filter(
+            (s) =>
+              s.week_start === weekStart &&
+              (s.status === "pending_approval" || s.status === "approved"),
+          )
+          .map((s) => s.department_id),
+      );
+      const notSubmittedDepts = allDepts.filter((d) => !submittedDeptIds.has(d.id));
 
       // Weekly approved schedules covering the current week (overlap)
       const weekScheds = scoped.filter(
@@ -494,7 +510,15 @@ function SchedulesStatsSection({ profile }: { profile: any }) {
           }
         }
       }
-      return { pending, approved, rejected, weekCounts, hasAnyApproved: ids.length > 0 };
+      return {
+        pending,
+        approved,
+        rejected,
+        weekCounts,
+        hasAnyApproved: ids.length > 0,
+        notSubmittedCount: notSubmittedDepts.length,
+        notSubmittedDepts,
+      };
     },
   });
 
@@ -505,6 +529,9 @@ function SchedulesStatsSection({ profile }: { profile: any }) {
         qc.invalidateQueries({ queryKey: ["dashboard-schedules"] }),
       )
       .on("postgres_changes", { event: "*", schema: "public", table: "schedule_shifts" }, () =>
+        qc.invalidateQueries({ queryKey: ["dashboard-schedules"] }),
+      )
+      .on("postgres_changes", { event: "*", schema: "public", table: "departments" }, () =>
         qc.invalidateQueries({ queryKey: ["dashboard-schedules"] }),
       )
       .subscribe();
@@ -543,10 +570,19 @@ function SchedulesStatsSection({ profile }: { profile: any }) {
       </div>
 
       {(isMainAdmin || canApprove || isDeptMgr) && (
-        <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
           <StatCard label="ממתינים לאישור" value={s.pending} icon={Clock} tone="warning" onClick={goPending} />
           <StatCard label="מאושרים" value={s.approved} icon={CheckCircle2} tone="success" onClick={() => setApprovedOpen(true)} />
           <StatCard label="נדחו" value={s.rejected} icon={AlertTriangle} tone="primary" onClick={goSchedules} />
+          {isMainAdmin && (
+            <StatCard
+              label="מחלקות שלא שלחו סידור"
+              value={s.notSubmittedCount}
+              icon={Building2}
+              tone="warning"
+              onClick={() => setNotSubmittedOpen(true)}
+            />
+          )}
         </div>
       )}
 
@@ -608,6 +644,40 @@ function SchedulesStatsSection({ profile }: { profile: any }) {
         onOpenChange={setApprovedOpen}
         scopeFilter={scopeFilter}
       />
+
+      <Dialog open={notSubmittedOpen} onOpenChange={setNotSubmittedOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>מחלקות שטרם שלחו סידור עבודה</DialogTitle>
+          </DialogHeader>
+          {s.notSubmittedDepts.length === 0 ? (
+            <p className="text-sm text-muted-foreground py-6 text-center">
+              כל המחלקות שלחו סידור לשבוע הנוכחי.
+            </p>
+          ) : (
+            <ul className="divide-y max-h-[60vh] overflow-auto">
+              {s.notSubmittedDepts.map((d) => (
+                <li key={d.id}>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setNotSubmittedOpen(false);
+                      navigate({
+                        to: "/schedules",
+                        search: { dept: d.id, week: weekStart, view: "editor" } as any,
+                      });
+                    }}
+                    className="w-full text-right py-3 px-2 hover:bg-accent/30 rounded-md flex items-center gap-2"
+                  >
+                    <Building2 className="size-4 text-amber-600" />
+                    <span className="font-medium">{d.name}</span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </DialogContent>
+      </Dialog>
 
       <ShiftCellDialog
         cell={shiftCell}
