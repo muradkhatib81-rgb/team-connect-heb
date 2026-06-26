@@ -327,6 +327,7 @@ function SchedulesPage() {
       .on("postgres_changes", { event: "*", schema: "public", table: "schedules" }, () => {
         qc.invalidateQueries({ queryKey: ["schedule"] });
         qc.invalidateQueries({ queryKey: ["schedules-pending"] });
+        qc.invalidateQueries({ queryKey: ["schedules-approved"] });
         qc.invalidateQueries({ queryKey: ["dashboard-schedules"] });
       })
 
