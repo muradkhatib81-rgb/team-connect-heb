@@ -64,17 +64,20 @@ function PermissionsPage() {
     queryKey: ["permissions-list"],
     queryFn: async () => {
       const [{ data: profiles, error: pe }, { data: roles, error: re }] = await Promise.all([
-        supabase.from("profiles").select("id, full_name, department").order("full_name"),
+        supabase
+          .from("profiles")
+          .select("id, full_name, department_id, departments(name)")
+          .order("full_name"),
         supabase.from("user_roles").select("user_id, role"),
       ]);
       if (pe) throw pe;
       if (re) throw re;
       const roleMap: Record<string, AppRole> = {};
       (roles ?? []).forEach((r) => (roleMap[r.user_id] = r.role as AppRole));
-      return (profiles ?? []).map((p) => ({
+      return (profiles ?? []).map((p: any) => ({
         id: p.id,
         full_name: p.full_name,
-        department: p.department as Department,
+        department_name: p.departments?.name ?? "—",
         role: roleMap[p.id] ?? "employee",
       })) as Row[];
     },
