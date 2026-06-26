@@ -281,7 +281,6 @@ export const submitSchedule = createServerFn({ method: "POST" })
       if (error) throw new Error(error.message);
 
       // Snapshot current shifts as the published baseline (clears any prior "modified" marks).
-      await context.supabase.rpc("noop").catch(() => {}); // ignore if missing
       {
         const { data: cur } = await context.supabase
           .from("schedule_shifts")
