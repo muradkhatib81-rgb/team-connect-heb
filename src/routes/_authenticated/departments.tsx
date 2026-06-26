@@ -496,6 +496,8 @@ function CreateDialog({
     onSuccess: () => {
       toast.success("המחלקה נוצרה");
       qc.invalidateQueries({ queryKey: ["departments"] });
+      qc.invalidateQueries({ queryKey: ["employees"] });
+      qc.invalidateQueries({ queryKey: ["all-roles"] });
       onClose();
     },
     onError: (e: any) => toast.error(e?.message ?? "שגיאה ביצירת מחלקה"),
