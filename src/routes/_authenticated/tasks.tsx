@@ -1473,6 +1473,7 @@ function RecurrenceFormDialog({
   const qc = useQueryClient();
   const create = useServerFn(createRecurrence);
   const update = useServerFn(updateRecurrence);
+  const addRecImg = useServerFn(addRecurrenceImage);
 
   const canPickAnyDept = caps.canCreateTasks;
   const allowedDepartments = canPickAnyDept
@@ -1488,6 +1489,7 @@ function RecurrenceFormDialog({
   const [dom, setDom] = useState<number>(rec?.day_of_month ?? 1);
   const [time, setTime] = useState(rec?.time_of_day ?? "08:00");
   const [active, setActive] = useState(rec?.is_active ?? true);
+  const [stagedImages, setStagedImages] = useState<File[]>([]);
 
   const submit = useMutation({
     mutationFn: async () => {
@@ -1503,8 +1505,25 @@ function RecurrenceFormDialog({
         time_of_day: time,
         is_active: active,
       };
-      if (mode === "create") await create({ data: payload });
-      else if (rec) await update({ data: { id: rec.id, ...payload } });
+      if (mode === "create") {
+        const created: any = await create({ data: payload });
+        const newId = created?.id;
+        if (newId && stagedImages.length && caps.profile?.id) {
+          for (const file of stagedImages) {
+            try {
+              const ext = file.name.split(".").pop() || "jpg";
+              const path = `${caps.profile.id}/recurrences/${newId}/${crypto.randomUUID()}.${ext}`;
+              const { error: upErr } = await supabase.storage
+                .from("task-images")
+                .upload(path, file);
+              if (upErr) throw upErr;
+              await addRecImg({ data: { recurrence_id: newId, storage_path: path } });
+            } catch (e: any) {
+              toast.error(`שגיאה בהעלאת תמונה: ${e?.message ?? ""}`);
+            }
+          }
+        }
+      } else if (rec) await update({ data: { id: rec.id, ...payload } });
     },
     onSuccess: () => {
       toast.success(mode === "create" ? "משימה חוזרת נוצרה" : "עודכן");
