@@ -218,10 +218,12 @@ function ManagerPermsCard({
     can_approve_tasks: false,
     can_create_schedule: false,
     can_approve_schedule: false,
+    can_publish_schedule: false,
     can_approve_leave: false,
     can_view_breaks: false,
     can_send_messages: false,
   });
+
 
   useEffect(() => {
     if (!q.data) return;
