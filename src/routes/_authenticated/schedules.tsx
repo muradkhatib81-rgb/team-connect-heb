@@ -108,6 +108,7 @@ function addDaysISO(iso: string, days: number): string {
 function SchedulesPage() {
   const { data: me } = useAuth();
   const qc = useQueryClient();
+  const search = Route.useSearch();
 
   const isMainAdmin = !!me?.roles.includes("main_admin");
   const isBranchMgr =
