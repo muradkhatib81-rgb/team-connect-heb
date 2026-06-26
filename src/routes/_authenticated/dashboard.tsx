@@ -548,12 +548,12 @@ function SchedulesStatsSection({ profile }: { profile: any }) {
           </p>
         ) : (
           <table className="w-full text-sm">
-            <thead className="bg-muted/40">
+            <thead>
               <tr>
                 <th className="text-right p-3">יום</th>
-                <th className="p-3 text-center"><span className="inline-flex items-center gap-1"><Sun className="size-4" /> בוקר</span></th>
-                <th className="p-3 text-center"><span className="inline-flex items-center gap-1"><Moon className="size-4" /> ערב</span></th>
-                <th className="p-3 text-center"><span className="inline-flex items-center gap-1"><Plane className="size-4" /> חופש</span></th>
+                <th className="p-3 text-center bg-amber-50"><span className="inline-flex items-center gap-1"><Sun className="size-4" /> בוקר</span></th>
+                <th className="p-3 text-center bg-sky-50"><span className="inline-flex items-center gap-1"><Moon className="size-4" /> ערב</span></th>
+                <th className="p-3 text-center bg-emerald-50"><span className="inline-flex items-center gap-1"><Plane className="size-4" /> חופש</span></th>
               </tr>
             </thead>
             <tbody>
@@ -565,17 +565,21 @@ function SchedulesStatsSection({ profile }: { profile: any }) {
                       <div>{DAY_NAMES[i]}</div>
                       <div className="text-xs text-muted-foreground">{heDate(d)}</div>
                     </td>
-                    {(["morning", "evening", "off"] as const).map((sh) => (
-                      <td key={sh} className="p-2 text-center">
-                        <button
-                          type="button"
-                          onClick={() => setShiftCell({ day: d, shift: sh })}
-                          className="inline-flex min-w-12 px-3 py-1.5 rounded-md hover:bg-accent/40 font-semibold"
-                        >
-                          {c[sh]}
-                        </button>
-                      </td>
-                    ))}
+                    {(["morning", "evening", "off"] as const).map((sh) => {
+                      const shiftBg =
+                        sh === "morning" ? "bg-amber-50" : sh === "evening" ? "bg-sky-50" : "bg-emerald-50";
+                      return (
+                        <td key={sh} className={`p-2 text-center ${shiftBg}`}>
+                          <button
+                            type="button"
+                            onClick={() => setShiftCell({ day: d, shift: sh })}
+                            className="inline-flex min-w-12 px-3 py-1.5 rounded-md hover:bg-accent/40 font-semibold"
+                          >
+                            {c[sh]}
+                          </button>
+                        </td>
+                      );
+                    })}
                   </tr>
                 );
               })}
