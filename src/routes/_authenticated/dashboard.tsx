@@ -516,11 +516,7 @@ function SchedulesStatsSection({ profile }: { profile: any }) {
         hasApproved={s.hasApprovedToday}
         onOpenChange={(v) => !v && setShiftDialog(null)}
         scopeFilter={
-          isMainAdmin || canApprove
-            ? null
-            : isDeptMgr || true
-            ? profile.department_id
-            : null
+          isMainAdmin || canApprove ? null : profile.department_id ?? null
         }
       />
     </section>
