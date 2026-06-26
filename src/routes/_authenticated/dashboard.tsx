@@ -571,10 +571,9 @@ function SchedulesStatsSection({ profile }: { profile: any }) {
       </div>
 
       {(isMainAdmin || canApprove || isDeptMgr) && (
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
           <StatCard label="ממתינים לאישור" value={s.pending} icon={Clock} tone="warning" onClick={goPending} />
           <StatCard label="מאושרים" value={s.approved} icon={CheckCircle2} tone="success" onClick={() => setApprovedOpen(true)} />
-          <StatCard label="נדחו" value={s.rejected} icon={AlertTriangle} tone="primary" onClick={goSchedules} />
           {isMainAdmin && (
             <StatCard
               label="מחלקות שלא שלחו סידור"
@@ -586,6 +585,7 @@ function SchedulesStatsSection({ profile }: { profile: any }) {
           )}
         </div>
       )}
+
 
       <Card className="card-elevated p-0 overflow-auto">
         <div className="px-4 pt-4 pb-2 flex items-center justify-between">
