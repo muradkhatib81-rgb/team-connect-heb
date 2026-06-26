@@ -26,6 +26,8 @@ function DashboardPage() {
   const admin = profile ? isAdmin(profile.roles) : false;
   const isDeptManager = profile ? profile.roles.includes("department_manager") : false;
   const queryClient = useQueryClient();
+  const [deptDialogId, setDeptDialogId] = useState<string | null>(null);
+  const [empDialogId, setEmpDialogId] = useState<string | null>(null);
 
   const statsQuery = useQuery({
     enabled: admin,
