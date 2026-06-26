@@ -213,6 +213,7 @@ function ManagerPermsCard({
     can_create_tasks: false,
     can_edit_tasks: false,
     can_delete_tasks: false,
+    can_approve_tasks: false,
     can_create_schedule: false,
     can_approve_schedule: false,
     can_approve_leave: false,
