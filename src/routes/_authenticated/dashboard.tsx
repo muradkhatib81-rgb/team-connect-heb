@@ -13,7 +13,7 @@ import {
 } from "@/lib/constants";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Users, UserCheck, UserX, Building2, Loader2, Plane, ListTodo, Clock, CheckCircle2, AlertTriangle, CalendarDays, Sun, Moon, User } from "lucide-react";
+import { Users, UserCheck, UserX, Building2, Loader2, Plane, ListTodo, Clock, CheckCircle2, AlertTriangle, CalendarDays, Sun, Moon, User, Coffee } from "lucide-react";
 import { Link, useNavigate } from "@tanstack/react-router";
 
 export const Route = createFileRoute("/_authenticated/dashboard")({
@@ -140,6 +140,9 @@ function DashboardPage() {
       <TasksStatsSection stats={tasksStatsQuery.data} loading={tasksStatsQuery.isLoading} />
 
       <SchedulesStatsSection profile={profile} />
+
+      <OnBreakSection profile={profile} />
+
 
 
       {admin ? (
@@ -474,7 +477,7 @@ function SchedulesStatsSection({ profile }: { profile: any }) {
 
       const pending = scoped.filter((s) => s.status === "pending_approval").length;
       const approved = scoped.filter((s) => s.status === "approved").length;
-      const rejected = scoped.filter((s) => s.status === "rejected").length;
+
 
       // Departments without a submitted schedule for the current week
       // (i.e., no schedule, or status is draft/rejected — not yet sent for approval).
@@ -514,12 +517,12 @@ function SchedulesStatsSection({ profile }: { profile: any }) {
       return {
         pending,
         approved,
-        rejected,
         weekCounts,
         hasAnyApproved: ids.length > 0,
         notSubmittedCount: notSubmittedDepts.length,
         notSubmittedDepts,
       };
+
     },
   });
 
@@ -571,10 +574,9 @@ function SchedulesStatsSection({ profile }: { profile: any }) {
       </div>
 
       {(isMainAdmin || canApprove || isDeptMgr) && (
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
           <StatCard label="ממתינים לאישור" value={s.pending} icon={Clock} tone="warning" onClick={goPending} />
           <StatCard label="מאושרים" value={s.approved} icon={CheckCircle2} tone="success" onClick={() => setApprovedOpen(true)} />
-          <StatCard label="נדחו" value={s.rejected} icon={AlertTriangle} tone="primary" onClick={goSchedules} />
           {isMainAdmin && (
             <StatCard
               label="מחלקות שלא שלחו סידור"
@@ -586,6 +588,7 @@ function SchedulesStatsSection({ profile }: { profile: any }) {
           )}
         </div>
       )}
+
 
       <Card className="card-elevated p-0 overflow-auto">
         <div className="px-4 pt-4 pb-2 flex items-center justify-between">
@@ -1111,5 +1114,159 @@ function ProfileRow({ label, value }: { label: string; value: string }) {
     </div>
   );
 }
+
+function OnBreakSection({ profile }: { profile: any }) {
+  const qc = useQueryClient();
+  const navigate = useNavigate();
+  const isMainAdmin = profile.roles.includes("main_admin");
+  const [open, setOpen] = useState(false);
+
+  const permQ = useQuery({
+    enabled: !!profile.id && !isMainAdmin,
+    queryKey: ["dash-can-manage-breaks", profile.id],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("user_task_permissions")
+        .select("can_manage_breaks")
+        .eq("user_id", profile.id)
+        .maybeSingle();
+      return !!(data as any)?.can_manage_breaks;
+    },
+  });
+  const canSee = isMainAdmin || !!permQ.data;
+
+  const onBreakQ = useQuery({
+    enabled: canSee,
+    queryKey: ["dashboard-on-break"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("break_requests")
+        .select(
+          "id, user_id, department_id, break_setting_id, started_at, ends_at, approved_by, duration_minutes",
+        )
+        .eq("status", "active");
+      if (error) throw error;
+      const rows = (data ?? []) as any[];
+      if (!rows.length) return [];
+      const uids = Array.from(new Set(rows.flatMap((r) => [r.user_id, r.approved_by].filter(Boolean))));
+      const dids = Array.from(new Set(rows.map((r) => r.department_id).filter(Boolean)));
+      const sids = Array.from(new Set(rows.map((r) => r.break_setting_id).filter(Boolean)));
+      const [{ data: profs }, { data: depts }, { data: settings }] = await Promise.all([
+        supabase.from("profiles").select("id, full_name").in("id", uids),
+        dids.length
+          ? supabase.from("departments").select("id, name").in("id", dids)
+          : Promise.resolve({ data: [] as any[] }),
+        sids.length
+          ? supabase.from("break_settings").select("id, name").in("id", sids)
+          : Promise.resolve({ data: [] as any[] }),
+      ]);
+      const pMap = new Map((profs ?? []).map((p: any) => [p.id, p.full_name]));
+      const dMap = new Map((depts ?? []).map((d: any) => [d.id, d.name]));
+      const sMap = new Map((settings ?? []).map((s: any) => [s.id, s.name]));
+      return rows.map((r) => ({
+        id: r.id,
+        name: pMap.get(r.user_id) ?? "—",
+        department: dMap.get(r.department_id) ?? "—",
+        type: sMap.get(r.break_setting_id) ?? "הפסקה",
+        startedAt: r.started_at as string | null,
+        endsAt: r.ends_at as string | null,
+        approverName: r.approved_by ? pMap.get(r.approved_by) ?? "—" : "—",
+      }));
+    },
+  });
+
+  // Realtime + minute tick for countdown
+  useEffect(() => {
+    const ch = supabase
+      .channel("dash-on-break-rt")
+      .on("postgres_changes", { event: "*", schema: "public", table: "break_requests" }, () =>
+        qc.invalidateQueries({ queryKey: ["dashboard-on-break"] }),
+      )
+      .subscribe();
+    const t = setInterval(() => {
+      qc.invalidateQueries({ queryKey: ["dashboard-on-break"] });
+    }, 30_000);
+    return () => {
+      supabase.removeChannel(ch);
+      clearInterval(t);
+    };
+  }, [qc]);
+
+  if (!canSee) return null;
+  const list = onBreakQ.data ?? [];
+
+  return (
+    <>
+      <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
+        <StatCard
+          label="עובדים בהפסקה כעת"
+          value={list.length}
+          icon={Coffee}
+          tone="primary"
+          onClick={() => setOpen(true)}
+        />
+        <Card
+          className="card-elevated p-4 flex items-center justify-between cursor-pointer hover:bg-muted/40"
+          onClick={() => navigate({ to: "/breaks" })}
+        >
+          <div>
+            <p className="text-xs text-muted-foreground">ניהול בקשות הפסקה</p>
+            <p className="font-medium mt-1">פתח מסך הפסקות</p>
+          </div>
+          <Coffee className="size-5 text-primary" />
+        </Card>
+      </div>
+
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>עובדים בהפסקה כעת</DialogTitle>
+          </DialogHeader>
+          {list.length === 0 ? (
+            <p className="text-sm text-muted-foreground py-6 text-center">
+              אין עובדים בהפסקה כרגע.
+            </p>
+          ) : (
+            <ul className="space-y-2 max-h-[60vh] overflow-y-auto">
+              {list.map((r) => {
+                const remainingMs = r.endsAt
+                  ? new Date(r.endsAt).getTime() - Date.now()
+                  : 0;
+                const remMin = Math.max(0, Math.ceil(remainingMs / 60000));
+                const startStr = r.startedAt
+                  ? new Intl.DateTimeFormat("he-IL", {
+                      timeZone: "Asia/Jerusalem",
+                      hour: "2-digit",
+                      minute: "2-digit",
+                      hour12: false,
+                    }).format(new Date(r.startedAt))
+                  : "—";
+                return (
+                  <li
+                    key={r.id}
+                    className="rounded-md border border-border/60 p-3 flex items-center justify-between gap-3"
+                  >
+                    <div className="min-w-0">
+                      <p className="font-medium truncate">
+                        {r.name} · {r.department}
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        {r.type} · התחיל ב־{startStr} · אישר/ה: {r.approverName}
+                      </p>
+                    </div>
+                    <Badge variant="secondary" className="shrink-0">
+                      נותר {remMin} דק׳
+                    </Badge>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </DialogContent>
+      </Dialog>
+    </>
+  );
+}
+
 
 
