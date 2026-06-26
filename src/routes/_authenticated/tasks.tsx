@@ -1633,10 +1633,21 @@ function RecurrenceFormDialog({
               <Label>שעה</Label>
               <HebrewTimeInput value={time || "08:00"} onChange={setTime} />
             </div>
-            <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2">
               <Switch checked={active} onCheckedChange={setActive} />
               <Label>פעיל</Label>
             </div>
+          </div>
+          <div className="border-t pt-3">
+            {mode === "create" ? (
+              <StagedImagesPicker files={stagedImages} onChange={setStagedImages} />
+            ) : rec ? (
+              <RecurrenceImagesSection
+                recurrenceId={rec.id}
+                canEdit={true}
+                userId={caps.profile?.id}
+              />
+            ) : null}
           </div>
         </div>
         <DialogFooter>
