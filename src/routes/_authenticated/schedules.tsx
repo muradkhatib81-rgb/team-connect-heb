@@ -268,11 +268,24 @@ function SchedulesPage() {
         : null
       : schedQ.data;
 
-  // Employees in this department
+  // Employees in this department.
+  // Plain employees query a safe view that exposes only non-sensitive fields
+  // of coworkers in their own department; managers/admins read from profiles
+  // directly under their existing RLS policies.
   const empsQ = useQuery({
     enabled: !!selectedDept,
-    queryKey: ["dept-employees", selectedDept],
+    queryKey: ["dept-employees", selectedDept, isEmployee],
     queryFn: async () => {
+      if (isEmployee) {
+        const { data, error } = await (supabase as any)
+          .from("department_coworkers")
+          .select("id, full_name, is_active")
+          .eq("department_id", selectedDept!)
+          .eq("is_active", true)
+          .order("full_name");
+        if (error) throw error;
+        return (data ?? []) as { id: string; full_name: string; is_active: boolean }[];
+      }
       const { data, error } = await supabase
         .from("profiles")
         .select("id, full_name, is_active")
