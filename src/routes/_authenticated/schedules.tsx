@@ -448,11 +448,13 @@ function SchedulesPage() {
   const editable =
     !!visible &&
     !isEmployee &&
-    ((visible.status === "draft" || visible.status === "rejected") &&
+    (((visible.status === "draft" || visible.status === "rejected") &&
       (isMainAdmin ||
         (isDeptMgr && visible.department_id === myDeptId) ||
-        (isBranchMgr && !!permsQ.data?.can_create_schedule))
-      || (visible.status === "approved" && (isMainAdmin || canPublishDirect)));
+        (isBranchMgr && !!permsQ.data?.can_create_schedule)))
+      || (visible.status === "approved" && (isMainAdmin || canPublishDirect))
+      || (visible.status === "pending_approval" && (isMainAdmin || canApprove || canPublishDirect)));
+
 
   const canShowApprove =
     !!visible &&
