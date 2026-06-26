@@ -543,7 +543,7 @@ function TaskDetailDialog({
     mutationFn: () =>
       markPending({ data: { id: task.id, employee_note: employeeNote || undefined } }),
     onSuccess: () => {
-      toast.success("נשלח לאישור אחראי המחלקה");
+      toast.success("נשלח לאישור");
       qc.invalidateQueries({ queryKey: ["tasks"] });
       onClose();
     },
