@@ -530,6 +530,7 @@ export type Database = {
           can_delete_tasks: boolean
           can_edit_tasks: boolean
           can_manage_tasks: boolean
+          can_publish_schedule: boolean
           can_send_messages: boolean
           can_view_breaks: boolean
           created_at: string
@@ -547,6 +548,7 @@ export type Database = {
           can_delete_tasks?: boolean
           can_edit_tasks?: boolean
           can_manage_tasks?: boolean
+          can_publish_schedule?: boolean
           can_send_messages?: boolean
           can_view_breaks?: boolean
           created_at?: string
@@ -564,6 +566,7 @@ export type Database = {
           can_delete_tasks?: boolean
           can_edit_tasks?: boolean
           can_manage_tasks?: boolean
+          can_publish_schedule?: boolean
           can_send_messages?: boolean
           can_view_breaks?: boolean
           created_at?: string
@@ -596,6 +599,10 @@ export type Database = {
         Returns: boolean
       }
       has_schedule_create_perm: { Args: { _user_id: string }; Returns: boolean }
+      has_schedule_publish_perm: {
+        Args: { _user_id: string }
+        Returns: boolean
+      }
       has_task_approve_perm: { Args: { _user_id: string }; Returns: boolean }
       has_task_close_perm: { Args: { _user_id: string }; Returns: boolean }
       has_task_create_perm: { Args: { _user_id: string }; Returns: boolean }

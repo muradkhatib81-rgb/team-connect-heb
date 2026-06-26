@@ -44,6 +44,8 @@ const GRANULAR_PERMS = [
   { key: "can_approve_tasks", label: "אישור משימות (כשהיוצר הוא אחראי מחלקה)" },
   { key: "can_create_schedule", label: "יצירת סידור עבודה" },
   { key: "can_approve_schedule", label: "אישור סידור עבודה" },
+  { key: "can_publish_schedule", label: "אישור ופרסום ישיר של סידורי עבודה" },
+
   { key: "can_approve_leave", label: "אישור בקשות חופשה" },
   { key: "can_view_breaks", label: "צפייה בעובדים בהפסקה" },
   { key: "can_send_messages", label: "שליחת הודעות" },
@@ -216,10 +218,12 @@ function ManagerPermsCard({
     can_approve_tasks: false,
     can_create_schedule: false,
     can_approve_schedule: false,
+    can_publish_schedule: false,
     can_approve_leave: false,
     can_view_breaks: false,
     can_send_messages: false,
   });
+
 
   useEffect(() => {
     if (!q.data) return;
@@ -231,6 +235,8 @@ function ManagerPermsCard({
       can_approve_tasks: !!(d.can_approve_tasks || d.can_manage_tasks),
       can_create_schedule: !!d.can_create_schedule,
       can_approve_schedule: !!d.can_approve_schedule,
+      can_publish_schedule: !!d.can_publish_schedule,
+
       can_approve_leave: !!d.can_approve_leave,
       can_view_breaks: !!d.can_view_breaks,
       can_send_messages: !!d.can_send_messages,

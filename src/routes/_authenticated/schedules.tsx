@@ -114,15 +114,24 @@ function SchedulesPage() {
     queryFn: async () => {
       const { data } = await supabase
         .from("user_task_permissions")
-        .select("can_create_schedule, can_approve_schedule")
+        .select("can_create_schedule, can_approve_schedule, can_publish_schedule")
         .eq("user_id", me!.id)
         .maybeSingle();
-      return data ?? { can_create_schedule: false, can_approve_schedule: false };
+      return (
+        data ?? {
+          can_create_schedule: false,
+          can_approve_schedule: false,
+          can_publish_schedule: false,
+        }
+      );
     },
   });
   const canApprove = isMainAdmin || (isBranchMgr && !!permsQ.data?.can_approve_schedule);
+  const canPublishDirect =
+    isMainAdmin || (isBranchMgr && !!permsQ.data?.can_publish_schedule);
   const canCreate =
     isMainAdmin || isDeptMgr || (isBranchMgr && !!permsQ.data?.can_create_schedule);
+
 
   // Department selection
   const deptsQ = useQuery({
@@ -152,6 +161,53 @@ function SchedulesPage() {
     () => Array.from({ length: 7 }, (_, i) => addDaysISO(weekStart, i)),
     [weekStart],
   );
+
+  // Default view for approvers = pending approvals list across all departments they can see.
+  const [view, setView] = useState<"pending" | "editor">(canApprove ? "pending" : "editor");
+  useEffect(() => {
+    if (canApprove && view === "editor" && !selectedDept) setView("pending");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [canApprove]);
+
+  const pendingQ = useQuery({
+    enabled: canApprove,
+    queryKey: ["schedules-pending"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("schedules")
+        .select(
+          "id, department_id, week_start, week_end, status, created_by, submitted_at, submitted_by",
+        )
+        .eq("status", "pending_approval")
+        .order("submitted_at", { ascending: true });
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
+
+  const pendingCreatorIds = useMemo(() => {
+    const s = new Set<string>();
+    for (const p of pendingQ.data ?? []) {
+      if (p.created_by) s.add(p.created_by);
+      if (p.submitted_by) s.add(p.submitted_by);
+    }
+    return Array.from(s);
+  }, [pendingQ.data]);
+
+  const pendingPeopleQ = useQuery({
+    enabled: pendingCreatorIds.length > 0,
+    queryKey: ["pending-people", pendingCreatorIds.join(",")],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("profiles")
+        .select("id, full_name")
+        .in("id", pendingCreatorIds);
+      const m: Record<string, string> = {};
+      for (const r of data ?? []) m[r.id] = r.full_name;
+      return m;
+    },
+  });
+
 
   // Schedule for selected dept+week
   const schedQ = useQuery({
@@ -224,8 +280,10 @@ function SchedulesPage() {
       .channel("schedules-realtime")
       .on("postgres_changes", { event: "*", schema: "public", table: "schedules" }, () => {
         qc.invalidateQueries({ queryKey: ["schedule"] });
+        qc.invalidateQueries({ queryKey: ["schedules-pending"] });
         qc.invalidateQueries({ queryKey: ["dashboard-schedules"] });
       })
+
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "schedule_shifts" },
@@ -273,12 +331,14 @@ function SchedulesPage() {
 
   const submitMut = useMutation({
     mutationFn: () => submitFn({ data: { schedule_id: visible!.id } }),
-    onSuccess: () => {
-      toast.success("נשלח לאישור");
+    onSuccess: (r: any) => {
+      toast.success(r?.published ? "הסידור אושר ופורסם" : "נשלח לאישור");
       qc.invalidateQueries({ queryKey: ["schedule"] });
+      qc.invalidateQueries({ queryKey: ["schedules-pending"] });
     },
     onError: (e: any) => toast.error(e?.message ?? "שגיאה"),
   });
+
 
   const approveMut = useMutation({
     mutationFn: () => approveFn({ data: { schedule_id: visible!.id } }),
@@ -334,6 +394,21 @@ function SchedulesPage() {
     canApprove &&
     visible.created_by !== me?.id;
 
+  const deptNameById = useMemo(() => {
+    const m: Record<string, string> = {};
+    for (const d of deptsQ.data ?? []) m[d.id] = d.name;
+    return m;
+  }, [deptsQ.data]);
+
+  function openScheduleFromPending(p: {
+    department_id: string;
+    week_start: string;
+  }) {
+    setSelectedDept(p.department_id);
+    setWeekStart(p.week_start);
+    setView("editor");
+  }
+
   return (
     <div className="space-y-6">
       <header className="flex items-center gap-3">
@@ -343,10 +418,97 @@ function SchedulesPage() {
         <div className="flex-1 min-w-0">
           <h1 className="text-2xl sm:text-3xl font-bold">סידורי עבודה</h1>
           <p className="text-sm text-muted-foreground mt-1">
-            {formatHeDate(weekStart)} – {formatHeDate(weekEnd)}
+            {view === "pending" && canApprove
+              ? "ממתינים לאישור — כל המחלקות"
+              : `${formatHeDate(weekStart)} – ${formatHeDate(weekEnd)}`}
           </p>
         </div>
       </header>
+
+      {canApprove && (
+        <div className="flex gap-2">
+          <Button
+            size="sm"
+            variant={view === "pending" ? "default" : "outline"}
+            onClick={() => setView("pending")}
+          >
+            ממתינים לאישור
+            {pendingQ.data && pendingQ.data.length > 0 && (
+              <Badge variant="secondary" className="mr-2">
+                {pendingQ.data.length}
+              </Badge>
+            )}
+          </Button>
+          <Button
+            size="sm"
+            variant={view === "editor" ? "default" : "outline"}
+            onClick={() => setView("editor")}
+          >
+            עריכת סידור שבועי
+          </Button>
+        </div>
+      )}
+
+      {canApprove && view === "pending" ? (
+        <Card className="card-elevated p-0 overflow-hidden">
+          {pendingQ.isLoading ? (
+            <div className="flex justify-center py-12">
+              <Loader2 className="size-6 animate-spin text-primary" />
+            </div>
+          ) : !pendingQ.data || pendingQ.data.length === 0 ? (
+            <div className="p-8 text-center text-sm text-muted-foreground">
+              אין סידורי עבודה הממתינים לאישור.
+            </div>
+          ) : (
+            <table className="w-full text-sm">
+              <thead className="bg-muted/50">
+                <tr>
+                  <th className="text-right p-3">מחלקה</th>
+                  <th className="text-right p-3">טווח תאריכים</th>
+                  <th className="text-right p-3">נוצר ע״י</th>
+                  <th className="text-right p-3">נשלח</th>
+                  <th className="text-right p-3">סטטוס</th>
+                  <th className="text-right p-3" />
+                </tr>
+              </thead>
+              <tbody>
+                {pendingQ.data.map((p) => (
+                  <tr key={p.id} className="border-t hover:bg-muted/30">
+                    <td className="p-3 font-medium">
+                      {deptNameById[p.department_id] ?? "—"}
+                    </td>
+                    <td className="p-3">
+                      {formatHeDate(p.week_start)} – {formatHeDate(p.week_end)}
+                    </td>
+                    <td className="p-3">
+                      {pendingPeopleQ.data?.[p.created_by ?? ""] ?? "—"}
+                    </td>
+                    <td className="p-3 text-xs text-muted-foreground">
+                      {p.submitted_at ? formatHeDate(p.submitted_at) : "—"}
+                    </td>
+                    <td className="p-3">
+                      <Badge variant={STATUS_VARIANT[p.status]}>
+                        {STATUS_LABEL[p.status as keyof typeof STATUS_LABEL]}
+                      </Badge>
+                    </td>
+                    <td className="p-3 text-left">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => openScheduleFromPending(p)}
+                      >
+                        פתח לאישור
+                      </Button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </Card>
+      ) : (
+        <>
+
 
       <Card className="card-elevated p-4 flex flex-col sm:flex-row gap-3 items-stretch sm:items-center">
         <div className="flex items-center gap-2">
@@ -458,8 +620,9 @@ function SchedulesPage() {
                   variant="default"
                 >
                   {submitMut.isPending ? <Loader2 className="size-4 animate-spin" /> : <Send className="size-4" />}
-                  שלח לאישור
+                  {canPublishDirect ? "אשר ופרסם" : "שלח לאישור"}
                 </Button>
+
                 <Button
                   onClick={() => setCopyOpen(true)}
                   size="sm"
@@ -563,6 +726,9 @@ function SchedulesPage() {
           </Card>
         </>
       )}
+        </>
+      )}
+
 
       <Dialog open={rejectOpen} onOpenChange={setRejectOpen}>
         <DialogContent>

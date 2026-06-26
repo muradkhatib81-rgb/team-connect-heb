@@ -554,9 +554,11 @@ export const PERMISSION_KEYS = [
   "can_approve_tasks",
   "can_create_schedule",
   "can_approve_schedule",
+  "can_publish_schedule",
   "can_approve_leave",
   "can_view_breaks",
   "can_send_messages",
+
 ] as const;
 
 const setPermsSchema = z.object({
