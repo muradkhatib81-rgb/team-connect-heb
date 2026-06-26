@@ -138,7 +138,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           <div className="min-w-0 flex-1">
             <p className="text-sm font-medium truncate">{profile.full_name}</p>
             <p className="text-xs text-muted-foreground truncate">
-              {top ? ROLE_LABELS[top] : "—"} · {DEPARTMENT_LABELS[profile.department]}
+              {top ? ROLE_LABELS[top] : "—"} · {profile.department_name ?? "—"}
             </p>
           </div>
         </div>
