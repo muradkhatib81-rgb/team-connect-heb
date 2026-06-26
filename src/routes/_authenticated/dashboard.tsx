@@ -279,7 +279,6 @@ function DeptManagerDashboard({
                     </div>
                   </div>
                 </div>
-                </div>
               </Card>
             ))}
           </div>
