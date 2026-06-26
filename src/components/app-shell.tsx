@@ -30,6 +30,7 @@ import {
 } from "@/lib/constants";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import { NotificationsBell } from "@/components/notifications-bell";
 
 interface NavItem {
   to: string;
@@ -130,6 +131,9 @@ export function AppShell({ children }: { children: ReactNode }) {
         })}
       </nav>
 
+      <div className="px-3 pb-2 hidden lg:flex justify-end">
+        <NotificationsBell />
+      </div>
       <div className="border-t border-sidebar-border p-4 space-y-3">
         <div className="flex items-center gap-3">
           <div className="size-9 rounded-full bg-accent text-accent-foreground flex items-center justify-center text-sm font-semibold shrink-0">
@@ -173,7 +177,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           <Store className="size-5 text-primary shrink-0" />
           <span className="font-semibold text-sm truncate">{APP_NAME}</span>
         </div>
-        <div className="size-9" />
+        <NotificationsBell />
       </header>
 
       <main className="lg:mr-64">
