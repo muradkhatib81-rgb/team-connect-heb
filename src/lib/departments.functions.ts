@@ -80,7 +80,7 @@ export const updateDepartment = createServerFn({ method: "POST" })
     const newManagerId: string | null = data.manager_id ?? null;
     const { error: rpcErr } = await context.supabase.rpc("set_department_manager", {
       _dept_id: data.id,
-      _new_manager_id: newManagerId,
+      _new_manager_id: newManagerId as any,
     });
     if (rpcErr) throw new Error(rpcErr.message);
 
