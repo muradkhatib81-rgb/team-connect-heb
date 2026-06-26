@@ -823,16 +823,6 @@ function SchedulesPage() {
       )}
         </>
       )}
-                    })}
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </Card>
-        </>
-      )}
-        </>
-      )}
 
 
       <Dialog open={rejectOpen} onOpenChange={setRejectOpen}>
