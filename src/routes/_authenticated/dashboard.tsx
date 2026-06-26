@@ -9,6 +9,7 @@ import {
   DEPARTMENT_LABELS,
   highestRole,
   isAdmin,
+  type AppRole,
 } from "@/lib/constants";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
