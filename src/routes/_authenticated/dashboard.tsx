@@ -1200,7 +1200,7 @@ function OnBreakSection({ profile }: { profile: any }) {
       const { data, error } = await supabase
         .from("break_requests")
         .select(
-          "id, user_id, department_id, break_setting_id, requested_at, approved_at_time, started_at, ends_at, completed_at, status, approved_by, duration_minutes",
+          "id, user_id, department_id, break_setting_id, created_at, requested_at, approved_at_time, approval_decided_at, started_at, ends_at, completed_at, status, approved_by, duration_minutes",
         )
         .gte("created_at", dayStart.toISOString())
         .lt("created_at", dayEnd.toISOString())
@@ -1232,7 +1232,10 @@ function OnBreakSection({ profile }: { profile: any }) {
         name: pMap.get(r.user_id) ?? "—",
         department: dMap.get(r.department_id) ?? "—",
         type: sMap.get(r.break_setting_id) ?? "הפסקה",
+        createdAt: r.created_at as string | null,
+        requestedTime: r.requested_at as string | null,
         approvedTime: r.approved_at_time as string | null,
+        approvalDecidedAt: r.approval_decided_at as string | null,
         startedAt: r.started_at as string | null,
         endsAt: r.ends_at as string | null,
         completedAt: r.completed_at as string | null,
@@ -1241,6 +1244,7 @@ function OnBreakSection({ profile }: { profile: any }) {
       }));
     },
   });
+
 
   // Realtime + minute tick for countdown
   useEffect(() => {
