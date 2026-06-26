@@ -13,10 +13,11 @@ import {
   UserCircle,
   ListTodo,
   CalendarDays,
+  Coffee,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/use-auth";
 import {
@@ -76,6 +77,21 @@ export function AppShell({ children }: { children: ReactNode }) {
   const isDeptManager = profile.roles.includes("department_manager");
   // עובד רגיל = אין הרשאות ניהול ואינו אחראי מחלקה
   const isPlainEmployee = !admin && !isDeptManager;
+  const isMainAdmin = profile.roles.includes("main_admin");
+
+  const breakPermQ = useQuery({
+    enabled: !!profile.id && !isMainAdmin,
+    queryKey: ["shell-can-manage-breaks", profile.id],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("user_task_permissions")
+        .select("can_manage_breaks")
+        .eq("user_id", profile.id)
+        .maybeSingle();
+      return !!(data as any)?.can_manage_breaks;
+    },
+  });
+  const canManageBreaks = isMainAdmin || !!breakPermQ.data;
 
   const nav: { to: string; label: string; icon: typeof LayoutDashboard; visible: boolean }[] = [
     { to: "/dashboard", label: "לוח בקרה", icon: LayoutDashboard, visible: !isPlainEmployee },
@@ -84,6 +100,7 @@ export function AppShell({ children }: { children: ReactNode }) {
     { to: "/employees", label: "ניהול עובדים", icon: Users, visible: admin },
     { to: "/departments", label: "מחלקות", icon: Building2, visible: admin },
     { to: "/permissions", label: "הרשאות", icon: ShieldCheck, visible: canManageUsers(profile.roles) },
+    { to: "/break-settings", label: "הגדרות הפסקות", icon: Coffee, visible: canManageBreaks },
     { to: "/profile", label: "הפרופיל שלי", icon: UserCircle, visible: isPlainEmployee },
   ].filter((n) => n.visible);
 

@@ -557,6 +557,7 @@ export const PERMISSION_KEYS = [
   "can_publish_schedule",
   "can_approve_leave",
   "can_view_breaks",
+  "can_manage_breaks",
   "can_send_messages",
 
 ] as const;

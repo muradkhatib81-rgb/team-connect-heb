@@ -14,6 +14,39 @@ export type Database = {
   }
   public: {
     Tables: {
+      break_settings: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          duration_minutes: number
+          id: string
+          is_active: boolean
+          name: string
+          order_index: number
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          duration_minutes: number
+          id?: string
+          is_active?: boolean
+          name: string
+          order_index?: number
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          duration_minutes?: number
+          id?: string
+          is_active?: boolean
+          name?: string
+          order_index?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
       departments: {
         Row: {
           code: string
@@ -529,6 +562,7 @@ export type Database = {
           can_create_tasks: boolean
           can_delete_tasks: boolean
           can_edit_tasks: boolean
+          can_manage_breaks: boolean
           can_manage_tasks: boolean
           can_publish_schedule: boolean
           can_send_messages: boolean
@@ -547,6 +581,7 @@ export type Database = {
           can_create_tasks?: boolean
           can_delete_tasks?: boolean
           can_edit_tasks?: boolean
+          can_manage_breaks?: boolean
           can_manage_tasks?: boolean
           can_publish_schedule?: boolean
           can_send_messages?: boolean
@@ -565,6 +600,7 @@ export type Database = {
           can_create_tasks?: boolean
           can_delete_tasks?: boolean
           can_edit_tasks?: boolean
+          can_manage_breaks?: boolean
           can_manage_tasks?: boolean
           can_publish_schedule?: boolean
           can_send_messages?: boolean
@@ -610,6 +646,7 @@ export type Database = {
         }[]
       }
       get_my_department_id: { Args: never; Returns: string }
+      has_break_manage_perm: { Args: { _user_id: string }; Returns: boolean }
       has_main_admin: { Args: never; Returns: boolean }
       has_role: {
         Args: {

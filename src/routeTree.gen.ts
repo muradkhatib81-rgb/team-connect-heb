@@ -20,6 +20,7 @@ import { Route as AuthenticatedEmployeesRouteImport } from './routes/_authentica
 import { Route as AuthenticatedDepartmentsRouteImport } from './routes/_authenticated/departments'
 import { Route as AuthenticatedDashboardRouteImport } from './routes/_authenticated/dashboard'
 import { Route as AuthenticatedChangePasswordRouteImport } from './routes/_authenticated/change-password'
+import { Route as AuthenticatedBreakSettingsRouteImport } from './routes/_authenticated/break-settings'
 import { Route as ApiPublicHooksGenerateRecurringTasksRouteImport } from './routes/api/public/hooks/generate-recurring-tasks'
 
 const AuthRoute = AuthRouteImport.update({
@@ -79,6 +80,12 @@ const AuthenticatedChangePasswordRoute =
     path: '/change-password',
     getParentRoute: () => AuthenticatedRouteRoute,
   } as any)
+const AuthenticatedBreakSettingsRoute =
+  AuthenticatedBreakSettingsRouteImport.update({
+    id: '/break-settings',
+    path: '/break-settings',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
 const ApiPublicHooksGenerateRecurringTasksRoute =
   ApiPublicHooksGenerateRecurringTasksRouteImport.update({
     id: '/api/public/hooks/generate-recurring-tasks',
@@ -89,6 +96,7 @@ const ApiPublicHooksGenerateRecurringTasksRoute =
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
+  '/break-settings': typeof AuthenticatedBreakSettingsRoute
   '/change-password': typeof AuthenticatedChangePasswordRoute
   '/dashboard': typeof AuthenticatedDashboardRoute
   '/departments': typeof AuthenticatedDepartmentsRoute
@@ -102,6 +110,7 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
+  '/break-settings': typeof AuthenticatedBreakSettingsRoute
   '/change-password': typeof AuthenticatedChangePasswordRoute
   '/dashboard': typeof AuthenticatedDashboardRoute
   '/departments': typeof AuthenticatedDepartmentsRoute
@@ -117,6 +126,7 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/_authenticated': typeof AuthenticatedRouteRouteWithChildren
   '/auth': typeof AuthRoute
+  '/_authenticated/break-settings': typeof AuthenticatedBreakSettingsRoute
   '/_authenticated/change-password': typeof AuthenticatedChangePasswordRoute
   '/_authenticated/dashboard': typeof AuthenticatedDashboardRoute
   '/_authenticated/departments': typeof AuthenticatedDepartmentsRoute
@@ -132,6 +142,7 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/auth'
+    | '/break-settings'
     | '/change-password'
     | '/dashboard'
     | '/departments'
@@ -145,6 +156,7 @@ export interface FileRouteTypes {
   to:
     | '/'
     | '/auth'
+    | '/break-settings'
     | '/change-password'
     | '/dashboard'
     | '/departments'
@@ -159,6 +171,7 @@ export interface FileRouteTypes {
     | '/'
     | '/_authenticated'
     | '/auth'
+    | '/_authenticated/break-settings'
     | '/_authenticated/change-password'
     | '/_authenticated/dashboard'
     | '/_authenticated/departments'
@@ -256,6 +269,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedChangePasswordRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/_authenticated/break-settings': {
+      id: '/_authenticated/break-settings'
+      path: '/break-settings'
+      fullPath: '/break-settings'
+      preLoaderRoute: typeof AuthenticatedBreakSettingsRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
     '/api/public/hooks/generate-recurring-tasks': {
       id: '/api/public/hooks/generate-recurring-tasks'
       path: '/api/public/hooks/generate-recurring-tasks'
@@ -267,6 +287,7 @@ declare module '@tanstack/react-router' {
 }
 
 interface AuthenticatedRouteRouteChildren {
+  AuthenticatedBreakSettingsRoute: typeof AuthenticatedBreakSettingsRoute
   AuthenticatedChangePasswordRoute: typeof AuthenticatedChangePasswordRoute
   AuthenticatedDashboardRoute: typeof AuthenticatedDashboardRoute
   AuthenticatedDepartmentsRoute: typeof AuthenticatedDepartmentsRoute
@@ -278,6 +299,7 @@ interface AuthenticatedRouteRouteChildren {
 }
 
 const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
+  AuthenticatedBreakSettingsRoute: AuthenticatedBreakSettingsRoute,
   AuthenticatedChangePasswordRoute: AuthenticatedChangePasswordRoute,
   AuthenticatedDashboardRoute: AuthenticatedDashboardRoute,
   AuthenticatedDepartmentsRoute: AuthenticatedDepartmentsRoute,
