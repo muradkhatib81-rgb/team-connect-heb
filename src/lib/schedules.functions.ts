@@ -363,6 +363,20 @@ export const approveSchedule = createServerFn({ method: "POST" })
       .eq("id", data.schedule_id);
     if (error) throw new Error(error.message);
 
+    // Snapshot current shifts as the published baseline.
+    {
+      const { data: cur } = await context.supabase
+        .from("schedule_shifts")
+        .select("id, shift")
+        .eq("schedule_id", data.schedule_id);
+      for (const row of cur ?? []) {
+        await context.supabase
+          .from("schedule_shifts")
+          .update({ published_shift: row.shift })
+          .eq("id", row.id);
+      }
+    }
+
     await context.supabase
       .from("schedule_audit_log")
       .insert({ schedule_id: data.schedule_id, actor_id: context.userId, action: "approved" });
