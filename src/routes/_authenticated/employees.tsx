@@ -797,7 +797,6 @@ function EditEmployeeDialog({
           full_name: form.full_name,
           id_number: form.id_number || null,
           department_id: form.department_id,
-          department: selected.code as any,
           phone: form.phone || null,
           is_active: form.is_active,
           on_leave: form.on_leave,
