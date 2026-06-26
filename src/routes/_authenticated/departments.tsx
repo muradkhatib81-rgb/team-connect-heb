@@ -218,10 +218,10 @@ function DepartmentsPage() {
       {editing && isMainAdmin && (
         <EditDialog
           dept={editing}
-          managers={managersQuery.data ?? []}
           onClose={() => setEditing(null)}
         />
       )}
+
       {deleting && isMainAdmin && (
         <DeleteDialog dept={deleting} onClose={() => setDeleting(null)} />
       )}
