@@ -416,6 +416,7 @@ function SchedulesStatsSection({ profile }: { profile: any }) {
   const isDeptMgr = profile.roles.includes("department_manager");
   const qc = useQueryClient();
   const [approvedOpen, setApprovedOpen] = useState(false);
+  const [notSubmittedOpen, setNotSubmittedOpen] = useState(false);
   const [shiftCell, setShiftCell] = useState<null | { day: string; shift: "morning" | "evening" | "off" }>(null);
 
   const permsQ = useQuery({
