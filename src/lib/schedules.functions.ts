@@ -113,10 +113,10 @@ export const saveScheduleShifts = createServerFn({ method: "POST" })
     } else if (!["draft", "rejected"].includes(sched.status)) {
       throw new Error("לא ניתן לערוך סידור בסטטוס זה");
     }
-    // Snapshot existing shifts for change detection
+    // Snapshot existing shifts for change detection + preserve published_shift snapshot
     const { data: existingShifts } = await context.supabase
       .from("schedule_shifts")
-      .select("employee_id, day_date, shift")
+      .select("employee_id, day_date, shift, published_shift")
       .eq("schedule_id", data.schedule_id);
     const keyOf = (s: { employee_id: string; day_date: string; shift: string }) =>
       `${s.employee_id}|${s.day_date}|${s.shift}`;
@@ -127,6 +127,12 @@ export const saveScheduleShifts = createServerFn({ method: "POST" })
       [...beforeSet].some((k) => !afterSet.has(k)) ||
       [...afterSet].some((k) => !beforeSet.has(k));
 
+    // Preserve published_shift snapshot across delete+insert (only meaningful for approved schedules)
+    const pubMap = new Map<string, string | null>();
+    for (const s of existingShifts ?? []) {
+      pubMap.set(`${s.employee_id}|${s.day_date}`, (s as any).published_shift ?? null);
+    }
+
     // Replace all shifts for the schedule (simpler + atomic-ish)
     const { error: delErr } = await context.supabase
       .from("schedule_shifts")
@@ -134,7 +140,15 @@ export const saveScheduleShifts = createServerFn({ method: "POST" })
       .eq("schedule_id", data.schedule_id);
     if (delErr) throw new Error(delErr.message);
     if (data.shifts.length) {
-      const rows = data.shifts.map((s) => ({ ...s, schedule_id: data.schedule_id }));
+      const rows = data.shifts.map((s) => ({
+        ...s,
+        schedule_id: data.schedule_id,
+        // For approved schedules, carry the published snapshot forward so the
+        // "modified after publish" marker persists. For drafts, leave null.
+        published_shift: isApproved
+          ? (pubMap.get(`${s.employee_id}|${s.day_date}`) ?? null)
+          : null,
+      }));
       const { error: insErr } = await context.supabase.from("schedule_shifts").insert(rows);
       if (insErr) throw new Error(insErr.message);
     }
