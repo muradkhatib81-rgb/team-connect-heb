@@ -580,16 +580,6 @@ function TaskDetailDialog({
     onError: (e: any) => toast.error(e?.message ?? "שגיאה"),
   });
 
-  const rejectM = useMutation({
-    mutationFn: () =>
-      reject({ data: { id: task.id, rejection_note: rejectNote || undefined } }),
-    onSuccess: () => {
-      toast.success("המשימה הוחזרה לביצוע");
-      qc.invalidateQueries({ queryKey: ["tasks"] });
-      onClose();
-    },
-    onError: (e: any) => toast.error(e?.message ?? "שגיאה"),
-  });
 
   const closeM = useMutation({
     mutationFn: () => close({ data: { id: task.id } }),
