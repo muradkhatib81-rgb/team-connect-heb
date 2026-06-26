@@ -378,6 +378,33 @@ function SchedulesPage() {
     },
   });
 
+  const deleteFn = useServerFn(deleteSchedule);
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const deleteMut = useMutation({
+    mutationFn: () => deleteFn({ data: { schedule_id: visible!.id } }),
+    onSuccess: () => {
+      toast.success("סידור העבודה נמחק");
+      setDeleteOpen(false);
+      qc.invalidateQueries({ queryKey: ["schedule"] });
+      qc.invalidateQueries({ queryKey: ["schedules-pending"] });
+      qc.invalidateQueries({ queryKey: ["dashboard-schedules"] });
+    },
+    onError: (e: any) => {
+      toast.error(e?.message ?? "שגיאה");
+      setDeleteOpen(false);
+    },
+  });
+
+  const canDelete =
+    !!visible &&
+    !isEmployee &&
+    (isMainAdmin ||
+      canApprove ||
+      canPublishDirect ||
+      (isDeptMgr &&
+        visible.department_id === myDeptId &&
+        (visible.status === "draft" || visible.status === "rejected")));
+
   function setShift(empId: string, day: string, shift: Shift) {
     setEdits((prev) => ({ ...prev, [empId]: { ...(prev[empId] ?? {}), [day]: shift } }));
   }
