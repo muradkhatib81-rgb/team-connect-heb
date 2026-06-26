@@ -496,6 +496,8 @@ function CreateDialog({
     onSuccess: () => {
       toast.success("המחלקה נוצרה");
       qc.invalidateQueries({ queryKey: ["departments"] });
+      qc.invalidateQueries({ queryKey: ["employees"] });
+      qc.invalidateQueries({ queryKey: ["all-roles"] });
       onClose();
     },
     onError: (e: any) => toast.error(e?.message ?? "שגיאה ביצירת מחלקה"),
@@ -642,6 +644,9 @@ function EditDialog({
     onSuccess: () => {
       toast.success("המחלקה עודכנה");
       qc.invalidateQueries({ queryKey: ["departments"] });
+      qc.invalidateQueries({ queryKey: ["employees"] });
+      qc.invalidateQueries({ queryKey: ["all-roles"] });
+      qc.invalidateQueries({ queryKey: ["dashboard", "stats"] });
       onClose();
     },
     onError: (e: any) => toast.error(e?.message ?? "שגיאה בעדכון"),
