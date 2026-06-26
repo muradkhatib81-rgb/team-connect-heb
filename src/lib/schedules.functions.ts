@@ -420,7 +420,8 @@ export const approveSchedule = createServerFn({ method: "POST" })
       .insert({
         schedule_id: data.schedule_id,
         actor_id: context.userId,
-        action: editedBeforeApproval ? "approved_with_changes" : "approved",
+        action: "approved",
+        note: editedBeforeApproval ? "אושר עם שינויים" : null,
       });
 
     // Notify department employees + department manager (creator/approver too).
