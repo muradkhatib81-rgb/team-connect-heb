@@ -123,6 +123,7 @@ const STATUS_LABEL: Record<TaskStatus, string> = {
   in_progress: "בביצוע",
   pending_approval: "ממתין לאישור",
   completed: "הושלמה",
+  closed: "נסגרה",
 };
 const PRIORITY_LABEL: Record<TaskPriority, string> = {
   low: "נמוכה",
