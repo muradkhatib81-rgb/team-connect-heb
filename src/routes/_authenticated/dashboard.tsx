@@ -546,7 +546,7 @@ function SchedulesStatsSection({ profile }: { profile: any }) {
   const goSchedules = () => navigate({ to: "/schedules" });
   const goPending = () => navigate({ to: "/schedules", search: { view: "pending" } as any });
 
-  const DAY_NAMES = ["ראשון", "שני", "שלישי", "רביעי", "חמישי", "שישי", "שבת"];
+  const DAY_NAMES = ["שבת", "ראשון", "שני", "שלישי", "רביעי", "חמישי", "שישי"];
   const heDate = (iso: string) => {
     const d = new Date(iso + "T00:00:00Z");
     return new Intl.DateTimeFormat("he-IL", {
