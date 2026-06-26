@@ -331,12 +331,14 @@ function SchedulesPage() {
 
   const submitMut = useMutation({
     mutationFn: () => submitFn({ data: { schedule_id: visible!.id } }),
-    onSuccess: () => {
-      toast.success("נשלח לאישור");
+    onSuccess: (r: any) => {
+      toast.success(r?.published ? "הסידור אושר ופורסם" : "נשלח לאישור");
       qc.invalidateQueries({ queryKey: ["schedule"] });
+      qc.invalidateQueries({ queryKey: ["schedules-pending"] });
     },
     onError: (e: any) => toast.error(e?.message ?? "שגיאה"),
   });
+
 
   const approveMut = useMutation({
     mutationFn: () => approveFn({ data: { schedule_id: visible!.id } }),
