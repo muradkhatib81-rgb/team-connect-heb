@@ -510,7 +510,18 @@ function TaskDetailDialog({
   const reject = useServerFn(rejectTask);
 
   const isMember = caps.profile?.department_id === task.department_id;
-  const canApprove = caps.canEditTasks || caps.isDeptMgr || caps.isMainAdmin;
+  const approveRpc = useQuery({
+    enabled: !!caps.profile && task.status === "pending_approval",
+    queryKey: ["can-approve", task.id, caps.profile?.id],
+    queryFn: async () => {
+      const { data } = await supabase.rpc("can_approve_task", {
+        _task_id: task.id,
+        _approver_id: caps.profile!.id,
+      });
+      return !!data;
+    },
+  });
+  const canApprove = !!approveRpc.data;
   // Employees in the same department can mark "done" — but not on already-pending/completed.
   const canMarkDone =
     isMember && (task.status === "new" || task.status === "in_progress");
