@@ -1292,9 +1292,11 @@ function OnBreakSection({ profile }: { profile: any }) {
     cancelled: "destructive",
   };
 
+  const [logOpen, setLogOpen] = useState(false);
+
   return (
     <>
-      <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard
           label="בקשות הפסקה ממתינות לאישור"
           value={pendingCountQ.data ?? 0}
@@ -1309,6 +1311,13 @@ function OnBreakSection({ profile }: { profile: any }) {
           tone="primary"
           onClick={() => setOpen(true)}
         />
+        <StatCard
+          label="יומן הפסקות"
+          value={log.length}
+          icon={Coffee}
+          tone="muted"
+          onClick={() => setLogOpen(true)}
+        />
         <Card
           className="card-elevated p-4 flex items-center justify-between cursor-pointer hover:bg-muted/40"
           onClick={() => navigate({ to: "/breaks" })}
@@ -1321,66 +1330,69 @@ function OnBreakSection({ profile }: { profile: any }) {
         </Card>
       </div>
 
-      <section>
-        <div className="flex items-center justify-between mb-3">
-          <h2 className="text-lg font-semibold flex items-center gap-2">
-            <Coffee className="size-5 text-primary" />
-            יומן הפסקות יומי
-          </h2>
-          <span className="text-xs text-muted-foreground">
-            {new Intl.DateTimeFormat("he-IL", {
-              timeZone: "Asia/Jerusalem",
-              dateStyle: "full",
-              numberingSystem: "latn",
-              calendar: "gregory",
-            }).format(new Date())}
-          </span>
-        </div>
-        <Card className="card-elevated p-0 overflow-auto">
-          {dailyLogQ.isLoading ? (
-            <div className="flex justify-center py-8">
-              <Loader2 className="size-5 animate-spin text-primary" />
-            </div>
-          ) : log.length === 0 ? (
-            <p className="p-6 text-sm text-muted-foreground text-center">
-              עדיין אין בקשות הפסקה היום.
-            </p>
-          ) : (
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="bg-muted/40">
-                  <th className="text-right p-3">עובד</th>
-                  <th className="text-right p-3">מחלקה</th>
-                  <th className="text-right p-3">סוג</th>
-                  <th className="text-right p-3">שעה מאושרת</th>
-                  <th className="text-right p-3">התחלה</th>
-                  <th className="text-right p-3">סיום</th>
-                  <th className="text-right p-3">אישר</th>
-                  <th className="text-right p-3">סטטוס</th>
-                </tr>
-              </thead>
-              <tbody>
-                {log.map((r) => (
-                  <tr key={r.id} className="border-t">
-                    <td className="p-3 font-medium">{r.name}</td>
-                    <td className="p-3">{r.department}</td>
-                    <td className="p-3">{r.type}</td>
-                    <td className="p-3">{fmtT(r.approvedTime)}</td>
-                    <td className="p-3">{fmtT(r.startedAt)}</td>
-                    <td className="p-3">{fmtT(r.completedAt ?? r.endsAt)}</td>
-                    <td className="p-3">{r.approverName}</td>
-                    <td className="p-3">
-                      <Badge variant={STATUS_TONE[r.status] ?? "secondary"}>
-                        {STATUS_LABEL[r.status] ?? r.status}
-                      </Badge>
-                    </td>
+      <Dialog open={logOpen} onOpenChange={setLogOpen}>
+        <DialogContent className="max-w-5xl">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Coffee className="size-5 text-primary" />
+              יומן הפסקות יומי
+              <span className="text-xs font-normal text-muted-foreground mr-2">
+                {new Intl.DateTimeFormat("he-IL", {
+                  timeZone: "Asia/Jerusalem",
+                  dateStyle: "full",
+                  numberingSystem: "latn",
+                  calendar: "gregory",
+                }).format(new Date())}
+              </span>
+            </DialogTitle>
+          </DialogHeader>
+          <div className="overflow-auto max-h-[70vh]">
+            {dailyLogQ.isLoading ? (
+              <div className="flex justify-center py-8">
+                <Loader2 className="size-5 animate-spin text-primary" />
+              </div>
+            ) : log.length === 0 ? (
+              <p className="p-6 text-sm text-muted-foreground text-center">
+                עדיין אין בקשות הפסקה היום.
+              </p>
+            ) : (
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="bg-muted/40">
+                    <th className="text-right p-3">עובד</th>
+                    <th className="text-right p-3">מחלקה</th>
+                    <th className="text-right p-3">סוג</th>
+                    <th className="text-right p-3">שעה מאושרת</th>
+                    <th className="text-right p-3">התחלה</th>
+                    <th className="text-right p-3">סיום</th>
+                    <th className="text-right p-3">אישר</th>
+                    <th className="text-right p-3">סטטוס</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
-        </Card>
-      </section>
+                </thead>
+                <tbody>
+                  {log.map((r) => (
+                    <tr key={r.id} className="border-t">
+                      <td className="p-3 font-medium">{r.name}</td>
+                      <td className="p-3">{r.department}</td>
+                      <td className="p-3">{r.type}</td>
+                      <td className="p-3">{fmtT(r.approvedTime)}</td>
+                      <td className="p-3">{fmtT(r.startedAt)}</td>
+                      <td className="p-3">{fmtT(r.completedAt ?? r.endsAt)}</td>
+                      <td className="p-3">{r.approverName}</td>
+                      <td className="p-3">
+                        <Badge variant={STATUS_TONE[r.status] ?? "secondary"}>
+                          {STATUS_LABEL[r.status] ?? r.status}
+                        </Badge>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
+
 
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent>
