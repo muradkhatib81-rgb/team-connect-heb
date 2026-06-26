@@ -114,15 +114,24 @@ function SchedulesPage() {
     queryFn: async () => {
       const { data } = await supabase
         .from("user_task_permissions")
-        .select("can_create_schedule, can_approve_schedule")
+        .select("can_create_schedule, can_approve_schedule, can_publish_schedule")
         .eq("user_id", me!.id)
         .maybeSingle();
-      return data ?? { can_create_schedule: false, can_approve_schedule: false };
+      return (
+        data ?? {
+          can_create_schedule: false,
+          can_approve_schedule: false,
+          can_publish_schedule: false,
+        }
+      );
     },
   });
   const canApprove = isMainAdmin || (isBranchMgr && !!permsQ.data?.can_approve_schedule);
+  const canPublishDirect =
+    isMainAdmin || (isBranchMgr && !!permsQ.data?.can_publish_schedule);
   const canCreate =
     isMainAdmin || isDeptMgr || (isBranchMgr && !!permsQ.data?.can_create_schedule);
+
 
   // Department selection
   const deptsQ = useQuery({
