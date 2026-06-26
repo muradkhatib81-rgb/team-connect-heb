@@ -48,6 +48,7 @@ const GRANULAR_PERMS = [
 
   { key: "can_approve_leave", label: "אישור בקשות חופשה" },
   { key: "can_view_breaks", label: "צפייה בעובדים בהפסקה" },
+  { key: "can_manage_breaks", label: "ניהול הפסקות (יצירה/עריכה/מחיקה)" },
   { key: "can_send_messages", label: "שליחת הודעות" },
 ] as const;
 
@@ -224,6 +225,7 @@ function ManagerPermsCard({
     can_publish_schedule: false,
     can_approve_leave: false,
     can_view_breaks: false,
+    can_manage_breaks: false,
     can_send_messages: false,
   });
 
@@ -242,6 +244,7 @@ function ManagerPermsCard({
 
       can_approve_leave: !!d.can_approve_leave,
       can_view_breaks: !!d.can_view_breaks,
+      can_manage_breaks: !!d.can_manage_breaks,
       can_send_messages: !!d.can_send_messages,
     });
   }, [q.data]);
