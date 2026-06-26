@@ -391,3 +391,107 @@ function StatCard({
     </button>
   );
 }
+
+function SchedulesStatsSection({ profile }: { profile: any }) {
+  const navigate = useNavigate();
+  const isMainAdmin = profile.roles.includes("main_admin");
+  const isBranchMgr =
+    profile.roles.includes("branch_manager") || profile.roles.includes("assistant_manager");
+  const isDeptMgr = profile.roles.includes("department_manager");
+  const qc = useQueryClient();
+
+  const permsQ = useQuery({
+    queryKey: ["my-perms", profile.id],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("user_task_permissions")
+        .select("can_create_schedule, can_approve_schedule")
+        .eq("user_id", profile.id)
+        .maybeSingle();
+      return data ?? { can_create_schedule: false, can_approve_schedule: false };
+    },
+  });
+  const canApprove = isMainAdmin || (isBranchMgr && !!permsQ.data?.can_approve_schedule);
+
+  const today = new Date().toISOString().slice(0, 10);
+
+  const statsQ = useQuery({
+    enabled: !!profile,
+    queryKey: ["dashboard-schedules", profile.id, today],
+    queryFn: async () => {
+      const base = supabase.from("schedules").select("id, status, department_id");
+      const { data: scheds } = await base;
+      const all = (scheds ?? []) as { id: string; status: string; department_id: string }[];
+      const scoped = isMainAdmin || canApprove
+        ? all
+        : isDeptMgr
+        ? all.filter((s) => s.department_id === profile.department_id)
+        : all.filter((s) => s.department_id === profile.department_id && s.status === "approved");
+
+      const pending = scoped.filter((s) => s.status === "pending_approval").length;
+      const approved = scoped.filter((s) => s.status === "approved").length;
+      const rejected = scoped.filter((s) => s.status === "rejected").length;
+
+      const approvedIds = scoped.filter((s) => s.status === "approved").map((s) => s.id);
+      let morning = 0, evening = 0, off = 0;
+      if (approvedIds.length) {
+        const { data: shifts } = await supabase
+          .from("schedule_shifts")
+          .select("shift, employee_id")
+          .in("schedule_id", approvedIds)
+          .eq("day_date", today);
+        const list = (shifts ?? []) as { shift: string }[];
+        morning = list.filter((s) => s.shift === "morning").length;
+        evening = list.filter((s) => s.shift === "evening").length;
+        off = list.filter((s) => s.shift === "off").length;
+      }
+      return { pending, approved, rejected, morning, evening, off };
+    },
+  });
+
+  useEffect(() => {
+    const ch = supabase
+      .channel("dash-schedules-rt")
+      .on("postgres_changes", { event: "*", schema: "public", table: "schedules" }, () =>
+        qc.invalidateQueries({ queryKey: ["dashboard-schedules"] }),
+      )
+      .on("postgres_changes", { event: "*", schema: "public", table: "schedule_shifts" }, () =>
+        qc.invalidateQueries({ queryKey: ["dashboard-schedules"] }),
+      )
+      .subscribe();
+    return () => {
+      supabase.removeChannel(ch);
+    };
+  }, [qc]);
+
+  if (statsQ.isLoading || !statsQ.data) return null;
+  const s = statsQ.data;
+  const go = () => navigate({ to: "/schedules" });
+
+  return (
+    <section>
+      <div className="flex items-center justify-between mb-4">
+        <h2 className="text-lg font-semibold flex items-center gap-2">
+          <CalendarDays className="size-5 text-primary" />
+          סידורי עבודה
+        </h2>
+        <Link to="/schedules" className="text-sm text-primary hover:underline">
+          לסידורי העבודה ←
+        </Link>
+      </div>
+      <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
+        {(isMainAdmin || canApprove || isDeptMgr) && (
+          <>
+            <StatCard label="ממתינים לאישור" value={s.pending} icon={Clock} tone="warning" onClick={go} />
+            <StatCard label="מאושרים" value={s.approved} icon={CheckCircle2} tone="success" onClick={go} />
+            <StatCard label="נדחו" value={s.rejected} icon={AlertTriangle} tone="primary" onClick={go} />
+          </>
+        )}
+        <StatCard label="במשמרת בוקר היום" value={s.morning} icon={Sun} tone="primary" onClick={go} />
+        <StatCard label="במשמרת ערב היום" value={s.evening} icon={Moon} tone="success" onClick={go} />
+        <StatCard label="בחופש היום" value={s.off} icon={Plane} tone="muted" onClick={go} />
+      </div>
+    </section>
+  );
+}
+
