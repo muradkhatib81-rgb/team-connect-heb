@@ -173,6 +173,7 @@ export type Database = {
           day_date: string
           employee_id: string
           id: string
+          published_shift: string | null
           schedule_id: string
           shift: Database["public"]["Enums"]["shift_type"]
           updated_at: string
@@ -182,6 +183,7 @@ export type Database = {
           day_date: string
           employee_id: string
           id?: string
+          published_shift?: string | null
           schedule_id: string
           shift: Database["public"]["Enums"]["shift_type"]
           updated_at?: string
@@ -191,6 +193,7 @@ export type Database = {
           day_date?: string
           employee_id?: string
           id?: string
+          published_shift?: string | null
           schedule_id?: string
           shift?: Database["public"]["Enums"]["shift_type"]
           updated_at?: string
