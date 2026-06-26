@@ -26,13 +26,21 @@ export function NotificationsBell() {
     queryKey: ["schedule-notifications", userId],
     enabled: !!userId,
     queryFn: async (): Promise<Notification[]> => {
-      const { data, error } = await supabase
-        .from("schedule_notifications")
-        .select("id, schedule_id, message, read_at, created_at")
-        .order("created_at", { ascending: false })
-        .limit(20);
-      if (error) throw error;
-      return (data ?? []) as Notification[];
+      try {
+        const { data, error } = await supabase
+          .from("schedule_notifications")
+          .select("id, schedule_id, message, read_at, created_at")
+          .order("created_at", { ascending: false })
+          .limit(20);
+        if (error) {
+          console.warn("notifications fetch error", error);
+          return [];
+        }
+        return (data ?? []) as Notification[];
+      } catch (err) {
+        console.warn("notifications fetch threw", err);
+        return [];
+      }
     },
     refetchInterval: 60_000,
   });
@@ -40,23 +48,34 @@ export function NotificationsBell() {
   // Realtime: new notifications for this user
   useEffect(() => {
     if (!userId) return;
-    const channel = supabase
-      .channel(`notif-${userId}`)
-      .on(
-        "postgres_changes",
-        {
-          event: "*",
-          schema: "public",
-          table: "schedule_notifications",
-          filter: `user_id=eq.${userId}`,
-        },
-        () => {
-          qc.invalidateQueries({ queryKey: ["schedule-notifications", userId] });
-        },
-      )
-      .subscribe();
+    let channel: ReturnType<typeof supabase.channel> | null = null;
+    try {
+      channel = supabase
+        .channel(`notif-${userId}-${Math.random().toString(36).slice(2, 8)}`)
+        .on(
+          "postgres_changes",
+          {
+            event: "*",
+            schema: "public",
+            table: "schedule_notifications",
+            filter: `user_id=eq.${userId}`,
+          },
+          () => {
+            qc.invalidateQueries({ queryKey: ["schedule-notifications", userId] });
+          },
+        )
+        .subscribe();
+    } catch (err) {
+      console.warn("notifications realtime subscribe failed", err);
+    }
     return () => {
-      supabase.removeChannel(channel);
+      if (channel) {
+        try {
+          supabase.removeChannel(channel);
+        } catch {
+          /* noop */
+        }
+      }
     };
   }, [userId, qc]);
 
