@@ -69,7 +69,7 @@ function DashboardPage() {
       if (dErr) throw dErr;
       const { data: emps, error: eErr } = await supabase
         .from("profiles")
-        .select("id, full_name, phone, is_active, on_leave, avatar_url, department_id")
+        .select("id, full_name, is_active, on_leave, avatar_url, department_id")
         .order("full_name");
       if (eErr) throw eErr;
       return { dept, employees: (emps ?? []) as DeptEmp[] };
