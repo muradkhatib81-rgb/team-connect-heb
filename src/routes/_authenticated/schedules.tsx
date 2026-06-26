@@ -271,7 +271,7 @@ function SchedulesPage() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("schedule_shifts")
-        .select("employee_id, day_date, shift")
+        .select("employee_id, day_date, shift, published_shift")
         .eq("schedule_id", visible!.id);
       if (error) throw error;
       return data ?? [];
@@ -289,12 +289,13 @@ function SchedulesPage() {
     setEdits(next);
   }, [shiftsQ.data]);
 
-  // Baseline (saved) shifts for change-detection visual marker on approved schedules
-  const baseline = useMemo(() => {
-    const m: Record<string, Record<string, Shift>> = {};
+  // Published-snapshot map (from DB) — drives the "modified after publish" marker
+  // and persists across refreshes for all viewers of an approved schedule.
+  const publishedMap = useMemo(() => {
+    const m: Record<string, Record<string, Shift | null>> = {};
     for (const s of shiftsQ.data ?? []) {
       m[s.employee_id] ??= {};
-      m[s.employee_id][s.day_date] = s.shift as Shift;
+      m[s.employee_id][s.day_date] = ((s as any).published_shift ?? null) as Shift | null;
     }
     return m;
   }, [shiftsQ.data]);
