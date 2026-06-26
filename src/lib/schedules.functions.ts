@@ -393,6 +393,27 @@ export const deleteSchedule = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: unknown) => z.object({ schedule_id: z.string().uuid() }).parse(d))
   .handler(async ({ data, context }) => {
+    const caps = await getCaps(context.supabase, context.userId);
+    const { data: sched } = await context.supabase
+      .from("schedules")
+      .select("id, department_id, status")
+      .eq("id", data.schedule_id)
+      .maybeSingle();
+    if (!sched) throw new Error("סידור לא נמצא");
+
+    const isOwnDeptMgrDraft =
+      caps.isDeptMgr &&
+      sched.department_id === caps.departmentId &&
+      (sched.status === "draft" || sched.status === "rejected");
+
+    if (!caps.isMainAdmin && !caps.canApprove && !caps.canPublishDirect && !isOwnDeptMgrDraft) {
+      throw new Error("אין הרשאה למחוק את סידור העבודה");
+    }
+
+    // Cascade: shifts, audit, notifications, then schedule
+    await context.supabase.from("schedule_shifts").delete().eq("schedule_id", data.schedule_id);
+    await context.supabase.from("schedule_notifications").delete().eq("schedule_id", data.schedule_id);
+    await context.supabase.from("schedule_audit_log").delete().eq("schedule_id", data.schedule_id);
     const { error } = await context.supabase
       .from("schedules")
       .delete()
