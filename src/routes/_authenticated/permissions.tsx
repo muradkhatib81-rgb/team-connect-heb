@@ -228,6 +228,7 @@ function ManagerPermsCard({
       can_create_tasks: !!(d.can_create_tasks || d.can_manage_tasks),
       can_edit_tasks: !!(d.can_edit_tasks || d.can_manage_tasks),
       can_delete_tasks: !!(d.can_delete_tasks || d.can_manage_tasks),
+      can_approve_tasks: !!(d.can_approve_tasks || d.can_manage_tasks),
       can_create_schedule: !!d.can_create_schedule,
       can_approve_schedule: !!d.can_approve_schedule,
       can_approve_leave: !!d.can_approve_leave,
