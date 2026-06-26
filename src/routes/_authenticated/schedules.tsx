@@ -277,8 +277,8 @@ function SchedulesPage() {
     queryKey: ["dept-employees", selectedDept, isEmployee],
     queryFn: async () => {
       if (isEmployee) {
-        const { data, error } = await supabase
-          .from("department_coworkers" as any)
+        const { data, error } = await (supabase as any)
+          .from("department_coworkers")
           .select("id, full_name, is_active")
           .eq("department_id", selectedDept!)
           .eq("is_active", true)
