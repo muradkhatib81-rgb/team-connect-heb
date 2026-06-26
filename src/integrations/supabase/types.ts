@@ -14,6 +14,87 @@ export type Database = {
   }
   public: {
     Tables: {
+      break_requests: {
+        Row: {
+          approval_decided_at: string | null
+          approved_at_time: string | null
+          approved_by: string | null
+          break_setting_id: string
+          completed_at: string | null
+          created_at: string
+          department_id: string | null
+          duration_minutes: number
+          end_notified_at: string | null
+          ending_notified_at: string | null
+          ends_at: string | null
+          id: string
+          note: string | null
+          requested_at: string
+          start_notified_at: string | null
+          started_at: string | null
+          status: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          approval_decided_at?: string | null
+          approved_at_time?: string | null
+          approved_by?: string | null
+          break_setting_id: string
+          completed_at?: string | null
+          created_at?: string
+          department_id?: string | null
+          duration_minutes: number
+          end_notified_at?: string | null
+          ending_notified_at?: string | null
+          ends_at?: string | null
+          id?: string
+          note?: string | null
+          requested_at: string
+          start_notified_at?: string | null
+          started_at?: string | null
+          status?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          approval_decided_at?: string | null
+          approved_at_time?: string | null
+          approved_by?: string | null
+          break_setting_id?: string
+          completed_at?: string | null
+          created_at?: string
+          department_id?: string | null
+          duration_minutes?: number
+          end_notified_at?: string | null
+          ending_notified_at?: string | null
+          ends_at?: string | null
+          id?: string
+          note?: string | null
+          requested_at?: string
+          start_notified_at?: string | null
+          started_at?: string | null
+          status?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "break_requests_break_setting_id_fkey"
+            columns: ["break_setting_id"]
+            isOneToOne: false
+            referencedRelation: "break_settings"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "break_requests_department_id_fkey"
+            columns: ["department_id"]
+            isOneToOne: false
+            referencedRelation: "departments"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       break_settings: {
         Row: {
           created_at: string
@@ -171,7 +252,7 @@ export type Database = {
           id: string
           message: string
           read_at: string | null
-          schedule_id: string
+          schedule_id: string | null
           user_id: string
         }
         Insert: {
@@ -179,7 +260,7 @@ export type Database = {
           id?: string
           message: string
           read_at?: string | null
-          schedule_id: string
+          schedule_id?: string | null
           user_id: string
         }
         Update: {
@@ -187,7 +268,7 @@ export type Database = {
           id?: string
           message?: string
           read_at?: string | null
-          schedule_id?: string
+          schedule_id?: string | null
           user_id?: string
         }
         Relationships: [
@@ -671,6 +752,7 @@ export type Database = {
       has_task_edit_perm: { Args: { _user_id: string }; Returns: boolean }
       has_task_management_perm: { Args: { _user_id: string }; Returns: boolean }
       is_admin: { Args: { _user_id: string }; Returns: boolean }
+      process_break_lifecycle: { Args: never; Returns: undefined }
       set_department_manager: {
         Args: { _dept_id: string; _new_manager_id: string }
         Returns: undefined
