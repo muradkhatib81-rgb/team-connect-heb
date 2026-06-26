@@ -246,6 +246,11 @@ function EmployeesPage() {
       <header className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <h1 className="text-2xl sm:text-3xl font-bold">ניהול עובדים</h1>
+          {isDeptManagerOnly && me?.department_id && deptMap[me.department_id] && (
+            <p className="text-sm font-medium text-primary mt-1">
+              מחלקה: {deptMap[me.department_id]}
+            </p>
+          )}
           <p className="text-sm text-muted-foreground mt-1">{headerSubtitle}</p>
         </div>
         {isMainAdmin && (
