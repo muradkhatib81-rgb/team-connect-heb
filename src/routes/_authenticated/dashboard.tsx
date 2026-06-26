@@ -1200,7 +1200,7 @@ function OnBreakSection({ profile }: { profile: any }) {
       const { data, error } = await supabase
         .from("break_requests")
         .select(
-          "id, user_id, department_id, break_setting_id, requested_at, approved_at_time, started_at, ends_at, completed_at, status, approved_by, duration_minutes",
+          "id, user_id, department_id, break_setting_id, created_at, requested_at, approved_at_time, approval_decided_at, started_at, ends_at, completed_at, status, approved_by, duration_minutes",
         )
         .gte("created_at", dayStart.toISOString())
         .lt("created_at", dayEnd.toISOString())
@@ -1232,7 +1232,10 @@ function OnBreakSection({ profile }: { profile: any }) {
         name: pMap.get(r.user_id) ?? "—",
         department: dMap.get(r.department_id) ?? "—",
         type: sMap.get(r.break_setting_id) ?? "הפסקה",
+        createdAt: r.created_at as string | null,
+        requestedTime: r.requested_at as string | null,
         approvedTime: r.approved_at_time as string | null,
+        approvalDecidedAt: r.approval_decided_at as string | null,
         startedAt: r.started_at as string | null,
         endsAt: r.ends_at as string | null,
         completedAt: r.completed_at as string | null,
@@ -1241,6 +1244,7 @@ function OnBreakSection({ profile }: { profile: any }) {
       }));
     },
   });
+
 
   // Realtime + minute tick for countdown
   useEffect(() => {
@@ -1278,12 +1282,13 @@ function OnBreakSection({ profile }: { profile: any }) {
       : "—";
 
   const STATUS_LABEL: Record<string, string> = {
-    pending: "ממתינה לאישור",
-    approved: "טרם יצא להפסקה",
+    pending: "ממתין לאישור",
+    approved: "אושר · טרם יצא להפסקה",
     active: "נמצא בהפסקה",
     completed: "סיים את ההפסקה",
     cancelled: "בוטלה",
   };
+
   const STATUS_TONE: Record<string, "default" | "secondary" | "destructive" | "outline"> = {
     pending: "secondary",
     approved: "outline",
@@ -1359,35 +1364,54 @@ function OnBreakSection({ profile }: { profile: any }) {
               <table className="w-full text-sm">
                 <thead>
                   <tr className="bg-muted/40">
-                    <th className="text-right p-3">עובד</th>
-                    <th className="text-right p-3">מחלקה</th>
-                    <th className="text-right p-3">סוג</th>
-                    <th className="text-right p-3">שעה מאושרת</th>
-                    <th className="text-right p-3">התחלה</th>
-                    <th className="text-right p-3">סיום</th>
-                    <th className="text-right p-3">אישר</th>
-                    <th className="text-right p-3">סטטוס</th>
+                    <th className="text-right p-2">עובד</th>
+                    <th className="text-right p-2">מחלקה</th>
+                    <th className="text-right p-2">סוג</th>
+                    <th className="text-right p-2">נשלחה</th>
+                    <th className="text-right p-2">שעה מבוקשת</th>
+                    <th className="text-right p-2">שעה מאושרת</th>
+                    <th className="text-right p-2">אישר</th>
+                    <th className="text-right p-2">התחלה בפועל</th>
+                    <th className="text-right p-2">סיום בפועל</th>
+                    <th className="text-right p-2">סטטוס</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {log.map((r) => (
-                    <tr key={r.id} className="border-t">
-                      <td className="p-3 font-medium">{r.name}</td>
-                      <td className="p-3">{r.department}</td>
-                      <td className="p-3">{r.type}</td>
-                      <td className="p-3">{fmtT(r.approvedTime)}</td>
-                      <td className="p-3">{fmtT(r.startedAt)}</td>
-                      <td className="p-3">{fmtT(r.completedAt ?? r.endsAt)}</td>
-                      <td className="p-3">{r.approverName}</td>
-                      <td className="p-3">
-                        <Badge variant={STATUS_TONE[r.status] ?? "secondary"}>
-                          {STATUS_LABEL[r.status] ?? r.status}
-                        </Badge>
-                      </td>
-                    </tr>
-                  ))}
+                  {log.map((r) => {
+                    const changed =
+                      r.requestedTime &&
+                      r.approvedTime &&
+                      new Date(r.requestedTime).getTime() !==
+                        new Date(r.approvedTime).getTime();
+                    return (
+                      <tr key={r.id} className="border-t align-top">
+                        <td className="p-2 font-medium">{r.name}</td>
+                        <td className="p-2">{r.department}</td>
+                        <td className="p-2">{r.type}</td>
+                        <td className="p-2 whitespace-nowrap">{fmtT(r.createdAt)}</td>
+                        <td className="p-2 whitespace-nowrap">{fmtT(r.requestedTime)}</td>
+                        <td className="p-2 whitespace-nowrap">
+                          {fmtT(r.approvedTime)}
+                          {changed ? (
+                            <span className="mr-1 text-[10px] text-amber-600">שונתה</span>
+                          ) : null}
+                        </td>
+                        <td className="p-2">{r.approverName}</td>
+                        <td className="p-2 whitespace-nowrap">{fmtT(r.startedAt)}</td>
+                        <td className="p-2 whitespace-nowrap">
+                          {fmtT(r.completedAt ?? (r.status === "completed" ? r.endsAt : null))}
+                        </td>
+                        <td className="p-2">
+                          <Badge variant={STATUS_TONE[r.status] ?? "secondary"}>
+                            {STATUS_LABEL[r.status] ?? r.status}
+                          </Badge>
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
+
             )}
           </div>
         </DialogContent>
