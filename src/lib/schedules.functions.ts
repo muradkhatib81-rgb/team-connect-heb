@@ -21,9 +21,11 @@ async function getCaps(supabase: any, userId: string) {
     isDeptMgr,
     canCreate: isMainAdmin || isDeptMgr || (isBranchMgr && !!p.can_create_schedule),
     canApprove: isMainAdmin || (isBranchMgr && !!p.can_approve_schedule),
+    canPublishDirect: isMainAdmin || (isBranchMgr && !!p.can_publish_schedule),
     departmentId: profile?.department_id ?? null,
   };
 }
+
 
 // Normalize a date string (YYYY-MM-DD) to the start of its ISO-week-like week (Sunday).
 function weekStartOf(dateStr: string): { start: string; end: string } {
