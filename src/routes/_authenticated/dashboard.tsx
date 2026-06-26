@@ -1282,12 +1282,13 @@ function OnBreakSection({ profile }: { profile: any }) {
       : "—";
 
   const STATUS_LABEL: Record<string, string> = {
-    pending: "ממתינה לאישור",
-    approved: "טרם יצא להפסקה",
+    pending: "ממתין לאישור",
+    approved: "אושר · טרם יצא להפסקה",
     active: "נמצא בהפסקה",
     completed: "סיים את ההפסקה",
     cancelled: "בוטלה",
   };
+
   const STATUS_TONE: Record<string, "default" | "secondary" | "destructive" | "outline"> = {
     pending: "secondary",
     approved: "outline",
