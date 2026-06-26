@@ -344,10 +344,22 @@ function SchedulesPage() {
   });
 
   const submitMut = useMutation({
-    mutationFn: () => submitFn({ data: { schedule_id: visible!.id } }),
+    mutationFn: async () => {
+      // Persist any unsaved local edits before validating on the server,
+      // so the validator sees the actual on-screen schedule.
+      const list: { employee_id: string; day_date: string; shift: Shift }[] = [];
+      for (const [emp, m] of Object.entries(edits)) {
+        for (const [day, shift] of Object.entries(m)) {
+          list.push({ employee_id: emp, day_date: day, shift });
+        }
+      }
+      await saveFn({ data: { schedule_id: visible!.id, shifts: list } });
+      return submitFn({ data: { schedule_id: visible!.id } });
+    },
     onSuccess: (r: any) => {
       toast.success(r?.published ? "הסידור אושר ופורסם" : "נשלח לאישור");
       qc.invalidateQueries({ queryKey: ["schedule"] });
+      qc.invalidateQueries({ queryKey: ["schedule-shifts", visible?.id] });
       qc.invalidateQueries({ queryKey: ["schedules-pending"] });
     },
     onError: (e: any) => toast.error(e?.message ?? "שגיאה"),
