@@ -399,6 +399,7 @@ function SchedulesStatsSection({ profile }: { profile: any }) {
     profile.roles.includes("branch_manager") || profile.roles.includes("assistant_manager");
   const isDeptMgr = profile.roles.includes("department_manager");
   const qc = useQueryClient();
+  const [shiftDialog, setShiftDialog] = useState<null | "morning" | "evening" | "off">(null);
 
   const permsQ = useQuery({
     queryKey: ["my-perms", profile.id],
@@ -419,9 +420,17 @@ function SchedulesStatsSection({ profile }: { profile: any }) {
     enabled: !!profile,
     queryKey: ["dashboard-schedules", profile.id, today],
     queryFn: async () => {
-      const base = supabase.from("schedules").select("id, status, department_id");
-      const { data: scheds } = await base;
-      const all = (scheds ?? []) as { id: string; status: string; department_id: string }[];
+      // Fetch all schedules (RLS filters appropriately)
+      const { data: scheds } = await supabase
+        .from("schedules")
+        .select("id, status, department_id, week_start, week_end");
+      const all = (scheds ?? []) as {
+        id: string;
+        status: string;
+        department_id: string;
+        week_start: string;
+        week_end: string;
+      }[];
       const scoped = isMainAdmin || canApprove
         ? all
         : isDeptMgr
@@ -432,20 +441,27 @@ function SchedulesStatsSection({ profile }: { profile: any }) {
       const approved = scoped.filter((s) => s.status === "approved").length;
       const rejected = scoped.filter((s) => s.status === "rejected").length;
 
-      const approvedIds = scoped.filter((s) => s.status === "approved").map((s) => s.id);
-      let morning = 0, evening = 0, off = 0;
-      if (approvedIds.length) {
+      // Only approved schedules whose week covers today
+      const approvedToday = scoped.filter(
+        (s) => s.status === "approved" && s.week_start <= today && today <= s.week_end,
+      );
+      const ids = approvedToday.map((s) => s.id);
+      let morning = 0,
+        evening = 0,
+        off = 0;
+      let hasApprovedToday = ids.length > 0;
+      if (ids.length) {
         const { data: shifts } = await supabase
           .from("schedule_shifts")
-          .select("shift, employee_id")
-          .in("schedule_id", approvedIds)
+          .select("shift")
+          .in("schedule_id", ids)
           .eq("day_date", today);
         const list = (shifts ?? []) as { shift: string }[];
         morning = list.filter((s) => s.shift === "morning").length;
         evening = list.filter((s) => s.shift === "evening").length;
         off = list.filter((s) => s.shift === "off").length;
       }
-      return { pending, approved, rejected, morning, evening, off };
+      return { pending, approved, rejected, morning, evening, off, hasApprovedToday };
     },
   });
 
@@ -466,7 +482,7 @@ function SchedulesStatsSection({ profile }: { profile: any }) {
 
   if (statsQ.isLoading || !statsQ.data) return null;
   const s = statsQ.data;
-  const go = () => navigate({ to: "/schedules" });
+  const goSchedules = () => navigate({ to: "/schedules" });
 
   return (
     <section>
@@ -482,16 +498,152 @@ function SchedulesStatsSection({ profile }: { profile: any }) {
       <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
         {(isMainAdmin || canApprove || isDeptMgr) && (
           <>
-            <StatCard label="ממתינים לאישור" value={s.pending} icon={Clock} tone="warning" onClick={go} />
-            <StatCard label="מאושרים" value={s.approved} icon={CheckCircle2} tone="success" onClick={go} />
-            <StatCard label="נדחו" value={s.rejected} icon={AlertTriangle} tone="primary" onClick={go} />
+            <StatCard label="ממתינים לאישור" value={s.pending} icon={Clock} tone="warning" onClick={goSchedules} />
+            <StatCard label="מאושרים" value={s.approved} icon={CheckCircle2} tone="success" onClick={goSchedules} />
+            <StatCard label="נדחו" value={s.rejected} icon={AlertTriangle} tone="primary" onClick={goSchedules} />
           </>
         )}
-        <StatCard label="במשמרת בוקר היום" value={s.morning} icon={Sun} tone="primary" onClick={go} />
-        <StatCard label="במשמרת ערב היום" value={s.evening} icon={Moon} tone="success" onClick={go} />
-        <StatCard label="בחופש היום" value={s.off} icon={Plane} tone="muted" onClick={go} />
+        <StatCard label="במשמרת בוקר היום" value={s.morning} icon={Sun} tone="primary" onClick={() => setShiftDialog("morning")} />
+        <StatCard label="במשמרת ערב היום" value={s.evening} icon={Moon} tone="success" onClick={() => setShiftDialog("evening")} />
+        <StatCard label="בחופש היום" value={s.off} icon={Plane} tone="muted" onClick={() => setShiftDialog("off")} />
       </div>
+
+      <TodayShiftDialog
+        open={shiftDialog !== null}
+        shift={shiftDialog}
+        today={today}
+        hasApproved={s.hasApprovedToday}
+        onOpenChange={(v) => !v && setShiftDialog(null)}
+        scopeFilter={
+          isMainAdmin || canApprove
+            ? null
+            : isDeptMgr || true
+            ? profile.department_id
+            : null
+        }
+      />
     </section>
+  );
+}
+
+function TodayShiftDialog({
+  open,
+  shift,
+  today,
+  hasApproved,
+  onOpenChange,
+  scopeFilter,
+}: {
+  open: boolean;
+  shift: "morning" | "evening" | "off" | null;
+  today: string;
+  hasApproved: boolean;
+  onOpenChange: (open: boolean) => void;
+  scopeFilter: string | null;
+}) {
+  const q = useQuery({
+    enabled: open && shift !== null,
+    queryKey: ["dashboard-today-shift", shift, today, scopeFilter],
+    queryFn: async () => {
+      // Find approved schedules covering today
+      let schedQ = supabase
+        .from("schedules")
+        .select("id, department_id")
+        .eq("status", "approved")
+        .lte("week_start", today)
+        .gte("week_end", today);
+      if (scopeFilter) schedQ = schedQ.eq("department_id", scopeFilter);
+      const { data: scheds } = await schedQ;
+      const ids = (scheds ?? []).map((s: any) => s.id);
+      if (!ids.length) return [];
+      const { data: shifts } = await supabase
+        .from("schedule_shifts")
+        .select("employee_id, schedule_id")
+        .in("schedule_id", ids)
+        .eq("day_date", today)
+        .eq("shift", shift!);
+      const empIds = Array.from(new Set((shifts ?? []).map((s: any) => s.employee_id)));
+      if (!empIds.length) return [];
+      const { data: emps } = await supabase
+        .from("profiles")
+        .select("id, full_name, phone, department_id")
+        .in("id", empIds)
+        .order("full_name");
+      const deptIds = Array.from(new Set((emps ?? []).map((e: any) => e.department_id).filter(Boolean)));
+      const { data: depts } = deptIds.length
+        ? await supabase.from("departments").select("id, name").in("id", deptIds)
+        : { data: [] as any[] };
+      const deptMap: Record<string, string> = {};
+      (depts ?? []).forEach((d: any) => (deptMap[d.id] = d.name));
+      return (emps ?? []).map((e: any) => ({ ...e, department_name: deptMap[e.department_id] ?? "—" }));
+    },
+  });
+
+  const title =
+    shift === "morning"
+      ? "משמרת בוקר היום"
+      : shift === "evening"
+      ? "משמרת ערב היום"
+      : "עובדים בחופש היום";
+
+  return (
+    <ShiftDialog open={open} onOpenChange={onOpenChange} title={title}>
+      {q.isLoading ? (
+        <div className="flex justify-center py-8">
+          <Loader2 className="size-5 animate-spin text-primary" />
+        </div>
+      ) : !hasApproved ? (
+        <p className="text-sm text-muted-foreground py-6 text-center">
+          אין סידור עבודה מאושר לתאריך הנוכחי.
+        </p>
+      ) : !q.data || q.data.length === 0 ? (
+        <p className="text-sm text-muted-foreground py-6 text-center">
+          אין עובדים משובצים בקטגוריה זו היום.
+        </p>
+      ) : (
+        <ul className="divide-y">
+          {q.data.map((e: any) => (
+            <li key={e.id} className="flex items-center justify-between py-3 gap-3">
+              <div className="min-w-0">
+                <p className="font-medium truncate">{e.full_name}</p>
+                <p className="text-xs text-muted-foreground truncate">{e.department_name}</p>
+              </div>
+              {e.phone && (
+                <a
+                  href={`tel:${e.phone}`}
+                  className="text-xs text-primary hover:underline shrink-0"
+                >
+                  {e.phone}
+                </a>
+              )}
+            </li>
+          ))}
+        </ul>
+      )}
+    </ShiftDialog>
+  );
+}
+
+function ShiftDialog({
+  open,
+  onOpenChange,
+  title,
+  children,
+}: {
+  open: boolean;
+  onOpenChange: (v: boolean) => void;
+  title: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>{title}</DialogTitle>
+        </DialogHeader>
+        {children}
+      </DialogContent>
+    </Dialog>
   );
 }
 
