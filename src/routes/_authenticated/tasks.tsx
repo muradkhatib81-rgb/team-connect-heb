@@ -450,6 +450,7 @@ function priorityVariant(p: TaskPriority): "default" | "secondary" | "destructiv
   return "secondary";
 }
 function statusVariant(s: TaskStatus): "default" | "secondary" | "destructive" | "outline" {
+  if (s === "closed") return "outline";
   if (s === "completed") return "secondary";
   if (s === "pending_approval") return "destructive";
   if (s === "in_progress") return "default";
