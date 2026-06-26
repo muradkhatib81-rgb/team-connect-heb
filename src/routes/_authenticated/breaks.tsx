@@ -549,6 +549,14 @@ function ApproveList({
                   >
                     <CheckCircle2 className="size-4" /> אישור
                   </Button>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="gap-1 text-destructive hover:text-destructive"
+                    onClick={() => setDeleteTarget(r)}
+                  >
+                    <Trash2 className="size-4" /> מחיקה
+                  </Button>
                 </div>
               </div>
 
