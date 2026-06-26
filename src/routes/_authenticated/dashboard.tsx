@@ -645,6 +645,40 @@ function SchedulesStatsSection({ profile }: { profile: any }) {
         scopeFilter={scopeFilter}
       />
 
+      <Dialog open={notSubmittedOpen} onOpenChange={setNotSubmittedOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>מחלקות שטרם שלחו סידור עבודה</DialogTitle>
+          </DialogHeader>
+          {s.notSubmittedDepts.length === 0 ? (
+            <p className="text-sm text-muted-foreground py-6 text-center">
+              כל המחלקות שלחו סידור לשבוע הנוכחי.
+            </p>
+          ) : (
+            <ul className="divide-y max-h-[60vh] overflow-auto">
+              {s.notSubmittedDepts.map((d) => (
+                <li key={d.id}>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setNotSubmittedOpen(false);
+                      navigate({
+                        to: "/schedules",
+                        search: { dept: d.id, week: weekStart, view: "editor" } as any,
+                      });
+                    }}
+                    className="w-full text-right py-3 px-2 hover:bg-accent/30 rounded-md flex items-center gap-2"
+                  >
+                    <Building2 className="size-4 text-amber-600" />
+                    <span className="font-medium">{d.name}</span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </DialogContent>
+      </Dialog>
+
       <ShiftCellDialog
         cell={shiftCell}
         onOpenChange={(v) => !v && setShiftCell(null)}
