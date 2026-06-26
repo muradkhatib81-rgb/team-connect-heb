@@ -141,14 +141,18 @@ function EmployeesPage() {
   const [deleting, setDeleting] = useState<ProfileRow | null>(null);
 
   const filterMode: FilterMode = search.filter ?? "all";
-  const deptFilter = search.dept ?? "all";
+  const allowedAdmin = me ? isAdmin(me.roles) : false;
+  const isDeptManagerOnly =
+    me ? me.roles.includes("department_manager") && !allowedAdmin : false;
+  // Department managers are forced to their own department (server RLS also enforces).
+  const forcedDept = isDeptManagerOnly ? (me?.department_id ?? "all") : null;
+  const deptFilter = forcedDept ?? (search.dept ?? "all");
 
   const setFilter = (f: FilterMode) =>
     navigate({ to: "/employees", search: { filter: f, dept: deptFilter } as any });
   const setDept = (d: string) =>
     navigate({ to: "/employees", search: { filter: filterMode, dept: d } as any });
 
-  const allowedAdmin = me ? isAdmin(me.roles) : false;
   const isDeptManager = me ? me.roles.includes("department_manager") : false;
   const allowed = allowedAdmin || isDeptManager;
   const isMainAdmin = me ? canManageUsers(me.roles) : false;
