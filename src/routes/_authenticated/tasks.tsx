@@ -580,9 +580,31 @@ function TaskDetailDialog({
     onError: (e: any) => toast.error(e?.message ?? "שגיאה"),
   });
 
+  const rejectM = useMutation({
+    mutationFn: () =>
+      reject({ data: { id: task.id, rejection_note: rejectNote || undefined } }),
+    onSuccess: () => {
+      toast.success("המשימה הוחזרה לביצוע");
+      qc.invalidateQueries({ queryKey: ["tasks"] });
+      onClose();
+    },
+    onError: (e: any) => toast.error(e?.message ?? "שגיאה"),
+  });
+
+  const closeM = useMutation({
+    mutationFn: () => close({ data: { id: task.id } }),
+    onSuccess: () => {
+      toast.success("המשימה נסגרה והועברה לארכיון");
+      qc.invalidateQueries({ queryKey: ["tasks"] });
+      onClose();
+    },
+    onError: (e: any) => toast.error(e?.message ?? "שגיאה בסגירה"),
+  });
+
   const dept = deps?.departments.find((d) => d.id === task.department_id);
   const completedBy = deps?.employees.find((e) => e.id === task.completed_by);
   const approvedBy = deps?.employees.find((e) => e.id === task.approved_by);
+  const closedBy = deps?.employees.find((e) => e.id === (task as any).closed_by);
 
   return (
     <Dialog open onOpenChange={(v) => !v && onClose()}>
