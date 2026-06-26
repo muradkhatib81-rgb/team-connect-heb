@@ -454,9 +454,10 @@ function SchedulesStatsSection({ profile }: { profile: any }) {
     enabled: !!profile,
     queryKey: ["dashboard-schedules", profile.id, weekStart],
     queryFn: async () => {
-      const { data: scheds } = await supabase
-        .from("schedules")
-        .select("id, status, department_id, week_start, week_end");
+      const [{ data: scheds }, { data: deptRows }] = await Promise.all([
+        supabase.from("schedules").select("id, status, department_id, week_start, week_end"),
+        supabase.from("departments").select("id, name, is_active").eq("is_active", true).order("name"),
+      ]);
       const all = (scheds ?? []) as {
         id: string;
         status: string;
@@ -473,6 +474,20 @@ function SchedulesStatsSection({ profile }: { profile: any }) {
       const pending = scoped.filter((s) => s.status === "pending_approval").length;
       const approved = scoped.filter((s) => s.status === "approved").length;
       const rejected = scoped.filter((s) => s.status === "rejected").length;
+
+      // Departments without a submitted schedule for the current week
+      // (i.e., no schedule, or status is draft/rejected — not yet sent for approval).
+      const allDepts = (deptRows ?? []) as { id: string; name: string }[];
+      const submittedDeptIds = new Set(
+        all
+          .filter(
+            (s) =>
+              s.week_start === weekStart &&
+              (s.status === "pending_approval" || s.status === "approved"),
+          )
+          .map((s) => s.department_id),
+      );
+      const notSubmittedDepts = allDepts.filter((d) => !submittedDeptIds.has(d.id));
 
       // Weekly approved schedules covering the current week (overlap)
       const weekScheds = scoped.filter(
@@ -495,7 +510,15 @@ function SchedulesStatsSection({ profile }: { profile: any }) {
           }
         }
       }
-      return { pending, approved, rejected, weekCounts, hasAnyApproved: ids.length > 0 };
+      return {
+        pending,
+        approved,
+        rejected,
+        weekCounts,
+        hasAnyApproved: ids.length > 0,
+        notSubmittedCount: notSubmittedDepts.length,
+        notSubmittedDepts,
+      };
     },
   });
 
