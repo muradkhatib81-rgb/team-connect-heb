@@ -782,23 +782,47 @@ function SchedulesPage() {
                       }
                       return (
                         <td key={day} className="p-2">
-                          <Select
-                            value={cur ?? ""}
-                            onValueChange={(v) => setShift(emp.id, day, v as Shift)}
-                          >
-                            <SelectTrigger
-                              className={`h-9 ${cur ? SHIFT_CLASS[cur] : ""}`}
+                          <div className="relative">
+                            <Select
+                              value={cur ?? ""}
+                              onValueChange={(v) => setShift(emp.id, day, v as Shift)}
                             >
-                              <SelectValue placeholder="—" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="morning">בוקר</SelectItem>
-                              <SelectItem value="evening">ערב</SelectItem>
-                              <SelectItem value="off">חופש</SelectItem>
-                            </SelectContent>
-                          </Select>
+                              <SelectTrigger
+                                className={`h-9 ${cur ? SHIFT_CLASS[cur] : ""} ${
+                                  visible.status === "approved" &&
+                                  (cur ?? null) !== (baseline[emp.id]?.[day] ?? null)
+                                    ? "ring-2 ring-purple-500 border-purple-500"
+                                    : ""
+                                }`}
+                              >
+                                <SelectValue placeholder="—" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="morning">בוקר</SelectItem>
+                                <SelectItem value="evening">ערב</SelectItem>
+                                <SelectItem value="off">חופש</SelectItem>
+                              </SelectContent>
+                            </Select>
+                            {visible.status === "approved" &&
+                              (cur ?? null) !== (baseline[emp.id]?.[day] ?? null) && (
+                                <Pencil
+                                  className="size-3 text-purple-600 absolute -top-1 -left-1 bg-background rounded-full p-0.5 box-content border border-purple-500"
+                                  aria-label="שונה"
+                                />
+                              )}
+                          </div>
                         </td>
                       );
+                    })}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </Card>
+        </>
+      )}
+        </>
+      )}
                     })}
                   </tr>
                 ))}
