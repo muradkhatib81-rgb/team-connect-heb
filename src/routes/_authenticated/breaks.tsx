@@ -379,8 +379,8 @@ function BreaksPage() {
 
 // Manager-only approval list — used by /breaks-admin
 export function ApproveList({
-
   all,
+
   loading,
   settings,
   profiles,
