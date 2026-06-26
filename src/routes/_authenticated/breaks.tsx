@@ -125,10 +125,9 @@ function BreaksPage() {
     !!me?.roles.includes("branch_manager") || !!me?.roles.includes("assistant_manager");
 
   const permQ = useQuery({
-    enabled: !!me?.id,
+    enabled: !!me?.id && !isMainAdmin,
     queryKey: ["my-break-manage-perm", me?.id],
     queryFn: async () => {
-      if (isMainAdmin) return true;
       const { data } = await supabase
         .from("user_task_permissions")
         .select("can_manage_breaks")
@@ -137,11 +136,21 @@ function BreaksPage() {
       return !!(data as any)?.can_manage_breaks;
     },
   });
-  const canManage = !!permQ.data;
-  // Only regular employees and department managers (without break-management perm) may submit requests.
-  const canRequest = !isMainAdmin && !isBranchOrAssistant && !canManage;
+  const isBreaksManager =
+    isMainAdmin || isBranchOrAssistant || !!permQ.data;
+
+  // Hard redirect: managers/admins must use the dedicated management screen.
+  useEffect(() => {
+    if (!me) return;
+    if (permQ.isLoading) return;
+    if (isBreaksManager) {
+      // Use replace to avoid leaving /breaks in the back-stack for managers.
+      window.location.replace("/breaks-admin");
+    }
+  }, [me, permQ.isLoading, isBreaksManager]);
 
   const settingsQ = useQuery({
+    enabled: !!me && !isBreaksManager,
     queryKey: ["break-settings-active"],
     queryFn: async () => {
       const { data, error } = await supabase
@@ -155,7 +164,7 @@ function BreaksPage() {
   });
 
   const myReqQ = useQuery({
-    enabled: !!me?.id,
+    enabled: !!me?.id && !isBreaksManager,
     queryKey: ["my-break-requests", me?.id],
     queryFn: async () => {
       const { data, error } = await supabase
@@ -169,60 +178,16 @@ function BreaksPage() {
     },
   });
 
-  const allReqQ = useQuery({
-    enabled: canManage,
-    queryKey: ["all-break-requests"],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("break_requests")
-        .select("*")
-        .order("created_at", { ascending: false })
-        .limit(200);
-      if (error) throw error;
-      return (data ?? []) as BreakRequest[];
-    },
-  });
-
-  // load profiles for display in approver lists
-  const userIds = useMemo(() => {
-    const s = new Set<string>();
-    (allReqQ.data ?? []).forEach((r) => s.add(r.user_id));
-    return Array.from(s);
-  }, [allReqQ.data]);
-
-  const profilesQ = useQuery({
-    enabled: userIds.length > 0,
-    queryKey: ["break-req-profiles", userIds.join(",")],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("profiles")
-        .select("id, full_name, department_id")
-        .in("id", userIds);
-      if (error) throw error;
-      return (data ?? []) as { id: string; full_name: string; department_id: string | null }[];
-    },
-  });
-
-  const deptsQ = useQuery({
-    queryKey: ["all-departments-breaks"],
-    queryFn: async () => {
-      const { data, error } = await supabase.from("departments").select("id, name, manager_id");
-      if (error) throw error;
-      return (data ?? []) as { id: string; name: string; manager_id: string | null }[];
-    },
-  });
-
-  // Realtime
+  // Realtime — only for the employee's own requests
   useEffect(() => {
+    if (isBreaksManager) return;
     const ch = supabase
-      .channel("break-requests-rt")
+      .channel("break-requests-self-rt")
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "break_requests" },
         () => {
           qc.invalidateQueries({ queryKey: ["my-break-requests"] });
-          qc.invalidateQueries({ queryKey: ["all-break-requests"] });
-          qc.invalidateQueries({ queryKey: ["dashboard-on-break"] });
         },
       )
       .on(
@@ -234,7 +199,7 @@ function BreaksPage() {
     return () => {
       supabase.removeChannel(ch);
     };
-  }, [qc]);
+  }, [qc, isBreaksManager]);
 
   // ---- Submit form
   const [settingId, setSettingId] = useState("");
@@ -247,7 +212,6 @@ function BreaksPage() {
       if (!timeStr) throw new Error("יש לבחור שעה");
       const setting = settingsQ.data?.find((s) => s.id === settingId);
       if (!setting) throw new Error("סוג הפסקה לא קיים");
-      // Enforce: one request per break type per calendar day (local time).
       const now = new Date();
       const dayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
       const dayEnd = new Date(dayStart.getTime() + 24 * 60 * 60 * 1000);
@@ -280,12 +244,19 @@ function BreaksPage() {
       setTimeStr("");
       setNote("");
       qc.invalidateQueries({ queryKey: ["my-break-requests"] });
-      qc.invalidateQueries({ queryKey: ["all-break-requests"] });
     },
     onError: (e: any) => toast.error(e?.message ?? "שגיאה בשליחה"),
   });
 
   if (!me) return null;
+
+  if (isBreaksManager) {
+    return (
+      <div className="flex justify-center py-12">
+        <Loader2 className="size-6 animate-spin text-primary" />
+      </div>
+    );
+  }
 
   const myReqs = myReqQ.data ?? [];
 
@@ -296,21 +267,20 @@ function BreaksPage() {
           <Coffee className="size-5" />
         </div>
         <div>
-          <h1 className="text-2xl sm:text-3xl font-bold">הפסקות</h1>
+          <h1 className="text-2xl sm:text-3xl font-bold">הפסקה</h1>
           <p className="text-sm text-muted-foreground mt-1">
-            הגשת בקשות להפסקה וצפייה בסטטוס. השעה המאושרת היא הקובעת.
+            הגשת בקשת הפסקה וצפייה בסטטוס. השעה המאושרת היא הקובעת.
           </p>
         </div>
       </header>
 
-      <Tabs defaultValue={canRequest ? "request" : canManage ? "approve" : "mine"} className="space-y-4">
+      <Tabs defaultValue="request" className="space-y-4">
         <TabsList>
-          {canRequest && <TabsTrigger value="request">בקשת הפסקה</TabsTrigger>}
+          <TabsTrigger value="request">בקשת הפסקה</TabsTrigger>
           <TabsTrigger value="mine">הבקשות שלי</TabsTrigger>
-          {canManage && <TabsTrigger value="approve">אישור בקשות</TabsTrigger>}
         </TabsList>
 
-        {canRequest && <TabsContent value="request">
+        <TabsContent value="request">
           <Card className="card-elevated p-5 space-y-4">
             <div className="grid sm:grid-cols-2 gap-4">
               <div className="space-y-1.5">
@@ -361,7 +331,7 @@ function BreaksPage() {
               שלח בקשה
             </Button>
           </Card>
-        </TabsContent>}
+        </TabsContent>
 
         <TabsContent value="mine">
           {myReqQ.isLoading ? (
@@ -376,7 +346,6 @@ function BreaksPage() {
             <div className="grid gap-3">
               {myReqs.map((r) => {
                 const setting = settingsQ.data?.find((s) => s.id === r.break_setting_id);
-                // For employees: show approved time only when available; otherwise the requested time
                 const showTime = r.approved_at_time ?? r.requested_at;
                 return (
                   <Card key={r.id} className="card-elevated p-4 flex items-center gap-3">
@@ -403,26 +372,15 @@ function BreaksPage() {
             </div>
           )}
         </TabsContent>
-
-        {canManage && (
-          <TabsContent value="approve">
-            <ApproveList
-              all={allReqQ.data ?? []}
-              loading={allReqQ.isLoading}
-              settings={settingsQ.data ?? []}
-              profiles={profilesQ.data ?? []}
-              departments={deptsQ.data ?? []}
-              me={me.id}
-            />
-          </TabsContent>
-        )}
       </Tabs>
     </div>
   );
 }
 
-function ApproveList({
+// Manager-only approval list — used by /breaks-admin
+export function ApproveList({
   all,
+
   loading,
   settings,
   profiles,
