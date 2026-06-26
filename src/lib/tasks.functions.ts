@@ -3,7 +3,7 @@ import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { z } from "zod";
 
 const PRIORITY = ["low", "medium", "high"] as const;
-const STATUS = ["new", "in_progress", "completed"] as const;
+const STATUS = ["new", "in_progress", "pending_approval", "pending_closure", "completed", "closed"] as const;
 const FREQ = ["daily", "weekly", "monthly"] as const;
 
 // ---------- Permission helpers (server) ----------
@@ -494,9 +494,29 @@ export const approveTask = createServerFn({ method: "POST" })
   .inputValidator((d: unknown) => z.object({ id: z.string().uuid() }).parse(d))
   .handler(async ({ data, context }) => {
     await assertCanApprove(context.supabase, context.userId, data.id);
+    const { data: task, error: taskError } = await context.supabase
+      .from("tasks")
+      .select("created_by")
+      .eq("id", data.id)
+      .maybeSingle();
+    if (taskError) throw new Error(taskError.message);
+
+    let nextStatus = "completed";
+    if (task?.created_by) {
+      const { data: creatorRoles, error: rolesError } = await context.supabase
+        .from("user_roles")
+        .select("role")
+        .eq("user_id", task.created_by);
+      if (rolesError) throw new Error(rolesError.message);
+      const roles = new Set((creatorRoles ?? []).map((r: any) => r.role));
+      if (roles.has("main_admin") || roles.has("branch_manager") || roles.has("assistant_manager")) {
+        nextStatus = "pending_closure";
+      }
+    }
+
     const { error } = await context.supabase
       .from("tasks")
-      .update({ status: "completed", rejection_note: null, rejected_at: null })
+      .update({ status: nextStatus, rejection_note: null, rejected_at: null } as any)
       .eq("id", data.id);
     if (error) throw new Error(error.message);
     return { ok: true };
@@ -577,7 +597,7 @@ export const closeTask = createServerFn({ method: "POST" })
   .inputValidator((d: unknown) => z.object({ id: z.string().uuid() }).parse(d))
   .handler(async ({ data, context }) => {
     const caps = await getCallerCaps(context.supabase, context.userId);
-    if (!caps.canCloseTasks) throw new Error("רק מנהל ראשי או בעלי הרשאת ניהול משימות יכולים לסגור משימה");
+    if (!caps.canCloseTasks) throw new Error("רק מנהל ראשי או בעלי הרשאת ניהול/אישור משימות יכולים לסגור משימה");
     const { error } = await context.supabase
       .from("tasks")
       .update({ status: "closed" } as any)
