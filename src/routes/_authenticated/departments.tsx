@@ -1,7 +1,7 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/use-auth";
 import { canManageUsers, ROLE_LABELS, type AppRole } from "@/lib/constants";
@@ -218,10 +218,10 @@ function DepartmentsPage() {
       {editing && isMainAdmin && (
         <EditDialog
           dept={editing}
-          managers={managersQuery.data ?? []}
           onClose={() => setEditing(null)}
         />
       )}
+
       {deleting && isMainAdmin && (
         <DeleteDialog dept={deleting} onClose={() => setDeleting(null)} />
       )}
@@ -551,11 +551,9 @@ function CreateDialog({
 
 function EditDialog({
   dept,
-  managers,
   onClose,
 }: {
   dept: DepartmentRow;
-  managers: ManagerOption[];
   onClose: () => void;
 }) {
   const qc = useQueryClient();
@@ -565,8 +563,73 @@ function EditDialog({
     manager_id: dept.manager_id ?? "",
     is_active: dept.is_active,
   });
+
+  // Only employees of THIS department are eligible to be its manager.
+  const deptEmployeesQuery = useQuery({
+    queryKey: ["dept-employees-for-manager", dept.id],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("profiles")
+        .select("id, full_name")
+        .eq("department_id", dept.id)
+        .eq("is_active", true)
+        .order("full_name");
+      if (error) throw error;
+      return (data ?? []) as ManagerOption[];
+    },
+  });
+
+  // Other departments' managers, to prevent assigning the same employee to two departments.
+  const otherManagersQuery = useQuery({
+    queryKey: ["other-dept-managers", dept.id],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("departments")
+        .select("id, name, manager_id")
+        .neq("id", dept.id)
+        .not("manager_id", "is", null);
+      if (error) throw error;
+      const map: Record<string, string> = {};
+      (data ?? []).forEach((d: any) => {
+        if (d.manager_id) map[d.manager_id] = d.name;
+      });
+      return map;
+    },
+  });
+
+  // Auto-refresh employee list when profiles change (employee moves between departments).
+  useEffect(() => {
+    const ch = supabase
+      .channel(`dept-edit-${dept.id}`)
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "profiles" },
+        () => {
+          qc.invalidateQueries({ queryKey: ["dept-employees-for-manager", dept.id] });
+        },
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "departments" },
+        () => {
+          qc.invalidateQueries({ queryKey: ["other-dept-managers", dept.id] });
+        },
+      )
+      .subscribe();
+    return () => {
+      supabase.removeChannel(ch);
+    };
+  }, [dept.id, qc]);
+
   const mutation = useMutation({
     mutationFn: async () => {
+      const conflictDept =
+        form.manager_id && otherManagersQuery.data?.[form.manager_id];
+      if (conflictDept) {
+        throw new Error(
+          `העובד כבר משמש כאחראי של מחלקת "${conflictDept}". לא ניתן להגדיר אותו כאחראי של שתי מחלקות במקביל.`,
+        );
+      }
       await fn({
         data: {
           id: dept.id,
@@ -583,6 +646,10 @@ function EditDialog({
     },
     onError: (e: any) => toast.error(e?.message ?? "שגיאה בעדכון"),
   });
+
+  const employees = deptEmployeesQuery.data ?? [];
+  const otherMgrs = otherManagersQuery.data ?? {};
+
   return (
     <Dialog open onOpenChange={(o) => !o && onClose()}>
       <DialogContent>
@@ -604,11 +671,26 @@ function EditDialog({
               <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="none">לא הוגדר</SelectItem>
-                {managers.map((m) => (
-                  <SelectItem key={m.id} value={m.id}>{m.full_name}</SelectItem>
-                ))}
+                {deptEmployeesQuery.isLoading ? (
+                  <SelectItem value="__loading" disabled>טוען עובדים…</SelectItem>
+                ) : employees.length === 0 ? (
+                  <SelectItem value="__empty" disabled>אין עובדים פעילים במחלקה זו</SelectItem>
+                ) : (
+                  employees.map((m) => {
+                    const conflict = otherMgrs[m.id];
+                    return (
+                      <SelectItem key={m.id} value={m.id} disabled={!!conflict}>
+                        {m.full_name}
+                        {conflict ? ` (אחראי ב"${conflict}")` : ""}
+                      </SelectItem>
+                    );
+                  })
+                )}
               </SelectContent>
             </Select>
+            <p className="text-xs text-muted-foreground mt-1">
+              מוצגים רק עובדי המחלקה. עובד יכול להיות אחראי של מחלקה אחת בלבד.
+            </p>
           </Field>
           <div className="flex items-center justify-between rounded-lg border border-border p-3">
             <div>
@@ -630,6 +712,7 @@ function EditDialog({
     </Dialog>
   );
 }
+
 
 function DeleteDialog({ dept, onClose }: { dept: DepartmentRow; onClose: () => void }) {
   const qc = useQueryClient();
