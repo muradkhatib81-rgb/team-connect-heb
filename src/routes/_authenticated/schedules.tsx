@@ -57,8 +57,14 @@ import {
 } from "@/lib/schedules.functions";
 import { formatHeDate } from "@/lib/date-format";
 
+type SchedulesSearch = { dept?: string; week?: string; view?: "pending" | "editor" };
 export const Route = createFileRoute("/_authenticated/schedules")({
   component: SchedulesPage,
+  validateSearch: (s: Record<string, unknown>): SchedulesSearch => ({
+    dept: typeof s.dept === "string" ? s.dept : undefined,
+    week: typeof s.week === "string" ? s.week : undefined,
+    view: s.view === "pending" || s.view === "editor" ? s.view : undefined,
+  }),
 });
 
 type Shift = "morning" | "evening" | "off";
@@ -102,6 +108,7 @@ function addDaysISO(iso: string, days: number): string {
 function SchedulesPage() {
   const { data: me } = useAuth();
   const qc = useQueryClient();
+  const search = Route.useSearch();
 
   const isMainAdmin = !!me?.roles.includes("main_admin");
   const isBranchMgr =
@@ -149,15 +156,18 @@ function SchedulesPage() {
   });
 
   const myDeptId = me?.department_id ?? null;
-  const [selectedDept, setSelectedDept] = useState<string | null>(null);
+  const [selectedDept, setSelectedDept] = useState<string | null>(search.dept ?? null);
   useEffect(() => {
     if (selectedDept) return;
-    if (isDeptMgr && !isMainAdmin && !isBranchMgr && myDeptId) setSelectedDept(myDeptId);
+    if (search.dept) setSelectedDept(search.dept);
+    else if (isDeptMgr && !isMainAdmin && !isBranchMgr && myDeptId) setSelectedDept(myDeptId);
     else if (isEmployee && myDeptId) setSelectedDept(myDeptId);
     else if (deptsQ.data?.length) setSelectedDept(deptsQ.data[0].id);
-  }, [deptsQ.data, myDeptId, selectedDept, isDeptMgr, isMainAdmin, isBranchMgr, isEmployee]);
+  }, [deptsQ.data, myDeptId, selectedDept, isDeptMgr, isMainAdmin, isBranchMgr, isEmployee, search.dept]);
 
-  const [weekStart, setWeekStart] = useState(() => getWeekStart(new Date()));
+  const [weekStart, setWeekStart] = useState(() =>
+    search.week ? getWeekStart(new Date(search.week + "T00:00:00Z")) : getWeekStart(new Date()),
+  );
   const weekEnd = addDaysISO(weekStart, 6);
   const days = useMemo(
     () => Array.from({ length: 7 }, (_, i) => addDaysISO(weekStart, i)),
@@ -165,7 +175,9 @@ function SchedulesPage() {
   );
 
   // Default view for approvers = pending approvals list across all departments they can see.
-  const [view, setView] = useState<"pending" | "editor">(canApprove ? "pending" : "editor");
+  const [view, setView] = useState<"pending" | "editor">(
+    search.view ?? (search.dept || search.week ? "editor" : canApprove ? "pending" : "editor"),
+  );
   useEffect(() => {
     if (canApprove && view === "editor" && !selectedDept) setView("pending");
     // eslint-disable-next-line react-hooks/exhaustive-deps

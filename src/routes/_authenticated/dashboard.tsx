@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/use-auth";
@@ -400,7 +400,8 @@ function SchedulesStatsSection({ profile }: { profile: any }) {
     profile.roles.includes("branch_manager") || profile.roles.includes("assistant_manager");
   const isDeptMgr = profile.roles.includes("department_manager");
   const qc = useQueryClient();
-  const [shiftDialog, setShiftDialog] = useState<null | "morning" | "evening" | "off">(null);
+  const [approvedOpen, setApprovedOpen] = useState(false);
+  const [shiftCell, setShiftCell] = useState<null | { day: string; shift: "morning" | "evening" | "off" }>(null);
 
   const permsQ = useQuery({
     queryKey: ["my-perms", profile.id],
@@ -415,13 +416,28 @@ function SchedulesStatsSection({ profile }: { profile: any }) {
   });
   const canApprove = isMainAdmin || (isBranchMgr && !!permsQ.data?.can_approve_schedule);
 
-  const today = new Date().toISOString().slice(0, 10);
+  // Compute current week (Sunday-based) in Asia/Jerusalem-agnostic UTC slicing,
+  // matching getWeekStart logic in schedules.tsx.
+  const { weekStart, weekDays } = useMemo(() => {
+    const now = new Date();
+    const d = new Date(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate()));
+    d.setUTCDate(d.getUTCDate() - d.getUTCDay());
+    const start = d.toISOString().slice(0, 10);
+    const days = Array.from({ length: 7 }, (_, i) => {
+      const x = new Date(d);
+      x.setUTCDate(d.getUTCDate() + i);
+      return x.toISOString().slice(0, 10);
+    });
+    return { weekStart: start, weekDays: days };
+  }, []);
+  const weekEnd = weekDays[6];
+
+  const scopeFilter = isMainAdmin || canApprove ? null : profile.department_id ?? null;
 
   const statsQ = useQuery({
     enabled: !!profile,
-    queryKey: ["dashboard-schedules", profile.id, today],
+    queryKey: ["dashboard-schedules", profile.id, weekStart],
     queryFn: async () => {
-      // Fetch all schedules (RLS filters appropriately)
       const { data: scheds } = await supabase
         .from("schedules")
         .select("id, status, department_id, week_start, week_end");
@@ -442,27 +458,28 @@ function SchedulesStatsSection({ profile }: { profile: any }) {
       const approved = scoped.filter((s) => s.status === "approved").length;
       const rejected = scoped.filter((s) => s.status === "rejected").length;
 
-      // Only approved schedules whose week covers today
-      const approvedToday = scoped.filter(
-        (s) => s.status === "approved" && s.week_start <= today && today <= s.week_end,
+      // Weekly approved schedules covering the current week (overlap)
+      const weekScheds = scoped.filter(
+        (s) => s.status === "approved" && s.week_start <= weekEnd && weekStart <= s.week_end,
       );
-      const ids = approvedToday.map((s) => s.id);
-      let morning = 0,
-        evening = 0,
-        off = 0;
-      let hasApprovedToday = ids.length > 0;
+      const ids = weekScheds.map((s) => s.id);
+      const weekCounts: Record<string, { morning: number; evening: number; off: number }> = {};
+      for (const d of weekDays) weekCounts[d] = { morning: 0, evening: 0, off: 0 };
       if (ids.length) {
         const { data: shifts } = await supabase
           .from("schedule_shifts")
-          .select("shift")
+          .select("shift, day_date")
           .in("schedule_id", ids)
-          .eq("day_date", today);
-        const list = (shifts ?? []) as { shift: string }[];
-        morning = list.filter((s) => s.shift === "morning").length;
-        evening = list.filter((s) => s.shift === "evening").length;
-        off = list.filter((s) => s.shift === "off").length;
+          .gte("day_date", weekStart)
+          .lte("day_date", weekEnd);
+        for (const s of (shifts ?? []) as { shift: string; day_date: string }[]) {
+          const b = weekCounts[s.day_date];
+          if (b && (s.shift === "morning" || s.shift === "evening" || s.shift === "off")) {
+            (b as any)[s.shift] += 1;
+          }
+        }
       }
-      return { pending, approved, rejected, morning, evening, off, hasApprovedToday };
+      return { pending, approved, rejected, weekCounts, hasAnyApproved: ids.length > 0 };
     },
   });
 
@@ -484,10 +501,23 @@ function SchedulesStatsSection({ profile }: { profile: any }) {
   if (statsQ.isLoading || !statsQ.data) return null;
   const s = statsQ.data;
   const goSchedules = () => navigate({ to: "/schedules" });
+  const goPending = () => navigate({ to: "/schedules", search: { view: "pending" } as any });
+
+  const DAY_NAMES = ["ראשון", "שני", "שלישי", "רביעי", "חמישי", "שישי", "שבת"];
+  const heDate = (iso: string) => {
+    const d = new Date(iso + "T00:00:00Z");
+    return new Intl.DateTimeFormat("he-IL", {
+      timeZone: "Asia/Jerusalem",
+      day: "2-digit",
+      month: "2-digit",
+      numberingSystem: "latn",
+      calendar: "gregory",
+    }).format(d);
+  };
 
   return (
-    <section>
-      <div className="flex items-center justify-between mb-4">
+    <section className="space-y-4">
+      <div className="flex items-center justify-between">
         <h2 className="text-lg font-semibold flex items-center gap-2">
           <CalendarDays className="size-5 text-primary" />
           סידורי עבודה
@@ -496,151 +526,298 @@ function SchedulesStatsSection({ profile }: { profile: any }) {
           לסידורי העבודה ←
         </Link>
       </div>
-      <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
-        {(isMainAdmin || canApprove || isDeptMgr) && (
-          <>
-            <StatCard label="ממתינים לאישור" value={s.pending} icon={Clock} tone="warning" onClick={goSchedules} />
-            <StatCard label="מאושרים" value={s.approved} icon={CheckCircle2} tone="success" onClick={goSchedules} />
-            <StatCard label="נדחו" value={s.rejected} icon={AlertTriangle} tone="primary" onClick={goSchedules} />
-          </>
-        )}
-        <StatCard label="במשמרת בוקר היום" value={s.morning} icon={Sun} tone="primary" onClick={() => setShiftDialog("morning")} />
-        <StatCard label="במשמרת ערב היום" value={s.evening} icon={Moon} tone="success" onClick={() => setShiftDialog("evening")} />
-        <StatCard label="בחופש היום" value={s.off} icon={Plane} tone="muted" onClick={() => setShiftDialog("off")} />
-      </div>
 
-      <TodayShiftDialog
-        open={shiftDialog !== null}
-        shift={shiftDialog}
-        today={today}
-        hasApproved={s.hasApprovedToday}
-        onOpenChange={(v) => !v && setShiftDialog(null)}
-        scopeFilter={
-          isMainAdmin || canApprove ? null : profile.department_id ?? null
-        }
+      {(isMainAdmin || canApprove || isDeptMgr) && (
+        <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
+          <StatCard label="ממתינים לאישור" value={s.pending} icon={Clock} tone="warning" onClick={goPending} />
+          <StatCard label="מאושרים" value={s.approved} icon={CheckCircle2} tone="success" onClick={() => setApprovedOpen(true)} />
+          <StatCard label="נדחו" value={s.rejected} icon={AlertTriangle} tone="primary" onClick={goSchedules} />
+        </div>
+      )}
+
+      <Card className="card-elevated p-0 overflow-auto">
+        <div className="px-4 pt-4 pb-2 flex items-center justify-between">
+          <p className="font-semibold text-sm">סיכום שבועי</p>
+          <p className="text-xs text-muted-foreground">
+            {heDate(weekStart)} – {heDate(weekEnd)}
+          </p>
+        </div>
+        {!s.hasAnyApproved ? (
+          <p className="px-4 pb-4 text-sm text-muted-foreground">
+            אין סידור עבודה מאושר לשבוע הנוכחי.
+          </p>
+        ) : (
+          <table className="w-full text-sm">
+            <thead className="bg-muted/40">
+              <tr>
+                <th className="text-right p-3">יום</th>
+                <th className="p-3 text-center"><span className="inline-flex items-center gap-1"><Sun className="size-4" /> בוקר</span></th>
+                <th className="p-3 text-center"><span className="inline-flex items-center gap-1"><Moon className="size-4" /> ערב</span></th>
+                <th className="p-3 text-center"><span className="inline-flex items-center gap-1"><Plane className="size-4" /> חופש</span></th>
+              </tr>
+            </thead>
+            <tbody>
+              {weekDays.map((d, i) => {
+                const c = s.weekCounts[d];
+                return (
+                  <tr key={d} className="border-t">
+                    <td className="p-3 font-medium">
+                      <div>{DAY_NAMES[i]}</div>
+                      <div className="text-xs text-muted-foreground">{heDate(d)}</div>
+                    </td>
+                    {(["morning", "evening", "off"] as const).map((sh) => (
+                      <td key={sh} className="p-2 text-center">
+                        <button
+                          type="button"
+                          onClick={() => setShiftCell({ day: d, shift: sh })}
+                          className="inline-flex min-w-12 px-3 py-1.5 rounded-md hover:bg-accent/40 font-semibold"
+                        >
+                          {c[sh]}
+                        </button>
+                      </td>
+                    ))}
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        )}
+      </Card>
+
+      <ApprovedSchedulesDialog
+        open={approvedOpen}
+        onOpenChange={setApprovedOpen}
+        scopeFilter={scopeFilter}
+      />
+
+      <ShiftCellDialog
+        cell={shiftCell}
+        onOpenChange={(v) => !v && setShiftCell(null)}
+        scopeFilter={scopeFilter}
       />
     </section>
   );
 }
 
-function TodayShiftDialog({
+function ApprovedSchedulesDialog({
   open,
-  shift,
-  today,
-  hasApproved,
   onOpenChange,
   scopeFilter,
 }: {
   open: boolean;
-  shift: "morning" | "evening" | "off" | null;
-  today: string;
-  hasApproved: boolean;
-  onOpenChange: (open: boolean) => void;
+  onOpenChange: (v: boolean) => void;
   scopeFilter: string | null;
 }) {
+  const navigate = useNavigate();
   const q = useQuery({
-    enabled: open && shift !== null,
-    queryKey: ["dashboard-today-shift", shift, today, scopeFilter],
+    enabled: open,
+    queryKey: ["dashboard-approved-list", scopeFilter],
     queryFn: async () => {
-      // Find approved schedules covering today
-      let schedQ = supabase
+      let sq = supabase
+        .from("schedules")
+        .select(
+          "id, department_id, week_start, week_end, created_by, approved_by, approved_at, published_at",
+        )
+        .eq("status", "approved")
+        .order("week_start", { ascending: false });
+      if (scopeFilter) sq = sq.eq("department_id", scopeFilter);
+      const { data: scheds } = await sq;
+      const rows = (scheds ?? []) as any[];
+      if (!rows.length) return [];
+      const deptIds = Array.from(new Set(rows.map((r) => r.department_id).filter(Boolean)));
+      const peopleIds = Array.from(
+        new Set(rows.flatMap((r) => [r.created_by, r.approved_by]).filter(Boolean)),
+      );
+      const [deptsRes, peopleRes] = await Promise.all([
+        deptIds.length
+          ? supabase.from("departments").select("id, name").in("id", deptIds)
+          : Promise.resolve({ data: [] as any[] }),
+        peopleIds.length
+          ? supabase.from("profiles").select("id, full_name").in("id", peopleIds)
+          : Promise.resolve({ data: [] as any[] }),
+      ]);
+      const dm: Record<string, string> = {};
+      (deptsRes.data ?? []).forEach((d: any) => (dm[d.id] = d.name));
+      const pm: Record<string, string> = {};
+      (peopleRes.data ?? []).forEach((p: any) => (pm[p.id] = p.full_name));
+      return rows.map((r) => ({
+        ...r,
+        department_name: dm[r.department_id] ?? "—",
+        creator_name: pm[r.created_by] ?? "—",
+        approver_name: pm[r.approved_by] ?? "—",
+      }));
+    },
+  });
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-2xl">
+        <DialogHeader>
+          <DialogTitle>סידורי עבודה מאושרים</DialogTitle>
+        </DialogHeader>
+        {q.isLoading ? (
+          <div className="flex justify-center py-8">
+            <Loader2 className="size-5 animate-spin text-primary" />
+          </div>
+        ) : !q.data || q.data.length === 0 ? (
+          <p className="text-sm text-muted-foreground py-6 text-center">
+            אין סידורי עבודה מאושרים.
+          </p>
+        ) : (
+          <ul className="divide-y max-h-[60vh] overflow-auto">
+            {q.data.map((r: any) => (
+              <li key={r.id}>
+                <button
+                  type="button"
+                  onClick={() => {
+                    onOpenChange(false);
+                    navigate({
+                      to: "/schedules",
+                      search: { dept: r.department_id, week: r.week_start, view: "editor" } as any,
+                    });
+                  }}
+                  className="w-full text-right py-3 px-2 hover:bg-accent/30 rounded-md"
+                >
+                  <div className="flex flex-wrap items-baseline justify-between gap-2">
+                    <p className="font-semibold">{r.department_name}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {new Intl.DateTimeFormat("he-IL", {
+                        timeZone: "Asia/Jerusalem",
+                        dateStyle: "short",
+                        numberingSystem: "latn",
+                        calendar: "gregory",
+                      }).format(new Date(r.week_start + "T00:00:00Z"))}{" "}
+                      –{" "}
+                      {new Intl.DateTimeFormat("he-IL", {
+                        timeZone: "Asia/Jerusalem",
+                        dateStyle: "short",
+                        numberingSystem: "latn",
+                        calendar: "gregory",
+                      }).format(new Date(r.week_end + "T00:00:00Z"))}
+                    </p>
+                  </div>
+                  <div className="mt-1 text-xs text-muted-foreground flex flex-wrap gap-x-4 gap-y-1">
+                    <span>נוצר ע״י: <span className="text-foreground">{r.creator_name}</span></span>
+                    <span>אושר ע״י: <span className="text-foreground">{r.approver_name}</span></span>
+                    <span>
+                      תאריך אישור:{" "}
+                      <span className="text-foreground">
+                        {r.approved_at
+                          ? new Intl.DateTimeFormat("he-IL", {
+                              timeZone: "Asia/Jerusalem",
+                              dateStyle: "short",
+                              timeStyle: "short",
+                              numberingSystem: "latn",
+                              calendar: "gregory",
+                            }).format(new Date(r.approved_at))
+                          : "—"}
+                      </span>
+                    </span>
+                  </div>
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function ShiftCellDialog({
+  cell,
+  onOpenChange,
+  scopeFilter,
+}: {
+  cell: { day: string; shift: "morning" | "evening" | "off" } | null;
+  onOpenChange: (v: boolean) => void;
+  scopeFilter: string | null;
+}) {
+  const open = cell !== null;
+  const q = useQuery({
+    enabled: open,
+    queryKey: ["dashboard-shift-cell", cell?.day, cell?.shift, scopeFilter],
+    queryFn: async () => {
+      let sq = supabase
         .from("schedules")
         .select("id, department_id")
         .eq("status", "approved")
-        .lte("week_start", today)
-        .gte("week_end", today);
-      if (scopeFilter) schedQ = schedQ.eq("department_id", scopeFilter);
-      const { data: scheds } = await schedQ;
+        .lte("week_start", cell!.day)
+        .gte("week_end", cell!.day);
+      if (scopeFilter) sq = sq.eq("department_id", scopeFilter);
+      const { data: scheds } = await sq;
       const ids = (scheds ?? []).map((s: any) => s.id);
       if (!ids.length) return [];
       const { data: shifts } = await supabase
         .from("schedule_shifts")
-        .select("employee_id, schedule_id")
+        .select("employee_id")
         .in("schedule_id", ids)
-        .eq("day_date", today)
-        .eq("shift", shift!);
+        .eq("day_date", cell!.day)
+        .eq("shift", cell!.shift);
       const empIds = Array.from(new Set((shifts ?? []).map((s: any) => s.employee_id)));
       if (!empIds.length) return [];
       const { data: emps } = await supabase
         .from("profiles")
-        .select("id, full_name, phone, department_id")
+        .select("id, full_name, department_id")
         .in("id", empIds)
         .order("full_name");
-      const deptIds = Array.from(new Set((emps ?? []).map((e: any) => e.department_id).filter(Boolean)));
+      const deptIds = Array.from(
+        new Set((emps ?? []).map((e: any) => e.department_id).filter(Boolean)),
+      );
       const { data: depts } = deptIds.length
         ? await supabase.from("departments").select("id, name").in("id", deptIds)
         : { data: [] as any[] };
-      const deptMap: Record<string, string> = {};
-      (depts ?? []).forEach((d: any) => (deptMap[d.id] = d.name));
-      return (emps ?? []).map((e: any) => ({ ...e, department_name: deptMap[e.department_id] ?? "—" }));
+      const dm: Record<string, string> = {};
+      (depts ?? []).forEach((d: any) => (dm[d.id] = d.name));
+      return (emps ?? []).map((e: any) => ({
+        ...e,
+        department_name: dm[e.department_id] ?? "—",
+      }));
     },
   });
 
-  const title =
-    shift === "morning"
-      ? "משמרת בוקר היום"
-      : shift === "evening"
-      ? "משמרת ערב היום"
-      : "עובדים בחופש היום";
+  const SHIFT_LABEL: Record<"morning" | "evening" | "off", string> = {
+    morning: "בוקר",
+    evening: "ערב",
+    off: "חופש",
+  };
+  const DAY_NAMES = ["ראשון", "שני", "שלישי", "רביעי", "חמישי", "שישי", "שבת"];
+  const title = cell
+    ? `יום ${DAY_NAMES[new Date(cell.day + "T00:00:00Z").getUTCDay()]} — ${SHIFT_LABEL[cell.shift]}`
+    : "";
 
-  return (
-    <ShiftDialog open={open} onOpenChange={onOpenChange} title={title}>
-      {q.isLoading ? (
-        <div className="flex justify-center py-8">
-          <Loader2 className="size-5 animate-spin text-primary" />
-        </div>
-      ) : !hasApproved ? (
-        <p className="text-sm text-muted-foreground py-6 text-center">
-          אין סידור עבודה מאושר לתאריך הנוכחי.
-        </p>
-      ) : !q.data || q.data.length === 0 ? (
-        <p className="text-sm text-muted-foreground py-6 text-center">
-          אין עובדים משובצים בקטגוריה זו היום.
-        </p>
-      ) : (
-        <ul className="divide-y">
-          {q.data.map((e: any) => (
-            <li key={e.id} className="flex items-center justify-between py-3 gap-3">
-              <div className="min-w-0">
-                <p className="font-medium truncate">{e.full_name}</p>
-                <p className="text-xs text-muted-foreground truncate">{e.department_name}</p>
-              </div>
-              {e.phone && (
-                <a
-                  href={`tel:${e.phone}`}
-                  className="text-xs text-primary hover:underline shrink-0"
-                >
-                  {e.phone}
-                </a>
-              )}
-            </li>
-          ))}
-        </ul>
-      )}
-    </ShiftDialog>
-  );
-}
-
-function ShiftDialog({
-  open,
-  onOpenChange,
-  title,
-  children,
-}: {
-  open: boolean;
-  onOpenChange: (v: boolean) => void;
-  title: string;
-  children: React.ReactNode;
-}) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
         <DialogHeader>
           <DialogTitle>{title}</DialogTitle>
         </DialogHeader>
-        {children}
+        {q.isLoading ? (
+          <div className="flex justify-center py-8">
+            <Loader2 className="size-5 animate-spin text-primary" />
+          </div>
+        ) : !q.data || q.data.length === 0 ? (
+          <p className="text-sm text-muted-foreground py-6 text-center">
+            אין עובדים משובצים.
+          </p>
+        ) : (
+          <ul className="divide-y max-h-[60vh] overflow-auto">
+            {q.data.map((e: any) => (
+              <li key={e.id} className="flex items-center justify-between py-3 gap-3">
+                <div className="min-w-0">
+                  <p className="font-medium truncate">{e.full_name}</p>
+                  <p className="text-xs text-muted-foreground truncate">{e.department_name}</p>
+                </div>
+                <Badge variant="outline" className="shrink-0">
+                  {SHIFT_LABEL[cell!.shift]}
+                </Badge>
+              </li>
+            ))}
+          </ul>
+        )}
       </DialogContent>
     </Dialog>
   );
 }
+
 
