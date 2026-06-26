@@ -180,12 +180,24 @@ function EmployeesPage() {
     enabled: allowed,
     queryKey: ["employees"],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("profiles")
-        .select("id, full_name, id_number, department_id, job_title, phone, is_active, on_leave, avatar_url")
-        .order("full_name");
+      const [{ data, error }, { data: contacts, error: cErr }] = await Promise.all([
+        supabase
+          .from("profiles")
+          .select("id, full_name, department_id, job_title, is_active, on_leave, avatar_url")
+          .order("full_name"),
+        supabase.rpc("list_profiles_contact"),
+      ]);
       if (error) throw error;
-      return data as ProfileRow[];
+      if (cErr) throw cErr;
+      const cmap: Record<string, { id_number: string | null; phone: string | null }> = {};
+      (contacts ?? []).forEach((c: any) => {
+        cmap[c.id] = { id_number: c.id_number ?? null, phone: c.phone ?? null };
+      });
+      return (data ?? []).map((p: any) => ({
+        ...p,
+        id_number: cmap[p.id]?.id_number ?? null,
+        phone: cmap[p.id]?.phone ?? null,
+      })) as ProfileRow[];
     },
   });
 

@@ -727,6 +727,14 @@ export type Database = {
         }[]
       }
       get_my_department_id: { Args: never; Returns: string }
+      get_profile_contact: {
+        Args: { _id: string }
+        Returns: {
+          id_number: string
+          must_change_password: boolean
+          phone: string
+        }[]
+      }
       has_break_manage_perm: { Args: { _user_id: string }; Returns: boolean }
       has_main_admin: { Args: never; Returns: boolean }
       has_role: {
@@ -752,6 +760,15 @@ export type Database = {
       has_task_edit_perm: { Args: { _user_id: string }; Returns: boolean }
       has_task_management_perm: { Args: { _user_id: string }; Returns: boolean }
       is_admin: { Args: { _user_id: string }; Returns: boolean }
+      list_profiles_contact: {
+        Args: never
+        Returns: {
+          id: string
+          id_number: string
+          must_change_password: boolean
+          phone: string
+        }[]
+      }
       process_break_lifecycle: { Args: never; Returns: undefined }
       reset_breaks_log_daily: { Args: never; Returns: undefined }
       set_department_manager: {

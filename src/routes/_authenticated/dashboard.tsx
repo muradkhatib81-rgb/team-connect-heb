@@ -69,7 +69,7 @@ function DashboardPage() {
       if (dErr) throw dErr;
       const { data: emps, error: eErr } = await supabase
         .from("profiles")
-        .select("id, full_name, phone, is_active, on_leave, avatar_url, department_id")
+        .select("id, full_name, is_active, on_leave, avatar_url, department_id")
         .order("full_name");
       if (eErr) throw eErr;
       return { dept, employees: (emps ?? []) as DeptEmp[] };
@@ -200,7 +200,6 @@ function TasksStatsSection({
 type DeptEmp = {
   id: string;
   full_name: string;
-  phone: string | null;
   is_active: boolean;
   on_leave: boolean;
   avatar_url: string | null;
@@ -278,9 +277,6 @@ function DeptManagerDashboard({
                         <Badge variant="secondary" className="rounded-full text-xs">בחופש</Badge>
                       )}
                     </div>
-                    {e.phone && (
-                      <p className="text-xs text-muted-foreground mt-0.5 truncate">{e.phone}</p>
-                    )}
                   </div>
                 </div>
               </Card>
@@ -1034,7 +1030,7 @@ function EmployeeProfileDialog({
       if (!employeeId) return null;
       const { data: profile, error: pErr } = await supabase
         .from("profiles")
-        .select("*, departments(name)")
+        .select("id, full_name, department_id, job_title, is_active, on_leave, avatar_url, departments(name)")
         .eq("id", employeeId)
         .maybeSingle();
       if (pErr) throw pErr;
@@ -1043,6 +1039,8 @@ function EmployeeProfileDialog({
         .select("role")
         .eq("user_id", employeeId);
       const roleLabel = (roles ?? []).map((r: any) => ROLE_LABELS[r.role as AppRole]).filter(Boolean).join(", ") || "—";
+      const { data: contactRows } = await supabase.rpc("get_profile_contact", { _id: employeeId });
+      const contact: any = Array.isArray(contactRows) ? contactRows[0] ?? {} : contactRows ?? {};
       let avatarUrl: string | null = null;
       if (profile?.avatar_url) {
         const { data: urlData } = await supabase.storage.from("avatars").createSignedUrl(profile.avatar_url, 60 * 60);
@@ -1050,7 +1048,9 @@ function EmployeeProfileDialog({
       }
       return {
         ...profile,
-        departmentName: profile?.departments?.name ?? "—",
+        id_number: contact.id_number ?? null,
+        phone: contact.phone ?? null,
+        departmentName: (profile as any)?.departments?.name ?? "—",
         roleLabel,
         avatarUrl,
       };

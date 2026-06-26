@@ -22,27 +22,29 @@ async function fetchSessionAndProfile(): Promise<AuthProfile | null> {
   const user = userData.user;
   if (!user) return null;
 
-  const [{ data: profile }, { data: roles }] = await Promise.all([
+  const [{ data: profile }, { data: roles }, { data: contactRows }] = await Promise.all([
     supabase
       .from("profiles")
-      .select("*, departments(name)")
+      .select("id, full_name, department_id, job_title, is_active, departments(name)")
       .eq("id", user.id)
       .maybeSingle(),
     supabase.from("user_roles").select("role").eq("user_id", user.id),
+    supabase.rpc("get_profile_contact", { _id: user.id }),
   ]);
 
   const p: any = profile ?? {};
+  const contact: any = Array.isArray(contactRows) ? contactRows[0] ?? {} : contactRows ?? {};
   return {
     id: user.id,
     email: user.email ?? null,
     full_name: p.full_name ?? "",
-    id_number: p.id_number ?? null,
+    id_number: contact.id_number ?? null,
     department_id: p.department_id ?? null,
     department_name: p.departments?.name ?? null,
     job_title: p.job_title ?? null,
-    phone: p.phone ?? null,
+    phone: contact.phone ?? null,
     is_active: p.is_active ?? true,
-    must_change_password: p.must_change_password ?? false,
+    must_change_password: contact.must_change_password ?? false,
     roles: (roles ?? []).map((r) => r.role as AppRole),
   };
 }
