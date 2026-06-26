@@ -48,7 +48,7 @@ interface BreakRow {
   is_active: boolean;
 }
 
-function BreakSettingsPage() {
+export function BreakSettingsPage() {
   const qc = useQueryClient();
   const { data: me } = useAuth();
   const isMainAdmin = !!me?.roles.includes("main_admin");
