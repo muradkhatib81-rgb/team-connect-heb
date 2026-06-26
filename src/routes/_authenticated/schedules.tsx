@@ -394,6 +394,21 @@ function SchedulesPage() {
     canApprove &&
     visible.created_by !== me?.id;
 
+  const deptNameById = useMemo(() => {
+    const m: Record<string, string> = {};
+    for (const d of deptsQ.data ?? []) m[d.id] = d.name;
+    return m;
+  }, [deptsQ.data]);
+
+  function openScheduleFromPending(p: {
+    department_id: string;
+    week_start: string;
+  }) {
+    setSelectedDept(p.department_id);
+    setWeekStart(p.week_start);
+    setView("editor");
+  }
+
   return (
     <div className="space-y-6">
       <header className="flex items-center gap-3">
@@ -403,10 +418,97 @@ function SchedulesPage() {
         <div className="flex-1 min-w-0">
           <h1 className="text-2xl sm:text-3xl font-bold">סידורי עבודה</h1>
           <p className="text-sm text-muted-foreground mt-1">
-            {formatHeDate(weekStart)} – {formatHeDate(weekEnd)}
+            {view === "pending" && canApprove
+              ? "ממתינים לאישור — כל המחלקות"
+              : `${formatHeDate(weekStart)} – ${formatHeDate(weekEnd)}`}
           </p>
         </div>
       </header>
+
+      {canApprove && (
+        <div className="flex gap-2">
+          <Button
+            size="sm"
+            variant={view === "pending" ? "default" : "outline"}
+            onClick={() => setView("pending")}
+          >
+            ממתינים לאישור
+            {pendingQ.data && pendingQ.data.length > 0 && (
+              <Badge variant="secondary" className="mr-2">
+                {pendingQ.data.length}
+              </Badge>
+            )}
+          </Button>
+          <Button
+            size="sm"
+            variant={view === "editor" ? "default" : "outline"}
+            onClick={() => setView("editor")}
+          >
+            עריכת סידור שבועי
+          </Button>
+        </div>
+      )}
+
+      {canApprove && view === "pending" ? (
+        <Card className="card-elevated p-0 overflow-hidden">
+          {pendingQ.isLoading ? (
+            <div className="flex justify-center py-12">
+              <Loader2 className="size-6 animate-spin text-primary" />
+            </div>
+          ) : !pendingQ.data || pendingQ.data.length === 0 ? (
+            <div className="p-8 text-center text-sm text-muted-foreground">
+              אין סידורי עבודה הממתינים לאישור.
+            </div>
+          ) : (
+            <table className="w-full text-sm">
+              <thead className="bg-muted/50">
+                <tr>
+                  <th className="text-right p-3">מחלקה</th>
+                  <th className="text-right p-3">טווח תאריכים</th>
+                  <th className="text-right p-3">נוצר ע״י</th>
+                  <th className="text-right p-3">נשלח</th>
+                  <th className="text-right p-3">סטטוס</th>
+                  <th className="text-right p-3" />
+                </tr>
+              </thead>
+              <tbody>
+                {pendingQ.data.map((p) => (
+                  <tr key={p.id} className="border-t hover:bg-muted/30">
+                    <td className="p-3 font-medium">
+                      {deptNameById[p.department_id] ?? "—"}
+                    </td>
+                    <td className="p-3">
+                      {formatHeDate(p.week_start)} – {formatHeDate(p.week_end)}
+                    </td>
+                    <td className="p-3">
+                      {pendingPeopleQ.data?.[p.created_by ?? ""] ?? "—"}
+                    </td>
+                    <td className="p-3 text-xs text-muted-foreground">
+                      {p.submitted_at ? formatHeDate(p.submitted_at) : "—"}
+                    </td>
+                    <td className="p-3">
+                      <Badge variant={STATUS_VARIANT[p.status]}>
+                        {STATUS_LABEL[p.status as keyof typeof STATUS_LABEL]}
+                      </Badge>
+                    </td>
+                    <td className="p-3 text-left">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => openScheduleFromPending(p)}
+                      >
+                        פתח לאישור
+                      </Button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </Card>
+      ) : (
+        <>
+
 
       <Card className="card-elevated p-4 flex flex-col sm:flex-row gap-3 items-stretch sm:items-center">
         <div className="flex items-center gap-2">
