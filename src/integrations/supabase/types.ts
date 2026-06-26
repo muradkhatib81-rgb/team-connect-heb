@@ -203,13 +203,6 @@ export type Database = {
             foreignKeyName: "schedule_shifts_employee_id_fkey"
             columns: ["employee_id"]
             isOneToOne: false
-            referencedRelation: "department_coworkers"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "schedule_shifts_employee_id_fkey"
-            columns: ["employee_id"]
-            isOneToOne: false
             referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
@@ -596,39 +589,25 @@ export type Database = {
           job_title: string | null
           on_leave: boolean | null
         }
-        Insert: {
-          avatar_url?: string | null
-          department_id?: string | null
-          full_name?: string | null
-          id?: string | null
-          is_active?: boolean | null
-          job_title?: string | null
-          on_leave?: boolean | null
-        }
-        Update: {
-          avatar_url?: string | null
-          department_id?: string | null
-          full_name?: string | null
-          id?: string | null
-          is_active?: boolean | null
-          job_title?: string | null
-          on_leave?: boolean | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "profiles_department_id_fkey"
-            columns: ["department_id"]
-            isOneToOne: false
-            referencedRelation: "departments"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
     }
     Functions: {
       can_approve_task: {
         Args: { _approver_id: string; _task_id: string }
         Returns: boolean
+      }
+      get_department_coworkers: {
+        Args: never
+        Returns: {
+          avatar_url: string
+          department_id: string
+          full_name: string
+          id: string
+          is_active: boolean
+          job_title: string
+          on_leave: boolean
+        }[]
       }
       get_my_department_id: { Args: never; Returns: string }
       has_main_admin: { Args: never; Returns: boolean }
