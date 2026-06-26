@@ -19,6 +19,7 @@ import {
   rejectTask,
 } from "@/lib/tasks.functions";
 import { formatHeDateTime, splitForInputs, combineToIso } from "@/lib/date-format";
+import { HebrewDateInput, HebrewTimeInput } from "@/components/hebrew-datetime";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -961,21 +962,11 @@ function TaskFormDialog({
           <div className="grid grid-cols-3 gap-3">
             <div>
               <Label>תאריך יעד</Label>
-              <Input
-                type="date"
-                lang="he"
-                value={dueDate}
-                onChange={(e) => setDueDate(e.target.value)}
-              />
+              <HebrewDateInput value={dueDate} onChange={setDueDate} />
             </div>
             <div>
               <Label>שעה</Label>
-              <Input
-                type="time"
-                lang="he"
-                value={dueTime}
-                onChange={(e) => setDueTime(e.target.value)}
-              />
+              <HebrewTimeInput value={dueTime || "08:00"} onChange={setDueTime} />
             </div>
             <div>
               <Label>עדיפות</Label>
@@ -1307,7 +1298,7 @@ function RecurrenceFormDialog({
           <div className="grid grid-cols-2 gap-3 items-end">
             <div>
               <Label>שעה</Label>
-              <Input type="time" lang="he" value={time} onChange={(e) => setTime(e.target.value)} />
+              <HebrewTimeInput value={time || "08:00"} onChange={setTime} />
             </div>
             <div className="flex items-center gap-2">
               <Switch checked={active} onCheckedChange={setActive} />
