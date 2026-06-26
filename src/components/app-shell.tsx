@@ -177,6 +177,13 @@ export function AppShell({ children }: { children: ReactNode }) {
         <NotificationsBell />
       </header>
 
+      {/* Floating notifications bell — desktop only (mobile uses the one in the header) */}
+      <div className="hidden lg:block fixed top-4 left-4 z-40">
+        <div className="bg-background/95 backdrop-blur border rounded-full shadow-soft">
+          <NotificationsBell />
+        </div>
+      </div>
+
       <main className="lg:mr-64">
         <div className="mx-auto max-w-6xl px-4 sm:px-6 py-6 lg:py-10">{children}</div>
       </main>
