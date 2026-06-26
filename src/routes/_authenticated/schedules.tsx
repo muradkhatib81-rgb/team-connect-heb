@@ -509,6 +509,8 @@ function SchedulesPage() {
           <p className="text-sm text-muted-foreground mt-1">
             {view === "pending" && canApprove
               ? "ממתינים לאישור — כל המחלקות"
+              : view === "approved" && canApprove
+              ? "סידורים מאושרים — כל המחלקות"
               : `${formatHeDate(weekStart)} – ${formatHeDate(weekEnd)}`}
           </p>
         </div>
