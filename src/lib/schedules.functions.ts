@@ -236,6 +236,24 @@ export const submitSchedule = createServerFn({ method: "POST" })
       m.get(s.day_date)!.push(s.shift);
     }
 
+    // Auto-fill missing (employee, day) cells as "off" so an unset cell defaults
+    // to a day off rather than blocking submission.
+    const autoFill: { schedule_id: string; employee_id: string; day_date: string; shift: "off" }[] = [];
+    for (const emp of deptEmployees ?? []) {
+      const m = map.get(emp.id) ?? new Map<string, string[]>();
+      for (const d of days) {
+        if (!m.has(d)) {
+          autoFill.push({ schedule_id: data.schedule_id, employee_id: emp.id, day_date: d, shift: "off" });
+          m.set(d, ["off"]);
+        }
+      }
+      if (!map.has(emp.id)) map.set(emp.id, m);
+    }
+    if (autoFill.length) {
+      const { error: afErr } = await context.supabase.from("schedule_shifts").insert(autoFill);
+      if (afErr) throw new Error(afErr.message);
+    }
+
     // Duplicates / off-with-shift checks per employee per day
     for (const [empId, dayMap] of map) {
       const emp = (deptEmployees ?? []).find((e: any) => e.id === empId);
@@ -245,13 +263,6 @@ export const submitSchedule = createServerFn({ method: "POST" })
         if (list.includes("off") && list.some((s) => s !== "off"))
           errors.push(`${name}: חופש ומשמרת באותו יום (${day})`);
       }
-    }
-
-    // Every employee must have all 7 days filled
-    for (const emp of deptEmployees ?? []) {
-      const m = map.get(emp.id);
-      const missing = days.filter((d) => !m?.has(d));
-      if (missing.length) errors.push(`${emp.full_name}: חסרים ימים (${missing.length})`);
     }
 
     if (errors.length) {
