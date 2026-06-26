@@ -586,6 +586,7 @@ export type Database = {
         Args: { _approver_id: string; _task_id: string }
         Returns: boolean
       }
+      get_my_department_id: { Args: never; Returns: string }
       has_main_admin: { Args: never; Returns: boolean }
       has_role: {
         Args: {
