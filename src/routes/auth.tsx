@@ -14,7 +14,6 @@ import { Store, Loader2 } from "lucide-react";
 const searchSchema = z.object({ redirect: z.string().optional() });
 
 export const Route = createFileRoute("/auth")({
-  ssr: false,
   validateSearch: searchSchema,
   head: () => ({ meta: [{ title: `התחברות | ${APP_NAME}` }] }),
   component: AuthPage,
