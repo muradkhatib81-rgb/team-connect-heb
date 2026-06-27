@@ -32,7 +32,6 @@ function fileToDataUrl(file: File): Promise<string> {
 function CompanySettingsPage() {
   const { data: profile, isLoading: profileLoading } = useAuth();
   const { data: company, isLoading } = useCompanySettings();
-  const navigate = useNavigate();
   const qc = useQueryClient();
   const fileRef = useRef<HTMLInputElement>(null);
 
@@ -46,12 +45,6 @@ function CompanySettingsPage() {
   });
 
   const isMainAdmin = !!profile?.roles?.includes("main_admin");
-
-  useEffect(() => {
-    if (!profileLoading && profile && !isMainAdmin) {
-      navigate({ to: "/dashboard", replace: true });
-    }
-  }, [profileLoading, profile, isMainAdmin, navigate]);
 
   useEffect(() => {
     if (company) {
