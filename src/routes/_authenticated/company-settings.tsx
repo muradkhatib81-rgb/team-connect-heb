@@ -1,4 +1,4 @@
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
@@ -32,7 +32,6 @@ function fileToDataUrl(file: File): Promise<string> {
 function CompanySettingsPage() {
   const { data: profile, isLoading: profileLoading } = useAuth();
   const { data: company, isLoading } = useCompanySettings();
-  const navigate = useNavigate();
   const qc = useQueryClient();
   const fileRef = useRef<HTMLInputElement>(null);
 
@@ -46,12 +45,6 @@ function CompanySettingsPage() {
   });
 
   const isMainAdmin = !!profile?.roles?.includes("main_admin");
-
-  useEffect(() => {
-    if (!profileLoading && profile && !isMainAdmin) {
-      navigate({ to: "/dashboard", replace: true });
-    }
-  }, [profileLoading, profile, isMainAdmin, navigate]);
 
   useEffect(() => {
     if (company) {
@@ -120,7 +113,19 @@ function CompanySettingsPage() {
     );
   }
 
-  if (!isMainAdmin) return null;
+  if (!isMainAdmin) {
+    return (
+      <div className="flex flex-col items-center justify-center py-20 text-center space-y-3">
+        <div className="size-12 rounded-xl bg-destructive/10 flex items-center justify-center">
+          <Building2 className="size-6 text-destructive" />
+        </div>
+        <h1 className="text-xl font-bold">אין הרשאה</h1>
+        <p className="text-sm text-muted-foreground">
+          רק מנהל ראשי יכול לגשת להגדרות החברה.
+        </p>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
