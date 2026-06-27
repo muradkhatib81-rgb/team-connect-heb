@@ -70,14 +70,29 @@ function CompanySettingsPage() {
         primary_color: form.primary_color.trim() || null,
         logo_url: form.logo_url || null,
       };
-      if (company?.id) {
+
+      // Always resolve the current active row id directly from the DB,
+      // so saves never create duplicate rows due to a stale client id.
+      const { data: existing, error: fetchErr } = await supabase
+        .from("company_settings" as any)
+        .select("id")
+        .eq("is_active", true)
+        .order("created_at", { ascending: true })
+        .limit(1)
+        .maybeSingle();
+      if (fetchErr) throw fetchErr;
+
+      const existingId = (existing as any)?.id as string | undefined;
+      if (existingId) {
         const { error } = await supabase
           .from("company_settings" as any)
           .update(payload)
-          .eq("id", company.id);
+          .eq("id", existingId);
         if (error) throw error;
       } else {
-        const { error } = await supabase.from("company_settings" as any).insert(payload);
+        const { error } = await supabase
+          .from("company_settings" as any)
+          .insert({ ...payload, is_active: true });
         if (error) throw error;
       }
     },
