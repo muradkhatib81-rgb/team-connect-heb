@@ -17,6 +17,7 @@ import { Route as AuthenticatedSchedulesRouteImport } from './routes/_authentica
 import { Route as AuthenticatedProfileRouteImport } from './routes/_authenticated/profile'
 import { Route as AuthenticatedPermissionsRouteImport } from './routes/_authenticated/permissions'
 import { Route as AuthenticatedEmployeesRouteImport } from './routes/_authenticated/employees'
+import { Route as AuthenticatedEmployeeOfMonthRouteImport } from './routes/_authenticated/employee-of-month'
 import { Route as AuthenticatedDepartmentsRouteImport } from './routes/_authenticated/departments'
 import { Route as AuthenticatedDashboardRouteImport } from './routes/_authenticated/dashboard'
 import { Route as AuthenticatedCompanySettingsRouteImport } from './routes/_authenticated/company-settings'
@@ -67,6 +68,12 @@ const AuthenticatedEmployeesRoute = AuthenticatedEmployeesRouteImport.update({
   path: '/employees',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
+const AuthenticatedEmployeeOfMonthRoute =
+  AuthenticatedEmployeeOfMonthRouteImport.update({
+    id: '/employee-of-month',
+    path: '/employee-of-month',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
 const AuthenticatedDepartmentsRoute =
   AuthenticatedDepartmentsRouteImport.update({
     id: '/departments',
@@ -131,6 +138,7 @@ export interface FileRoutesByFullPath {
   '/company-settings': typeof AuthenticatedCompanySettingsRoute
   '/dashboard': typeof AuthenticatedDashboardRoute
   '/departments': typeof AuthenticatedDepartmentsRoute
+  '/employee-of-month': typeof AuthenticatedEmployeeOfMonthRoute
   '/employees': typeof AuthenticatedEmployeesRoute
   '/permissions': typeof AuthenticatedPermissionsRoute
   '/profile': typeof AuthenticatedProfileRoute
@@ -149,6 +157,7 @@ export interface FileRoutesByTo {
   '/company-settings': typeof AuthenticatedCompanySettingsRoute
   '/dashboard': typeof AuthenticatedDashboardRoute
   '/departments': typeof AuthenticatedDepartmentsRoute
+  '/employee-of-month': typeof AuthenticatedEmployeeOfMonthRoute
   '/employees': typeof AuthenticatedEmployeesRoute
   '/permissions': typeof AuthenticatedPermissionsRoute
   '/profile': typeof AuthenticatedProfileRoute
@@ -169,6 +178,7 @@ export interface FileRoutesById {
   '/_authenticated/company-settings': typeof AuthenticatedCompanySettingsRoute
   '/_authenticated/dashboard': typeof AuthenticatedDashboardRoute
   '/_authenticated/departments': typeof AuthenticatedDepartmentsRoute
+  '/_authenticated/employee-of-month': typeof AuthenticatedEmployeeOfMonthRoute
   '/_authenticated/employees': typeof AuthenticatedEmployeesRoute
   '/_authenticated/permissions': typeof AuthenticatedPermissionsRoute
   '/_authenticated/profile': typeof AuthenticatedProfileRoute
@@ -189,6 +199,7 @@ export interface FileRouteTypes {
     | '/company-settings'
     | '/dashboard'
     | '/departments'
+    | '/employee-of-month'
     | '/employees'
     | '/permissions'
     | '/profile'
@@ -207,6 +218,7 @@ export interface FileRouteTypes {
     | '/company-settings'
     | '/dashboard'
     | '/departments'
+    | '/employee-of-month'
     | '/employees'
     | '/permissions'
     | '/profile'
@@ -226,6 +238,7 @@ export interface FileRouteTypes {
     | '/_authenticated/company-settings'
     | '/_authenticated/dashboard'
     | '/_authenticated/departments'
+    | '/_authenticated/employee-of-month'
     | '/_authenticated/employees'
     | '/_authenticated/permissions'
     | '/_authenticated/profile'
@@ -297,6 +310,13 @@ declare module '@tanstack/react-router' {
       path: '/employees'
       fullPath: '/employees'
       preLoaderRoute: typeof AuthenticatedEmployeesRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/employee-of-month': {
+      id: '/_authenticated/employee-of-month'
+      path: '/employee-of-month'
+      fullPath: '/employee-of-month'
+      preLoaderRoute: typeof AuthenticatedEmployeeOfMonthRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
     '/_authenticated/departments': {
@@ -374,6 +394,7 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedCompanySettingsRoute: typeof AuthenticatedCompanySettingsRoute
   AuthenticatedDashboardRoute: typeof AuthenticatedDashboardRoute
   AuthenticatedDepartmentsRoute: typeof AuthenticatedDepartmentsRoute
+  AuthenticatedEmployeeOfMonthRoute: typeof AuthenticatedEmployeeOfMonthRoute
   AuthenticatedEmployeesRoute: typeof AuthenticatedEmployeesRoute
   AuthenticatedPermissionsRoute: typeof AuthenticatedPermissionsRoute
   AuthenticatedProfileRoute: typeof AuthenticatedProfileRoute
@@ -390,6 +411,7 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedCompanySettingsRoute: AuthenticatedCompanySettingsRoute,
   AuthenticatedDashboardRoute: AuthenticatedDashboardRoute,
   AuthenticatedDepartmentsRoute: AuthenticatedDepartmentsRoute,
+  AuthenticatedEmployeeOfMonthRoute: AuthenticatedEmployeeOfMonthRoute,
   AuthenticatedEmployeesRoute: AuthenticatedEmployeesRoute,
   AuthenticatedPermissionsRoute: AuthenticatedPermissionsRoute,
   AuthenticatedProfileRoute: AuthenticatedProfileRoute,

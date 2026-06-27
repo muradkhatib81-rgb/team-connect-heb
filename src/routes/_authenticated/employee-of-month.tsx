@@ -389,7 +389,7 @@ function EomEditDialog({
           if (row.image_url) await supabase.storage.from("employee-of-month").remove([row.image_url]).catch(() => {});
           imagePath = await uploadImageFor(row.id);
         }
-        const update: Record<string, unknown> = { reason: reason.trim() || null };
+        const update: { reason: string | null; image_url?: string | null } = { reason: reason.trim() || null };
         if (imagePath !== undefined) update.image_url = imagePath;
         const { error } = await supabase.from("employee_of_month").update(update).eq("id", row.id);
         if (error) throw error;
