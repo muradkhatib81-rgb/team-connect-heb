@@ -1303,26 +1303,133 @@ function TaskFormDialog({
             <Label>תיאור</Label>
             <Textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={3} />
           </div>
-          <div>
-            <Label>מחלקה</Label>
-            {canPickAnyDept ? (
-              <Select value={departmentId} onValueChange={(v) => setDepartmentId(v)}>
+          {canPickAnyDept && (
+            <div>
+              <Label>יעד המשימה</Label>
+              <Select
+                value={targetScope}
+                onValueChange={(v) => setTargetScope(v as any)}
+              >
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  {allowedDepartments.map((d) => (
-                    <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>
+                  <SelectItem value="all_departments">🌍 כל המחלקות</SelectItem>
+                  <SelectItem value="departments">📂 מספר מחלקות</SelectItem>
+                  <SelectItem value="single_department">📁 מחלקה אחת</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          )}
+          {targetScope === "single_department" && (
+            <div>
+              <Label>מחלקה</Label>
+              {canPickAnyDept ? (
+                <Select value={departmentId} onValueChange={(v) => setDepartmentId(v)}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {allowedDepartments.map((d) => (
+                      <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              ) : (
+                <div className="px-3 py-2 rounded-md border bg-muted text-sm">
+                  {allowedDepartments.find((d) => d.id === departmentId)?.name ?? "—"}
+                </div>
+              )}
+            </div>
+          )}
+          {targetScope === "departments" && (
+            <div>
+              <Label>מחלקות (בחירה מרובה)</Label>
+              <div className="flex flex-wrap gap-2 p-2 border rounded-md max-h-40 overflow-y-auto">
+                {allowedDepartments.map((d) => {
+                  const on = departmentIds.includes(d.id);
+                  return (
+                    <button
+                      type="button"
+                      key={d.id}
+                      onClick={() =>
+                        setDepartmentIds((prev) =>
+                          on ? prev.filter((x) => x !== d.id) : [...prev, d.id],
+                        )
+                      }
+                      className={`px-3 py-1 rounded-full text-xs border transition ${
+                        on
+                          ? "bg-primary text-primary-foreground border-primary"
+                          : "bg-background hover:bg-muted"
+                      }`}
+                    >
+                      {d.name}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+          <div>
+            <Label>ביצוע המשימה על ידי</Label>
+            <Select value={executorMode} onValueChange={(v) => setExecutorMode(v as any)}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">כל עובדי המחלקה</SelectItem>
+                <SelectItem value="single">עובד אחד</SelectItem>
+                <SelectItem value="multi">מספר עובדים</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          {executorMode === "single" && (
+            <div>
+              <Label>עובד מבצע</Label>
+              <Select value={singleAssignee} onValueChange={setSingleAssignee}>
+                <SelectTrigger><SelectValue placeholder="בחר עובד" /></SelectTrigger>
+                <SelectContent>
+                  {eligibleEmployees.map((e) => (
+                    <SelectItem key={e.id} value={e.id}>{e.full_name}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
-            ) : (
-              <div className="px-3 py-2 rounded-md border bg-muted text-sm">
-                {allowedDepartments.find((d) => d.id === departmentId)?.name ?? "—"}
+            </div>
+          )}
+          {executorMode === "multi" && (
+            <div>
+              <Label>עובדים מבצעים (בחירה מרובה)</Label>
+              <div className="flex flex-wrap gap-2 p-2 border rounded-md max-h-40 overflow-y-auto">
+                {eligibleEmployees.length === 0 && (
+                  <span className="text-xs text-muted-foreground">בחר תחילה מחלקות</span>
+                )}
+                {eligibleEmployees.map((e) => {
+                  const on = assigneeIds.includes(e.id);
+                  return (
+                    <button
+                      type="button"
+                      key={e.id}
+                      onClick={() =>
+                        setAssigneeIds((prev) =>
+                          on ? prev.filter((x) => x !== e.id) : [...prev, e.id],
+                        )
+                      }
+                      className={`px-3 py-1 rounded-full text-xs border transition ${
+                        on
+                          ? "bg-primary text-primary-foreground border-primary"
+                          : "bg-background hover:bg-muted"
+                      }`}
+                    >
+                      {e.full_name}
+                    </button>
+                  );
+                })}
               </div>
-            )}
-            <p className="text-xs text-muted-foreground mt-1">
-              המשימה תהיה זמינה לכל עובדי המחלקה
-            </p>
-          </div>
+            </div>
+          )}
+          <label className="flex items-center gap-2 text-sm cursor-pointer select-none">
+            <input
+              type="checkbox"
+              checked={requiresApproval}
+              onChange={(e) => setRequiresApproval(e.target.checked)}
+              className="size-4"
+            />
+            נדרש אישור מנהל לאחר השלמת המשימה
+          </label>
           <div className="grid grid-cols-3 gap-3">
             <div>
               <Label>תאריך יעד</Label>
