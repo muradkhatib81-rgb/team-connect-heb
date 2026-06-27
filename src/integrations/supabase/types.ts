@@ -377,6 +377,57 @@ export type Database = {
         }
         Relationships: []
       }
+      employee_of_month: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          employee_id: string
+          id: string
+          image_url: string | null
+          month: number
+          reason: string | null
+          updated_at: string
+          year: number
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          employee_id: string
+          id?: string
+          image_url?: string | null
+          month: number
+          reason?: string | null
+          updated_at?: string
+          year: number
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          employee_id?: string
+          id?: string
+          image_url?: string | null
+          month?: number
+          reason?: string | null
+          updated_at?: string
+          year?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "employee_of_month_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "employee_of_month_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       message_attachments: {
         Row: {
           file_name: string
@@ -1153,6 +1204,7 @@ export type Database = {
           can_manage_communications: boolean
           can_manage_company_settings: boolean
           can_manage_departments: boolean
+          can_manage_employee_of_month: boolean
           can_manage_permissions: boolean
           can_manage_tasks: boolean
           can_manage_users: boolean
@@ -1201,6 +1253,7 @@ export type Database = {
           can_manage_communications?: boolean
           can_manage_company_settings?: boolean
           can_manage_departments?: boolean
+          can_manage_employee_of_month?: boolean
           can_manage_permissions?: boolean
           can_manage_tasks?: boolean
           can_manage_users?: boolean
@@ -1249,6 +1302,7 @@ export type Database = {
           can_manage_communications?: boolean
           can_manage_company_settings?: boolean
           can_manage_departments?: boolean
+          can_manage_employee_of_month?: boolean
           can_manage_permissions?: boolean
           can_manage_tasks?: boolean
           can_manage_users?: boolean
@@ -1365,6 +1419,10 @@ export type Database = {
       has_main_admin: { Args: never; Returns: boolean }
       has_manage_communications_perm: {
         Args: { _user_id: string }
+        Returns: boolean
+      }
+      has_manage_employee_of_month_perm: {
+        Args: { _uid: string }
         Returns: boolean
       }
       has_role: {
