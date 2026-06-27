@@ -876,6 +876,14 @@ export type Database = {
       has_task_delete_perm: { Args: { _user_id: string }; Returns: boolean }
       has_task_edit_perm: { Args: { _user_id: string }; Returns: boolean }
       has_task_management_perm: { Args: { _user_id: string }; Returns: boolean }
+      has_view_all_employees_perm: {
+        Args: { _user_id: string }
+        Returns: boolean
+      }
+      has_view_employee_details_perm: {
+        Args: { _user_id: string }
+        Returns: boolean
+      }
       is_admin: { Args: { _user_id: string }; Returns: boolean }
       list_profiles_contact: {
         Args: never
