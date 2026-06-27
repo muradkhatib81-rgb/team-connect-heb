@@ -264,6 +264,7 @@ interface InboxRow {
     sender_id: string;
     created_at: string;
     deleted_at: string | null;
+    edited_at?: string | null;
   };
   sender?: { full_name: string | null } | null;
 }
@@ -279,13 +280,15 @@ function InboxTab({ userId }: { userId: string }) {
       const { data, error } = await supabase
         .from("message_recipients")
         .select(
-          "message_id, read_at, acknowledged_at, archived_at, delivered_at, message:messages!inner(id,title,body,priority,requires_acknowledgment,sender_id,created_at,deleted_at)",
+          "message_id, read_at, acknowledged_at, archived_at, delivered_at, message:messages!inner(id,title,body,priority,requires_acknowledgment,sender_id,created_at,deleted_at,edited_at)",
         )
         .eq("user_id", userId)
         .is("archived_at", null)
         .order("delivered_at", { ascending: false });
       if (error) throw error;
-      const rows = ((data ?? []) as any[]).filter((r) => !r.message?.deleted_at);
+      const rows = ((data ?? []) as any[]).filter(
+        (r) => !r.message?.deleted_at && r.message?.sender_id !== userId,
+      );
       const senderIds = [...new Set(rows.map((r) => r.message.sender_id).filter(Boolean))];
       let senderMap: Record<string, string> = {};
       if (senderIds.length) {
