@@ -5,10 +5,8 @@ import { useAuth } from "@/lib/use-auth";
 import {
   ROLE_LABELS,
   ROLE_OPTIONS,
-  DEPARTMENT_LABELS,
   canManageUsers,
   type AppRole,
-  type Department,
 } from "@/lib/constants";
 import { Card } from "@/components/ui/card";
 import {
@@ -20,11 +18,58 @@ import {
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
-import { Loader2, ShieldCheck, Settings2 } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from "@/components/ui/accordion";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
+import {
+  Loader2,
+  ShieldCheck,
+  Settings2,
+  Search,
+  Info,
+  Copy,
+  Users,
+  Calendar,
+  Palmtree,
+  Coffee,
+  ListChecks,
+  MessageSquare,
+  BarChart3,
+  Cog,
+} from "lucide-react";
 import { toast } from "sonner";
 import { useServerFn } from "@tanstack/react-start";
 import { setUserPermissions } from "@/lib/tasks.functions";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 export const Route = createFileRoute("/_authenticated/permissions")({
   component: PermissionsPage,
@@ -37,22 +82,123 @@ interface Row {
   role: AppRole;
 }
 
-const GRANULAR_PERMS = [
-  { key: "can_create_tasks", label: "יצירת משימות" },
-  { key: "can_edit_tasks", label: "עריכת משימות" },
-  { key: "can_delete_tasks", label: "מחיקת משימות" },
-  { key: "can_approve_tasks", label: "אישור משימות (כשהיוצר הוא אחראי מחלקה)" },
-  { key: "can_create_schedule", label: "יצירת סידור עבודה" },
-  { key: "can_approve_schedule", label: "אישור סידור עבודה" },
-  { key: "can_publish_schedule", label: "אישור ופרסום ישיר של סידורי עבודה" },
+type PermDef = { key: string; label: string; description: string };
+type Category = {
+  id: string;
+  title: string;
+  icon: typeof Users;
+  perms: PermDef[];
+};
 
-  { key: "can_approve_leave", label: "אישור בקשות חופשה" },
-  { key: "can_view_breaks", label: "צפייה בעובדים בהפסקה" },
-  { key: "can_manage_breaks", label: "ניהול הפסקות (יצירה/עריכה/מחיקה)" },
-  { key: "can_send_messages", label: "שליחת הודעות" },
-] as const;
+const CATEGORIES: Category[] = [
+  {
+    id: "employees",
+    title: "עובדים",
+    icon: Users,
+    perms: [
+      { key: "can_view_all_employees", label: "צפייה בכל העובדים", description: "מאפשר למשתמש לצפות בכל עובדי החברה ללא אפשרות לערוך אותם." },
+      { key: "can_view_employee_details", label: "צפייה בפרטי עובד", description: "מאפשר לפתוח כרטיס עובד ולראות את הפרטים האישיים שלו." },
+      { key: "can_add_employee", label: "הוספת עובד", description: "מאפשר ליצור משתמשי עובדים חדשים במערכת." },
+      { key: "can_edit_employee", label: "עריכת עובד", description: "מאפשר לשנות פרטים של עובד קיים (שם, מחלקה, טלפון וכו')." },
+      { key: "can_delete_employee", label: "מחיקת עובד", description: "מאפשר להסיר עובדים מהמערכת כולל כל הנתונים שלהם." },
+      { key: "can_reset_employee_password", label: "איפוס סיסמת עובד", description: "מאפשר ליצור סיסמה זמנית לעובד שאיבד גישה." },
+      { key: "can_manage_departments", label: "ניהול מחלקות", description: "מאפשר יצירה, עריכה ומחיקה של מחלקות בארגון." },
+      { key: "can_export_employees", label: "ייצוא רשימת עובדים", description: "מאפשר להוריד רשימת עובדים לקובץ חיצוני." },
+    ],
+  },
+  {
+    id: "schedules",
+    title: "סידורי עבודה",
+    icon: Calendar,
+    perms: [
+      { key: "can_view_schedule", label: "צפייה בסידורי עבודה", description: "מאפשר לראות סידורי עבודה של מחלקות." },
+      { key: "can_create_schedule", label: "יצירת סידור עבודה", description: "מאפשר ליצור סידור עבודה שבועי חדש." },
+      { key: "can_edit_schedule", label: "עריכת סידור עבודה", description: "מאפשר לשנות סידור עבודה קיים לפני אישורו." },
+      { key: "can_approve_schedule", label: "אישור סידור עבודה", description: "מאפשר לאשר סידור עבודה ששלח אחראי מחלקה." },
+      { key: "can_publish_schedule", label: "פרסום סידור עבודה", description: "מאפשר לאשר ולפרסם סידור עבודה ישירות לעובדים." },
+    ],
+  },
+  {
+    id: "leave",
+    title: "חופשות",
+    icon: Palmtree,
+    perms: [
+      { key: "can_view_leave", label: "צפייה בבקשות חופשה", description: "מאפשר לראות בקשות חופשה שעובדים שלחו." },
+      { key: "can_approve_leave", label: "אישור חופשות", description: "מאפשר לאשר בקשת חופשה." },
+      { key: "can_reject_leave", label: "דחיית חופשות", description: "מאפשר לדחות בקשת חופשה." },
+      { key: "can_edit_leave_balance", label: "עריכת יתרת חופשה", description: "מאפשר לשנות את מספר ימי החופשה שעומדים לרשות עובד." },
+    ],
+  },
+  {
+    id: "breaks",
+    title: "הפסקות",
+    icon: Coffee,
+    perms: [
+      { key: "can_view_breaks", label: "צפייה בעובדים בהפסקה", description: "מאפשר לראות אילו עובדים נמצאים בהפסקה כרגע." },
+      { key: "can_manage_breaks", label: "ניהול הפסקות", description: "מאפשר יצירה, עריכה ומחיקה של בקשות הפסקה." },
+    ],
+  },
+  {
+    id: "tasks",
+    title: "משימות",
+    icon: ListChecks,
+    perms: [
+      { key: "can_view_tasks", label: "צפייה במשימות", description: "מאפשר לראות את כל המשימות במערכת." },
+      { key: "can_create_tasks", label: "יצירת משימות", description: "מאפשר להקים משימות חדשות ולשבץ אליהן עובדים." },
+      { key: "can_edit_tasks", label: "עריכת משימות", description: "מאפשר לעדכן פרטי משימה קיימת." },
+      { key: "can_delete_tasks", label: "מחיקת משימות", description: "מאפשר למחוק משימות מהמערכת." },
+      { key: "can_approve_tasks", label: "אישור משימות (כשהיוצר הוא אחראי מחלקה)", description: "מאפשר לאשר השלמת משימה שיצר אחראי מחלקה." },
+    ],
+  },
+  {
+    id: "messages",
+    title: "הודעות",
+    icon: MessageSquare,
+    perms: [
+      { key: "can_view_messages", label: "צפייה בהודעות", description: "מאפשר לפתוח את מסך ההודעות ולקרוא הודעות שהתקבלו." },
+      { key: "can_send_messages", label: "שליחת הודעות", description: "הרשאת בסיס לשליחת הודעות מתוך המערכת." },
+      { key: "can_send_message_employee", label: "שליחת הודעה לעובד", description: "מאפשר לשלוח הודעה אישית לעובד בודד." },
+      { key: "can_send_message_department", label: "שליחת הודעה למחלקה", description: "מאפשר לשלוח הודעה לכל עובדי מחלקה." },
+      { key: "can_send_message_all", label: "שליחת הודעה לכל העובדים", description: "מאפשר לשלוח הודעה לכל עובדי החברה." },
+    ],
+  },
+  {
+    id: "reports",
+    title: "דוחות",
+    icon: BarChart3,
+    perms: [
+      { key: "can_view_reports", label: "צפייה בדוחות", description: "מאפשר לצפות בדוחות הניהול של המערכת." },
+      { key: "can_export_reports", label: "ייצוא דוחות", description: "מאפשר להוריד דוחות לקובץ חיצוני." },
+    ],
+  },
+  {
+    id: "system",
+    title: "מערכת",
+    icon: Cog,
+    perms: [
+      { key: "can_manage_permissions", label: "ניהול הרשאות", description: "מאפשר לקבוע אילו הרשאות יש לכל משתמש." },
+      { key: "can_manage_company_settings", label: "ניהול הגדרות חברה", description: "מאפשר לעדכן שם חברה, לוגו, צבעים ופרטי קשר." },
+      { key: "can_view_activity_log", label: "צפייה בלוג פעילות", description: "מאפשר לצפות בהיסטוריית הפעולות במערכת." },
+      { key: "can_manage_users", label: "ניהול משתמשים", description: "מאפשר ניהול חשבונות משתמשים ותפקידיהם." },
+    ],
+  },
+];
 
-type PermKey = (typeof GRANULAR_PERMS)[number]["key"];
+const ALL_PERM_KEYS = CATEGORIES.flatMap((c) => c.perms.map((p) => p.key));
+
+const DEFAULT_MANAGER_PERMS: Record<string, boolean> = {
+  can_view_dashboard: true,
+  can_view_all_employees: true,
+  can_view_employee_details: true,
+  can_view_schedule: true,
+  can_view_tasks: true,
+};
+
+function buildEmptyPerms(): Record<string, boolean> {
+  const o: Record<string, boolean> = { can_view_dashboard: false };
+  for (const k of ALL_PERM_KEYS) o[k] = false;
+  return o;
+}
 
 function PermissionsPage() {
   const qc = useQueryClient();
@@ -84,7 +230,7 @@ function PermissionsPage() {
     },
   });
 
-  const mutation = useMutation({
+  const roleMutation = useMutation({
     mutationFn: async ({ userId, role }: { userId: string; role: AppRole }) => {
       const { error: dErr } = await supabase.from("user_roles").delete().eq("user_id", userId);
       if (dErr) throw dErr;
@@ -96,6 +242,7 @@ function PermissionsPage() {
       qc.invalidateQueries({ queryKey: ["permissions-list"] });
       qc.invalidateQueries({ queryKey: ["all-roles"] });
       qc.invalidateQueries({ queryKey: ["auth", "me"] });
+      qc.invalidateQueries({ queryKey: ["user-perms"] });
     },
     onError: (e: any) => toast.error(e?.message ?? "שגיאה"),
   });
@@ -114,78 +261,99 @@ function PermissionsPage() {
   );
 
   return (
-    <div className="space-y-6">
-      <header className="flex items-center gap-3">
-        <div className="size-10 rounded-xl bg-primary/10 text-primary flex items-center justify-center">
-          <ShieldCheck className="size-5" />
-        </div>
-        <div>
-          <h1 className="text-2xl sm:text-3xl font-bold">ניהול הרשאות</h1>
-          <p className="text-sm text-muted-foreground mt-1">קביעת תפקיד מערכת לכל עובד</p>
-        </div>
-      </header>
-
-      {query.isLoading ? (
-        <div className="flex justify-center py-12"><Loader2 className="size-6 animate-spin text-primary" /></div>
-      ) : (
-        <div className="grid gap-3">
-          {query.data?.map((row) => (
-            <Card key={row.id} className="card-elevated p-4 flex items-center gap-4">
-              <div className="size-10 rounded-full bg-accent text-accent-foreground flex items-center justify-center font-semibold shrink-0">
-                {row.full_name?.charAt(0) || "?"}
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="font-medium truncate">{row.full_name || "ללא שם"}</p>
-                <p className="text-xs text-muted-foreground">{row.department_name}</p>
-              </div>
-              <div className="w-40 shrink-0">
-                <Select
-                  value={row.role}
-                  disabled={row.id === me?.id || mutation.isPending}
-                  onValueChange={(v) => mutation.mutate({ userId: row.id, role: v as AppRole })}
-                >
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    {ROLE_OPTIONS.map((r) => (
-                      <SelectItem key={r} value={r}>{ROLE_LABELS[r]}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                {row.id === me?.id && (
-                  <p className="text-[10px] text-muted-foreground mt-1 text-center">אינך יכול לערוך את עצמך</p>
-                )}
-              </div>
-            </Card>
-          ))}
-        </div>
-      )}
-
-      {isMainAdmin && (
-        <section className="space-y-3">
-          <div className="flex items-center gap-3 mt-8">
-            <div className="size-10 rounded-xl bg-primary/10 text-primary flex items-center justify-center">
-              <Settings2 className="size-5" />
-            </div>
-            <div>
-              <h2 className="text-xl font-bold">הרשאות מפורטות למנהלים</h2>
-              <p className="text-sm text-muted-foreground mt-1">
-                הענקה/הסרה של הרשאות פעולה למנהל סניף וסגן מנהל. השינוי נכנס לתוקף מיד.
-              </p>
-            </div>
+    <TooltipProvider delayDuration={150}>
+      <div className="space-y-6">
+        <header className="flex items-center gap-3">
+          <div className="size-10 rounded-xl bg-primary/10 text-primary flex items-center justify-center">
+            <ShieldCheck className="size-5" />
           </div>
-          {managers.length === 0 ? (
-            <Card className="card-elevated p-6 text-sm text-muted-foreground text-center">
-              אין מנהלי סניף או סגני מנהל להגדרה.
-            </Card>
-          ) : (
-            <div className="grid gap-3">
-              {managers.map((m) => (
-                <ManagerPermsCard key={m.id} userId={m.id} name={m.full_name} role={m.role} />
-              ))}
+          <div>
+            <h1 className="text-2xl sm:text-3xl font-bold">ניהול הרשאות</h1>
+            <p className="text-sm text-muted-foreground mt-1">קביעת תפקיד מערכת והרשאות מפורטות לכל עובד</p>
+          </div>
+        </header>
+
+        {query.isLoading ? (
+          <div className="flex justify-center py-12"><Loader2 className="size-6 animate-spin text-primary" /></div>
+        ) : (
+          <div className="grid gap-3">
+            {query.data?.map((row) => (
+              <Card key={row.id} className="card-elevated p-4 flex items-center gap-4">
+                <div className="size-10 rounded-full bg-accent text-accent-foreground flex items-center justify-center font-semibold shrink-0">
+                  {row.full_name?.charAt(0) || "?"}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="font-medium truncate">{row.full_name || "ללא שם"}</p>
+                  <p className="text-xs text-muted-foreground">{row.department_name}</p>
+                </div>
+                <div className="w-40 shrink-0">
+                  <Select
+                    value={row.role}
+                    disabled={row.id === me?.id || roleMutation.isPending}
+                    onValueChange={(v) => roleMutation.mutate({ userId: row.id, role: v as AppRole })}
+                  >
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {ROLE_OPTIONS.map((r) => (
+                        <SelectItem key={r} value={r}>{ROLE_LABELS[r]}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  {row.id === me?.id && (
+                    <p className="text-[10px] text-muted-foreground mt-1 text-center">אינך יכול לערוך את עצמך</p>
+                  )}
+                </div>
+              </Card>
+            ))}
+          </div>
+        )}
+
+        {isMainAdmin && (
+          <section className="space-y-3">
+            <div className="flex items-center gap-3 mt-8">
+              <div className="size-10 rounded-xl bg-primary/10 text-primary flex items-center justify-center">
+                <Settings2 className="size-5" />
+              </div>
+              <div className="flex-1">
+                <h2 className="text-xl font-bold">הרשאות מפורטות למנהלים</h2>
+                <p className="text-sm text-muted-foreground mt-1">
+                  הענקה/הסרה של הרשאות פעולה למנהל סניף וסגן מנהל. השינוי נשמר ונכנס לתוקף מיד.
+                </p>
+              </div>
+              {managers.length >= 2 && <CopyPermsButton managers={managers} />}
             </div>
-          )}
-        </section>
-      )}
+            {managers.length === 0 ? (
+              <Card className="card-elevated p-6 text-sm text-muted-foreground text-center">
+                אין מנהלי סניף או סגני מנהל להגדרה.
+              </Card>
+            ) : (
+              <div className="grid gap-3">
+                {managers.map((m) => (
+                  <ManagerPermsCard key={m.id} userId={m.id} name={m.full_name} role={m.role} />
+                ))}
+              </div>
+            )}
+          </section>
+        )}
+      </div>
+    </TooltipProvider>
+  );
+}
+
+function PermLabel({ def }: { def: PermDef }) {
+  return (
+    <div className="flex items-center gap-1.5 min-w-0">
+      <span className="text-sm truncate">{def.label}</span>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <button type="button" className="text-muted-foreground hover:text-foreground shrink-0" aria-label="מידע">
+            <Info className="size-3.5" />
+          </button>
+        </TooltipTrigger>
+        <TooltipContent side="top" className="max-w-xs text-right leading-relaxed">
+          {def.description}
+        </TooltipContent>
+      </Tooltip>
     </div>
   );
 }
@@ -201,6 +369,7 @@ function ManagerPermsCard({
 }) {
   const qc = useQueryClient();
   const save = useServerFn(setUserPermissions);
+  const [search, setSearch] = useState("");
 
   const q = useQuery({
     queryKey: ["user-perms", userId],
@@ -215,43 +384,25 @@ function ManagerPermsCard({
     },
   });
 
-  const [state, setState] = useState<Record<PermKey, boolean>>({
-    can_create_tasks: false,
-    can_edit_tasks: false,
-    can_delete_tasks: false,
-    can_approve_tasks: false,
-    can_create_schedule: false,
-    can_approve_schedule: false,
-    can_publish_schedule: false,
-    can_approve_leave: false,
-    can_view_breaks: false,
-    can_manage_breaks: false,
-    can_send_messages: false,
-  });
-
+  const [state, setState] = useState<Record<string, boolean>>(buildEmptyPerms());
 
   useEffect(() => {
-    if (!q.data) return;
-    const d: any = q.data;
-    setState({
-      can_create_tasks: !!(d.can_create_tasks || d.can_manage_tasks),
-      can_edit_tasks: !!(d.can_edit_tasks || d.can_manage_tasks),
-      can_delete_tasks: !!(d.can_delete_tasks || d.can_manage_tasks),
-      can_approve_tasks: !!(d.can_approve_tasks || d.can_manage_tasks),
-      can_create_schedule: !!d.can_create_schedule,
-      can_approve_schedule: !!d.can_approve_schedule,
-      can_publish_schedule: !!d.can_publish_schedule,
-
-      can_approve_leave: !!d.can_approve_leave,
-      can_view_breaks: !!d.can_view_breaks,
-      can_manage_breaks: !!d.can_manage_breaks,
-      can_send_messages: !!d.can_send_messages,
-    });
+    const next = buildEmptyPerms();
+    const d: any = q.data ?? {};
+    for (const k of Object.keys(next)) next[k] = !!d[k];
+    // Legacy compatibility — granular task perms also reflected by can_manage_tasks
+    if (d.can_manage_tasks) {
+      next.can_create_tasks = true;
+      next.can_edit_tasks = true;
+      next.can_delete_tasks = true;
+      next.can_approve_tasks = true;
+    }
+    setState(next);
   }, [q.data]);
 
   const mut = useMutation({
-    mutationFn: (next: Record<PermKey, boolean>) =>
-      save({ data: { user_id: userId, perms: next } }),
+    mutationFn: (next: Record<string, boolean>) =>
+      save({ data: { user_id: userId, perms: next as any } }),
     onSuccess: () => {
       toast.success("ההרשאות עודכנו");
       qc.invalidateQueries({ queryKey: ["user-perms", userId] });
@@ -260,39 +411,208 @@ function ManagerPermsCard({
     onError: (e: any) => toast.error(e?.message ?? "שגיאה"),
   });
 
-  function toggle(k: PermKey, v: boolean) {
+  function toggle(k: string, v: boolean) {
     const next = { ...state, [k]: v };
     setState(next);
     mut.mutate(next);
   }
 
+  const term = search.trim().toLowerCase();
+  const filtered: Category[] = useMemo(() => {
+    if (!term) return CATEGORIES;
+    return CATEGORIES
+      .map((c) => ({
+        ...c,
+        perms: c.perms.filter(
+          (p) =>
+            p.label.toLowerCase().includes(term) ||
+            p.description.toLowerCase().includes(term),
+        ),
+      }))
+      .filter((c) => c.perms.length > 0);
+  }, [term]);
+
   return (
     <Card className="card-elevated p-4">
-      <div className="flex items-center justify-between gap-3 mb-3">
+      <div className="flex items-center justify-between gap-3 mb-3 flex-wrap">
         <div>
           <p className="font-semibold">{name}</p>
           <p className="text-xs text-muted-foreground">{ROLE_LABELS[role]}</p>
         </div>
         {mut.isPending && <Loader2 className="size-4 animate-spin text-primary" />}
       </div>
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-        {GRANULAR_PERMS.map((p) => (
-          <div
-            key={p.key}
-            className="flex items-center justify-between gap-2 px-3 py-2 rounded-md border"
-          >
-            <Label htmlFor={`${userId}-${p.key}`} className="text-sm cursor-pointer">
-              {p.label}
-            </Label>
-            <Switch
-              id={`${userId}-${p.key}`}
-              checked={state[p.key]}
-              onCheckedChange={(v) => toggle(p.key, v)}
-            />
-          </div>
-        ))}
+
+      <div className="relative mb-3">
+        <Search className="size-4 absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />
+        <Input
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder="חיפוש הרשאה…"
+          className="pr-9"
+        />
       </div>
+
+      {filtered.length === 0 ? (
+        <p className="text-sm text-muted-foreground text-center py-6">לא נמצאו הרשאות מתאימות.</p>
+      ) : (
+        <Accordion type="multiple" defaultValue={term ? filtered.map((c) => c.id) : []} className="w-full">
+          {filtered.map((cat) => {
+            const Icon = cat.icon;
+            const onCount = cat.perms.filter((p) => state[p.key]).length;
+            return (
+              <AccordionItem key={cat.id} value={cat.id}>
+                <AccordionTrigger className="py-3">
+                  <div className="flex items-center gap-2 flex-1">
+                    <Icon className="size-4 text-primary" />
+                    <span className="font-medium">{cat.title}</span>
+                    <span className="text-xs text-muted-foreground ms-auto me-2">
+                      {onCount}/{cat.perms.length}
+                    </span>
+                  </div>
+                </AccordionTrigger>
+                <AccordionContent>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
+                    {cat.perms.map((p) => (
+                      <div
+                        key={p.key}
+                        className="flex items-center justify-between gap-2 px-3 py-2 rounded-md border bg-card"
+                      >
+                        <Label htmlFor={`${userId}-${p.key}`} className="cursor-pointer flex-1 min-w-0">
+                          <PermLabel def={p} />
+                        </Label>
+                        <Switch
+                          id={`${userId}-${p.key}`}
+                          checked={!!state[p.key]}
+                          onCheckedChange={(v) => toggle(p.key, v)}
+                        />
+                      </div>
+                    ))}
+                  </div>
+                </AccordionContent>
+              </AccordionItem>
+            );
+          })}
+        </Accordion>
+      )}
     </Card>
   );
 }
 
+function CopyPermsButton({ managers }: { managers: Row[] }) {
+  const qc = useQueryClient();
+  const save = useServerFn(setUserPermissions);
+  const [open, setOpen] = useState(false);
+  const [confirm, setConfirm] = useState(false);
+  const [fromId, setFromId] = useState<string>("");
+  const [toId, setToId] = useState<string>("");
+  const [busy, setBusy] = useState(false);
+
+  async function doCopy() {
+    if (!fromId || !toId || fromId === toId) return;
+    setBusy(true);
+    try {
+      const { data, error } = await supabase
+        .from("user_task_permissions")
+        .select("*")
+        .eq("user_id", fromId)
+        .maybeSingle();
+      if (error) throw error;
+      const src: any = data ?? {};
+      const next = buildEmptyPerms();
+      for (const k of Object.keys(next)) next[k] = !!src[k];
+      if (src.can_manage_tasks) {
+        next.can_create_tasks = true;
+        next.can_edit_tasks = true;
+        next.can_delete_tasks = true;
+        next.can_approve_tasks = true;
+      }
+      await save({ data: { user_id: toId, perms: next as any } });
+      toast.success("ההרשאות הועתקו בהצלחה");
+      qc.invalidateQueries({ queryKey: ["user-perms", toId] });
+      qc.invalidateQueries({ queryKey: ["task-perm"] });
+      setConfirm(false);
+      setOpen(false);
+      setFromId("");
+      setToId("");
+    } catch (e: any) {
+      toast.error(e?.message ?? "שגיאה בהעתקה");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const toLabel = (id: string) => managers.find((m) => m.id === id)?.full_name ?? "";
+
+  return (
+    <>
+      <Button variant="outline" size="sm" onClick={() => setOpen(true)} className="gap-2">
+        <Copy className="size-4" />
+        העתק הרשאות מתפקיד קיים
+      </Button>
+
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>העתקת הרשאות</DialogTitle>
+            <DialogDescription>
+              בחר ממי להעתיק ולמי להדביק. רק הרשאות יועתקו — לא משתמשים, עובדים, מחלקות או נתונים אחרים.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label>העתק הרשאות מתוך</Label>
+              <Select value={fromId} onValueChange={setFromId}>
+                <SelectTrigger><SelectValue placeholder="בחירת משתמש" /></SelectTrigger>
+                <SelectContent>
+                  {managers.map((m) => (
+                    <SelectItem key={m.id} value={m.id}>
+                      {m.full_name} ({ROLE_LABELS[m.role]})
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label>הדבק הרשאות אל</Label>
+              <Select value={toId} onValueChange={setToId}>
+                <SelectTrigger><SelectValue placeholder="בחירת משתמש" /></SelectTrigger>
+                <SelectContent>
+                  {managers
+                    .filter((m) => m.id !== fromId)
+                    .map((m) => (
+                      <SelectItem key={m.id} value={m.id}>
+                        {m.full_name} ({ROLE_LABELS[m.role]})
+                      </SelectItem>
+                    ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setOpen(false)}>ביטול</Button>
+            <Button onClick={() => setConfirm(true)} disabled={!fromId || !toId || fromId === toId}>
+              המשך
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <AlertDialog open={confirm} onOpenChange={setConfirm}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>אישור העתקה</AlertDialogTitle>
+            <AlertDialogDescription>
+              פעולה זו תחליף את כל ההרשאות של <strong>{toLabel(toId)}</strong> בהרשאות של <strong>{toLabel(fromId)}</strong>. האם להמשיך?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={busy}>ביטול</AlertDialogCancel>
+            <AlertDialogAction onClick={doCopy} disabled={busy}>
+              {busy ? <Loader2 className="size-4 animate-spin" /> : "אישור והעתקה"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </>
+  );
+}

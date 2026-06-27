@@ -678,18 +678,43 @@ export type Database = {
       }
       user_task_permissions: {
         Row: {
+          can_add_employee: boolean
           can_approve_leave: boolean
           can_approve_schedule: boolean
           can_approve_tasks: boolean
           can_create_schedule: boolean
           can_create_tasks: boolean
+          can_delete_employee: boolean
           can_delete_tasks: boolean
+          can_edit_employee: boolean
+          can_edit_leave_balance: boolean
+          can_edit_schedule: boolean
           can_edit_tasks: boolean
+          can_export_employees: boolean
+          can_export_reports: boolean
           can_manage_breaks: boolean
+          can_manage_company_settings: boolean
+          can_manage_departments: boolean
+          can_manage_permissions: boolean
           can_manage_tasks: boolean
+          can_manage_users: boolean
           can_publish_schedule: boolean
+          can_reject_leave: boolean
+          can_reset_employee_password: boolean
+          can_send_message_all: boolean
+          can_send_message_department: boolean
+          can_send_message_employee: boolean
           can_send_messages: boolean
+          can_view_activity_log: boolean
+          can_view_all_employees: boolean
           can_view_breaks: boolean
+          can_view_dashboard: boolean
+          can_view_employee_details: boolean
+          can_view_leave: boolean
+          can_view_messages: boolean
+          can_view_reports: boolean
+          can_view_schedule: boolean
+          can_view_tasks: boolean
           created_at: string
           granted_by: string | null
           id: string
@@ -697,18 +722,43 @@ export type Database = {
           user_id: string
         }
         Insert: {
+          can_add_employee?: boolean
           can_approve_leave?: boolean
           can_approve_schedule?: boolean
           can_approve_tasks?: boolean
           can_create_schedule?: boolean
           can_create_tasks?: boolean
+          can_delete_employee?: boolean
           can_delete_tasks?: boolean
+          can_edit_employee?: boolean
+          can_edit_leave_balance?: boolean
+          can_edit_schedule?: boolean
           can_edit_tasks?: boolean
+          can_export_employees?: boolean
+          can_export_reports?: boolean
           can_manage_breaks?: boolean
+          can_manage_company_settings?: boolean
+          can_manage_departments?: boolean
+          can_manage_permissions?: boolean
           can_manage_tasks?: boolean
+          can_manage_users?: boolean
           can_publish_schedule?: boolean
+          can_reject_leave?: boolean
+          can_reset_employee_password?: boolean
+          can_send_message_all?: boolean
+          can_send_message_department?: boolean
+          can_send_message_employee?: boolean
           can_send_messages?: boolean
+          can_view_activity_log?: boolean
+          can_view_all_employees?: boolean
           can_view_breaks?: boolean
+          can_view_dashboard?: boolean
+          can_view_employee_details?: boolean
+          can_view_leave?: boolean
+          can_view_messages?: boolean
+          can_view_reports?: boolean
+          can_view_schedule?: boolean
+          can_view_tasks?: boolean
           created_at?: string
           granted_by?: string | null
           id?: string
@@ -716,18 +766,43 @@ export type Database = {
           user_id: string
         }
         Update: {
+          can_add_employee?: boolean
           can_approve_leave?: boolean
           can_approve_schedule?: boolean
           can_approve_tasks?: boolean
           can_create_schedule?: boolean
           can_create_tasks?: boolean
+          can_delete_employee?: boolean
           can_delete_tasks?: boolean
+          can_edit_employee?: boolean
+          can_edit_leave_balance?: boolean
+          can_edit_schedule?: boolean
           can_edit_tasks?: boolean
+          can_export_employees?: boolean
+          can_export_reports?: boolean
           can_manage_breaks?: boolean
+          can_manage_company_settings?: boolean
+          can_manage_departments?: boolean
+          can_manage_permissions?: boolean
           can_manage_tasks?: boolean
+          can_manage_users?: boolean
           can_publish_schedule?: boolean
+          can_reject_leave?: boolean
+          can_reset_employee_password?: boolean
+          can_send_message_all?: boolean
+          can_send_message_department?: boolean
+          can_send_message_employee?: boolean
           can_send_messages?: boolean
+          can_view_activity_log?: boolean
+          can_view_all_employees?: boolean
           can_view_breaks?: boolean
+          can_view_dashboard?: boolean
+          can_view_employee_details?: boolean
+          can_view_leave?: boolean
+          can_view_messages?: boolean
+          can_view_reports?: boolean
+          can_view_schedule?: boolean
+          can_view_tasks?: boolean
           created_at?: string
           granted_by?: string | null
           id?: string

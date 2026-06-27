@@ -1,0 +1,1 @@
+REVOKE EXECUTE ON FUNCTION public.seed_manager_default_permissions() FROM PUBLIC, anon, authenticated;
