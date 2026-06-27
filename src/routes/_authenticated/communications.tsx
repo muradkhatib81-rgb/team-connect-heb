@@ -629,6 +629,14 @@ function AnnouncementsTab({ userId, canManage, canViewReceipts }: { userId: stri
         />
       )}
 
+      {receiptsAnn && (
+        <ReadReceiptsDialog
+          kind="announcement"
+          targetId={receiptsAnn}
+          onClose={() => setReceiptsAnn(null)}
+        />
+      )}
+
       <AlertDialog open={!!delAnn} onOpenChange={(o) => !o && setDelAnn(null)}>
         <AlertDialogContent dir="rtl">
           <AlertDialogHeader>
