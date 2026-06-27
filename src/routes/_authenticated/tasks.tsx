@@ -1194,8 +1194,18 @@ function TaskFormDialog({
     : deps.departments.filter((d) => d.id === caps.profile?.department_id);
   const [title, setTitle] = useState(task?.title ?? "");
   const [description, setDescription] = useState(task?.description ?? "");
+  const [targetScope, setTargetScope] = useState<"all_departments" | "departments" | "single_department">(
+    (task as any)?.target_scope ?? "single_department",
+  );
   const [departmentId, setDepartmentId] = useState(
     task?.department_id ?? allowedDepartments[0]?.id ?? "",
+  );
+  const [departmentIds, setDepartmentIds] = useState<string[]>([]);
+  const [executorMode, setExecutorMode] = useState<"all" | "single" | "multi">("all");
+  const [singleAssignee, setSingleAssignee] = useState<string>(task?.assignee_id ?? "");
+  const [assigneeIds, setAssigneeIds] = useState<string[]>([]);
+  const [requiresApproval, setRequiresApproval] = useState<boolean>(
+    (task as any)?.requires_approval ?? true,
   );
   const initSplit = splitForInputs(task?.due_at ?? null);
   const [dueDate, setDueDate] = useState<string>(initSplit.date);
@@ -1203,19 +1213,53 @@ function TaskFormDialog({
   const [priority, setPriority] = useState<TaskPriority>(task?.priority ?? "medium");
   const [stagedImages, setStagedImages] = useState<File[]>([]);
 
+  // Load existing multi-dept / multi-assignee on edit
+  const loadAssignees = useServerFn(listTaskAssigneeIds);
+  const loadDepts = useServerFn(listTaskDepartmentIds);
+  useEffect(() => {
+    if (mode !== "edit" || !task) return;
+    loadAssignees({ data: { task_id: task.id } }).then((ids: any) => {
+      if (Array.isArray(ids) && ids.length) {
+        setAssigneeIds(ids);
+        setExecutorMode(ids.length > 1 ? "multi" : task.assignee_id ? "single" : "multi");
+      } else if (task.assignee_id) {
+        setExecutorMode("single");
+      } else {
+        setExecutorMode("all");
+      }
+    });
+    loadDepts({ data: { task_id: task.id } }).then((ids: any) => {
+      if (Array.isArray(ids) && ids.length) setDepartmentIds(ids);
+    });
+  }, [mode, task?.id]);
+
+  // Filter employees by chosen scope/depts
+  const eligibleEmployees = useMemo(() => {
+    if (targetScope === "all_departments") return deps.employees;
+    if (targetScope === "departments") {
+      if (!departmentIds.length) return [];
+      return deps.employees.filter((e) => e.department_id && departmentIds.includes(e.department_id));
+    }
+    return deps.employees.filter((e) => e.department_id === departmentId);
+  }, [targetScope, departmentId, departmentIds, deps.employees]);
+
   const submit = useMutation({
     mutationFn: async () => {
       const dueIso = dueDate && dueTime ? combineToIso(dueDate, dueTime) : null;
-      const payload = {
+      const basePayload: any = {
         title,
         description: description || null,
-        department_id: departmentId,
-        assignee_id: null,
+        target_scope: targetScope,
+        department_id: targetScope === "single_department" ? departmentId : null,
+        department_ids: targetScope === "departments" ? departmentIds : [],
+        assignee_id: executorMode === "single" ? singleAssignee || null : null,
+        assignee_ids: executorMode === "multi" ? assigneeIds : [],
+        requires_approval: requiresApproval,
         due_at: dueIso,
         priority,
       };
       if (mode === "create") {
-        const created: any = await create({ data: payload as any });
+        const created: any = await create({ data: basePayload });
         const newId = created?.id;
         if (newId && stagedImages.length && caps.profile?.id) {
           for (const file of stagedImages) {
@@ -1233,7 +1277,7 @@ function TaskFormDialog({
           }
         }
       } else if (task) {
-        await update({ data: { id: task.id, ...payload } as any });
+        await update({ data: { id: task.id, ...basePayload } as any });
       }
     },
     onSuccess: () => {
