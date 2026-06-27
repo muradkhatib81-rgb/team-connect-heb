@@ -47,15 +47,31 @@ export function AppShell({ children }: { children: ReactNode }) {
   const qc = useQueryClient();
   const pathname = useRouterState({ select: (s) => s.location.pathname });
 
+  const isMainAdminEarly = !!profile?.roles?.includes("main_admin");
+
+  const breakPermQ = useQuery({
+    enabled: !!profile?.id && !isMainAdminEarly,
+    queryKey: ["shell-can-manage-breaks", profile?.id],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("user_task_permissions")
+        .select("can_manage_breaks")
+        .eq("user_id", profile!.id)
+        .maybeSingle();
+      return !!(data as any)?.can_manage_breaks;
+    },
+  });
+
   useEffect(() => {
+    if (!profile) return;
     if (
-      profile?.must_change_password &&
+      profile.must_change_password &&
       pathname !== "/change-password"
     ) {
       navigate({ to: "/change-password", replace: true });
       return;
     }
-    if (profile && pathname === "/dashboard") {
+    if (pathname === "/dashboard") {
       const admin2 = isAdmin(profile.roles);
       const deptMgr = profile.roles.includes("department_manager");
       if (!admin2 && !deptMgr) {
@@ -77,26 +93,15 @@ export function AppShell({ children }: { children: ReactNode }) {
   const isDeptManager = profile.roles.includes("department_manager");
   // עובד רגיל = אין הרשאות ניהול ואינו אחראי מחלקה
   const isPlainEmployee = !admin && !isDeptManager;
-  const isMainAdmin = profile.roles.includes("main_admin");
+  const isMainAdmin = isMainAdminEarly;
   const isBranchOrAssistant =
     profile.roles.includes("branch_manager") || profile.roles.includes("assistant_manager");
 
-  const breakPermQ = useQuery({
-    enabled: !!profile.id && !isMainAdmin,
-    queryKey: ["shell-can-manage-breaks", profile.id],
-    queryFn: async () => {
-      const { data } = await supabase
-        .from("user_task_permissions")
-        .select("can_manage_breaks")
-        .eq("user_id", profile.id)
-        .maybeSingle();
-      return !!(data as any)?.can_manage_breaks;
-    },
-  });
   // Managers of breaks: main admin, branch/assistant manager, or any user with the explicit perm.
   const isBreaksManager = isMainAdmin || isBranchOrAssistant || !!breakPermQ.data;
   // Only employees and department managers (without manager role / breaks perm) can request a break.
   const canRequestBreak = !isBreaksManager;
+
 
   const nav: { to: string; label: string; icon: typeof LayoutDashboard; visible: boolean }[] = [
     { to: "/dashboard", label: "לוח בקרה", icon: LayoutDashboard, visible: !isPlainEmployee },
