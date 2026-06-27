@@ -207,7 +207,11 @@ export function AppShell({ children }: { children: ReactNode }) {
           </SheetContent>
         </Sheet>
         <div className="flex items-center gap-2 min-w-0">
-          <Store className="size-5 text-primary shrink-0" />
+          {company?.logo_url ? (
+            <img src={company.logo_url} alt={company.company_name} className="size-6 rounded object-contain shrink-0" />
+          ) : (
+            <Store className="size-5 text-primary shrink-0" />
+          )}
           <span className="font-semibold text-sm truncate">{APP_NAME}</span>
         </div>
         <NotificationsBell />
