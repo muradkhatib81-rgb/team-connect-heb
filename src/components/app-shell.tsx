@@ -208,7 +208,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         })}
       </nav>
 
-      <div className="border-t border-sidebar-border p-4 space-y-3">
+      <div className="shrink-0 border-t border-sidebar-border p-4 space-y-3 bg-sidebar">
         <div className="flex items-center gap-3">
           <div className="size-9 rounded-full bg-accent text-accent-foreground flex items-center justify-center text-sm font-semibold shrink-0">
             {profile.full_name?.charAt(0) || "?"}
