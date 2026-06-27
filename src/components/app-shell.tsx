@@ -16,6 +16,7 @@ import {
   Coffee,
   Building,
   Megaphone,
+  Trophy,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
