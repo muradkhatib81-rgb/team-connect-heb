@@ -708,9 +708,85 @@ function EditAnnouncementDialog({ ann, onClose }: { ann: any; onClose: () => voi
   );
 }
 
+// ---------------- Announcement Card (auto-marks read on mount) ----------------
+function AnnouncementCard({
+  ann,
+  userId,
+  canEditThis,
+  canDeleteThis,
+  canViewReceipts,
+  onEdit,
+  onDelete,
+  onShowReceipts,
+}: {
+  ann: any;
+  userId: string;
+  canEditThis: boolean;
+  canDeleteThis: boolean;
+  canViewReceipts: boolean;
+  onEdit: () => void;
+  onDelete: () => void;
+  onShowReceipts: () => void;
+}) {
+  const qc = useQueryClient();
+  useEffect(() => {
+    if (!ann.is_read) {
+      markAnnouncementRead(ann.id).then(() =>
+        qc.invalidateQueries({ queryKey: ["comm"] }),
+      );
+    }
+  }, [ann.id, ann.is_read, qc]);
+
+  return (
+    <Card className={cn("p-4 space-y-2 relative", !ann.is_read && "ring-2 ring-primary/40")}>
+      {ann.image_url && (
+        <img src={ann.image_url} alt="" className="w-full h-32 object-cover rounded-md" />
+      )}
+      <div className="flex items-center justify-between gap-2 flex-wrap">
+        <h3 className="font-bold">{ann.title}</h3>
+        <div className="flex items-center gap-1.5">
+          <PriorityBadge p={ann.priority} />
+          {ann.edited_at && (
+            <Badge variant="outline" className="gap-1 text-[10px]">
+              <Pencil className="size-3" /> נערך
+            </Badge>
+          )}
+        </div>
+      </div>
+      <p className="text-sm whitespace-pre-wrap">{ann.body}</p>
+      <p className="text-xs text-muted-foreground">
+        פורסם ע"י {ann.sender_name} · {formatHeDateTime(ann.starts_at)}
+        {ann.ends_at && ` · עד ${formatHeDateTime(ann.ends_at)}`}
+        {ann.edited_at && ` · עודכן ${formatHeDateTime(ann.edited_at)}`}
+      </p>
+      <div className="flex items-center justify-end pt-1 flex-wrap gap-1">
+        {(canViewReceipts || ann.sender_id === userId) && (
+          <Button size="sm" variant="outline" onClick={onShowReceipts} className="gap-1.5">
+            <Eye className="size-4" /> 👁️ אישורי קריאה
+          </Button>
+        )}
+        {canEditThis && (
+          <Button size="sm" variant="outline" onClick={onEdit} className="gap-1.5">
+            <Pencil className="size-4" /> ערוך
+          </Button>
+        )}
+        {canDeleteThis && (
+          <Button
+            size="sm"
+            variant="ghost"
+            onClick={onDelete}
+            className="gap-1.5 text-destructive"
+          >
+            <Trash2 className="size-4" /> מחק
+          </Button>
+        )}
+      </div>
+    </Card>
+  );
+}
 
 // ---------------- Archive ----------------
-function ArchiveTab({ userId, canManage }: { userId: string; canManage: boolean }) {
+function ArchiveTab({ userId, canDelete }: { userId: string; canDelete: boolean }) {
   const qc = useQueryClient();
 
   const msgsQ = useQuery({
