@@ -15,6 +15,7 @@ import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Users, UserCheck, UserX, Building2, Loader2, Plane, ListTodo, Clock, CheckCircle2, AlertTriangle, CalendarDays, Sun, Moon, User, Coffee } from "lucide-react";
 import { Link, useNavigate } from "@tanstack/react-router";
+import { EmployeeOfMonthSection } from "@/components/employee-of-month-section";
 
 export const Route = createFileRoute("/_authenticated/dashboard")({
   component: DashboardPage,
@@ -136,6 +137,8 @@ function DashboardPage() {
           )}
         </div>
       </header>
+
+      <EmployeeOfMonthSection />
 
       <TasksStatsSection stats={tasksStatsQuery.data} loading={tasksStatsQuery.isLoading} />
 

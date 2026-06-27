@@ -16,6 +16,7 @@ import {
   Coffee,
   Building,
   Megaphone,
+  Trophy,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
@@ -57,10 +58,13 @@ export function AppShell({ children }: { children: ReactNode }) {
     queryFn: async () => {
       const { data } = await supabase
         .from("user_task_permissions")
-        .select("can_manage_breaks")
+        .select("can_manage_breaks, can_manage_employee_of_month")
         .eq("user_id", profile!.id)
         .maybeSingle();
-      return !!(data as any)?.can_manage_breaks;
+      return {
+        breaks: !!(data as any)?.can_manage_breaks,
+        eom: !!(data as any)?.can_manage_employee_of_month,
+      };
     },
   });
 
@@ -128,9 +132,10 @@ export function AppShell({ children }: { children: ReactNode }) {
     profile.roles.includes("branch_manager") || profile.roles.includes("assistant_manager");
 
   // Managers of breaks: main admin, branch/assistant manager, or any user with the explicit perm.
-  const isBreaksManager = isMainAdmin || isBranchOrAssistant || !!breakPermQ.data;
+  const isBreaksManager = isMainAdmin || isBranchOrAssistant || !!breakPermQ.data?.breaks;
   // Only employees and department managers (without manager role / breaks perm) can request a break.
   const canRequestBreak = !isBreaksManager;
+  const canManageEom = isMainAdmin || !!breakPermQ.data?.eom;
 
 
   const nav: { to: string; label: string; icon: typeof LayoutDashboard; visible: boolean; badge?: number }[] = [
@@ -140,6 +145,7 @@ export function AppShell({ children }: { children: ReactNode }) {
     { to: "/communications", label: "מרכז תקשורת", icon: Megaphone, visible: true, badge: commUnreadQ.data ?? 0 },
     { to: "/breaks", label: "הפסקה", icon: Coffee, visible: canRequestBreak },
     { to: "/breaks-admin", label: "ניהול הפסקות", icon: Coffee, visible: isBreaksManager },
+    { to: "/employee-of-month", label: "עובד החודש", icon: Trophy, visible: canManageEom },
 
     { to: "/employees", label: "ניהול עובדים", icon: Users, visible: admin },
     { to: "/departments", label: "מחלקות", icon: Building2, visible: admin },

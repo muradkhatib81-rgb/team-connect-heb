@@ -65,6 +65,7 @@ import {
   MessageSquare,
   BarChart3,
   Cog,
+  Trophy,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useServerFn } from "@tanstack/react-start";
@@ -173,6 +174,14 @@ const CATEGORIES: Category[] = [
     perms: [
       { key: "can_view_reports", label: "צפייה בדוחות", description: "מאפשר לצפות בדוחות הניהול של המערכת." },
       { key: "can_export_reports", label: "ייצוא דוחות", description: "מאפשר להוריד דוחות לקובץ חיצוני." },
+    ],
+  },
+  {
+    id: "recognition",
+    title: "הוקרת עובדים",
+    icon: Trophy,
+    perms: [
+      { key: "can_manage_employee_of_month", label: "🏆 ניהול עובד החודש", description: "מאפשר לבחור עובדים מצטיינים לחודש, לעדכן סיבת בחירה, להעלות תמונות ולמחוק רשומות." },
     ],
   },
   {
