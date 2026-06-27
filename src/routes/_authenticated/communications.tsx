@@ -487,7 +487,9 @@ function AnnouncementsTab({ userId, canManage }: { userId: string; canManage: bo
       const nowIso = new Date().toISOString();
       const { data, error } = await supabase
         .from("announcements")
-        .select("id, title, body, priority, image_url, starts_at, ends_at, sender_id, created_at, deleted_at")
+        .select(
+          "id, title, body, priority, image_url, starts_at, ends_at, sender_id, created_at, deleted_at, edited_at, edited_by",
+        )
         .is("deleted_at", null)
         .lte("starts_at", nowIso)
         .order("starts_at", { ascending: false });
