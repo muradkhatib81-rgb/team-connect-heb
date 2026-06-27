@@ -727,7 +727,9 @@ function MessageDetailDialog({
     queryFn: async () => {
       const { data: m, error } = await supabase
         .from("messages")
-        .select("id, title, body, priority, requires_acknowledgment, sender_id, created_at")
+        .select(
+          "id, title, body, priority, requires_acknowledgment, sender_id, created_at, edited_at, edited_by, edit_count",
+        )
         .eq("id", messageId)
         .single();
       if (error) throw error;
@@ -736,6 +738,15 @@ function MessageDetailDialog({
         .select("full_name")
         .eq("id", m.sender_id)
         .maybeSingle();
+      let editor_name: string | null = null;
+      if (m.edited_by) {
+        const { data: ed } = await supabase
+          .from("profiles")
+          .select("full_name")
+          .eq("id", m.edited_by)
+          .maybeSingle();
+        editor_name = ed?.full_name ?? null;
+      }
       const { data: atts } = await supabase
         .from("message_attachments")
         .select("id, file_name, storage_path, mime_type, file_size")
@@ -748,7 +759,7 @@ function MessageDetailDialog({
           .eq("message_id", messageId);
         recipients = recs ?? [];
       }
-      return { msg: m, sender_name: sender?.full_name ?? "—", atts: atts ?? [], recipients };
+      return { msg: m, sender_name: sender?.full_name ?? "—", editor_name, atts: atts ?? [], recipients };
     },
   });
 
