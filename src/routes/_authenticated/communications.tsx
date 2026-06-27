@@ -590,21 +590,33 @@ function AnnouncementsTab({ userId, canManage, canViewReceipts }: { userId: stri
               >
                 <Eye className="size-4" /> {a.is_read ? "נקרא" : "סמן כנקרא"}
               </Button>
-              {canManageThis && (
-                <div className="flex gap-1">
-                  <Button size="sm" variant="outline" onClick={() => setEditAnn(a)} className="gap-1.5">
-                    <Pencil className="size-4" /> ערוך
-                  </Button>
+              <div className="flex gap-1 flex-wrap">
+                {(canViewReceipts || a.sender_id === userId) && (
                   <Button
                     size="sm"
-                    variant="ghost"
-                    onClick={() => setDelAnn(a.id)}
-                    className="gap-1.5 text-destructive"
+                    variant="outline"
+                    onClick={() => setReceiptsAnn(a.id)}
+                    className="gap-1.5"
                   >
-                    <Trash2 className="size-4" /> מחק
+                    <Eye className="size-4" /> 👁️ אישורי קריאה
                   </Button>
-                </div>
-              )}
+                )}
+                {canManageThis && (
+                  <>
+                    <Button size="sm" variant="outline" onClick={() => setEditAnn(a)} className="gap-1.5">
+                      <Pencil className="size-4" /> ערוך
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => setDelAnn(a.id)}
+                      className="gap-1.5 text-destructive"
+                    >
+                      <Trash2 className="size-4" /> מחק
+                    </Button>
+                  </>
+                )}
+              </div>
             </div>
           </Card>
         );
