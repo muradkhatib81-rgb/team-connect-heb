@@ -963,6 +963,7 @@ function MessageDetailDialog({
 
   const [editOpen, setEditOpen] = useState(false);
   const [delOpen, setDelOpen] = useState(false);
+  const [receiptsOpen, setReceiptsOpen] = useState(false);
 
   const d = q.data;
 
