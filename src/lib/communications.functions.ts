@@ -102,8 +102,8 @@ export async function sendMessage(input: SendMessageInput) {
   if (!u.user) throw new Error("לא מחובר");
   const senderId = u.user.id;
 
-  const recipientIds = await resolveTargetUserIds(input.targets);
-  if (recipientIds.length === 0) throw new Error("בחר לפחות נמען אחד");
+  const recipientIds = await resolveTargetUserIds(input.targets, senderId);
+  if (recipientIds.length === 0) throw new Error("בחר לפחות נמען אחד (לא כולל אותך)");
 
   const { data: msg, error: msgErr } = await supabase
     .from("messages")
