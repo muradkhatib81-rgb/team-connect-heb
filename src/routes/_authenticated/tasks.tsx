@@ -784,6 +784,9 @@ function TaskDetailDialog({
               )}
             </div>
           )}
+          <div className="pt-2">
+            <TaskActivityComments taskId={task.id} />
+          </div>
         </div>
         <DialogFooter className="gap-2 flex-wrap">
           <Button variant="outline" onClick={onClose}>סגירה</Button>
