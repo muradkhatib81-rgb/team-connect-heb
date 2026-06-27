@@ -479,6 +479,7 @@ function SentTab({ userId, canManage, canDelete, canViewReceipts }: { userId: st
           onClose={() => setSelected(null)}
           viewerMode="sent"
           canManage={canManage}
+          canDelete={canDelete}
           canViewReceipts={canViewReceipts}
         />
       )}
