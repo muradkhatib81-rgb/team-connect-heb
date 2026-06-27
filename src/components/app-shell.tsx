@@ -42,6 +42,7 @@ interface NavItem {
 
 export function AppShell({ children }: { children: ReactNode }) {
   const { data: profile, isLoading } = useAuth();
+  const { data: company } = useCompanySettings();
   const [mobileOpen, setMobileOpen] = useState(false);
   const navigate = useNavigate();
   const qc = useQueryClient();
