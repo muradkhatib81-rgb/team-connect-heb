@@ -401,7 +401,7 @@ function InboxTab({ userId, canDelete }: { userId: string; canDelete: boolean })
 }
 
 // ---------------- Sent ----------------
-function SentTab({ userId, canManage, canViewReceipts }: { userId: string; canManage: boolean; canViewReceipts: boolean }) {
+function SentTab({ userId, canManage, canDelete, canViewReceipts }: { userId: string; canManage: boolean; canDelete: boolean; canViewReceipts: boolean }) {
   const [selected, setSelected] = useState<string | null>(null);
   const q = useQuery({
     queryKey: ["comm", "sent", userId],
