@@ -107,6 +107,7 @@ interface PermsRow {
   can_send_message_all: boolean | null;
   can_send_announcements: boolean | null;
   can_manage_communications: boolean | null;
+  can_delete_communications: boolean | null;
   can_view_read_receipts: boolean | null;
 }
 
@@ -125,7 +126,7 @@ function CommunicationsPage() {
       const { data } = await supabase
         .from("user_task_permissions")
         .select(
-          "can_view_messages, can_send_messages, can_send_message_employee, can_send_message_department, can_send_message_all, can_send_announcements, can_manage_communications, can_view_read_receipts",
+          "can_view_messages, can_send_messages, can_send_message_employee, can_send_message_department, can_send_message_all, can_send_announcements, can_manage_communications, can_delete_communications, can_view_read_receipts",
         )
         .eq("user_id", userId!)
         .maybeSingle();
@@ -133,10 +134,13 @@ function CommunicationsPage() {
     },
   });
   const p = permsQ.data ?? ({} as PermsRow);
-  const canSendMsg = admin || isDeptManager || !!p.can_send_messages;
-  const canSendAnnouncement = admin || !!p.can_send_announcements;
+  // Permission-based only (no role fallback besides main_admin).
+  const canSendMsg = admin || !!p.can_send_messages || !!p.can_manage_communications;
+  const canSendAnnouncement = admin || !!p.can_send_announcements || !!p.can_manage_communications;
   const canManage = admin || !!p.can_manage_communications;
-  const canViewReceipts = admin || !!p.can_view_read_receipts;
+  const canDelete = admin || !!p.can_delete_communications || !!p.can_manage_communications;
+  const canViewReceipts = admin || !!p.can_view_read_receipts || !!p.can_manage_communications;
+
 
   // Realtime subscriptions
   useEffect(() => {
