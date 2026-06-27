@@ -152,14 +152,16 @@ const CATEGORIES: Category[] = [
   },
   {
     id: "messages",
-    title: "הודעות",
+    title: "מרכז תקשורת",
     icon: MessageSquare,
     perms: [
-      { key: "can_view_messages", label: "צפייה בהודעות", description: "מאפשר לפתוח את מסך ההודעות ולקרוא הודעות שהתקבלו." },
+      { key: "can_view_messages", label: "צפייה בהודעות", description: "מאפשר לפתוח את מרכז התקשורת ולקרוא הודעות שהתקבלו." },
       { key: "can_send_messages", label: "שליחת הודעות", description: "הרשאת בסיס לשליחת הודעות מתוך המערכת." },
       { key: "can_send_message_employee", label: "שליחת הודעה לעובד", description: "מאפשר לשלוח הודעה אישית לעובד בודד." },
       { key: "can_send_message_department", label: "שליחת הודעה למחלקה", description: "מאפשר לשלוח הודעה לכל עובדי מחלקה." },
       { key: "can_send_message_all", label: "שליחת הודעה לכל העובדים", description: "מאפשר לשלוח הודעה לכל עובדי החברה." },
+      { key: "can_send_announcements", label: "פרסום הכרזות", description: "מאפשר לפרסם הכרזות רשמיות לסניף או למחלקה." },
+      { key: "can_manage_communications", label: "ניהול מרכז התקשורת", description: "מאפשר לערוך ולמחוק הודעות והכרזות של אחרים, וצפייה בלוג הפעילות." },
     ],
   },
   {

@@ -774,12 +774,14 @@ export const PERMISSION_KEYS = [
   "can_edit_tasks",
   "can_delete_tasks",
   "can_approve_tasks",
-  // Messages
+  // Messages / Communication Center
   "can_view_messages",
   "can_send_messages",
   "can_send_message_employee",
   "can_send_message_department",
   "can_send_message_all",
+  "can_send_announcements",
+  "can_manage_communications",
   // Reports
   "can_view_reports",
   "can_export_reports",
