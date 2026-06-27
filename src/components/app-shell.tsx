@@ -191,7 +191,12 @@ export function AppShell({ children }: { children: ReactNode }) {
               )}
             >
               <item.icon className="size-4 shrink-0" />
-              <span>{item.label}</span>
+              <span className="flex-1">{item.label}</span>
+              {!!item.badge && item.badge > 0 && (
+                <span className="min-w-[20px] h-5 px-1.5 rounded-full bg-destructive text-destructive-foreground text-[11px] font-bold flex items-center justify-center">
+                  {item.badge > 99 ? "99+" : item.badge}
+                </span>
+              )}
             </Link>
           );
         })}
