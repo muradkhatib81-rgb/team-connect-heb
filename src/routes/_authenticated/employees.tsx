@@ -295,6 +295,43 @@ function EmployeesPage() {
         )}
       </header>
 
+      {isDeptManagerOnly && me && managerDeptStats && (
+        <Card className="card-elevated p-4">
+          <div className="flex items-center gap-4">
+            <div className="size-16 rounded-full bg-accent overflow-hidden flex items-center justify-center shrink-0 border border-border">
+              {(() => {
+                const path = (employeesQuery.data ?? []).find((e) => e.id === me.id)?.avatar_url;
+                const url = path ? (managerAvatarMap[path] ?? avatarUrlFor(path)) : null;
+                return url ? (
+                  <img src={url} alt="" className="w-full h-full object-cover" />
+                ) : (
+                  <span className="text-xl font-semibold text-muted-foreground">
+                    {(me.full_name || "?").charAt(0)}
+                  </span>
+                );
+              })()}
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="text-xs text-muted-foreground">👤 אחראי המחלקה</div>
+              <div className="font-semibold truncate">{me.full_name}</div>
+              <div className="text-sm text-muted-foreground truncate">
+                {me.department_name ?? (me.department_id ? deptMap[me.department_id] : "")}
+                {me.job_title ? ` · ${me.job_title}` : ""}
+              </div>
+            </div>
+            <div className="flex flex-wrap gap-2 justify-end">
+              <Badge variant="secondary">עובדים: {managerDeptStats.total}</Badge>
+              <Badge variant="outline">פעילים: {managerDeptStats.active}</Badge>
+              {managerDeptStats.onLeave > 0 && (
+                <Badge variant="outline">בחופש: {managerDeptStats.onLeave}</Badge>
+              )}
+            </div>
+          </div>
+        </Card>
+      )}
+
+
+
       <Card className="card-elevated p-4">
         <div className="flex flex-col sm:flex-row gap-3">
           <div className="relative flex-1">
