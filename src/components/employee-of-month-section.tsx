@@ -62,32 +62,40 @@ export function EmployeeOfMonthSection() {
     queryKey: ["eom", "current", year, month],
     refetchOnMount: "always",
     queryFn: async () => {
-      const { data: rows, error } = await supabase
-        .from("employee_of_month")
-        .select("id, year, month, employee_id, reason, image_url")
-        .eq("year", year)
-        .eq("month", month)
-        .order("created_at");
+      const { data: rows, error } = await supabase.rpc("get_employees_of_month", {
+        _year: year,
+        _month: month,
+      });
       if (error) throw error;
-      const list = (rows ?? []) as Row[];
-      if (list.length === 0) return { list: [] as Row[], profiles: {} as Record<string, Profile>, images: {} as Record<string, string>, avatars: {} as Record<string, string> };
-
-      const ids = Array.from(new Set(list.map((r) => r.employee_id)));
-      const { data: profs } = await supabase
-        .from("profiles")
-        .select("id, full_name, avatar_url, job_title, departments(name)")
-        .in("id", ids);
-
+      const raw = (rows ?? []) as Array<{
+        id: string; year: number; month: number; employee_id: string;
+        reason: string | null; image_url: string | null;
+        full_name: string | null; avatar_url: string | null;
+        job_title: string | null; department_name: string | null;
+      }>;
+      const list: Row[] = raw.map((r) => ({
+        id: r.id, year: r.year, month: r.month, employee_id: r.employee_id,
+        reason: r.reason, image_url: r.image_url,
+      }));
       const profilesMap: Record<string, Profile> = {};
-      (profs ?? []).forEach((p: any) => (profilesMap[p.id] = p));
-
+      raw.forEach((r) => {
+        profilesMap[r.employee_id] = {
+          id: r.employee_id,
+          full_name: r.full_name ?? "—",
+          avatar_url: r.avatar_url,
+          job_title: r.job_title,
+          departments: r.department_name ? { name: r.department_name } : null,
+        };
+      });
+      if (list.length === 0) {
+        return { list, profiles: profilesMap, images: {} as Record<string, string>, avatars: {} as Record<string, string> };
+      }
       const imageEntries = await Promise.all(
         list.map(async (r) => [r.id, await signUrl("employee-of-month", r.image_url)] as const),
       );
       const avatarEntries = await Promise.all(
-        ids.map(async (id) => [id, await signUrl("avatars", profilesMap[id]?.avatar_url ?? null)] as const),
+        raw.map(async (r) => [r.employee_id, await signUrl("avatars", r.avatar_url)] as const),
       );
-
       return {
         list,
         profiles: profilesMap,

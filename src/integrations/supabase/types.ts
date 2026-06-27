@@ -1383,6 +1383,22 @@ export type Database = {
           on_leave: boolean
         }[]
       }
+      get_employees_of_month: {
+        Args: { _month: number; _year: number }
+        Returns: {
+          avatar_url: string
+          created_at: string
+          department_name: string
+          employee_id: string
+          full_name: string
+          id: string
+          image_url: string
+          job_title: string
+          month: number
+          reason: string
+          year: number
+        }[]
+      }
       get_message_read_receipts: {
         Args: { _message_id: string }
         Returns: {
