@@ -113,7 +113,19 @@ function CompanySettingsPage() {
     );
   }
 
-  if (!isMainAdmin) return null;
+  if (!isMainAdmin) {
+    return (
+      <div className="flex flex-col items-center justify-center py-20 text-center space-y-3">
+        <div className="size-12 rounded-xl bg-destructive/10 flex items-center justify-center">
+          <Building2 className="size-6 text-destructive" />
+        </div>
+        <h1 className="text-xl font-bold">אין הרשאה</h1>
+        <p className="text-sm text-muted-foreground">
+          רק מנהל ראשי יכול לגשת להגדרות החברה.
+        </p>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
