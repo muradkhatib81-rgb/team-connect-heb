@@ -20,6 +20,7 @@ import { Route as AuthenticatedEmployeesRouteImport } from './routes/_authentica
 import { Route as AuthenticatedDepartmentsRouteImport } from './routes/_authenticated/departments'
 import { Route as AuthenticatedDashboardRouteImport } from './routes/_authenticated/dashboard'
 import { Route as AuthenticatedCompanySettingsRouteImport } from './routes/_authenticated/company-settings'
+import { Route as AuthenticatedCommunicationsRouteImport } from './routes/_authenticated/communications'
 import { Route as AuthenticatedChangePasswordRouteImport } from './routes/_authenticated/change-password'
 import { Route as AuthenticatedBreaksAdminRouteImport } from './routes/_authenticated/breaks-admin'
 import { Route as AuthenticatedBreaksRouteImport } from './routes/_authenticated/breaks'
@@ -83,6 +84,12 @@ const AuthenticatedCompanySettingsRoute =
     path: '/company-settings',
     getParentRoute: () => AuthenticatedRouteRoute,
   } as any)
+const AuthenticatedCommunicationsRoute =
+  AuthenticatedCommunicationsRouteImport.update({
+    id: '/communications',
+    path: '/communications',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
 const AuthenticatedChangePasswordRoute =
   AuthenticatedChangePasswordRouteImport.update({
     id: '/change-password',
@@ -120,6 +127,7 @@ export interface FileRoutesByFullPath {
   '/breaks': typeof AuthenticatedBreaksRoute
   '/breaks-admin': typeof AuthenticatedBreaksAdminRoute
   '/change-password': typeof AuthenticatedChangePasswordRoute
+  '/communications': typeof AuthenticatedCommunicationsRoute
   '/company-settings': typeof AuthenticatedCompanySettingsRoute
   '/dashboard': typeof AuthenticatedDashboardRoute
   '/departments': typeof AuthenticatedDepartmentsRoute
@@ -137,6 +145,7 @@ export interface FileRoutesByTo {
   '/breaks': typeof AuthenticatedBreaksRoute
   '/breaks-admin': typeof AuthenticatedBreaksAdminRoute
   '/change-password': typeof AuthenticatedChangePasswordRoute
+  '/communications': typeof AuthenticatedCommunicationsRoute
   '/company-settings': typeof AuthenticatedCompanySettingsRoute
   '/dashboard': typeof AuthenticatedDashboardRoute
   '/departments': typeof AuthenticatedDepartmentsRoute
@@ -156,6 +165,7 @@ export interface FileRoutesById {
   '/_authenticated/breaks': typeof AuthenticatedBreaksRoute
   '/_authenticated/breaks-admin': typeof AuthenticatedBreaksAdminRoute
   '/_authenticated/change-password': typeof AuthenticatedChangePasswordRoute
+  '/_authenticated/communications': typeof AuthenticatedCommunicationsRoute
   '/_authenticated/company-settings': typeof AuthenticatedCompanySettingsRoute
   '/_authenticated/dashboard': typeof AuthenticatedDashboardRoute
   '/_authenticated/departments': typeof AuthenticatedDepartmentsRoute
@@ -175,6 +185,7 @@ export interface FileRouteTypes {
     | '/breaks'
     | '/breaks-admin'
     | '/change-password'
+    | '/communications'
     | '/company-settings'
     | '/dashboard'
     | '/departments'
@@ -192,6 +203,7 @@ export interface FileRouteTypes {
     | '/breaks'
     | '/breaks-admin'
     | '/change-password'
+    | '/communications'
     | '/company-settings'
     | '/dashboard'
     | '/departments'
@@ -210,6 +222,7 @@ export interface FileRouteTypes {
     | '/_authenticated/breaks'
     | '/_authenticated/breaks-admin'
     | '/_authenticated/change-password'
+    | '/_authenticated/communications'
     | '/_authenticated/company-settings'
     | '/_authenticated/dashboard'
     | '/_authenticated/departments'
@@ -307,6 +320,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedCompanySettingsRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/_authenticated/communications': {
+      id: '/_authenticated/communications'
+      path: '/communications'
+      fullPath: '/communications'
+      preLoaderRoute: typeof AuthenticatedCommunicationsRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
     '/_authenticated/change-password': {
       id: '/_authenticated/change-password'
       path: '/change-password'
@@ -350,6 +370,7 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedBreaksRoute: typeof AuthenticatedBreaksRoute
   AuthenticatedBreaksAdminRoute: typeof AuthenticatedBreaksAdminRoute
   AuthenticatedChangePasswordRoute: typeof AuthenticatedChangePasswordRoute
+  AuthenticatedCommunicationsRoute: typeof AuthenticatedCommunicationsRoute
   AuthenticatedCompanySettingsRoute: typeof AuthenticatedCompanySettingsRoute
   AuthenticatedDashboardRoute: typeof AuthenticatedDashboardRoute
   AuthenticatedDepartmentsRoute: typeof AuthenticatedDepartmentsRoute
@@ -365,6 +386,7 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedBreaksRoute: AuthenticatedBreaksRoute,
   AuthenticatedBreaksAdminRoute: AuthenticatedBreaksAdminRoute,
   AuthenticatedChangePasswordRoute: AuthenticatedChangePasswordRoute,
+  AuthenticatedCommunicationsRoute: AuthenticatedCommunicationsRoute,
   AuthenticatedCompanySettingsRoute: AuthenticatedCompanySettingsRoute,
   AuthenticatedDashboardRoute: AuthenticatedDashboardRoute,
   AuthenticatedDepartmentsRoute: AuthenticatedDepartmentsRoute,

@@ -1,0 +1,1306 @@
+import { createFileRoute } from "@tanstack/react-router";
+import { useEffect, useMemo, useState } from "react";
+import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
+import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/lib/use-auth";
+import { isAdmin } from "@/lib/constants";
+import { Card } from "@/components/ui/card";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
+import { Badge } from "@/components/ui/badge";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
+  Inbox,
+  Send,
+  Megaphone,
+  Archive,
+  PenSquare,
+  CheckCheck,
+  Trash2,
+  RotateCcw,
+  Search,
+  Paperclip,
+  AlertCircle,
+  Loader2,
+  Eye,
+  EyeOff,
+} from "lucide-react";
+import { toast } from "sonner";
+import { formatHeDateTime } from "@/lib/date-format";
+import {
+  sendMessage,
+  createAnnouncement,
+  markMessageRead,
+  markMessageUnread,
+  acknowledgeMessage,
+  archiveMessage,
+  deleteMessage,
+  restoreMessage,
+  markAnnouncementRead,
+  deleteAnnouncement,
+  restoreAnnouncement,
+  getAttachmentUrl,
+  type CommPriority,
+} from "@/lib/communications.functions";
+import { cn } from "@/lib/utils";
+
+export const Route = createFileRoute("/_authenticated/communications")({
+  component: CommunicationsPage,
+});
+
+// ---------------- Shared helpers ----------------
+const PRIORITY_LABEL: Record<CommPriority, string> = {
+  low: "נמוכה",
+  normal: "רגילה",
+  high: "גבוהה",
+  urgent: "דחופה",
+};
+const PRIORITY_CLASS: Record<CommPriority, string> = {
+  low: "bg-muted text-foreground",
+  normal: "bg-sky-100 text-sky-900",
+  high: "bg-amber-100 text-amber-900",
+  urgent: "bg-red-100 text-red-900",
+};
+
+function PriorityBadge({ p }: { p: CommPriority }) {
+  return <Badge className={cn("border-0", PRIORITY_CLASS[p])}>{PRIORITY_LABEL[p]}</Badge>;
+}
+
+interface PermsRow {
+  can_view_messages: boolean | null;
+  can_send_messages: boolean | null;
+  can_send_message_employee: boolean | null;
+  can_send_message_department: boolean | null;
+  can_send_message_all: boolean | null;
+  can_send_announcements: boolean | null;
+  can_manage_communications: boolean | null;
+}
+
+function CommunicationsPage() {
+  const { data: me } = useAuth();
+  const qc = useQueryClient();
+  const userId = me?.id;
+  const admin = me ? isAdmin(me.roles) : false;
+  const isDeptManager = !!me?.roles.includes("department_manager");
+
+  // Granular perms
+  const permsQ = useQuery({
+    enabled: !!userId,
+    queryKey: ["comm-perms", userId],
+    queryFn: async (): Promise<PermsRow> => {
+      const { data } = await supabase
+        .from("user_task_permissions")
+        .select(
+          "can_view_messages, can_send_messages, can_send_message_employee, can_send_message_department, can_send_message_all, can_send_announcements, can_manage_communications",
+        )
+        .eq("user_id", userId!)
+        .maybeSingle();
+      return (data as PermsRow) ?? ({} as PermsRow);
+    },
+  });
+  const p = permsQ.data ?? ({} as PermsRow);
+  const canSendMsg = admin || isDeptManager || !!p.can_send_messages;
+  const canSendAnnouncement = admin || !!p.can_send_announcements;
+  const canManage = admin || !!p.can_manage_communications;
+
+  // Realtime subscriptions
+  useEffect(() => {
+    if (!userId) return;
+    const ch = supabase
+      .channel(`comms-${userId}`)
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "messages" },
+        () => qc.invalidateQueries({ queryKey: ["comm"] }),
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "message_recipients", filter: `user_id=eq.${userId}` },
+        () => qc.invalidateQueries({ queryKey: ["comm"] }),
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "announcements" },
+        () => qc.invalidateQueries({ queryKey: ["comm"] }),
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "announcement_reads", filter: `user_id=eq.${userId}` },
+        () => qc.invalidateQueries({ queryKey: ["comm"] }),
+      )
+      .subscribe();
+    return () => {
+      supabase.removeChannel(ch);
+    };
+  }, [userId, qc]);
+
+  const [tab, setTab] = useState("inbox");
+  const [composeOpen, setComposeOpen] = useState(false);
+  const [annOpen, setAnnOpen] = useState(false);
+
+  if (!me) return null;
+
+  return (
+    <div className="space-y-6" dir="rtl">
+      <header className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-bold flex items-center gap-2">
+            <Megaphone className="size-6 text-primary" /> מרכז תקשורת
+          </h1>
+          <p className="text-sm text-muted-foreground">הודעות פנימיות, הכרזות וארכיון</p>
+        </div>
+        <div className="flex gap-2">
+          {canSendMsg && (
+            <Button onClick={() => setComposeOpen(true)} className="gap-2">
+              <PenSquare className="size-4" /> הודעה חדשה
+            </Button>
+          )}
+          {canSendAnnouncement && (
+            <Button onClick={() => setAnnOpen(true)} variant="secondary" className="gap-2">
+              <Megaphone className="size-4" /> הכרזה חדשה
+            </Button>
+          )}
+        </div>
+      </header>
+
+      <Tabs value={tab} onValueChange={setTab}>
+        <TabsList className="grid grid-cols-2 sm:grid-cols-4 w-full">
+          <TabsTrigger value="inbox" className="gap-1.5">
+            <Inbox className="size-4" /> דואר נכנס
+          </TabsTrigger>
+          <TabsTrigger value="announcements" className="gap-1.5">
+            <Megaphone className="size-4" /> הכרזות
+          </TabsTrigger>
+          <TabsTrigger value="sent" className="gap-1.5">
+            <Send className="size-4" /> שנשלחו
+          </TabsTrigger>
+          <TabsTrigger value="archive" className="gap-1.5">
+            <Archive className="size-4" /> ארכיון
+          </TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="inbox" className="mt-4">
+          <InboxTab userId={userId!} />
+        </TabsContent>
+        <TabsContent value="announcements" className="mt-4">
+          <AnnouncementsTab userId={userId!} canManage={canManage} />
+        </TabsContent>
+        <TabsContent value="sent" className="mt-4">
+          <SentTab userId={userId!} canManage={canManage} />
+        </TabsContent>
+        <TabsContent value="archive" className="mt-4">
+          <ArchiveTab userId={userId!} canManage={canManage} />
+        </TabsContent>
+      </Tabs>
+
+      {composeOpen && (
+        <ComposeMessageDialog
+          open={composeOpen}
+          onOpenChange={setComposeOpen}
+          perms={p}
+          admin={admin}
+          isDeptManager={isDeptManager}
+          myDeptId={me.department_id}
+        />
+      )}
+      {annOpen && (
+        <ComposeAnnouncementDialog
+          open={annOpen}
+          onOpenChange={setAnnOpen}
+          admin={admin}
+          myDeptId={me.department_id}
+        />
+      )}
+    </div>
+  );
+}
+
+// ---------------- Inbox ----------------
+interface InboxRow {
+  message_id: string;
+  read_at: string | null;
+  acknowledged_at: string | null;
+  archived_at: string | null;
+  delivered_at: string | null;
+  message: {
+    id: string;
+    title: string;
+    body: string;
+    priority: CommPriority;
+    requires_acknowledgment: boolean;
+    sender_id: string;
+    created_at: string;
+    deleted_at: string | null;
+  };
+  sender?: { full_name: string | null } | null;
+}
+
+function InboxTab({ userId }: { userId: string }) {
+  const [search, setSearch] = useState("");
+  const [filter, setFilter] = useState<"all" | "unread" | "important">("all");
+  const [selected, setSelected] = useState<string | null>(null);
+
+  const q = useQuery({
+    queryKey: ["comm", "inbox", userId],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("message_recipients")
+        .select(
+          "message_id, read_at, acknowledged_at, archived_at, delivered_at, message:messages!inner(id,title,body,priority,requires_acknowledgment,sender_id,created_at,deleted_at)",
+        )
+        .eq("user_id", userId)
+        .is("archived_at", null)
+        .order("delivered_at", { ascending: false });
+      if (error) throw error;
+      const rows = ((data ?? []) as any[]).filter((r) => !r.message?.deleted_at);
+      const senderIds = [...new Set(rows.map((r) => r.message.sender_id).filter(Boolean))];
+      let senderMap: Record<string, string> = {};
+      if (senderIds.length) {
+        const { data: sp } = await supabase
+          .from("profiles")
+          .select("id, full_name")
+          .in("id", senderIds);
+        (sp ?? []).forEach((u: any) => (senderMap[u.id] = u.full_name));
+      }
+      return rows.map((r) => ({ ...r, sender: { full_name: senderMap[r.message.sender_id] ?? "—" } })) as InboxRow[];
+    },
+  });
+
+  const filtered = useMemo(() => {
+    const list = q.data ?? [];
+    return list.filter((r) => {
+      if (filter === "unread" && r.read_at) return false;
+      if (filter === "important" && r.message.priority !== "high" && r.message.priority !== "urgent")
+        return false;
+      if (search) {
+        const t = search.trim().toLowerCase();
+        if (!r.message.title.toLowerCase().includes(t) && !r.message.body.toLowerCase().includes(t))
+          return false;
+      }
+      return true;
+    });
+  }, [q.data, filter, search]);
+
+  return (
+    <div className="space-y-3">
+      <div className="flex flex-wrap items-center gap-2">
+        <div className="relative flex-1 min-w-[220px]">
+          <Search className="absolute right-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
+          <Input
+            placeholder="חיפוש..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="pr-9"
+          />
+        </div>
+        <Select value={filter} onValueChange={(v: any) => setFilter(v)}>
+          <SelectTrigger className="w-44">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">הכל</SelectItem>
+            <SelectItem value="unread">לא נקראו</SelectItem>
+            <SelectItem value="important">חשובות/דחופות</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+
+      {q.isLoading ? (
+        <Loader2 className="mx-auto size-5 animate-spin text-muted-foreground" />
+      ) : filtered.length === 0 ? (
+        <Card className="p-8 text-center text-sm text-muted-foreground">אין הודעות להצגה</Card>
+      ) : (
+        <div className="space-y-2">
+          {filtered.map((r) => (
+            <Card
+              key={r.message_id}
+              onClick={() => setSelected(r.message_id)}
+              className={cn(
+                "p-3 cursor-pointer hover:bg-accent/50 transition-colors flex items-start gap-3",
+                !r.read_at && "border-r-4 border-r-primary bg-primary/5",
+              )}
+            >
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <p className={cn("text-sm truncate", !r.read_at && "font-bold")}>
+                    {r.message.title}
+                  </p>
+                  <PriorityBadge p={r.message.priority} />
+                  {r.message.requires_acknowledgment && (
+                    <Badge variant="outline" className="gap-1 text-xs">
+                      <AlertCircle className="size-3" /> נדרש אישור
+                    </Badge>
+                  )}
+                  {r.acknowledged_at && (
+                    <Badge className="bg-emerald-100 text-emerald-900 border-0 gap-1 text-xs">
+                      <CheckCheck className="size-3" /> אושר
+                    </Badge>
+                  )}
+                </div>
+                <p className="text-xs text-muted-foreground truncate mt-0.5">
+                  {r.sender?.full_name} · {formatHeDateTime(r.delivered_at ?? r.message.created_at)}
+                </p>
+              </div>
+            </Card>
+          ))}
+        </div>
+      )}
+
+      {selected && (
+        <MessageDetailDialog
+          messageId={selected}
+          onClose={() => setSelected(null)}
+          viewerMode="inbox"
+        />
+      )}
+    </div>
+  );
+}
+
+// ---------------- Sent ----------------
+function SentTab({ userId, canManage }: { userId: string; canManage: boolean }) {
+  const [selected, setSelected] = useState<string | null>(null);
+  const q = useQuery({
+    queryKey: ["comm", "sent", userId],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("messages")
+        .select("id, title, body, priority, requires_acknowledgment, created_at, deleted_at")
+        .eq("sender_id", userId)
+        .is("deleted_at", null)
+        .order("created_at", { ascending: false });
+      if (error) throw error;
+      // Read stats
+      const ids = (data ?? []).map((m: any) => m.id);
+      let statsMap: Record<string, { total: number; read: number; ack: number }> = {};
+      if (ids.length) {
+        const { data: recs } = await supabase
+          .from("message_recipients")
+          .select("message_id, read_at, acknowledged_at")
+          .in("message_id", ids);
+        (recs ?? []).forEach((r: any) => {
+          const s = (statsMap[r.message_id] ||= { total: 0, read: 0, ack: 0 });
+          s.total++;
+          if (r.read_at) s.read++;
+          if (r.acknowledged_at) s.ack++;
+        });
+      }
+      return (data ?? []).map((m: any) => ({ ...m, stats: statsMap[m.id] ?? { total: 0, read: 0, ack: 0 } }));
+    },
+  });
+
+  return (
+    <div className="space-y-2">
+      {q.isLoading ? (
+        <Loader2 className="mx-auto size-5 animate-spin text-muted-foreground" />
+      ) : (q.data ?? []).length === 0 ? (
+        <Card className="p-8 text-center text-sm text-muted-foreground">לא שלחת הודעות עדיין</Card>
+      ) : (
+        (q.data ?? []).map((m: any) => {
+          const pct = m.stats.total ? Math.round((m.stats.read / m.stats.total) * 100) : 0;
+          return (
+            <Card
+              key={m.id}
+              onClick={() => setSelected(m.id)}
+              className="p-3 cursor-pointer hover:bg-accent/50 transition-colors"
+            >
+              <div className="flex items-start justify-between gap-2 flex-wrap">
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <p className="font-semibold text-sm">{m.title}</p>
+                    <PriorityBadge p={m.priority} />
+                  </div>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    נשלח {formatHeDateTime(m.created_at)}
+                  </p>
+                </div>
+                <div className="text-xs text-muted-foreground text-left">
+                  <div>{m.stats.read}/{m.stats.total} קראו ({pct}%)</div>
+                  {m.requires_acknowledgment && <div>{m.stats.ack}/{m.stats.total} אישרו</div>}
+                </div>
+              </div>
+            </Card>
+          );
+        })
+      )}
+
+      {selected && (
+        <MessageDetailDialog
+          messageId={selected}
+          onClose={() => setSelected(null)}
+          viewerMode="sent"
+          canManage={canManage}
+        />
+      )}
+    </div>
+  );
+}
+
+// ---------------- Announcements ----------------
+function AnnouncementsTab({ userId, canManage }: { userId: string; canManage: boolean }) {
+  const qc = useQueryClient();
+  const q = useQuery({
+    queryKey: ["comm", "announcements", userId],
+    queryFn: async () => {
+      const nowIso = new Date().toISOString();
+      const { data, error } = await supabase
+        .from("announcements")
+        .select("id, title, body, priority, image_url, starts_at, ends_at, sender_id, created_at, deleted_at")
+        .is("deleted_at", null)
+        .lte("starts_at", nowIso)
+        .order("starts_at", { ascending: false });
+      if (error) throw error;
+      const rows = ((data ?? []) as any[]).filter((a) => !a.ends_at || a.ends_at > nowIso);
+      const senderIds = [...new Set(rows.map((r) => r.sender_id).filter(Boolean))];
+      let senderMap: Record<string, string> = {};
+      if (senderIds.length) {
+        const { data: sp } = await supabase
+          .from("profiles")
+          .select("id, full_name")
+          .in("id", senderIds);
+        (sp ?? []).forEach((u: any) => (senderMap[u.id] = u.full_name));
+      }
+      // Reads
+      let readMap: Record<string, boolean> = {};
+      if (rows.length) {
+        const { data: reads } = await supabase
+          .from("announcement_reads")
+          .select("announcement_id")
+          .in("announcement_id", rows.map((r) => r.id))
+          .eq("user_id", userId);
+        (reads ?? []).forEach((r: any) => (readMap[r.announcement_id] = true));
+      }
+      return rows.map((a) => ({
+        ...a,
+        sender_name: senderMap[a.sender_id] ?? "—",
+        is_read: !!readMap[a.id],
+      }));
+    },
+  });
+
+  const delMut = useMutation({
+    mutationFn: (id: string) => deleteAnnouncement(id),
+    onSuccess: () => {
+      toast.success("ההכרזה הועברה לארכיון");
+      qc.invalidateQueries({ queryKey: ["comm"] });
+    },
+    onError: (e: any) => toast.error(e?.message ?? "שגיאה"),
+  });
+
+  if (q.isLoading) return <Loader2 className="mx-auto size-5 animate-spin text-muted-foreground" />;
+  const list = q.data ?? [];
+  if (!list.length)
+    return <Card className="p-8 text-center text-sm text-muted-foreground">אין הכרזות פעילות</Card>;
+
+  return (
+    <div className="grid sm:grid-cols-2 gap-3">
+      {list.map((a: any) => (
+        <Card
+          key={a.id}
+          className={cn(
+            "p-4 space-y-2 relative",
+            !a.is_read && "ring-2 ring-primary/40",
+          )}
+        >
+          {a.image_url && (
+            <img src={a.image_url} alt="" className="w-full h-32 object-cover rounded-md" />
+          )}
+          <div className="flex items-center justify-between gap-2 flex-wrap">
+            <h3 className="font-bold">{a.title}</h3>
+            <PriorityBadge p={a.priority} />
+          </div>
+          <p className="text-sm whitespace-pre-wrap">{a.body}</p>
+          <p className="text-xs text-muted-foreground">
+            פורסם ע"י {a.sender_name} · {formatHeDateTime(a.starts_at)}
+            {a.ends_at && ` · עד ${formatHeDateTime(a.ends_at)}`}
+          </p>
+          <div className="flex items-center justify-between pt-1">
+            <Button
+              size="sm"
+              variant={a.is_read ? "outline" : "default"}
+              onClick={() => markAnnouncementRead(a.id).then(() => qc.invalidateQueries({ queryKey: ["comm"] }))}
+              className="gap-1.5"
+              disabled={a.is_read}
+            >
+              <Eye className="size-4" /> {a.is_read ? "נקרא" : "סמן כנקרא"}
+            </Button>
+            {canManage && (
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={() => {
+                  if (confirm("להעביר את ההכרזה לארכיון?")) delMut.mutate(a.id);
+                }}
+                className="gap-1.5 text-destructive"
+              >
+                <Trash2 className="size-4" /> מחק
+              </Button>
+            )}
+          </div>
+        </Card>
+      ))}
+    </div>
+  );
+}
+
+// ---------------- Archive ----------------
+function ArchiveTab({ userId, canManage }: { userId: string; canManage: boolean }) {
+  const qc = useQueryClient();
+
+  const msgsQ = useQuery({
+    queryKey: ["comm", "archive-msgs", userId],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("message_recipients")
+        .select(
+          "message_id, archived_at, message:messages!inner(id,title,body,priority,created_at,deleted_at)",
+        )
+        .eq("user_id", userId)
+        .not("archived_at", "is", null)
+        .order("archived_at", { ascending: false });
+      if (error) throw error;
+      return (data ?? []) as any[];
+    },
+  });
+
+  const annsQ = useQuery({
+    enabled: canManage,
+    queryKey: ["comm", "archive-anns", userId],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("announcements")
+        .select("id, title, body, priority, deleted_at, created_at, ends_at")
+        .not("deleted_at", "is", null)
+        .order("deleted_at", { ascending: false });
+      if (error) throw error;
+      return (data ?? []) as any[];
+    },
+  });
+
+  const restoreMsg = useMutation({
+    mutationFn: (id: string) => archiveMessage(id, false),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["comm"] }),
+  });
+  const restoreAnn = useMutation({
+    mutationFn: (id: string) => restoreAnnouncement(id),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["comm"] }),
+  });
+  const delMsg = useMutation({
+    mutationFn: (id: string) => deleteMessage(id),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["comm"] }),
+  });
+
+  return (
+    <div className="space-y-6">
+      <section>
+        <h3 className="text-sm font-semibold mb-2 text-muted-foreground">הודעות בארכיון</h3>
+        {(msgsQ.data ?? []).length === 0 ? (
+          <Card className="p-6 text-center text-sm text-muted-foreground">ריק</Card>
+        ) : (
+          <div className="space-y-2">
+            {(msgsQ.data ?? []).map((r: any) => (
+              <Card key={r.message_id} className="p-3 flex items-center justify-between gap-2">
+                <div className="min-w-0">
+                  <p className="text-sm font-medium truncate">{r.message.title}</p>
+                  <p className="text-xs text-muted-foreground">
+                    בוטל ב-{formatHeDateTime(r.archived_at)}
+                  </p>
+                </div>
+                <div className="flex gap-1">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => restoreMsg.mutate(r.message_id)}
+                    className="gap-1.5"
+                  >
+                    <RotateCcw className="size-4" /> שחזר
+                  </Button>
+                  {canManage && (
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="text-destructive gap-1.5"
+                      onClick={() => {
+                        if (confirm("למחוק לצמיתות?")) delMsg.mutate(r.message_id);
+                      }}
+                    >
+                      <Trash2 className="size-4" />
+                    </Button>
+                  )}
+                </div>
+              </Card>
+            ))}
+          </div>
+        )}
+      </section>
+
+      {canManage && (
+        <section>
+          <h3 className="text-sm font-semibold mb-2 text-muted-foreground">הכרזות בארכיון</h3>
+          {(annsQ.data ?? []).length === 0 ? (
+            <Card className="p-6 text-center text-sm text-muted-foreground">ריק</Card>
+          ) : (
+            <div className="space-y-2">
+              {(annsQ.data ?? []).map((a: any) => (
+                <Card key={a.id} className="p-3 flex items-center justify-between gap-2">
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium truncate">{a.title}</p>
+                    <p className="text-xs text-muted-foreground">
+                      נמחק ב-{formatHeDateTime(a.deleted_at)}
+                    </p>
+                  </div>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => restoreAnn.mutate(a.id)}
+                    className="gap-1.5"
+                  >
+                    <RotateCcw className="size-4" /> שחזר
+                  </Button>
+                </Card>
+              ))}
+            </div>
+          )}
+        </section>
+      )}
+    </div>
+  );
+}
+
+// ---------------- Message Detail Dialog ----------------
+function MessageDetailDialog({
+  messageId,
+  onClose,
+  viewerMode,
+  canManage,
+}: {
+  messageId: string;
+  onClose: () => void;
+  viewerMode: "inbox" | "sent";
+  canManage?: boolean;
+}) {
+  const qc = useQueryClient();
+  const q = useQuery({
+    queryKey: ["comm", "msg-detail", messageId],
+    queryFn: async () => {
+      const { data: m, error } = await supabase
+        .from("messages")
+        .select("id, title, body, priority, requires_acknowledgment, sender_id, created_at")
+        .eq("id", messageId)
+        .single();
+      if (error) throw error;
+      const { data: sender } = await supabase
+        .from("profiles")
+        .select("full_name")
+        .eq("id", m.sender_id)
+        .maybeSingle();
+      const { data: atts } = await supabase
+        .from("message_attachments")
+        .select("id, file_name, storage_path, mime_type, file_size")
+        .eq("message_id", messageId);
+      let recipients: any[] = [];
+      if (viewerMode === "sent") {
+        const { data: recs } = await supabase
+          .from("message_recipients")
+          .select("user_id, read_at, acknowledged_at, profile:profiles!inner(full_name, departments(name))")
+          .eq("message_id", messageId);
+        recipients = recs ?? [];
+      }
+      return { msg: m, sender_name: sender?.full_name ?? "—", atts: atts ?? [], recipients };
+    },
+  });
+
+  // Auto-mark read in inbox mode
+  useEffect(() => {
+    if (viewerMode === "inbox") {
+      markMessageRead(messageId).then(() => qc.invalidateQueries({ queryKey: ["comm"] }));
+    }
+  }, [messageId, viewerMode, qc]);
+
+  const ackMut = useMutation({
+    mutationFn: () => acknowledgeMessage(messageId),
+    onSuccess: () => {
+      toast.success("האישור נשמר");
+      qc.invalidateQueries({ queryKey: ["comm"] });
+    },
+    onError: (e: any) => toast.error(e?.message ?? "שגיאה"),
+  });
+  const archMut = useMutation({
+    mutationFn: () => archiveMessage(messageId, true),
+    onSuccess: () => {
+      toast.success("הועבר לארכיון");
+      qc.invalidateQueries({ queryKey: ["comm"] });
+      onClose();
+    },
+  });
+  const unreadMut = useMutation({
+    mutationFn: () => markMessageUnread(messageId),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["comm"] });
+      onClose();
+    },
+  });
+  const delMut = useMutation({
+    mutationFn: () => deleteMessage(messageId),
+    onSuccess: () => {
+      toast.success("נמחק");
+      qc.invalidateQueries({ queryKey: ["comm"] });
+      onClose();
+    },
+  });
+
+  const d = q.data;
+
+  return (
+    <Dialog open onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto" dir="rtl">
+        {q.isLoading || !d ? (
+          <Loader2 className="mx-auto size-5 animate-spin" />
+        ) : (
+          <>
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2 flex-wrap">
+                {d.msg.title}
+                <PriorityBadge p={d.msg.priority} />
+                {d.msg.requires_acknowledgment && (
+                  <Badge variant="outline" className="gap-1">
+                    <AlertCircle className="size-3" /> נדרש אישור
+                  </Badge>
+                )}
+              </DialogTitle>
+              <DialogDescription>
+                מאת {d.sender_name} · {formatHeDateTime(d.msg.created_at)}
+              </DialogDescription>
+            </DialogHeader>
+
+            <div className="whitespace-pre-wrap text-sm leading-relaxed">{d.msg.body}</div>
+
+            {d.atts.length > 0 && (
+              <div className="space-y-1.5">
+                <p className="text-xs font-semibold text-muted-foreground">קבצים מצורפים</p>
+                {d.atts.map((a: any) => (
+                  <AttachmentLink key={a.id} att={a} />
+                ))}
+              </div>
+            )}
+
+            {viewerMode === "sent" && d.recipients.length > 0 && (
+              <RecipientsBreakdown
+                recipients={d.recipients}
+                requiresAck={d.msg.requires_acknowledgment}
+              />
+            )}
+
+            <DialogFooter className="gap-2 sm:gap-2 flex-wrap">
+              {viewerMode === "inbox" && (
+                <>
+                  {d.msg.requires_acknowledgment && (
+                    <Button onClick={() => ackMut.mutate()} className="gap-1.5" disabled={ackMut.isPending}>
+                      <CheckCheck className="size-4" /> קראתי והבנתי
+                    </Button>
+                  )}
+                  <Button variant="outline" onClick={() => unreadMut.mutate()} className="gap-1.5">
+                    <EyeOff className="size-4" /> סמן כלא נקרא
+                  </Button>
+                  <Button variant="outline" onClick={() => archMut.mutate()} className="gap-1.5">
+                    <Archive className="size-4" /> ארכיון
+                  </Button>
+                </>
+              )}
+              {viewerMode === "sent" && canManage && (
+                <Button
+                  variant="ghost"
+                  className="text-destructive gap-1.5"
+                  onClick={() => {
+                    if (confirm("למחוק את ההודעה?")) delMut.mutate();
+                  }}
+                >
+                  <Trash2 className="size-4" /> מחק
+                </Button>
+              )}
+            </DialogFooter>
+          </>
+        )}
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function AttachmentLink({ att }: { att: any }) {
+  const [url, setUrl] = useState<string | null>(null);
+  useEffect(() => {
+    getAttachmentUrl(att.storage_path).then(setUrl);
+  }, [att.storage_path]);
+  return (
+    <a
+      href={url ?? "#"}
+      target="_blank"
+      rel="noreferrer"
+      className="flex items-center gap-2 text-sm text-primary hover:underline"
+    >
+      <Paperclip className="size-4" />
+      {att.file_name}
+      <span className="text-xs text-muted-foreground">
+        ({Math.round((att.file_size ?? 0) / 1024)} KB)
+      </span>
+    </a>
+  );
+}
+
+function RecipientsBreakdown({
+  recipients,
+  requiresAck,
+}: {
+  recipients: any[];
+  requiresAck: boolean;
+}) {
+  const total = recipients.length;
+  const read = recipients.filter((r) => r.read_at).length;
+  const ack = recipients.filter((r) => r.acknowledged_at).length;
+  const readPct = total ? Math.round((read / total) * 100) : 0;
+  const ackPct = total ? Math.round((ack / total) * 100) : 0;
+  return (
+    <div className="border-t pt-3 space-y-2">
+      <p className="text-sm font-semibold">
+        סטטוס נמענים — {read} מתוך {total} קראו ({readPct}%)
+        {requiresAck && ` · ${ack}/${total} אישרו (${ackPct}%)`}
+      </p>
+      <div className="max-h-48 overflow-y-auto border rounded-md divide-y">
+        {recipients.map((r) => (
+          <div
+            key={r.user_id}
+            className="flex items-center justify-between px-2 py-1.5 text-xs"
+          >
+            <div>
+              <p className="font-medium">{r.profile?.full_name ?? "—"}</p>
+              <p className="text-muted-foreground">{r.profile?.departments?.name ?? "—"}</p>
+            </div>
+            <div className="flex gap-1">
+              {r.acknowledged_at ? (
+                <Badge className="bg-emerald-100 text-emerald-900 border-0">אושר</Badge>
+              ) : r.read_at ? (
+                <Badge className="bg-sky-100 text-sky-900 border-0">נקרא</Badge>
+              ) : (
+                <Badge variant="outline">לא נקרא</Badge>
+              )}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ---------------- Compose dialogs ----------------
+function useDepartments() {
+  return useQuery({
+    queryKey: ["comm", "departments"],
+    queryFn: async () => {
+      const { data, error } = await supabase.from("departments").select("id, name").order("name");
+      if (error) throw error;
+      return (data ?? []) as { id: string; name: string }[];
+    },
+  });
+}
+
+function useEmployeesLite() {
+  return useQuery({
+    queryKey: ["comm", "employees-lite"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("profiles")
+        .select("id, full_name, department_id, departments(name)")
+        .eq("is_active", true)
+        .order("full_name");
+      if (error) throw error;
+      return (data ?? []).map((r: any) => ({
+        id: r.id,
+        full_name: r.full_name,
+        department_id: r.department_id,
+        department_name: r.departments?.name ?? "—",
+      }));
+    },
+  });
+}
+
+function ComposeMessageDialog({
+  open,
+  onOpenChange,
+  perms,
+  admin,
+  isDeptManager,
+  myDeptId,
+}: {
+  open: boolean;
+  onOpenChange: (o: boolean) => void;
+  perms: PermsRow;
+  admin: boolean;
+  isDeptManager: boolean;
+  myDeptId: string | null;
+}) {
+  const qc = useQueryClient();
+  const depsQ = useDepartments();
+  const empsQ = useEmployeesLite();
+
+  const canAll = admin || !!perms.can_send_message_all;
+  const canDept = admin || isDeptManager || !!perms.can_send_message_department;
+  const canEmp = admin || isDeptManager || !!perms.can_send_message_employee;
+
+  const [scope, setScope] = useState<"all" | "departments" | "users">(
+    canAll ? "all" : canDept ? "departments" : "users",
+  );
+  const [title, setTitle] = useState("");
+  const [body, setBody] = useState("");
+  const [priority, setPriority] = useState<CommPriority>("normal");
+  const [requiresAck, setRequiresAck] = useState(false);
+  const [selectedDepts, setSelectedDepts] = useState<string[]>([]);
+  const [selectedUsers, setSelectedUsers] = useState<string[]>([]);
+  const [file, setFile] = useState<File | null>(null);
+
+  // Dept managers: restrict picker to their dept
+  const visibleDepts = useMemo(() => {
+    const list = depsQ.data ?? [];
+    if (admin) return list;
+    if (isDeptManager && myDeptId) return list.filter((d) => d.id === myDeptId);
+    return list;
+  }, [depsQ.data, admin, isDeptManager, myDeptId]);
+
+  const visibleEmps = useMemo(() => {
+    const list = empsQ.data ?? [];
+    if (admin) return list;
+    if (isDeptManager && myDeptId) return list.filter((e) => e.department_id === myDeptId);
+    return list;
+  }, [empsQ.data, admin, isDeptManager, myDeptId]);
+
+  const sendMut = useMutation({
+    mutationFn: () =>
+      sendMessage({
+        title,
+        body,
+        priority,
+        requires_acknowledgment: requiresAck,
+        file,
+        targets: {
+          all: scope === "all",
+          departments: scope === "departments" ? selectedDepts : [],
+          users: scope === "users" ? selectedUsers : [],
+        },
+      }),
+    onSuccess: () => {
+      toast.success("ההודעה נשלחה");
+      qc.invalidateQueries({ queryKey: ["comm"] });
+      onOpenChange(false);
+    },
+    onError: (e: any) => toast.error(e?.message ?? "שגיאה בשליחת ההודעה"),
+  });
+
+  function toggle(list: string[], setList: (v: string[]) => void, id: string) {
+    setList(list.includes(id) ? list.filter((x) => x !== id) : [...list, id]);
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-xl max-h-[90vh] overflow-y-auto" dir="rtl">
+        <DialogHeader>
+          <DialogTitle>הודעה חדשה</DialogTitle>
+          <DialogDescription>בחר נמענים והקלד את תוכן ההודעה</DialogDescription>
+        </DialogHeader>
+        <div className="space-y-3">
+          <div>
+            <Label>כותרת</Label>
+            <Input value={title} onChange={(e) => setTitle(e.target.value)} />
+          </div>
+          <div>
+            <Label>תוכן</Label>
+            <Textarea
+              value={body}
+              onChange={(e) => setBody(e.target.value)}
+              rows={5}
+            />
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <Label>עדיפות</Label>
+              <Select value={priority} onValueChange={(v: any) => setPriority(v)}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="low">נמוכה</SelectItem>
+                  <SelectItem value="normal">רגילה</SelectItem>
+                  <SelectItem value="high">גבוהה</SelectItem>
+                  <SelectItem value="urgent">דחופה</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="flex items-end gap-2">
+              <Switch
+                id="req-ack"
+                checked={requiresAck}
+                onCheckedChange={setRequiresAck}
+              />
+              <Label htmlFor="req-ack" className="cursor-pointer">
+                נדרש אישור קריאה
+              </Label>
+            </div>
+          </div>
+
+          <div>
+            <Label>נמענים</Label>
+            <Select value={scope} onValueChange={(v: any) => setScope(v)}>
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {canAll && <SelectItem value="all">כל עובדי החברה</SelectItem>}
+                {canDept && <SelectItem value="departments">מחלקות</SelectItem>}
+                {canEmp && <SelectItem value="users">עובדים בודדים</SelectItem>}
+              </SelectContent>
+            </Select>
+          </div>
+
+          {scope === "departments" && (
+            <div className="border rounded-md p-2 max-h-40 overflow-y-auto space-y-1">
+              {visibleDepts.map((d) => (
+                <label key={d.id} className="flex items-center gap-2 text-sm cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={selectedDepts.includes(d.id)}
+                    onChange={() => toggle(selectedDepts, setSelectedDepts, d.id)}
+                  />
+                  {d.name}
+                </label>
+              ))}
+            </div>
+          )}
+
+          {scope === "users" && (
+            <div className="border rounded-md p-2 max-h-48 overflow-y-auto space-y-1">
+              {visibleEmps.map((e) => (
+                <label key={e.id} className="flex items-center gap-2 text-sm cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={selectedUsers.includes(e.id)}
+                    onChange={() => toggle(selectedUsers, setSelectedUsers, e.id)}
+                  />
+                  {e.full_name}
+                  <span className="text-xs text-muted-foreground">({e.department_name})</span>
+                </label>
+              ))}
+            </div>
+          )}
+
+          <div>
+            <Label className="flex items-center gap-1.5">
+              <Paperclip className="size-4" /> קובץ מצורף (אופציונלי)
+            </Label>
+            <Input type="file" onChange={(e) => setFile(e.target.files?.[0] ?? null)} />
+          </div>
+        </div>
+
+        <DialogFooter>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>
+            ביטול
+          </Button>
+          <Button
+            disabled={!title.trim() || !body.trim() || sendMut.isPending}
+            onClick={() => sendMut.mutate()}
+            className="gap-1.5"
+          >
+            {sendMut.isPending && <Loader2 className="size-4 animate-spin" />}
+            <Send className="size-4" /> שלח
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function ComposeAnnouncementDialog({
+  open,
+  onOpenChange,
+  admin,
+  myDeptId,
+}: {
+  open: boolean;
+  onOpenChange: (o: boolean) => void;
+  admin: boolean;
+  myDeptId: string | null;
+}) {
+  const qc = useQueryClient();
+  const depsQ = useDepartments();
+
+  const [scope, setScope] = useState<"all" | "departments">(admin ? "all" : "departments");
+  const [title, setTitle] = useState("");
+  const [body, setBody] = useState("");
+  const [priority, setPriority] = useState<CommPriority>("normal");
+  const [imageUrl, setImageUrl] = useState("");
+  const [startsAt, setStartsAt] = useState("");
+  const [endsAt, setEndsAt] = useState("");
+  const [selectedDepts, setSelectedDepts] = useState<string[]>(
+    !admin && myDeptId ? [myDeptId] : [],
+  );
+  const [file, setFile] = useState<File | null>(null);
+
+  const visibleDepts = useMemo(() => {
+    const list = depsQ.data ?? [];
+    if (admin) return list;
+    if (myDeptId) return list.filter((d) => d.id === myDeptId);
+    return [];
+  }, [depsQ.data, admin, myDeptId]);
+
+  const mut = useMutation({
+    mutationFn: () =>
+      createAnnouncement({
+        title,
+        body,
+        priority,
+        image_url: imageUrl || null,
+        starts_at: startsAt ? new Date(startsAt).toISOString() : null,
+        ends_at: endsAt ? new Date(endsAt).toISOString() : null,
+        targets: {
+          all: scope === "all",
+          departments: scope === "departments" ? selectedDepts : [],
+        },
+        file,
+      }),
+    onSuccess: () => {
+      toast.success("ההכרזה פורסמה");
+      qc.invalidateQueries({ queryKey: ["comm"] });
+      onOpenChange(false);
+    },
+    onError: (e: any) => toast.error(e?.message ?? "שגיאה ביצירת הכרזה"),
+  });
+
+  function toggle(id: string) {
+    setSelectedDepts(
+      selectedDepts.includes(id)
+        ? selectedDepts.filter((x) => x !== id)
+        : [...selectedDepts, id],
+    );
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-xl max-h-[90vh] overflow-y-auto" dir="rtl">
+        <DialogHeader>
+          <DialogTitle>הכרזה חדשה</DialogTitle>
+          <DialogDescription>הכרזות מוצגות בלוח הבקרה ובמרכז התקשורת</DialogDescription>
+        </DialogHeader>
+        <div className="space-y-3">
+          <div>
+            <Label>כותרת</Label>
+            <Input value={title} onChange={(e) => setTitle(e.target.value)} />
+          </div>
+          <div>
+            <Label>תוכן</Label>
+            <Textarea value={body} onChange={(e) => setBody(e.target.value)} rows={5} />
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <Label>עדיפות</Label>
+              <Select value={priority} onValueChange={(v: any) => setPriority(v)}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="low">נמוכה</SelectItem>
+                  <SelectItem value="normal">רגילה</SelectItem>
+                  <SelectItem value="high">גבוהה</SelectItem>
+                  <SelectItem value="urgent">דחופה</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label>קישור תמונה (אופציונלי)</Label>
+              <Input value={imageUrl} onChange={(e) => setImageUrl(e.target.value)} />
+            </div>
+            <div>
+              <Label>תאריך התחלה</Label>
+              <Input
+                type="datetime-local"
+                value={startsAt}
+                onChange={(e) => setStartsAt(e.target.value)}
+              />
+            </div>
+            <div>
+              <Label>תאריך סיום</Label>
+              <Input
+                type="datetime-local"
+                value={endsAt}
+                onChange={(e) => setEndsAt(e.target.value)}
+              />
+            </div>
+          </div>
+
+          <div>
+            <Label>פרסום ל-</Label>
+            <Select value={scope} onValueChange={(v: any) => setScope(v)}>
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {admin && <SelectItem value="all">כל עובדי החברה</SelectItem>}
+                <SelectItem value="departments">מחלקות</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          {scope === "departments" && (
+            <div className="border rounded-md p-2 max-h-40 overflow-y-auto space-y-1">
+              {visibleDepts.map((d) => (
+                <label key={d.id} className="flex items-center gap-2 text-sm cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={selectedDepts.includes(d.id)}
+                    onChange={() => toggle(d.id)}
+                  />
+                  {d.name}
+                </label>
+              ))}
+            </div>
+          )}
+
+          <div>
+            <Label className="flex items-center gap-1.5">
+              <Paperclip className="size-4" /> קובץ מצורף (אופציונלי)
+            </Label>
+            <Input type="file" onChange={(e) => setFile(e.target.files?.[0] ?? null)} />
+          </div>
+        </div>
+
+        <DialogFooter>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>
+            ביטול
+          </Button>
+          <Button
+            disabled={!title.trim() || !body.trim() || mut.isPending}
+            onClick={() => mut.mutate()}
+            className="gap-1.5"
+          >
+            {mut.isPending && <Loader2 className="size-4 animate-spin" />}
+            <Megaphone className="size-4" /> פרסם
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}

@@ -14,6 +14,144 @@ export type Database = {
   }
   public: {
     Tables: {
+      announcement_attachments: {
+        Row: {
+          announcement_id: string
+          file_name: string
+          file_size: number | null
+          id: string
+          mime_type: string | null
+          storage_path: string
+          uploaded_at: string
+        }
+        Insert: {
+          announcement_id: string
+          file_name: string
+          file_size?: number | null
+          id?: string
+          mime_type?: string | null
+          storage_path: string
+          uploaded_at?: string
+        }
+        Update: {
+          announcement_id?: string
+          file_name?: string
+          file_size?: number | null
+          id?: string
+          mime_type?: string | null
+          storage_path?: string
+          uploaded_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "announcement_attachments_announcement_id_fkey"
+            columns: ["announcement_id"]
+            isOneToOne: false
+            referencedRelation: "announcements"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      announcement_reads: {
+        Row: {
+          announcement_id: string
+          id: string
+          read_at: string
+          user_id: string
+        }
+        Insert: {
+          announcement_id: string
+          id?: string
+          read_at?: string
+          user_id: string
+        }
+        Update: {
+          announcement_id?: string
+          id?: string
+          read_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "announcement_reads_announcement_id_fkey"
+            columns: ["announcement_id"]
+            isOneToOne: false
+            referencedRelation: "announcements"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      announcement_targets: {
+        Row: {
+          announcement_id: string
+          id: string
+          target_id: string | null
+          target_type: Database["public"]["Enums"]["comm_target_type"]
+        }
+        Insert: {
+          announcement_id: string
+          id?: string
+          target_id?: string | null
+          target_type: Database["public"]["Enums"]["comm_target_type"]
+        }
+        Update: {
+          announcement_id?: string
+          id?: string
+          target_id?: string | null
+          target_type?: Database["public"]["Enums"]["comm_target_type"]
+        }
+        Relationships: [
+          {
+            foreignKeyName: "announcement_targets_announcement_id_fkey"
+            columns: ["announcement_id"]
+            isOneToOne: false
+            referencedRelation: "announcements"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      announcements: {
+        Row: {
+          body: string
+          created_at: string
+          deleted_at: string | null
+          ends_at: string | null
+          id: string
+          image_url: string | null
+          priority: Database["public"]["Enums"]["comm_priority"]
+          sender_id: string
+          starts_at: string
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          body: string
+          created_at?: string
+          deleted_at?: string | null
+          ends_at?: string | null
+          id?: string
+          image_url?: string | null
+          priority?: Database["public"]["Enums"]["comm_priority"]
+          sender_id: string
+          starts_at?: string
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          body?: string
+          created_at?: string
+          deleted_at?: string | null
+          ends_at?: string | null
+          id?: string
+          image_url?: string | null
+          priority?: Database["public"]["Enums"]["comm_priority"]
+          sender_id?: string
+          starts_at?: string
+          title?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       break_requests: {
         Row: {
           approval_decided_at: string | null
@@ -128,6 +266,36 @@ export type Database = {
         }
         Relationships: []
       }
+      communications_audit_log: {
+        Row: {
+          action: Database["public"]["Enums"]["comm_audit_action"]
+          actor_id: string | null
+          created_at: string
+          entity_id: string
+          entity_type: Database["public"]["Enums"]["comm_entity_type"]
+          id: string
+          payload: Json | null
+        }
+        Insert: {
+          action: Database["public"]["Enums"]["comm_audit_action"]
+          actor_id?: string | null
+          created_at?: string
+          entity_id: string
+          entity_type: Database["public"]["Enums"]["comm_entity_type"]
+          id?: string
+          payload?: Json | null
+        }
+        Update: {
+          action?: Database["public"]["Enums"]["comm_audit_action"]
+          actor_id?: string | null
+          created_at?: string
+          entity_id?: string
+          entity_type?: Database["public"]["Enums"]["comm_entity_type"]
+          id?: string
+          payload?: Json | null
+        }
+        Relationships: []
+      }
       company_settings: {
         Row: {
           address: string | null
@@ -196,6 +364,147 @@ export type Database = {
           is_active?: boolean
           manager_id?: string | null
           name?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      message_attachments: {
+        Row: {
+          file_name: string
+          file_size: number | null
+          id: string
+          message_id: string
+          mime_type: string | null
+          storage_path: string
+          uploaded_at: string
+        }
+        Insert: {
+          file_name: string
+          file_size?: number | null
+          id?: string
+          message_id: string
+          mime_type?: string | null
+          storage_path: string
+          uploaded_at?: string
+        }
+        Update: {
+          file_name?: string
+          file_size?: number | null
+          id?: string
+          message_id?: string
+          mime_type?: string | null
+          storage_path?: string
+          uploaded_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "message_attachments_message_id_fkey"
+            columns: ["message_id"]
+            isOneToOne: false
+            referencedRelation: "messages"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      message_recipients: {
+        Row: {
+          acknowledged_at: string | null
+          archived_at: string | null
+          delivered_at: string
+          id: string
+          message_id: string
+          read_at: string | null
+          user_id: string
+        }
+        Insert: {
+          acknowledged_at?: string | null
+          archived_at?: string | null
+          delivered_at?: string
+          id?: string
+          message_id: string
+          read_at?: string | null
+          user_id: string
+        }
+        Update: {
+          acknowledged_at?: string | null
+          archived_at?: string | null
+          delivered_at?: string
+          id?: string
+          message_id?: string
+          read_at?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "message_recipients_message_id_fkey"
+            columns: ["message_id"]
+            isOneToOne: false
+            referencedRelation: "messages"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      message_targets: {
+        Row: {
+          id: string
+          message_id: string
+          target_id: string | null
+          target_type: Database["public"]["Enums"]["comm_target_type"]
+        }
+        Insert: {
+          id?: string
+          message_id: string
+          target_id?: string | null
+          target_type: Database["public"]["Enums"]["comm_target_type"]
+        }
+        Update: {
+          id?: string
+          message_id?: string
+          target_id?: string | null
+          target_type?: Database["public"]["Enums"]["comm_target_type"]
+        }
+        Relationships: [
+          {
+            foreignKeyName: "message_targets_message_id_fkey"
+            columns: ["message_id"]
+            isOneToOne: false
+            referencedRelation: "messages"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      messages: {
+        Row: {
+          body: string
+          created_at: string
+          deleted_at: string | null
+          id: string
+          priority: Database["public"]["Enums"]["comm_priority"]
+          requires_acknowledgment: boolean
+          sender_id: string
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          body: string
+          created_at?: string
+          deleted_at?: string | null
+          id?: string
+          priority?: Database["public"]["Enums"]["comm_priority"]
+          requires_acknowledgment?: boolean
+          sender_id: string
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          body?: string
+          created_at?: string
+          deleted_at?: string | null
+          id?: string
+          priority?: Database["public"]["Enums"]["comm_priority"]
+          requires_acknowledgment?: boolean
+          sender_id?: string
+          title?: string
           updated_at?: string
         }
         Relationships: []
@@ -822,6 +1131,7 @@ export type Database = {
           can_export_employees: boolean
           can_export_reports: boolean
           can_manage_breaks: boolean
+          can_manage_communications: boolean
           can_manage_company_settings: boolean
           can_manage_departments: boolean
           can_manage_permissions: boolean
@@ -830,6 +1140,7 @@ export type Database = {
           can_publish_schedule: boolean
           can_reject_leave: boolean
           can_reset_employee_password: boolean
+          can_send_announcements: boolean
           can_send_message_all: boolean
           can_send_message_department: boolean
           can_send_message_employee: boolean
@@ -866,6 +1177,7 @@ export type Database = {
           can_export_employees?: boolean
           can_export_reports?: boolean
           can_manage_breaks?: boolean
+          can_manage_communications?: boolean
           can_manage_company_settings?: boolean
           can_manage_departments?: boolean
           can_manage_permissions?: boolean
@@ -874,6 +1186,7 @@ export type Database = {
           can_publish_schedule?: boolean
           can_reject_leave?: boolean
           can_reset_employee_password?: boolean
+          can_send_announcements?: boolean
           can_send_message_all?: boolean
           can_send_message_department?: boolean
           can_send_message_employee?: boolean
@@ -910,6 +1223,7 @@ export type Database = {
           can_export_employees?: boolean
           can_export_reports?: boolean
           can_manage_breaks?: boolean
+          can_manage_communications?: boolean
           can_manage_company_settings?: boolean
           can_manage_departments?: boolean
           can_manage_permissions?: boolean
@@ -918,6 +1232,7 @@ export type Database = {
           can_publish_schedule?: boolean
           can_reject_leave?: boolean
           can_reset_employee_password?: boolean
+          can_send_announcements?: boolean
           can_send_message_all?: boolean
           can_send_message_department?: boolean
           can_send_message_employee?: boolean
@@ -991,6 +1306,10 @@ export type Database = {
       }
       has_break_manage_perm: { Args: { _user_id: string }; Returns: boolean }
       has_main_admin: { Args: never; Returns: boolean }
+      has_manage_communications_perm: {
+        Args: { _user_id: string }
+        Returns: boolean
+      }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
@@ -1007,6 +1326,11 @@ export type Database = {
         Args: { _user_id: string }
         Returns: boolean
       }
+      has_send_announcements_perm: {
+        Args: { _user_id: string }
+        Returns: boolean
+      }
+      has_send_messages_perm: { Args: { _user_id: string }; Returns: boolean }
       has_task_approve_perm: { Args: { _user_id: string }; Returns: boolean }
       has_task_close_perm: { Args: { _user_id: string }; Returns: boolean }
       has_task_create_perm: { Args: { _user_id: string }; Returns: boolean }
@@ -1045,6 +1369,17 @@ export type Database = {
         | "assistant_manager"
         | "department_manager"
         | "employee"
+      comm_audit_action:
+        | "created"
+        | "edited"
+        | "deleted"
+        | "sent"
+        | "read"
+        | "acknowledged"
+        | "restored"
+      comm_entity_type: "message" | "announcement"
+      comm_priority: "low" | "normal" | "high" | "urgent"
+      comm_target_type: "user" | "department" | "all"
       schedule_audit_action:
         | "created"
         | "updated"
@@ -1199,6 +1534,18 @@ export const Constants = {
         "department_manager",
         "employee",
       ],
+      comm_audit_action: [
+        "created",
+        "edited",
+        "deleted",
+        "sent",
+        "read",
+        "acknowledged",
+        "restored",
+      ],
+      comm_entity_type: ["message", "announcement"],
+      comm_priority: ["low", "normal", "high", "urgent"],
+      comm_target_type: ["user", "department", "all"],
       schedule_audit_action: [
         "created",
         "updated",

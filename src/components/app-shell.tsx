@@ -15,6 +15,7 @@ import {
   CalendarDays,
   Coffee,
   Building,
+  Megaphone,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
@@ -63,6 +64,34 @@ export function AppShell({ children }: { children: ReactNode }) {
     },
   });
 
+  // Unread communications count (messages + unread announcements)
+  const commUnreadQ = useQuery({
+    enabled: !!profile?.id,
+    queryKey: ["shell-comm-unread", profile?.id],
+    refetchInterval: 60_000,
+    queryFn: async () => {
+      const uid = profile!.id;
+      const [{ count: msgCount }, annRes, readsRes] = await Promise.all([
+        supabase
+          .from("message_recipients")
+          .select("message_id", { count: "exact", head: true })
+          .eq("user_id", uid)
+          .is("read_at", null)
+          .is("archived_at", null),
+        supabase
+          .from("announcements")
+          .select("id")
+          .is("deleted_at", null)
+          .lte("starts_at", new Date().toISOString()),
+        supabase.from("announcement_reads").select("announcement_id").eq("user_id", uid),
+      ]);
+      const annIds = (annRes.data ?? []).map((a: any) => a.id);
+      const readIds = new Set((readsRes.data ?? []).map((r: any) => r.announcement_id));
+      const annUnread = annIds.filter((id) => !readIds.has(id)).length;
+      return (msgCount ?? 0) + annUnread;
+    },
+  });
+
   useEffect(() => {
     if (!profile) return;
     if (
@@ -104,10 +133,11 @@ export function AppShell({ children }: { children: ReactNode }) {
   const canRequestBreak = !isBreaksManager;
 
 
-  const nav: { to: string; label: string; icon: typeof LayoutDashboard; visible: boolean }[] = [
+  const nav: { to: string; label: string; icon: typeof LayoutDashboard; visible: boolean; badge?: number }[] = [
     { to: "/dashboard", label: "לוח בקרה", icon: LayoutDashboard, visible: !isPlainEmployee },
     { to: "/tasks", label: "משימות", icon: ListTodo, visible: true },
     { to: "/schedules", label: "סידורי עבודה", icon: CalendarDays, visible: true },
+    { to: "/communications", label: "מרכז תקשורת", icon: Megaphone, visible: true, badge: commUnreadQ.data ?? 0 },
     { to: "/breaks", label: "הפסקה", icon: Coffee, visible: canRequestBreak },
     { to: "/breaks-admin", label: "ניהול הפסקות", icon: Coffee, visible: isBreaksManager },
 
@@ -161,7 +191,12 @@ export function AppShell({ children }: { children: ReactNode }) {
               )}
             >
               <item.icon className="size-4 shrink-0" />
-              <span>{item.label}</span>
+              <span className="flex-1">{item.label}</span>
+              {!!item.badge && item.badge > 0 && (
+                <span className="min-w-[20px] h-5 px-1.5 rounded-full bg-destructive text-destructive-foreground text-[11px] font-bold flex items-center justify-center">
+                  {item.badge > 99 ? "99+" : item.badge}
+                </span>
+              )}
             </Link>
           );
         })}
