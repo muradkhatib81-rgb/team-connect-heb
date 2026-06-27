@@ -114,6 +114,7 @@ export function AppShell({ children }: { children: ReactNode }) {
     { to: "/employees", label: "ניהול עובדים", icon: Users, visible: admin },
     { to: "/departments", label: "מחלקות", icon: Building2, visible: admin },
     { to: "/permissions", label: "הרשאות", icon: ShieldCheck, visible: canManageUsers(profile.roles) },
+    { to: "/company-settings", label: "הגדרות חברה", icon: Building, visible: isMainAdmin },
     { to: "/profile", label: "הפרופיל שלי", icon: UserCircle, visible: isPlainEmployee },
   ].filter((n) => n.visible);
 
@@ -130,12 +131,16 @@ export function AppShell({ children }: { children: ReactNode }) {
     <div className="flex h-full flex-col bg-sidebar text-sidebar-foreground">
       <div className="px-5 py-6 border-b border-sidebar-border">
         <div className="flex items-center gap-3">
-          <div className="size-10 rounded-xl gradient-brand flex items-center justify-center shadow-soft shrink-0">
-            <Store className="size-5 text-primary-foreground" />
+          <div className="size-10 rounded-xl gradient-brand flex items-center justify-center shadow-soft shrink-0 overflow-hidden">
+            {company?.logo_url ? (
+              <img src={company.logo_url} alt={company.company_name} className="size-full object-contain bg-white" />
+            ) : (
+              <Store className="size-5 text-primary-foreground" />
+            )}
           </div>
           <div className="min-w-0">
             <p className="font-bold text-sm truncate">{APP_NAME}</p>
-            <p className="text-xs text-muted-foreground truncate">{BRANCH_NAME}</p>
+            <p className="text-xs text-muted-foreground truncate">{company?.company_name}</p>
           </div>
         </div>
       </div>
