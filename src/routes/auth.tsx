@@ -9,7 +9,6 @@ import { Card } from "@/components/ui/card";
 import { toast } from "sonner";
 import { APP_NAME } from "@/lib/constants";
 import { useCompanySettings } from "@/lib/use-company-settings";
-import { Building2 } from "lucide-react";
 import { Store, Loader2 } from "lucide-react";
 
 const searchSchema = z.object({ redirect: z.string().optional() });
