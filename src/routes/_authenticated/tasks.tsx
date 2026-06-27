@@ -29,6 +29,7 @@ import {
 import { formatHeDateTime, splitForInputs, combineToIso } from "@/lib/date-format";
 import { HebrewDateInput, HebrewTimeInput } from "@/components/hebrew-datetime";
 import { ImageLightbox, type LightboxImage } from "@/components/image-lightbox";
+import { TaskActivityComments } from "@/components/task-activity-comments";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
