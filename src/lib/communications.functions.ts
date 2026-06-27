@@ -31,7 +31,10 @@ export interface CreateAnnouncementInput {
 }
 
 // ---------------- Helpers ----------------
-async function resolveTargetUserIds(targets: MessageTargetsInput): Promise<string[]> {
+async function resolveTargetUserIds(
+  targets: MessageTargetsInput,
+  excludeUserId?: string | null,
+): Promise<string[]> {
   const ids = new Set<string>();
   if (targets.all) {
     const { data, error } = await supabase
@@ -51,6 +54,7 @@ async function resolveTargetUserIds(targets: MessageTargetsInput): Promise<strin
     (data ?? []).forEach((r: any) => ids.add(r.id));
   }
   (targets.users ?? []).forEach((u) => ids.add(u));
+  if (excludeUserId) ids.delete(excludeUserId);
   return [...ids];
 }
 
