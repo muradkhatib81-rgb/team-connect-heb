@@ -220,10 +220,19 @@ export function AppShell({ children }: { children: ReactNode }) {
             </p>
           </div>
         </div>
-        <Button onClick={handleSignOut} variant="outline" size="sm" className="w-full gap-2">
-          <LogOut className="size-4" />
-          התנתקות
-        </Button>
+        <div className="grid grid-cols-2 gap-2">
+          <Button asChild variant="outline" size="sm" className="gap-2" onClick={() => setMobileOpen(false)}>
+            <Link to="/profile">
+              <UserCircle className="size-4" />
+              פרופיל
+            </Link>
+          </Button>
+          <Button onClick={handleSignOut} variant="outline" size="sm" className="gap-2">
+            <LogOut className="size-4" />
+            התנתקות
+          </Button>
+        </div>
+
       </div>
     </div>
   );
