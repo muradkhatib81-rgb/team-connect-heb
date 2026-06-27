@@ -1080,11 +1080,8 @@ function MessageDetailDialog({
                       <CheckCheck className="size-4" /> קראתי והבנתי
                     </Button>
                   )}
-                  <Button variant="outline" onClick={() => unreadMut.mutate()} className="gap-1.5">
-                    <EyeOff className="size-4" /> סמן כלא נקרא
-                  </Button>
                   <Button variant="outline" onClick={() => archMut.mutate()} className="gap-1.5">
-                    <Archive className="size-4" /> ארכיון
+                    <Archive className="size-4" /> 📁 העבר לארכיון
                   </Button>
                 </>
               )}
@@ -1094,18 +1091,18 @@ function MessageDetailDialog({
                 </Button>
               )}
               {viewerMode === "sent" && canManage && (
-                <>
-                  <Button variant="outline" className="gap-1.5" onClick={() => setEditOpen(true)}>
-                    <Pencil className="size-4" /> ערוך
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    className="text-destructive gap-1.5"
-                    onClick={() => setDelOpen(true)}
-                  >
-                    <Trash2 className="size-4" /> מחק
-                  </Button>
-                </>
+                <Button variant="outline" className="gap-1.5" onClick={() => setEditOpen(true)}>
+                  <Pencil className="size-4" /> ערוך
+                </Button>
+              )}
+              {viewerMode === "sent" && canDelete && (
+                <Button
+                  variant="ghost"
+                  className="text-destructive gap-1.5"
+                  onClick={() => setDelOpen(true)}
+                >
+                  <Trash2 className="size-4" /> מחק
+                </Button>
               )}
             </DialogFooter>
 
