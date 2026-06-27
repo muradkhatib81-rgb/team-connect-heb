@@ -1279,6 +1279,10 @@ export type Database = {
         Args: { _ann_id: string; _user_id: string }
         Returns: boolean
       }
+      can_view_task: {
+        Args: { _task_id: string; _user_id: string }
+        Returns: boolean
+      }
       get_department_coworkers: {
         Args: never
         Returns: {
