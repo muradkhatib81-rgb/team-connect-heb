@@ -990,13 +990,6 @@ function MessageDetailDialog({
       onClose();
     },
   });
-  const unreadMut = useMutation({
-    mutationFn: () => markMessageUnread(messageId),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["comm"] });
-      onClose();
-    },
-  });
   const delMut = useMutation({
     mutationFn: () => deleteMessage(messageId),
     onSuccess: () => {
