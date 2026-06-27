@@ -1140,6 +1140,7 @@ export type Database = {
           can_approve_tasks: boolean
           can_create_schedule: boolean
           can_create_tasks: boolean
+          can_delete_communications: boolean
           can_delete_employee: boolean
           can_delete_tasks: boolean
           can_edit_employee: boolean
@@ -1187,6 +1188,7 @@ export type Database = {
           can_approve_tasks?: boolean
           can_create_schedule?: boolean
           can_create_tasks?: boolean
+          can_delete_communications?: boolean
           can_delete_employee?: boolean
           can_delete_tasks?: boolean
           can_edit_employee?: boolean
@@ -1234,6 +1236,7 @@ export type Database = {
           can_approve_tasks?: boolean
           can_create_schedule?: boolean
           can_create_tasks?: boolean
+          can_delete_communications?: boolean
           can_delete_employee?: boolean
           can_delete_tasks?: boolean
           can_edit_employee?: boolean
@@ -1355,6 +1358,10 @@ export type Database = {
         }[]
       }
       has_break_manage_perm: { Args: { _user_id: string }; Returns: boolean }
+      has_delete_communications_perm: {
+        Args: { _user_id: string }
+        Returns: boolean
+      }
       has_main_admin: { Args: never; Returns: boolean }
       has_manage_communications_perm: {
         Args: { _user_id: string }

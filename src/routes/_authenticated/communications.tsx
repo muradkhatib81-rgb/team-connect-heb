@@ -107,6 +107,7 @@ interface PermsRow {
   can_send_message_all: boolean | null;
   can_send_announcements: boolean | null;
   can_manage_communications: boolean | null;
+  can_delete_communications: boolean | null;
   can_view_read_receipts: boolean | null;
 }
 
@@ -125,7 +126,7 @@ function CommunicationsPage() {
       const { data } = await supabase
         .from("user_task_permissions")
         .select(
-          "can_view_messages, can_send_messages, can_send_message_employee, can_send_message_department, can_send_message_all, can_send_announcements, can_manage_communications, can_view_read_receipts",
+          "can_view_messages, can_send_messages, can_send_message_employee, can_send_message_department, can_send_message_all, can_send_announcements, can_manage_communications, can_delete_communications, can_view_read_receipts",
         )
         .eq("user_id", userId!)
         .maybeSingle();
@@ -133,10 +134,13 @@ function CommunicationsPage() {
     },
   });
   const p = permsQ.data ?? ({} as PermsRow);
-  const canSendMsg = admin || isDeptManager || !!p.can_send_messages;
-  const canSendAnnouncement = admin || !!p.can_send_announcements;
+  // Permission-based only (no role fallback besides main_admin).
+  const canSendMsg = admin || !!p.can_send_messages || !!p.can_manage_communications;
+  const canSendAnnouncement = admin || !!p.can_send_announcements || !!p.can_manage_communications;
   const canManage = admin || !!p.can_manage_communications;
-  const canViewReceipts = admin || !!p.can_view_read_receipts;
+  const canDelete = admin || !!p.can_delete_communications || !!p.can_manage_communications;
+  const canViewReceipts = admin || !!p.can_view_read_receipts || !!p.can_manage_communications;
+
 
   // Realtime subscriptions
   useEffect(() => {
@@ -215,16 +219,16 @@ function CommunicationsPage() {
         </TabsList>
 
         <TabsContent value="inbox" className="mt-4">
-          <InboxTab userId={userId!} />
+          <InboxTab userId={userId!} canDelete={canDelete} />
         </TabsContent>
         <TabsContent value="announcements" className="mt-4">
-          <AnnouncementsTab userId={userId!} canManage={canManage} canViewReceipts={canViewReceipts} />
+          <AnnouncementsTab userId={userId!} canDelete={canDelete} canViewReceipts={canViewReceipts} />
         </TabsContent>
         <TabsContent value="sent" className="mt-4">
-          <SentTab userId={userId!} canManage={canManage} canViewReceipts={canViewReceipts} />
+          <SentTab userId={userId!} canManage={canManage} canDelete={canDelete} canViewReceipts={canViewReceipts} />
         </TabsContent>
         <TabsContent value="archive" className="mt-4">
-          <ArchiveTab userId={userId!} canManage={canManage} />
+          <ArchiveTab userId={userId!} canDelete={canDelete} />
         </TabsContent>
       </Tabs>
 
@@ -271,7 +275,7 @@ interface InboxRow {
   sender?: { full_name: string | null } | null;
 }
 
-function InboxTab({ userId }: { userId: string }) {
+function InboxTab({ userId, canDelete }: { userId: string; canDelete: boolean }) {
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState<"all" | "unread" | "important">("all");
   const [selected, setSelected] = useState<string | null>(null);
@@ -389,6 +393,7 @@ function InboxTab({ userId }: { userId: string }) {
           messageId={selected}
           onClose={() => setSelected(null)}
           viewerMode="inbox"
+          canDelete={canDelete}
         />
       )}
     </div>
@@ -396,7 +401,7 @@ function InboxTab({ userId }: { userId: string }) {
 }
 
 // ---------------- Sent ----------------
-function SentTab({ userId, canManage, canViewReceipts }: { userId: string; canManage: boolean; canViewReceipts: boolean }) {
+function SentTab({ userId, canManage, canDelete, canViewReceipts }: { userId: string; canManage: boolean; canDelete: boolean; canViewReceipts: boolean }) {
   const [selected, setSelected] = useState<string | null>(null);
   const q = useQuery({
     queryKey: ["comm", "sent", userId],
@@ -474,6 +479,7 @@ function SentTab({ userId, canManage, canViewReceipts }: { userId: string; canMa
           onClose={() => setSelected(null)}
           viewerMode="sent"
           canManage={canManage}
+          canDelete={canDelete}
           canViewReceipts={canViewReceipts}
         />
       )}
@@ -482,7 +488,7 @@ function SentTab({ userId, canManage, canViewReceipts }: { userId: string; canMa
 }
 
 // ---------------- Announcements ----------------
-function AnnouncementsTab({ userId, canManage, canViewReceipts }: { userId: string; canManage: boolean; canViewReceipts: boolean }) {
+function AnnouncementsTab({ userId, canDelete, canViewReceipts }: { userId: string; canDelete: boolean; canViewReceipts: boolean }) {
   const qc = useQueryClient();
   const q = useQuery({
     queryKey: ["comm", "announcements", userId],
@@ -554,71 +560,20 @@ function AnnouncementsTab({ userId, canManage, canViewReceipts }: { userId: stri
   return (
     <div className="grid sm:grid-cols-2 gap-3">
       {list.map((a: any) => {
-        const canManageThis = canManage && a.sender_id === userId;
+        const canEditThis = a.sender_id === userId;
+        const canDeleteThis = canDelete;
         return (
-          <Card
+          <AnnouncementCard
             key={a.id}
-            className={cn("p-4 space-y-2 relative", !a.is_read && "ring-2 ring-primary/40")}
-          >
-            {a.image_url && (
-              <img src={a.image_url} alt="" className="w-full h-32 object-cover rounded-md" />
-            )}
-            <div className="flex items-center justify-between gap-2 flex-wrap">
-              <h3 className="font-bold">{a.title}</h3>
-              <div className="flex items-center gap-1.5">
-                <PriorityBadge p={a.priority} />
-                {a.edited_at && (
-                  <Badge variant="outline" className="gap-1 text-[10px]">
-                    <Pencil className="size-3" /> נערך
-                  </Badge>
-                )}
-              </div>
-            </div>
-            <p className="text-sm whitespace-pre-wrap">{a.body}</p>
-            <p className="text-xs text-muted-foreground">
-              פורסם ע"י {a.sender_name} · {formatHeDateTime(a.starts_at)}
-              {a.ends_at && ` · עד ${formatHeDateTime(a.ends_at)}`}
-              {a.edited_at && ` · עודכן ${formatHeDateTime(a.edited_at)}`}
-            </p>
-            <div className="flex items-center justify-between pt-1 flex-wrap gap-1">
-              <Button
-                size="sm"
-                variant={a.is_read ? "outline" : "default"}
-                onClick={() => markAnnouncementRead(a.id).then(() => qc.invalidateQueries({ queryKey: ["comm"] }))}
-                className="gap-1.5"
-                disabled={a.is_read}
-              >
-                <Eye className="size-4" /> {a.is_read ? "נקרא" : "סמן כנקרא"}
-              </Button>
-              <div className="flex gap-1 flex-wrap">
-                {(canViewReceipts || a.sender_id === userId) && (
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() => setReceiptsAnn(a.id)}
-                    className="gap-1.5"
-                  >
-                    <Eye className="size-4" /> 👁️ אישורי קריאה
-                  </Button>
-                )}
-                {canManageThis && (
-                  <>
-                    <Button size="sm" variant="outline" onClick={() => setEditAnn(a)} className="gap-1.5">
-                      <Pencil className="size-4" /> ערוך
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      onClick={() => setDelAnn(a.id)}
-                      className="gap-1.5 text-destructive"
-                    >
-                      <Trash2 className="size-4" /> מחק
-                    </Button>
-                  </>
-                )}
-              </div>
-            </div>
-          </Card>
+            ann={a}
+            userId={userId}
+            canEditThis={canEditThis}
+            canDeleteThis={canDeleteThis}
+            canViewReceipts={canViewReceipts}
+            onEdit={() => setEditAnn(a)}
+            onDelete={() => setDelAnn(a.id)}
+            onShowReceipts={() => setReceiptsAnn(a.id)}
+          />
         );
       })}
 
@@ -753,9 +708,85 @@ function EditAnnouncementDialog({ ann, onClose }: { ann: any; onClose: () => voi
   );
 }
 
+// ---------------- Announcement Card (auto-marks read on mount) ----------------
+function AnnouncementCard({
+  ann,
+  userId,
+  canEditThis,
+  canDeleteThis,
+  canViewReceipts,
+  onEdit,
+  onDelete,
+  onShowReceipts,
+}: {
+  ann: any;
+  userId: string;
+  canEditThis: boolean;
+  canDeleteThis: boolean;
+  canViewReceipts: boolean;
+  onEdit: () => void;
+  onDelete: () => void;
+  onShowReceipts: () => void;
+}) {
+  const qc = useQueryClient();
+  useEffect(() => {
+    if (!ann.is_read) {
+      markAnnouncementRead(ann.id).then(() =>
+        qc.invalidateQueries({ queryKey: ["comm"] }),
+      );
+    }
+  }, [ann.id, ann.is_read, qc]);
+
+  return (
+    <Card className={cn("p-4 space-y-2 relative", !ann.is_read && "ring-2 ring-primary/40")}>
+      {ann.image_url && (
+        <img src={ann.image_url} alt="" className="w-full h-32 object-cover rounded-md" />
+      )}
+      <div className="flex items-center justify-between gap-2 flex-wrap">
+        <h3 className="font-bold">{ann.title}</h3>
+        <div className="flex items-center gap-1.5">
+          <PriorityBadge p={ann.priority} />
+          {ann.edited_at && (
+            <Badge variant="outline" className="gap-1 text-[10px]">
+              <Pencil className="size-3" /> נערך
+            </Badge>
+          )}
+        </div>
+      </div>
+      <p className="text-sm whitespace-pre-wrap">{ann.body}</p>
+      <p className="text-xs text-muted-foreground">
+        פורסם ע"י {ann.sender_name} · {formatHeDateTime(ann.starts_at)}
+        {ann.ends_at && ` · עד ${formatHeDateTime(ann.ends_at)}`}
+        {ann.edited_at && ` · עודכן ${formatHeDateTime(ann.edited_at)}`}
+      </p>
+      <div className="flex items-center justify-end pt-1 flex-wrap gap-1">
+        {(canViewReceipts || ann.sender_id === userId) && (
+          <Button size="sm" variant="outline" onClick={onShowReceipts} className="gap-1.5">
+            <Eye className="size-4" /> 👁️ אישורי קריאה
+          </Button>
+        )}
+        {canEditThis && (
+          <Button size="sm" variant="outline" onClick={onEdit} className="gap-1.5">
+            <Pencil className="size-4" /> ערוך
+          </Button>
+        )}
+        {canDeleteThis && (
+          <Button
+            size="sm"
+            variant="ghost"
+            onClick={onDelete}
+            className="gap-1.5 text-destructive"
+          >
+            <Trash2 className="size-4" /> מחק
+          </Button>
+        )}
+      </div>
+    </Card>
+  );
+}
 
 // ---------------- Archive ----------------
-function ArchiveTab({ userId, canManage }: { userId: string; canManage: boolean }) {
+function ArchiveTab({ userId, canDelete }: { userId: string; canDelete: boolean }) {
   const qc = useQueryClient();
 
   const msgsQ = useQuery({
@@ -775,7 +806,7 @@ function ArchiveTab({ userId, canManage }: { userId: string; canManage: boolean 
   });
 
   const annsQ = useQuery({
-    enabled: canManage,
+    enabled: canDelete,
     queryKey: ["comm", "archive-anns", userId],
     queryFn: async () => {
       const { data, error } = await supabase
@@ -826,7 +857,7 @@ function ArchiveTab({ userId, canManage }: { userId: string; canManage: boolean 
                   >
                     <RotateCcw className="size-4" /> שחזר
                   </Button>
-                  {canManage && (
+                  {canDelete && (
                     <Button
                       size="sm"
                       variant="ghost"
@@ -845,7 +876,7 @@ function ArchiveTab({ userId, canManage }: { userId: string; canManage: boolean 
         )}
       </section>
 
-      {canManage && (
+      {canDelete && (
         <section>
           <h3 className="text-sm font-semibold mb-2 text-muted-foreground">הכרזות בארכיון</h3>
           {(annsQ.data ?? []).length === 0 ? (
@@ -884,12 +915,14 @@ function MessageDetailDialog({
   onClose,
   viewerMode,
   canManage,
+  canDelete,
   canViewReceipts,
 }: {
   messageId: string;
   onClose: () => void;
   viewerMode: "inbox" | "sent";
   canManage?: boolean;
+  canDelete?: boolean;
   canViewReceipts?: boolean;
 }) {
   const qc = useQueryClient();
@@ -953,13 +986,6 @@ function MessageDetailDialog({
     mutationFn: () => archiveMessage(messageId, true),
     onSuccess: () => {
       toast.success("הועבר לארכיון");
-      qc.invalidateQueries({ queryKey: ["comm"] });
-      onClose();
-    },
-  });
-  const unreadMut = useMutation({
-    mutationFn: () => markMessageUnread(messageId),
-    onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["comm"] });
       onClose();
     },
@@ -1047,11 +1073,8 @@ function MessageDetailDialog({
                       <CheckCheck className="size-4" /> קראתי והבנתי
                     </Button>
                   )}
-                  <Button variant="outline" onClick={() => unreadMut.mutate()} className="gap-1.5">
-                    <EyeOff className="size-4" /> סמן כלא נקרא
-                  </Button>
                   <Button variant="outline" onClick={() => archMut.mutate()} className="gap-1.5">
-                    <Archive className="size-4" /> ארכיון
+                    <Archive className="size-4" /> 📁 העבר לארכיון
                   </Button>
                 </>
               )}
@@ -1061,18 +1084,18 @@ function MessageDetailDialog({
                 </Button>
               )}
               {viewerMode === "sent" && canManage && (
-                <>
-                  <Button variant="outline" className="gap-1.5" onClick={() => setEditOpen(true)}>
-                    <Pencil className="size-4" /> ערוך
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    className="text-destructive gap-1.5"
-                    onClick={() => setDelOpen(true)}
-                  >
-                    <Trash2 className="size-4" /> מחק
-                  </Button>
-                </>
+                <Button variant="outline" className="gap-1.5" onClick={() => setEditOpen(true)}>
+                  <Pencil className="size-4" /> ערוך
+                </Button>
+              )}
+              {viewerMode === "sent" && canDelete && (
+                <Button
+                  variant="ghost"
+                  className="text-destructive gap-1.5"
+                  onClick={() => setDelOpen(true)}
+                >
+                  <Trash2 className="size-4" /> מחק
+                </Button>
               )}
             </DialogFooter>
 
