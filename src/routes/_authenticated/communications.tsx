@@ -401,7 +401,7 @@ function SentTab({ userId, canManage }: { userId: string; canManage: boolean }) 
     queryFn: async () => {
       const { data, error } = await supabase
         .from("messages")
-        .select("id, title, body, priority, requires_acknowledgment, created_at, deleted_at")
+        .select("id, title, body, priority, requires_acknowledgment, created_at, deleted_at, edited_at, edited_by")
         .eq("sender_id", userId)
         .is("deleted_at", null)
         .order("created_at", { ascending: false });
