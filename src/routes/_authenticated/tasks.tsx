@@ -1473,7 +1473,14 @@ function TaskFormDialog({
           <Button variant="outline" onClick={onClose}>ביטול</Button>
           <Button
             onClick={() => submit.mutate()}
-            disabled={!title.trim() || !departmentId || submit.isPending}
+            disabled={
+              !title.trim() ||
+              submit.isPending ||
+              (targetScope === "single_department" && !departmentId) ||
+              (targetScope === "departments" && departmentIds.length === 0) ||
+              (executorMode === "single" && !singleAssignee) ||
+              (executorMode === "multi" && assigneeIds.length === 0)
+            }
           >
             {submit.isPending && <Loader2 className="size-4 animate-spin ml-2" />}
             {mode === "create" ? "צור" : "עדכן"}
