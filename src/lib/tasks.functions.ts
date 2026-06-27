@@ -62,30 +62,54 @@ function canEditForDept(caps: Awaited<ReturnType<typeof getCallerCaps>>, deptId:
 }
 
 // ---------- CREATE task ----------
+const TARGET_SCOPE = ["all_departments", "departments", "single_department"] as const;
+
 const createSchema = z.object({
   title: z.string().trim().min(1, "כותרת חובה").max(200),
   description: z.string().trim().max(2000).optional().nullable(),
-  department_id: z.string().uuid(),
+  department_id: z.string().uuid().optional().nullable(),
+  department_ids: z.array(z.string().uuid()).optional().default([]),
+  target_scope: z.enum(TARGET_SCOPE).default("single_department"),
   assignee_id: z.string().uuid().optional().nullable(),
+  assignee_ids: z.array(z.string().uuid()).optional().default([]),
+  requires_approval: z.boolean().optional().default(true),
   due_at: z.string().datetime().optional().nullable(),
   priority: z.enum(PRIORITY).default("medium"),
   notes: z.string().trim().max(2000).optional().nullable(),
 });
+
+async function notifyUsers(supabase: any, userIds: string[], message: string) {
+  const ids = Array.from(new Set(userIds.filter(Boolean)));
+  if (!ids.length) return;
+  const rows = ids.map((uid) => ({ schedule_id: null, user_id: uid, message }));
+  await supabase.from("schedule_notifications").insert(rows);
+}
 
 export const createTask = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: unknown) => createSchema.parse(d))
   .handler(async ({ data, context }) => {
     const caps = await getCallerCaps(context.supabase, context.userId);
-    if (!canCreateForDept(caps, data.department_id)) {
-      throw new Error("אין הרשאה ליצור משימה במחלקה זו");
+    if (data.target_scope === "single_department") {
+      if (!data.department_id) throw new Error("נדרשת מחלקה");
+      if (!canCreateForDept(caps, data.department_id))
+        throw new Error("אין הרשאה ליצור משימה במחלקה זו");
+    } else {
+      if (!caps.canCreateTasks)
+        throw new Error("אין הרשאה ליצור משימה לכמה מחלקות / לכל הארגון");
     }
+    const primaryDept =
+      data.target_scope === "single_department"
+        ? data.department_id
+        : (data.department_ids?.[0] ?? null);
     const { data: row, error } = await context.supabase
       .from("tasks")
       .insert({
         title: data.title,
         description: data.description ?? null,
-        department_id: data.department_id,
+        department_id: primaryDept,
+        target_scope: data.target_scope,
+        requires_approval: data.requires_approval ?? true,
         assignee_id: data.assignee_id ?? null,
         due_at: data.due_at ?? null,
         priority: data.priority,
@@ -95,6 +119,48 @@ export const createTask = createServerFn({ method: "POST" })
       .select("*")
       .single();
     if (error) throw new Error(error.message);
+
+    if (data.target_scope === "departments" && data.department_ids?.length) {
+      await context.supabase
+        .from("task_departments")
+        .insert(data.department_ids.map((id) => ({ task_id: row.id, department_id: id })));
+    }
+    if (data.assignee_ids?.length) {
+      await context.supabase
+        .from("task_assignees")
+        .insert(data.assignee_ids.map((uid) => ({ task_id: row.id, user_id: uid })));
+    }
+
+    const notifyTargets = new Set<string>(data.assignee_ids ?? []);
+    if (data.assignee_id) notifyTargets.add(data.assignee_id);
+    if (data.target_scope === "all_departments") {
+      const { data: emps } = await context.supabase.from("profiles").select("id").eq("is_active", true);
+      (emps ?? []).forEach((e: any) => notifyTargets.add(e.id));
+    } else if (data.target_scope === "departments" && data.department_ids?.length) {
+      const { data: emps } = await context.supabase
+        .from("profiles")
+        .select("id")
+        .in("department_id", data.department_ids);
+      (emps ?? []).forEach((e: any) => notifyTargets.add(e.id));
+    } else if (
+      data.target_scope === "single_department" &&
+      primaryDept &&
+      !data.assignee_ids?.length &&
+      !data.assignee_id
+    ) {
+      const { data: emps } = await context.supabase
+        .from("profiles")
+        .select("id")
+        .eq("department_id", primaryDept);
+      (emps ?? []).forEach((e: any) => notifyTargets.add(e.id));
+    }
+    notifyTargets.delete(context.userId);
+    await notifyUsers(
+      context.supabase,
+      Array.from(notifyTargets),
+      `הוקצתה לך משימה חדשה: ${data.title}`,
+    );
+
     return row;
   });
 
@@ -103,8 +169,12 @@ const updateSchema = z.object({
   id: z.string().uuid(),
   title: z.string().trim().min(1).max(200).optional(),
   description: z.string().trim().max(2000).nullable().optional(),
-  department_id: z.string().uuid().optional(),
+  department_id: z.string().uuid().nullable().optional(),
+  department_ids: z.array(z.string().uuid()).optional(),
+  target_scope: z.enum(TARGET_SCOPE).optional(),
   assignee_id: z.string().uuid().nullable().optional(),
+  assignee_ids: z.array(z.string().uuid()).optional(),
+  requires_approval: z.boolean().optional(),
   due_at: z.string().datetime().nullable().optional(),
   priority: z.enum(PRIORITY).optional(),
   status: z.enum(STATUS).optional(),
@@ -115,12 +185,137 @@ export const updateTask = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: unknown) => updateSchema.parse(d))
   .handler(async ({ data, context }) => {
-    const { id, ...patch } = data;
+    const { id, department_ids, assignee_ids, ...patch } = data;
     const cleaned: Record<string, any> = {};
     for (const [k, v] of Object.entries(patch)) if (v !== undefined) cleaned[k] = v;
-    const { error } = await context.supabase.from("tasks").update(cleaned as any).eq("id", id);
+    if (Object.keys(cleaned).length) {
+      const { error } = await context.supabase.from("tasks").update(cleaned as any).eq("id", id);
+      if (error) throw new Error(error.message);
+    }
+    if (department_ids) {
+      await context.supabase.from("task_departments").delete().eq("task_id", id);
+      if (department_ids.length) {
+        await context.supabase
+          .from("task_departments")
+          .insert(department_ids.map((d) => ({ task_id: id, department_id: d })));
+      }
+    }
+    if (assignee_ids) {
+      const { data: existing } = await context.supabase
+        .from("task_assignees")
+        .select("user_id")
+        .eq("task_id", id);
+      const existingSet = new Set((existing ?? []).map((r: any) => r.user_id));
+      const newSet = new Set(assignee_ids);
+      const toAdd = assignee_ids.filter((u) => !existingSet.has(u));
+      const toRemove = Array.from(existingSet).filter((u) => !newSet.has(u as string)) as string[];
+      if (toRemove.length) {
+        await context.supabase
+          .from("task_assignees")
+          .delete()
+          .eq("task_id", id)
+          .in("user_id", toRemove);
+      }
+      if (toAdd.length) {
+        await context.supabase
+          .from("task_assignees")
+          .insert(toAdd.map((u) => ({ task_id: id, user_id: u })));
+        const { data: t } = await context.supabase
+          .from("tasks")
+          .select("title")
+          .eq("id", id)
+          .maybeSingle();
+        await notifyUsers(context.supabase, toAdd, `הוקצתה לך משימה: ${t?.title ?? ""}`);
+      }
+    }
+    return { ok: true };
+  });
+
+// ---------- ACTIVITY & COMMENTS ----------
+export const listTaskActivity = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) => z.object({ task_id: z.string().uuid() }).parse(d))
+  .handler(async ({ data, context }) => {
+    const { data: rows, error } = await context.supabase
+      .from("task_activity_log")
+      .select("id, actor_id, event, payload, created_at")
+      .eq("task_id", data.task_id)
+      .order("created_at", { ascending: true });
+    if (error) throw new Error(error.message);
+    const actorIds = Array.from(new Set((rows ?? []).map((r: any) => r.actor_id).filter(Boolean)));
+    let names: Record<string, string> = {};
+    if (actorIds.length) {
+      const { data: profs } = await context.supabase
+        .from("profiles")
+        .select("id, full_name")
+        .in("id", actorIds);
+      names = Object.fromEntries((profs ?? []).map((p: any) => [p.id, p.full_name]));
+    }
+    return (rows ?? []).map((r: any) => ({
+      ...r,
+      actor_name: r.actor_id ? (names[r.actor_id] ?? null) : null,
+    }));
+  });
+
+export const listTaskComments = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) => z.object({ task_id: z.string().uuid() }).parse(d))
+  .handler(async ({ data, context }) => {
+    const { data: rows, error } = await context.supabase
+      .from("task_comments")
+      .select("id, author_id, body, created_at")
+      .eq("task_id", data.task_id)
+      .order("created_at", { ascending: true });
+    if (error) throw new Error(error.message);
+    const ids = Array.from(new Set((rows ?? []).map((r: any) => r.author_id)));
+    let names: Record<string, string> = {};
+    if (ids.length) {
+      const { data: profs } = await context.supabase
+        .from("profiles")
+        .select("id, full_name")
+        .in("id", ids);
+      names = Object.fromEntries((profs ?? []).map((p: any) => [p.id, p.full_name]));
+    }
+    return (rows ?? []).map((r: any) => ({ ...r, author_name: names[r.author_id] ?? "—" }));
+  });
+
+export const addTaskComment = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) =>
+    z.object({ task_id: z.string().uuid(), body: z.string().trim().min(1).max(2000) }).parse(d),
+  )
+  .handler(async ({ data, context }) => {
+    const { error } = await context.supabase.from("task_comments").insert({
+      task_id: data.task_id,
+      author_id: context.userId,
+      body: data.body,
+    });
     if (error) throw new Error(error.message);
     return { ok: true };
+  });
+
+export const listTaskAssigneeIds = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) => z.object({ task_id: z.string().uuid() }).parse(d))
+  .handler(async ({ data, context }) => {
+    const { data: rows, error } = await context.supabase
+      .from("task_assignees")
+      .select("user_id")
+      .eq("task_id", data.task_id);
+    if (error) throw new Error(error.message);
+    return (rows ?? []).map((r: any) => r.user_id as string);
+  });
+
+export const listTaskDepartmentIds = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) => z.object({ task_id: z.string().uuid() }).parse(d))
+  .handler(async ({ data, context }) => {
+    const { data: rows, error } = await context.supabase
+      .from("task_departments")
+      .select("department_id")
+      .eq("task_id", data.task_id);
+    if (error) throw new Error(error.message);
+    return (rows ?? []).map((r: any) => r.department_id as string);
   });
 
 // ---------- DELETE task ----------
