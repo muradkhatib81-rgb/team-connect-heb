@@ -436,6 +436,129 @@ export type Database = {
           },
         ]
       }
+      task_activity_log: {
+        Row: {
+          actor_id: string | null
+          created_at: string
+          event: string
+          id: string
+          payload: Json | null
+          task_id: string
+        }
+        Insert: {
+          actor_id?: string | null
+          created_at?: string
+          event: string
+          id?: string
+          payload?: Json | null
+          task_id: string
+        }
+        Update: {
+          actor_id?: string | null
+          created_at?: string
+          event?: string
+          id?: string
+          payload?: Json | null
+          task_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "task_activity_log_task_id_fkey"
+            columns: ["task_id"]
+            isOneToOne: false
+            referencedRelation: "tasks"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      task_assignees: {
+        Row: {
+          assigned_at: string
+          task_id: string
+          user_id: string
+        }
+        Insert: {
+          assigned_at?: string
+          task_id: string
+          user_id: string
+        }
+        Update: {
+          assigned_at?: string
+          task_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "task_assignees_task_id_fkey"
+            columns: ["task_id"]
+            isOneToOne: false
+            referencedRelation: "tasks"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      task_comments: {
+        Row: {
+          author_id: string
+          body: string
+          created_at: string
+          id: string
+          task_id: string
+        }
+        Insert: {
+          author_id: string
+          body: string
+          created_at?: string
+          id?: string
+          task_id: string
+        }
+        Update: {
+          author_id?: string
+          body?: string
+          created_at?: string
+          id?: string
+          task_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "task_comments_task_id_fkey"
+            columns: ["task_id"]
+            isOneToOne: false
+            referencedRelation: "tasks"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      task_departments: {
+        Row: {
+          department_id: string
+          task_id: string
+        }
+        Insert: {
+          department_id: string
+          task_id: string
+        }
+        Update: {
+          department_id?: string
+          task_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "task_departments_department_id_fkey"
+            columns: ["department_id"]
+            isOneToOne: false
+            referencedRelation: "departments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "task_departments_task_id_fkey"
+            columns: ["task_id"]
+            isOneToOne: false
+            referencedRelation: "tasks"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       task_images: {
         Row: {
           created_at: string
@@ -576,7 +699,7 @@ export type Database = {
           completed_by: string | null
           created_at: string
           created_by: string | null
-          department_id: string
+          department_id: string | null
           description: string | null
           due_at: string | null
           employee_note: string | null
@@ -586,7 +709,9 @@ export type Database = {
           recurrence_id: string | null
           rejected_at: string | null
           rejection_note: string | null
+          requires_approval: boolean
           status: Database["public"]["Enums"]["task_status"]
+          target_scope: Database["public"]["Enums"]["task_target_scope"]
           title: string
           updated_at: string
         }
@@ -600,7 +725,7 @@ export type Database = {
           completed_by?: string | null
           created_at?: string
           created_by?: string | null
-          department_id: string
+          department_id?: string | null
           description?: string | null
           due_at?: string | null
           employee_note?: string | null
@@ -610,7 +735,9 @@ export type Database = {
           recurrence_id?: string | null
           rejected_at?: string | null
           rejection_note?: string | null
+          requires_approval?: boolean
           status?: Database["public"]["Enums"]["task_status"]
+          target_scope?: Database["public"]["Enums"]["task_target_scope"]
           title: string
           updated_at?: string
         }
@@ -624,7 +751,7 @@ export type Database = {
           completed_by?: string | null
           created_at?: string
           created_by?: string | null
-          department_id?: string
+          department_id?: string | null
           description?: string | null
           due_at?: string | null
           employee_note?: string | null
@@ -634,7 +761,9 @@ export type Database = {
           recurrence_id?: string | null
           rejected_at?: string | null
           rejection_note?: string | null
+          requires_approval?: boolean
           status?: Database["public"]["Enums"]["task_status"]
+          target_scope?: Database["public"]["Enums"]["task_target_scope"]
           title?: string
           updated_at?: string
         }
@@ -852,6 +981,14 @@ export type Database = {
           phone: string
         }[]
       }
+      get_task_assignees: {
+        Args: { _task_id: string }
+        Returns: {
+          avatar_url: string
+          full_name: string
+          user_id: string
+        }[]
+      }
       has_break_manage_perm: { Args: { _user_id: string }; Returns: boolean }
       has_main_admin: { Args: never; Returns: boolean }
       has_role: {
@@ -927,6 +1064,7 @@ export type Database = {
         | "completed"
         | "pending_closure"
         | "closed"
+      task_target_scope: "all_departments" | "departments" | "single_department"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -1081,6 +1219,11 @@ export const Constants = {
         "completed",
         "pending_closure",
         "closed",
+      ],
+      task_target_scope: [
+        "all_departments",
+        "departments",
+        "single_department",
       ],
     },
   },
