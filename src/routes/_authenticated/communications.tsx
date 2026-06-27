@@ -806,7 +806,7 @@ function ArchiveTab({ userId, canDelete }: { userId: string; canDelete: boolean 
   });
 
   const annsQ = useQuery({
-    enabled: canManage,
+    enabled: canDelete,
     queryKey: ["comm", "archive-anns", userId],
     queryFn: async () => {
       const { data, error } = await supabase
@@ -857,7 +857,7 @@ function ArchiveTab({ userId, canDelete }: { userId: string; canDelete: boolean 
                   >
                     <RotateCcw className="size-4" /> שחזר
                   </Button>
-                  {canManage && (
+                  {canDelete && (
                     <Button
                       size="sm"
                       variant="ghost"
@@ -876,7 +876,7 @@ function ArchiveTab({ userId, canDelete }: { userId: string; canDelete: boolean 
         )}
       </section>
 
-      {canManage && (
+      {canDelete && (
         <section>
           <h3 className="text-sm font-semibold mb-2 text-muted-foreground">הכרזות בארכיון</h3>
           {(annsQ.data ?? []).length === 0 ? (
