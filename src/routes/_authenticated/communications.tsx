@@ -1034,6 +1034,11 @@ function MessageDetailDialog({
                   </Button>
                 </>
               )}
+              {viewerMode === "sent" && canViewReceipts && (
+                <Button variant="outline" className="gap-1.5" onClick={() => setReceiptsOpen(true)}>
+                  <Eye className="size-4" /> 👁️ אישורי קריאה
+                </Button>
+              )}
               {viewerMode === "sent" && canManage && (
                 <>
                   <Button variant="outline" className="gap-1.5" onClick={() => setEditOpen(true)}>
@@ -1049,6 +1054,14 @@ function MessageDetailDialog({
                 </>
               )}
             </DialogFooter>
+
+            {receiptsOpen && (
+              <ReadReceiptsDialog
+                kind="message"
+                targetId={messageId}
+                onClose={() => setReceiptsOpen(false)}
+              />
+            )}
 
             {editOpen && (
               <EditMessageDialog
