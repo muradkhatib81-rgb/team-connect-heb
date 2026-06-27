@@ -107,6 +107,7 @@ interface PermsRow {
   can_send_message_all: boolean | null;
   can_send_announcements: boolean | null;
   can_manage_communications: boolean | null;
+  can_view_read_receipts: boolean | null;
 }
 
 function CommunicationsPage() {
@@ -124,7 +125,7 @@ function CommunicationsPage() {
       const { data } = await supabase
         .from("user_task_permissions")
         .select(
-          "can_view_messages, can_send_messages, can_send_message_employee, can_send_message_department, can_send_message_all, can_send_announcements, can_manage_communications",
+          "can_view_messages, can_send_messages, can_send_message_employee, can_send_message_department, can_send_message_all, can_send_announcements, can_manage_communications, can_view_read_receipts",
         )
         .eq("user_id", userId!)
         .maybeSingle();
@@ -135,6 +136,7 @@ function CommunicationsPage() {
   const canSendMsg = admin || isDeptManager || !!p.can_send_messages;
   const canSendAnnouncement = admin || !!p.can_send_announcements;
   const canManage = admin || !!p.can_manage_communications;
+  const canViewReceipts = admin || !!p.can_view_read_receipts;
 
   // Realtime subscriptions
   useEffect(() => {
