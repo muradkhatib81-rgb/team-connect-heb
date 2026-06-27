@@ -14,17 +14,17 @@ import {
   ListTodo,
   CalendarDays,
   Coffee,
+  Building,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/use-auth";
+import { useCompanySettings } from "@/lib/use-company-settings";
 import {
   APP_NAME,
-  BRANCH_NAME,
   ROLE_LABELS,
-  DEPARTMENT_LABELS,
   isAdmin,
   canManageUsers,
   highestRole,
