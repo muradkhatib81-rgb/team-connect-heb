@@ -220,6 +220,8 @@ function EmployeesPage() {
     const data = employeesQuery.data ?? [];
     const term = searchTerm.trim().toLowerCase();
     return data.filter((e) => {
+      // Hide department manager from their own employees list
+      if (isDeptManagerOnly && e.id === me?.id) return false;
       if (deptFilter !== "all" && e.department_id !== deptFilter) return false;
       if (filterMode === "active" && (!e.is_active || e.on_leave)) return false;
       if (filterMode === "inactive" && e.is_active) return false;
@@ -231,7 +233,27 @@ function EmployeesPage() {
         (e.phone ?? "").includes(term)
       );
     });
-  }, [employeesQuery.data, searchTerm, deptFilter, filterMode]);
+  }, [employeesQuery.data, searchTerm, deptFilter, filterMode, isDeptManagerOnly, me?.id]);
+
+  // Manager's own department stats (excluding the manager themselves)
+  const managerDeptStats = useMemo(() => {
+    if (!isDeptManagerOnly || !me?.department_id) return null;
+    const data = employeesQuery.data ?? [];
+    const dept = data.filter((e) => e.department_id === me.department_id && e.id !== me.id);
+    return {
+      total: dept.length,
+      active: dept.filter((e) => e.is_active && !e.on_leave).length,
+      onLeave: dept.filter((e) => e.on_leave).length,
+    };
+  }, [employeesQuery.data, isDeptManagerOnly, me?.id, me?.department_id]);
+
+  // Ensure manager's own avatar is signed too
+  const managerAvatarQ = useSignedAvatarUrls(
+    isDeptManagerOnly
+      ? [(employeesQuery.data ?? []).find((e) => e.id === me?.id)?.avatar_url]
+      : [],
+  );
+  const managerAvatarMap = managerAvatarQ.data ?? {};
 
   // Populate signed URL cache for avatars in current list
   const avatarsQ = useSignedAvatarUrls((employeesQuery.data ?? []).map((e) => e.avatar_url));
