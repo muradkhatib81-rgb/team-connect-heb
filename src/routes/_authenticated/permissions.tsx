@@ -65,6 +65,7 @@ import {
   MessageSquare,
   BarChart3,
   Cog,
+  Trophy,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useServerFn } from "@tanstack/react-start";
