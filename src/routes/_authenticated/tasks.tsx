@@ -20,6 +20,11 @@ import {
   closeTask,
   addRecurrenceImage,
   deleteRecurrenceImage,
+  listTaskActivity,
+  listTaskComments,
+  addTaskComment,
+  listTaskAssigneeIds,
+  listTaskDepartmentIds,
 } from "@/lib/tasks.functions";
 import { formatHeDateTime, splitForInputs, combineToIso } from "@/lib/date-format";
 import { HebrewDateInput, HebrewTimeInput } from "@/components/hebrew-datetime";
