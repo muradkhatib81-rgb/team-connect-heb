@@ -56,7 +56,8 @@ function DashboardPage() {
     },
   });
 
-  // Department manager: always reload their department employees on mount
+  // Department manager: always reload their department employees on mount.
+  // The manager is excluded from the employees list at the source (Query level).
   const deptManagerQuery = useQuery({
     enabled: !admin && isDeptManager && !!profile,
     queryKey: ["dashboard", "dept-manager", profile?.id],
@@ -68,14 +69,37 @@ function DashboardPage() {
         .eq("manager_id", profile!.id)
         .maybeSingle();
       if (dErr) throw dErr;
-      const { data: emps, error: eErr } = await supabase
-        .from("profiles")
-        .select("id, full_name, is_active, on_leave, avatar_url, department_id")
-        .order("full_name");
-      if (eErr) throw eErr;
-      return { dept, employees: (emps ?? []) as DeptEmp[] };
+
+      let employees: DeptEmp[] = [];
+      let manager: {
+        id: string;
+        full_name: string;
+        job_title: string | null;
+        avatar_url: string | null;
+      } | null = null;
+
+      if (dept?.id) {
+        const { data: emps, error: eErr } = await supabase
+          .from("profiles")
+          .select("id, full_name, is_active, on_leave, avatar_url, department_id, job_title")
+          .eq("department_id", dept.id)
+          .neq("id", profile!.id) // exclude the department manager themselves
+          .order("full_name");
+        if (eErr) throw eErr;
+        employees = (emps ?? []) as DeptEmp[];
+
+        const { data: mgr } = await supabase
+          .from("profiles")
+          .select("id, full_name, job_title, avatar_url")
+          .eq("id", profile!.id)
+          .maybeSingle();
+        if (mgr) manager = mgr as typeof manager;
+      }
+
+      return { dept, employees, manager };
     },
   });
+
 
   // Tasks stats (visible to anyone who can see at least their dept tasks)
   const tasksStatsQuery = useQuery({
