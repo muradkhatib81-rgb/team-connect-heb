@@ -138,6 +138,8 @@ function DashboardPage() {
         </div>
       </header>
 
+      <EmployeeOfMonthSection />
+
       <TasksStatsSection stats={tasksStatsQuery.data} loading={tasksStatsQuery.isLoading} />
 
       <SchedulesStatsSection profile={profile} />
