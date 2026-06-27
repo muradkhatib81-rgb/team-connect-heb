@@ -115,6 +115,9 @@ export type Database = {
           body: string
           created_at: string
           deleted_at: string | null
+          edit_count: number
+          edited_at: string | null
+          edited_by: string | null
           ends_at: string | null
           id: string
           image_url: string | null
@@ -128,6 +131,9 @@ export type Database = {
           body: string
           created_at?: string
           deleted_at?: string | null
+          edit_count?: number
+          edited_at?: string | null
+          edited_by?: string | null
           ends_at?: string | null
           id?: string
           image_url?: string | null
@@ -141,6 +147,9 @@ export type Database = {
           body?: string
           created_at?: string
           deleted_at?: string | null
+          edit_count?: number
+          edited_at?: string | null
+          edited_by?: string | null
           ends_at?: string | null
           id?: string
           image_url?: string | null
@@ -478,6 +487,9 @@ export type Database = {
           body: string
           created_at: string
           deleted_at: string | null
+          edit_count: number
+          edited_at: string | null
+          edited_by: string | null
           id: string
           priority: Database["public"]["Enums"]["comm_priority"]
           requires_acknowledgment: boolean
@@ -489,6 +501,9 @@ export type Database = {
           body: string
           created_at?: string
           deleted_at?: string | null
+          edit_count?: number
+          edited_at?: string | null
+          edited_by?: string | null
           id?: string
           priority?: Database["public"]["Enums"]["comm_priority"]
           requires_acknowledgment?: boolean
@@ -500,6 +515,9 @@ export type Database = {
           body?: string
           created_at?: string
           deleted_at?: string | null
+          edit_count?: number
+          edited_at?: string | null
+          edited_by?: string | null
           id?: string
           priority?: Database["public"]["Enums"]["comm_priority"]
           requires_acknowledgment?: boolean
@@ -1374,6 +1392,14 @@ export type Database = {
           must_change_password: boolean
           phone: string
         }[]
+      }
+      notify_announcement_edited: {
+        Args: { _ann_id: string; _title: string }
+        Returns: undefined
+      }
+      notify_message_edited: {
+        Args: { _message_id: string; _title: string }
+        Returns: undefined
       }
       process_break_lifecycle: { Args: never; Returns: undefined }
       reset_breaks_log_daily: { Args: never; Returns: undefined }

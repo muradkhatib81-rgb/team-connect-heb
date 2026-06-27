@@ -31,7 +31,10 @@ export interface CreateAnnouncementInput {
 }
 
 // ---------------- Helpers ----------------
-async function resolveTargetUserIds(targets: MessageTargetsInput): Promise<string[]> {
+async function resolveTargetUserIds(
+  targets: MessageTargetsInput,
+  excludeUserId?: string | null,
+): Promise<string[]> {
   const ids = new Set<string>();
   if (targets.all) {
     const { data, error } = await supabase
@@ -51,6 +54,7 @@ async function resolveTargetUserIds(targets: MessageTargetsInput): Promise<strin
     (data ?? []).forEach((r: any) => ids.add(r.id));
   }
   (targets.users ?? []).forEach((u) => ids.add(u));
+  if (excludeUserId) ids.delete(excludeUserId);
   return [...ids];
 }
 
@@ -98,8 +102,8 @@ export async function sendMessage(input: SendMessageInput) {
   if (!u.user) throw new Error("לא מחובר");
   const senderId = u.user.id;
 
-  const recipientIds = await resolveTargetUserIds(input.targets);
-  if (recipientIds.length === 0) throw new Error("בחר לפחות נמען אחד");
+  const recipientIds = await resolveTargetUserIds(input.targets, senderId);
+  if (recipientIds.length === 0) throw new Error("בחר לפחות נמען אחד (לא כולל אותך)");
 
   const { data: msg, error: msgErr } = await supabase
     .from("messages")
@@ -294,4 +298,195 @@ export async function restoreAnnouncement(annId: string) {
     .eq("id", annId);
   if (error) throw error;
   await logAudit("announcement", annId, "restored");
+}
+
+// ---------------- Edit ----------------
+export interface EditMessageInput {
+  title?: string;
+  body?: string;
+  priority?: CommPriority;
+  requires_acknowledgment?: boolean;
+  targets?: MessageTargetsInput; // if provided, replaces recipients & target metadata
+  file?: File | null;            // if provided, adds a new attachment
+}
+
+export async function editMessage(messageId: string, input: EditMessageInput) {
+  const { data: u } = await supabase.auth.getUser();
+  if (!u.user) throw new Error("לא מחובר");
+  const userId = u.user.id;
+
+  const { data: existing, error: exErr } = await supabase
+    .from("messages")
+    .select("id, title, edit_count")
+    .eq("id", messageId)
+    .single();
+  if (exErr) throw exErr;
+
+  const patch: any = {
+    edited_at: new Date().toISOString(),
+    edited_by: userId,
+    edit_count: (existing.edit_count ?? 0) + 1,
+  };
+  if (input.title !== undefined) patch.title = input.title.trim();
+  if (input.body !== undefined) patch.body = input.body.trim();
+  if (input.priority !== undefined) patch.priority = input.priority;
+  if (input.requires_acknowledgment !== undefined)
+    patch.requires_acknowledgment = input.requires_acknowledgment;
+
+  const { error } = await supabase.from("messages").update(patch).eq("id", messageId);
+  if (error) throw error;
+
+  if (input.targets) {
+    const newIds = await resolveTargetUserIds(input.targets, userId);
+    if (newIds.length === 0) throw new Error("בחר לפחות נמען אחד (לא כולל אותך)");
+    // Replace target metadata
+    await supabase.from("message_targets").delete().eq("message_id", messageId);
+    const tgtRows: any[] = [];
+    if (input.targets.all) tgtRows.push({ message_id: messageId, target_type: "all" });
+    (input.targets.departments ?? []).forEach((d) =>
+      tgtRows.push({ message_id: messageId, target_type: "department", target_id: d }),
+    );
+    (input.targets.users ?? []).forEach((uid) =>
+      tgtRows.push({ message_id: messageId, target_type: "user", target_id: uid }),
+    );
+    if (tgtRows.length) await supabase.from("message_targets").insert(tgtRows);
+    // Sync recipients: add new ones, keep existing reads intact.
+    const { data: curRecs } = await supabase
+      .from("message_recipients")
+      .select("user_id")
+      .eq("message_id", messageId);
+    const curSet = new Set(((curRecs ?? []) as any[]).map((r) => r.user_id));
+    const newSet = new Set(newIds);
+    const toAdd = newIds.filter((id) => !curSet.has(id));
+    const toRemove = [...curSet].filter((id) => !newSet.has(id));
+    if (toAdd.length) {
+      await supabase.from("message_recipients").insert(
+        toAdd.map((uid) => ({
+          message_id: messageId,
+          user_id: uid,
+          delivered_at: new Date().toISOString(),
+        })),
+      );
+    }
+    if (toRemove.length) {
+      await supabase
+        .from("message_recipients")
+        .delete()
+        .eq("message_id", messageId)
+        .in("user_id", toRemove);
+    }
+  }
+
+  if (input.file) {
+    const up = await uploadAttachment(input.file, userId);
+    await supabase.from("message_attachments").insert({
+      message_id: messageId,
+      file_name: up.name,
+      storage_path: up.path,
+      mime_type: up.mime,
+      file_size: up.size,
+    });
+  }
+
+  // Notify users who already read it
+  try {
+    await supabase.rpc("notify_message_edited", {
+      _message_id: messageId,
+      _title: patch.title ?? existing.title,
+    });
+  } catch {
+    /* noop */
+  }
+
+  await logAudit("message", messageId, "edited", { fields: Object.keys(patch) });
+  return { id: messageId };
+}
+
+export interface EditAnnouncementInput {
+  title?: string;
+  body?: string;
+  priority?: CommPriority;
+  image_url?: string | null;
+  starts_at?: string | null;
+  ends_at?: string | null;
+  targets?: MessageTargetsInput;
+  file?: File | null;
+}
+
+export async function editAnnouncement(annId: string, input: EditAnnouncementInput) {
+  const { data: u } = await supabase.auth.getUser();
+  if (!u.user) throw new Error("לא מחובר");
+  const userId = u.user.id;
+
+  const { data: existing, error: exErr } = await supabase
+    .from("announcements")
+    .select("id, title, edit_count")
+    .eq("id", annId)
+    .single();
+  if (exErr) throw exErr;
+
+  const patch: any = {
+    edited_at: new Date().toISOString(),
+    edited_by: userId,
+    edit_count: (existing.edit_count ?? 0) + 1,
+  };
+  if (input.title !== undefined) patch.title = input.title.trim();
+  if (input.body !== undefined) patch.body = input.body.trim();
+  if (input.priority !== undefined) patch.priority = input.priority;
+  if (input.image_url !== undefined) patch.image_url = input.image_url;
+  if (input.starts_at !== undefined) patch.starts_at = input.starts_at;
+  if (input.ends_at !== undefined) patch.ends_at = input.ends_at;
+
+  const { error } = await supabase.from("announcements").update(patch).eq("id", annId);
+  if (error) throw error;
+
+  if (input.targets) {
+    await supabase.from("announcement_targets").delete().eq("announcement_id", annId);
+    const tgtRows: any[] = [];
+    if (input.targets.all) tgtRows.push({ announcement_id: annId, target_type: "all" });
+    (input.targets.departments ?? []).forEach((d) =>
+      tgtRows.push({ announcement_id: annId, target_type: "department", target_id: d }),
+    );
+    (input.targets.users ?? []).forEach((uid) =>
+      tgtRows.push({ announcement_id: annId, target_type: "user", target_id: uid }),
+    );
+    if (!tgtRows.length) tgtRows.push({ announcement_id: annId, target_type: "all" });
+    await supabase.from("announcement_targets").insert(tgtRows);
+  }
+
+  if (input.file) {
+    const up = await uploadAttachment(input.file, userId);
+    await supabase.from("announcement_attachments").insert({
+      announcement_id: annId,
+      file_name: up.name,
+      storage_path: up.path,
+      mime_type: up.mime,
+      file_size: up.size,
+    });
+  }
+
+  try {
+    await supabase.rpc("notify_announcement_edited", {
+      _ann_id: annId,
+      _title: patch.title ?? existing.title,
+    });
+  } catch {
+    /* noop */
+  }
+
+  await logAudit("announcement", annId, "edited", { fields: Object.keys(patch) });
+  return { id: annId };
+}
+
+// ---------------- Permanent delete ----------------
+export async function permanentDeleteMessage(messageId: string) {
+  await logAudit("message", messageId, "deleted", { permanent: true });
+  const { error } = await supabase.from("messages").delete().eq("id", messageId);
+  if (error) throw error;
+}
+
+export async function permanentDeleteAnnouncement(annId: string) {
+  await logAudit("announcement", annId, "deleted", { permanent: true });
+  const { error } = await supabase.from("announcements").delete().eq("id", annId);
+  if (error) throw error;
 }
