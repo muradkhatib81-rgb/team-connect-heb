@@ -145,6 +145,7 @@ export function AppShell({ children }: { children: ReactNode }) {
     { to: "/communications", label: "מרכז תקשורת", icon: Megaphone, visible: true, badge: commUnreadQ.data ?? 0 },
     { to: "/breaks", label: "הפסקה", icon: Coffee, visible: canRequestBreak },
     { to: "/breaks-admin", label: "ניהול הפסקות", icon: Coffee, visible: isBreaksManager },
+    { to: "/employee-of-month", label: "עובד החודש", icon: Trophy, visible: canManageEom },
 
     { to: "/employees", label: "ניהול עובדים", icon: Users, visible: admin },
     { to: "/departments", label: "מחלקות", icon: Building2, visible: admin },
