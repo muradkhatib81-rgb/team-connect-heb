@@ -1298,7 +1298,6 @@ function OnBreakSection({ profile }: { profile: any }) {
     cancelled: "destructive",
   };
 
-  const [logOpen, setLogOpen] = useState(false);
 
   return (
     <>
