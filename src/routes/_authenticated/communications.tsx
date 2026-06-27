@@ -107,6 +107,7 @@ interface PermsRow {
   can_send_message_all: boolean | null;
   can_send_announcements: boolean | null;
   can_manage_communications: boolean | null;
+  can_view_read_receipts: boolean | null;
 }
 
 function CommunicationsPage() {
@@ -124,7 +125,7 @@ function CommunicationsPage() {
       const { data } = await supabase
         .from("user_task_permissions")
         .select(
-          "can_view_messages, can_send_messages, can_send_message_employee, can_send_message_department, can_send_message_all, can_send_announcements, can_manage_communications",
+          "can_view_messages, can_send_messages, can_send_message_employee, can_send_message_department, can_send_message_all, can_send_announcements, can_manage_communications, can_view_read_receipts",
         )
         .eq("user_id", userId!)
         .maybeSingle();
@@ -135,6 +136,7 @@ function CommunicationsPage() {
   const canSendMsg = admin || isDeptManager || !!p.can_send_messages;
   const canSendAnnouncement = admin || !!p.can_send_announcements;
   const canManage = admin || !!p.can_manage_communications;
+  const canViewReceipts = admin || !!p.can_view_read_receipts;
 
   // Realtime subscriptions
   useEffect(() => {
@@ -216,10 +218,10 @@ function CommunicationsPage() {
           <InboxTab userId={userId!} />
         </TabsContent>
         <TabsContent value="announcements" className="mt-4">
-          <AnnouncementsTab userId={userId!} canManage={canManage} />
+          <AnnouncementsTab userId={userId!} canManage={canManage} canViewReceipts={canViewReceipts} />
         </TabsContent>
         <TabsContent value="sent" className="mt-4">
-          <SentTab userId={userId!} canManage={canManage} />
+          <SentTab userId={userId!} canManage={canManage} canViewReceipts={canViewReceipts} />
         </TabsContent>
         <TabsContent value="archive" className="mt-4">
           <ArchiveTab userId={userId!} canManage={canManage} />
@@ -394,7 +396,7 @@ function InboxTab({ userId }: { userId: string }) {
 }
 
 // ---------------- Sent ----------------
-function SentTab({ userId, canManage }: { userId: string; canManage: boolean }) {
+function SentTab({ userId, canManage, canViewReceipts }: { userId: string; canManage: boolean; canViewReceipts: boolean }) {
   const [selected, setSelected] = useState<string | null>(null);
   const q = useQuery({
     queryKey: ["comm", "sent", userId],
@@ -472,6 +474,7 @@ function SentTab({ userId, canManage }: { userId: string; canManage: boolean }) 
           onClose={() => setSelected(null)}
           viewerMode="sent"
           canManage={canManage}
+          canViewReceipts={canViewReceipts}
         />
       )}
     </div>
@@ -479,7 +482,7 @@ function SentTab({ userId, canManage }: { userId: string; canManage: boolean }) 
 }
 
 // ---------------- Announcements ----------------
-function AnnouncementsTab({ userId, canManage }: { userId: string; canManage: boolean }) {
+function AnnouncementsTab({ userId, canManage, canViewReceipts }: { userId: string; canManage: boolean; canViewReceipts: boolean }) {
   const qc = useQueryClient();
   const q = useQuery({
     queryKey: ["comm", "announcements", userId],
@@ -541,6 +544,7 @@ function AnnouncementsTab({ userId, canManage }: { userId: string; canManage: bo
 
   const [editAnn, setEditAnn] = useState<any | null>(null);
   const [delAnn, setDelAnn] = useState<string | null>(null);
+  const [receiptsAnn, setReceiptsAnn] = useState<string | null>(null);
 
   if (q.isLoading) return <Loader2 className="mx-auto size-5 animate-spin text-muted-foreground" />;
   const list = q.data ?? [];
@@ -586,21 +590,33 @@ function AnnouncementsTab({ userId, canManage }: { userId: string; canManage: bo
               >
                 <Eye className="size-4" /> {a.is_read ? "נקרא" : "סמן כנקרא"}
               </Button>
-              {canManageThis && (
-                <div className="flex gap-1">
-                  <Button size="sm" variant="outline" onClick={() => setEditAnn(a)} className="gap-1.5">
-                    <Pencil className="size-4" /> ערוך
-                  </Button>
+              <div className="flex gap-1 flex-wrap">
+                {(canViewReceipts || a.sender_id === userId) && (
                   <Button
                     size="sm"
-                    variant="ghost"
-                    onClick={() => setDelAnn(a.id)}
-                    className="gap-1.5 text-destructive"
+                    variant="outline"
+                    onClick={() => setReceiptsAnn(a.id)}
+                    className="gap-1.5"
                   >
-                    <Trash2 className="size-4" /> מחק
+                    <Eye className="size-4" /> 👁️ אישורי קריאה
                   </Button>
-                </div>
-              )}
+                )}
+                {canManageThis && (
+                  <>
+                    <Button size="sm" variant="outline" onClick={() => setEditAnn(a)} className="gap-1.5">
+                      <Pencil className="size-4" /> ערוך
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => setDelAnn(a.id)}
+                      className="gap-1.5 text-destructive"
+                    >
+                      <Trash2 className="size-4" /> מחק
+                    </Button>
+                  </>
+                )}
+              </div>
             </div>
           </Card>
         );
@@ -610,6 +626,14 @@ function AnnouncementsTab({ userId, canManage }: { userId: string; canManage: bo
         <EditAnnouncementDialog
           ann={editAnn}
           onClose={() => setEditAnn(null)}
+        />
+      )}
+
+      {receiptsAnn && (
+        <ReadReceiptsDialog
+          kind="announcement"
+          targetId={receiptsAnn}
+          onClose={() => setReceiptsAnn(null)}
         />
       )}
 
@@ -860,11 +884,13 @@ function MessageDetailDialog({
   onClose,
   viewerMode,
   canManage,
+  canViewReceipts,
 }: {
   messageId: string;
   onClose: () => void;
   viewerMode: "inbox" | "sent";
   canManage?: boolean;
+  canViewReceipts?: boolean;
 }) {
   const qc = useQueryClient();
   const q = useQuery({
@@ -958,6 +984,7 @@ function MessageDetailDialog({
 
   const [editOpen, setEditOpen] = useState(false);
   const [delOpen, setDelOpen] = useState(false);
+  const [receiptsOpen, setReceiptsOpen] = useState(false);
 
   const d = q.data;
 
@@ -1028,6 +1055,11 @@ function MessageDetailDialog({
                   </Button>
                 </>
               )}
+              {viewerMode === "sent" && canViewReceipts && (
+                <Button variant="outline" className="gap-1.5" onClick={() => setReceiptsOpen(true)}>
+                  <Eye className="size-4" /> 👁️ אישורי קריאה
+                </Button>
+              )}
               {viewerMode === "sent" && canManage && (
                 <>
                   <Button variant="outline" className="gap-1.5" onClick={() => setEditOpen(true)}>
@@ -1043,6 +1075,14 @@ function MessageDetailDialog({
                 </>
               )}
             </DialogFooter>
+
+            {receiptsOpen && (
+              <ReadReceiptsDialog
+                kind="message"
+                targetId={messageId}
+                onClose={() => setReceiptsOpen(false)}
+              />
+            )}
 
             {editOpen && (
               <EditMessageDialog
@@ -1635,6 +1675,132 @@ function ComposeAnnouncementDialog({
             {mut.isPending && <Loader2 className="size-4 animate-spin" />}
             <Megaphone className="size-4" /> פרסם
           </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// ---------------- Read Receipts Dialog ----------------
+function ReadReceiptsDialog({
+  kind,
+  targetId,
+  onClose,
+}: {
+  kind: "message" | "announcement";
+  targetId: string;
+  onClose: () => void;
+}) {
+  const q = useQuery({
+    queryKey: ["comm", "receipts", kind, targetId],
+    queryFn: async () => {
+      const fn = kind === "message" ? "get_message_read_receipts" : "get_announcement_read_receipts";
+      const arg = kind === "message" ? { _message_id: targetId } : { _ann_id: targetId };
+      const { data, error } = await supabase.rpc(fn as any, arg as any);
+      if (error) throw error;
+      return (data ?? []) as Array<{
+        user_id: string;
+        full_name: string;
+        department_name: string | null;
+        job_title: string | null;
+        read_at: string | null;
+        acknowledged_at?: string | null;
+      }>;
+    },
+  });
+
+  const rows = q.data ?? [];
+  const total = rows.length;
+  const read = rows.filter((r) => r.read_at).length;
+  const unread = total - read;
+  const pct = total ? Math.round((read / total) * 100) : 0;
+
+  const readRows = rows.filter((r) => r.read_at);
+  const unreadRows = rows.filter((r) => !r.read_at);
+
+  return (
+    <Dialog open onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto" dir="rtl">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <Eye className="size-5" /> אישורי קריאה
+          </DialogTitle>
+          <DialogDescription>פירוט מי קרא ומי טרם קרא</DialogDescription>
+        </DialogHeader>
+
+        {q.isLoading ? (
+          <Loader2 className="mx-auto size-5 animate-spin text-muted-foreground" />
+        ) : q.isError ? (
+          <p className="text-sm text-destructive">{(q.error as any)?.message ?? "שגיאה בטעינה"}</p>
+        ) : (
+          <>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+              <Card className="p-3 text-center">
+                <p className="text-xs text-muted-foreground">נמענים</p>
+                <p className="text-2xl font-bold">{total}</p>
+              </Card>
+              <Card className="p-3 text-center bg-emerald-50">
+                <p className="text-xs text-emerald-900">קראו</p>
+                <p className="text-2xl font-bold text-emerald-900">{read}</p>
+              </Card>
+              <Card className="p-3 text-center bg-amber-50">
+                <p className="text-xs text-amber-900">לא קראו</p>
+                <p className="text-2xl font-bold text-amber-900">{unread}</p>
+              </Card>
+              <Card className="p-3 text-center bg-sky-50">
+                <p className="text-xs text-sky-900">אחוז קריאה</p>
+                <p className="text-2xl font-bold text-sky-900">{pct}%</p>
+              </Card>
+            </div>
+
+            <Tabs defaultValue="read" className="mt-2">
+              <TabsList className="grid grid-cols-2 w-full">
+                <TabsTrigger value="read">קראו ({read})</TabsTrigger>
+                <TabsTrigger value="unread">עדיין לא קראו ({unread})</TabsTrigger>
+              </TabsList>
+              <TabsContent value="read" className="mt-3">
+                {readRows.length === 0 ? (
+                  <p className="text-sm text-muted-foreground text-center py-4">אף אחד עדיין לא קרא</p>
+                ) : (
+                  <div className="border rounded-md divide-y max-h-72 overflow-y-auto">
+                    {readRows.map((r) => (
+                      <div key={r.user_id} className="px-3 py-2 text-sm flex items-center justify-between gap-2">
+                        <div>
+                          <p className="font-medium">{r.full_name}</p>
+                          <p className="text-xs text-muted-foreground">
+                            {r.department_name ?? "—"} · {r.job_title ?? "—"}
+                          </p>
+                        </div>
+                        <div className="text-xs text-muted-foreground text-left">
+                          {r.read_at && formatHeDateTime(r.read_at)}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </TabsContent>
+              <TabsContent value="unread" className="mt-3">
+                {unreadRows.length === 0 ? (
+                  <p className="text-sm text-muted-foreground text-center py-4">כולם קראו 🎉</p>
+                ) : (
+                  <div className="border rounded-md divide-y max-h-72 overflow-y-auto">
+                    {unreadRows.map((r) => (
+                      <div key={r.user_id} className="px-3 py-2 text-sm">
+                        <p className="font-medium">{r.full_name}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {r.department_name ?? "—"} · {r.job_title ?? "—"}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </TabsContent>
+            </Tabs>
+          </>
+        )}
+
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose}>סגור</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

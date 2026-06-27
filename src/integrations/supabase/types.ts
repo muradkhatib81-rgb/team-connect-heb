@@ -1170,6 +1170,7 @@ export type Database = {
           can_view_employee_details: boolean
           can_view_leave: boolean
           can_view_messages: boolean
+          can_view_read_receipts: boolean
           can_view_reports: boolean
           can_view_schedule: boolean
           can_view_tasks: boolean
@@ -1216,6 +1217,7 @@ export type Database = {
           can_view_employee_details?: boolean
           can_view_leave?: boolean
           can_view_messages?: boolean
+          can_view_read_receipts?: boolean
           can_view_reports?: boolean
           can_view_schedule?: boolean
           can_view_tasks?: boolean
@@ -1262,6 +1264,7 @@ export type Database = {
           can_view_employee_details?: boolean
           can_view_leave?: boolean
           can_view_messages?: boolean
+          can_view_read_receipts?: boolean
           can_view_reports?: boolean
           can_view_schedule?: boolean
           can_view_tasks?: boolean
@@ -1301,6 +1304,16 @@ export type Database = {
         Args: { _task_id: string; _user_id: string }
         Returns: boolean
       }
+      get_announcement_read_receipts: {
+        Args: { _ann_id: string }
+        Returns: {
+          department_name: string
+          full_name: string
+          job_title: string
+          read_at: string
+          user_id: string
+        }[]
+      }
       get_department_coworkers: {
         Args: never
         Returns: {
@@ -1311,6 +1324,17 @@ export type Database = {
           is_active: boolean
           job_title: string
           on_leave: boolean
+        }[]
+      }
+      get_message_read_receipts: {
+        Args: { _message_id: string }
+        Returns: {
+          acknowledged_at: string
+          department_name: string
+          full_name: string
+          job_title: string
+          read_at: string
+          user_id: string
         }[]
       }
       get_my_department_id: { Args: never; Returns: string }
@@ -1368,6 +1392,10 @@ export type Database = {
         Returns: boolean
       }
       has_view_employee_details_perm: {
+        Args: { _user_id: string }
+        Returns: boolean
+      }
+      has_view_read_receipts_perm: {
         Args: { _user_id: string }
         Returns: boolean
       }
