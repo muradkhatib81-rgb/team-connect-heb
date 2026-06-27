@@ -393,6 +393,7 @@ function InboxTab({ userId, canDelete }: { userId: string; canDelete: boolean })
           messageId={selected}
           onClose={() => setSelected(null)}
           viewerMode="inbox"
+          canDelete={canDelete}
         />
       )}
     </div>
