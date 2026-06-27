@@ -58,10 +58,13 @@ export function AppShell({ children }: { children: ReactNode }) {
     queryFn: async () => {
       const { data } = await supabase
         .from("user_task_permissions")
-        .select("can_manage_breaks")
+        .select("can_manage_breaks, can_manage_employee_of_month")
         .eq("user_id", profile!.id)
         .maybeSingle();
-      return !!(data as any)?.can_manage_breaks;
+      return {
+        breaks: !!(data as any)?.can_manage_breaks,
+        eom: !!(data as any)?.can_manage_employee_of_month,
+      };
     },
   });
 
