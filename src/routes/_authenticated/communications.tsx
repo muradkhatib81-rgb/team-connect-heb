@@ -796,11 +796,23 @@ function MessageDetailDialog({
   const delMut = useMutation({
     mutationFn: () => deleteMessage(messageId),
     onSuccess: () => {
-      toast.success("נמחק");
+      toast.success("הועבר לארכיון מערכת (ניתן לשחזור)");
       qc.invalidateQueries({ queryKey: ["comm"] });
       onClose();
     },
   });
+  const permDelMut = useMutation({
+    mutationFn: () => permanentDeleteMessage(messageId),
+    onSuccess: () => {
+      toast.success("נמחק לצמיתות");
+      qc.invalidateQueries({ queryKey: ["comm"] });
+      onClose();
+    },
+    onError: (e: any) => toast.error(e?.message ?? "שגיאה במחיקה"),
+  });
+
+  const [editOpen, setEditOpen] = useState(false);
+  const [delOpen, setDelOpen] = useState(false);
 
   const d = q.data;
 
@@ -820,9 +832,20 @@ function MessageDetailDialog({
                     <AlertCircle className="size-3" /> נדרש אישור
                   </Badge>
                 )}
+                {d.msg.edited_at && (
+                  <Badge variant="outline" className="gap-1">
+                    <Pencil className="size-3" /> נערך
+                  </Badge>
+                )}
               </DialogTitle>
               <DialogDescription>
                 מאת {d.sender_name} · {formatHeDateTime(d.msg.created_at)}
+                {d.msg.edited_at && (
+                  <>
+                    <br />
+                    נערך לאחרונה ע״י {d.editor_name ?? "—"} · {formatHeDateTime(d.msg.edited_at)}
+                  </>
+                )}
               </DialogDescription>
             </DialogHeader>
 
@@ -861,23 +884,156 @@ function MessageDetailDialog({
                 </>
               )}
               {viewerMode === "sent" && canManage && (
-                <Button
-                  variant="ghost"
-                  className="text-destructive gap-1.5"
-                  onClick={() => {
-                    if (confirm("למחוק את ההודעה?")) delMut.mutate();
-                  }}
-                >
-                  <Trash2 className="size-4" /> מחק
-                </Button>
+                <>
+                  <Button variant="outline" className="gap-1.5" onClick={() => setEditOpen(true)}>
+                    <Pencil className="size-4" /> ערוך
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    className="text-destructive gap-1.5"
+                    onClick={() => setDelOpen(true)}
+                  >
+                    <Trash2 className="size-4" /> מחק
+                  </Button>
+                </>
               )}
             </DialogFooter>
+
+            {editOpen && (
+              <EditMessageDialog
+                messageId={messageId}
+                initial={{
+                  title: d.msg.title,
+                  body: d.msg.body,
+                  priority: d.msg.priority,
+                  requires_acknowledgment: d.msg.requires_acknowledgment,
+                }}
+                onClose={() => setEditOpen(false)}
+              />
+            )}
+
+            <AlertDialog open={delOpen} onOpenChange={setDelOpen}>
+              <AlertDialogContent dir="rtl">
+                <AlertDialogHeader>
+                  <AlertDialogTitle>מחיקת הודעה</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    בחר כיצד למחוק את ההודעה. מחיקה לצמיתות אינה ניתנת לשחזור.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter className="gap-2 flex-wrap">
+                  <AlertDialogCancel>ביטול</AlertDialogCancel>
+                  <AlertDialogAction
+                    onClick={() => {
+                      setDelOpen(false);
+                      delMut.mutate();
+                    }}
+                  >
+                    📁 העבר לארכיון
+                  </AlertDialogAction>
+                  <AlertDialogAction
+                    className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                    onClick={() => {
+                      setDelOpen(false);
+                      permDelMut.mutate();
+                    }}
+                  >
+                    🗑️ מחק לצמיתות
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
           </>
         )}
       </DialogContent>
     </Dialog>
   );
 }
+
+// ---------------- Edit Message Dialog ----------------
+function EditMessageDialog({
+  messageId,
+  initial,
+  onClose,
+}: {
+  messageId: string;
+  initial: { title: string; body: string; priority: CommPriority; requires_acknowledgment: boolean };
+  onClose: () => void;
+}) {
+  const qc = useQueryClient();
+  const [title, setTitle] = useState(initial.title);
+  const [body, setBody] = useState(initial.body);
+  const [priority, setPriority] = useState<CommPriority>(initial.priority);
+  const [ack, setAck] = useState(initial.requires_acknowledgment);
+  const [file, setFile] = useState<File | null>(null);
+
+  const mut = useMutation({
+    mutationFn: () =>
+      editMessage(messageId, {
+        title,
+        body,
+        priority,
+        requires_acknowledgment: ack,
+        file,
+      }),
+    onSuccess: () => {
+      toast.success("ההודעה עודכנה");
+      qc.invalidateQueries({ queryKey: ["comm"] });
+      onClose();
+    },
+    onError: (e: any) => toast.error(e?.message ?? "שגיאה"),
+  });
+
+  return (
+    <Dialog open onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="max-w-xl" dir="rtl">
+        <DialogHeader>
+          <DialogTitle>עריכת הודעה</DialogTitle>
+          <DialogDescription>הנמענים שכבר קראו יקבלו התראה על העדכון</DialogDescription>
+        </DialogHeader>
+        <div className="space-y-3">
+          <div>
+            <Label>כותרת</Label>
+            <Input value={title} onChange={(e) => setTitle(e.target.value)} />
+          </div>
+          <div>
+            <Label>תוכן</Label>
+            <Textarea rows={6} value={body} onChange={(e) => setBody(e.target.value)} />
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <Label>עדיפות</Label>
+              <Select value={priority} onValueChange={(v) => setPriority(v as CommPriority)}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="low">נמוכה</SelectItem>
+                  <SelectItem value="normal">רגילה</SelectItem>
+                  <SelectItem value="high">גבוהה</SelectItem>
+                  <SelectItem value="urgent">דחופה</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="flex items-end gap-2">
+              <Switch id="edit-ack" checked={ack} onCheckedChange={setAck} />
+              <Label htmlFor="edit-ack">נדרש אישור קריאה</Label>
+            </div>
+          </div>
+          <div>
+            <Label>הוספת קובץ (אופציונלי)</Label>
+            <Input type="file" onChange={(e) => setFile(e.target.files?.[0] ?? null)} />
+          </div>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose}>ביטול</Button>
+          <Button onClick={() => mut.mutate()} disabled={mut.isPending || !title.trim() || !body.trim()}>
+            {mut.isPending && <Loader2 className="ml-2 size-4 animate-spin" />}
+            שמור שינויים
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 
 function AttachmentLink({ att }: { att: any }) {
   const [url, setUrl] = useState<string | null>(null);
