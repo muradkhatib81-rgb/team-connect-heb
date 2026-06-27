@@ -219,16 +219,16 @@ function CommunicationsPage() {
         </TabsList>
 
         <TabsContent value="inbox" className="mt-4">
-          <InboxTab userId={userId!} />
+          <InboxTab userId={userId!} canDelete={canDelete} />
         </TabsContent>
         <TabsContent value="announcements" className="mt-4">
-          <AnnouncementsTab userId={userId!} canManage={canManage} canViewReceipts={canViewReceipts} />
+          <AnnouncementsTab userId={userId!} canDelete={canDelete} canViewReceipts={canViewReceipts} />
         </TabsContent>
         <TabsContent value="sent" className="mt-4">
-          <SentTab userId={userId!} canManage={canManage} canViewReceipts={canViewReceipts} />
+          <SentTab userId={userId!} canManage={canManage} canDelete={canDelete} canViewReceipts={canViewReceipts} />
         </TabsContent>
         <TabsContent value="archive" className="mt-4">
-          <ArchiveTab userId={userId!} canManage={canManage} />
+          <ArchiveTab userId={userId!} canDelete={canDelete} />
         </TabsContent>
       </Tabs>
 
