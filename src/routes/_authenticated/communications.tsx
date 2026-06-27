@@ -530,6 +530,17 @@ function AnnouncementsTab({ userId, canManage }: { userId: string; canManage: bo
     },
     onError: (e: any) => toast.error(e?.message ?? "שגיאה"),
   });
+  const permDelMut = useMutation({
+    mutationFn: (id: string) => permanentDeleteAnnouncement(id),
+    onSuccess: () => {
+      toast.success("ההכרזה נמחקה לצמיתות");
+      qc.invalidateQueries({ queryKey: ["comm"] });
+    },
+    onError: (e: any) => toast.error(e?.message ?? "שגיאה במחיקה"),
+  });
+
+  const [editAnn, setEditAnn] = useState<any | null>(null);
+  const [delAnn, setDelAnn] = useState<string | null>(null);
 
   if (q.isLoading) return <Loader2 className="mx-auto size-5 animate-spin text-muted-foreground" />;
   const list = q.data ?? [];
@@ -538,54 +549,186 @@ function AnnouncementsTab({ userId, canManage }: { userId: string; canManage: bo
 
   return (
     <div className="grid sm:grid-cols-2 gap-3">
-      {list.map((a: any) => (
-        <Card
-          key={a.id}
-          className={cn(
-            "p-4 space-y-2 relative",
-            !a.is_read && "ring-2 ring-primary/40",
-          )}
-        >
-          {a.image_url && (
-            <img src={a.image_url} alt="" className="w-full h-32 object-cover rounded-md" />
-          )}
-          <div className="flex items-center justify-between gap-2 flex-wrap">
-            <h3 className="font-bold">{a.title}</h3>
-            <PriorityBadge p={a.priority} />
-          </div>
-          <p className="text-sm whitespace-pre-wrap">{a.body}</p>
-          <p className="text-xs text-muted-foreground">
-            פורסם ע"י {a.sender_name} · {formatHeDateTime(a.starts_at)}
-            {a.ends_at && ` · עד ${formatHeDateTime(a.ends_at)}`}
-          </p>
-          <div className="flex items-center justify-between pt-1">
-            <Button
-              size="sm"
-              variant={a.is_read ? "outline" : "default"}
-              onClick={() => markAnnouncementRead(a.id).then(() => qc.invalidateQueries({ queryKey: ["comm"] }))}
-              className="gap-1.5"
-              disabled={a.is_read}
-            >
-              <Eye className="size-4" /> {a.is_read ? "נקרא" : "סמן כנקרא"}
-            </Button>
-            {canManage && (
+      {list.map((a: any) => {
+        const canManageThis = canManage && a.sender_id === userId;
+        return (
+          <Card
+            key={a.id}
+            className={cn("p-4 space-y-2 relative", !a.is_read && "ring-2 ring-primary/40")}
+          >
+            {a.image_url && (
+              <img src={a.image_url} alt="" className="w-full h-32 object-cover rounded-md" />
+            )}
+            <div className="flex items-center justify-between gap-2 flex-wrap">
+              <h3 className="font-bold">{a.title}</h3>
+              <div className="flex items-center gap-1.5">
+                <PriorityBadge p={a.priority} />
+                {a.edited_at && (
+                  <Badge variant="outline" className="gap-1 text-[10px]">
+                    <Pencil className="size-3" /> נערך
+                  </Badge>
+                )}
+              </div>
+            </div>
+            <p className="text-sm whitespace-pre-wrap">{a.body}</p>
+            <p className="text-xs text-muted-foreground">
+              פורסם ע"י {a.sender_name} · {formatHeDateTime(a.starts_at)}
+              {a.ends_at && ` · עד ${formatHeDateTime(a.ends_at)}`}
+              {a.edited_at && ` · עודכן ${formatHeDateTime(a.edited_at)}`}
+            </p>
+            <div className="flex items-center justify-between pt-1 flex-wrap gap-1">
               <Button
                 size="sm"
-                variant="ghost"
-                onClick={() => {
-                  if (confirm("להעביר את ההכרזה לארכיון?")) delMut.mutate(a.id);
-                }}
-                className="gap-1.5 text-destructive"
+                variant={a.is_read ? "outline" : "default"}
+                onClick={() => markAnnouncementRead(a.id).then(() => qc.invalidateQueries({ queryKey: ["comm"] }))}
+                className="gap-1.5"
+                disabled={a.is_read}
               >
-                <Trash2 className="size-4" /> מחק
+                <Eye className="size-4" /> {a.is_read ? "נקרא" : "סמן כנקרא"}
               </Button>
-            )}
-          </div>
-        </Card>
-      ))}
+              {canManageThis && (
+                <div className="flex gap-1">
+                  <Button size="sm" variant="outline" onClick={() => setEditAnn(a)} className="gap-1.5">
+                    <Pencil className="size-4" /> ערוך
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => setDelAnn(a.id)}
+                    className="gap-1.5 text-destructive"
+                  >
+                    <Trash2 className="size-4" /> מחק
+                  </Button>
+                </div>
+              )}
+            </div>
+          </Card>
+        );
+      })}
+
+      {editAnn && (
+        <EditAnnouncementDialog
+          ann={editAnn}
+          onClose={() => setEditAnn(null)}
+        />
+      )}
+
+      <AlertDialog open={!!delAnn} onOpenChange={(o) => !o && setDelAnn(null)}>
+        <AlertDialogContent dir="rtl">
+          <AlertDialogHeader>
+            <AlertDialogTitle>מחיקת הכרזה</AlertDialogTitle>
+            <AlertDialogDescription>
+              בחר כיצד למחוק את ההכרזה. מחיקה לצמיתות אינה ניתנת לשחזור.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter className="gap-2 flex-wrap">
+            <AlertDialogCancel>ביטול</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                const id = delAnn!;
+                setDelAnn(null);
+                delMut.mutate(id);
+              }}
+            >
+              📁 העבר לארכיון
+            </AlertDialogAction>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={() => {
+                const id = delAnn!;
+                setDelAnn(null);
+                permDelMut.mutate(id);
+              }}
+            >
+              🗑️ מחק לצמיתות
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
+
+function EditAnnouncementDialog({ ann, onClose }: { ann: any; onClose: () => void }) {
+  const qc = useQueryClient();
+  const [title, setTitle] = useState(ann.title);
+  const [body, setBody] = useState(ann.body);
+  const [priority, setPriority] = useState<CommPriority>(ann.priority);
+  const [endsAt, setEndsAt] = useState<string>(ann.ends_at ?? "");
+  const [file, setFile] = useState<File | null>(null);
+
+  const mut = useMutation({
+    mutationFn: () =>
+      editAnnouncement(ann.id, {
+        title,
+        body,
+        priority,
+        ends_at: endsAt || null,
+        file,
+      }),
+    onSuccess: () => {
+      toast.success("ההכרזה עודכנה");
+      qc.invalidateQueries({ queryKey: ["comm"] });
+      onClose();
+    },
+    onError: (e: any) => toast.error(e?.message ?? "שגיאה"),
+  });
+
+  return (
+    <Dialog open onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="max-w-xl" dir="rtl">
+        <DialogHeader>
+          <DialogTitle>עריכת הכרזה</DialogTitle>
+          <DialogDescription>הקוראים הקודמים יקבלו התראה על העדכון</DialogDescription>
+        </DialogHeader>
+        <div className="space-y-3">
+          <div>
+            <Label>כותרת</Label>
+            <Input value={title} onChange={(e) => setTitle(e.target.value)} />
+          </div>
+          <div>
+            <Label>תוכן</Label>
+            <Textarea rows={6} value={body} onChange={(e) => setBody(e.target.value)} />
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <Label>עדיפות</Label>
+              <Select value={priority} onValueChange={(v) => setPriority(v as CommPriority)}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="low">נמוכה</SelectItem>
+                  <SelectItem value="normal">רגילה</SelectItem>
+                  <SelectItem value="high">גבוהה</SelectItem>
+                  <SelectItem value="urgent">דחופה</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label>תוקף עד</Label>
+              <Input
+                type="datetime-local"
+                value={endsAt ? endsAt.slice(0, 16) : ""}
+                onChange={(e) => setEndsAt(e.target.value ? new Date(e.target.value).toISOString() : "")}
+              />
+            </div>
+          </div>
+          <div>
+            <Label>הוספת קובץ (אופציונלי)</Label>
+            <Input type="file" onChange={(e) => setFile(e.target.files?.[0] ?? null)} />
+          </div>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose}>ביטול</Button>
+          <Button onClick={() => mut.mutate()} disabled={mut.isPending || !title.trim() || !body.trim()}>
+            {mut.isPending && <Loader2 className="ml-2 size-4 animate-spin" />}
+            שמור שינויים
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 
 // ---------------- Archive ----------------
 function ArchiveTab({ userId, canManage }: { userId: string; canManage: boolean }) {
