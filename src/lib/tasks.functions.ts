@@ -782,6 +782,7 @@ export const PERMISSION_KEYS = [
   "can_send_message_all",
   "can_send_announcements",
   "can_manage_communications",
+  "can_view_read_receipts",
   // Reports
   "can_view_reports",
   "can_export_reports",
