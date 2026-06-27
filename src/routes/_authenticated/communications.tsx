@@ -560,71 +560,20 @@ function AnnouncementsTab({ userId, canDelete, canViewReceipts }: { userId: stri
   return (
     <div className="grid sm:grid-cols-2 gap-3">
       {list.map((a: any) => {
-        const canManageThis = canManage && a.sender_id === userId;
+        const canEditThis = a.sender_id === userId;
+        const canDeleteThis = canDelete;
         return (
-          <Card
+          <AnnouncementCard
             key={a.id}
-            className={cn("p-4 space-y-2 relative", !a.is_read && "ring-2 ring-primary/40")}
-          >
-            {a.image_url && (
-              <img src={a.image_url} alt="" className="w-full h-32 object-cover rounded-md" />
-            )}
-            <div className="flex items-center justify-between gap-2 flex-wrap">
-              <h3 className="font-bold">{a.title}</h3>
-              <div className="flex items-center gap-1.5">
-                <PriorityBadge p={a.priority} />
-                {a.edited_at && (
-                  <Badge variant="outline" className="gap-1 text-[10px]">
-                    <Pencil className="size-3" /> נערך
-                  </Badge>
-                )}
-              </div>
-            </div>
-            <p className="text-sm whitespace-pre-wrap">{a.body}</p>
-            <p className="text-xs text-muted-foreground">
-              פורסם ע"י {a.sender_name} · {formatHeDateTime(a.starts_at)}
-              {a.ends_at && ` · עד ${formatHeDateTime(a.ends_at)}`}
-              {a.edited_at && ` · עודכן ${formatHeDateTime(a.edited_at)}`}
-            </p>
-            <div className="flex items-center justify-between pt-1 flex-wrap gap-1">
-              <Button
-                size="sm"
-                variant={a.is_read ? "outline" : "default"}
-                onClick={() => markAnnouncementRead(a.id).then(() => qc.invalidateQueries({ queryKey: ["comm"] }))}
-                className="gap-1.5"
-                disabled={a.is_read}
-              >
-                <Eye className="size-4" /> {a.is_read ? "נקרא" : "סמן כנקרא"}
-              </Button>
-              <div className="flex gap-1 flex-wrap">
-                {(canViewReceipts || a.sender_id === userId) && (
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() => setReceiptsAnn(a.id)}
-                    className="gap-1.5"
-                  >
-                    <Eye className="size-4" /> 👁️ אישורי קריאה
-                  </Button>
-                )}
-                {canManageThis && (
-                  <>
-                    <Button size="sm" variant="outline" onClick={() => setEditAnn(a)} className="gap-1.5">
-                      <Pencil className="size-4" /> ערוך
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      onClick={() => setDelAnn(a.id)}
-                      className="gap-1.5 text-destructive"
-                    >
-                      <Trash2 className="size-4" /> מחק
-                    </Button>
-                  </>
-                )}
-              </div>
-            </div>
-          </Card>
+            ann={a}
+            userId={userId}
+            canEditThis={canEditThis}
+            canDeleteThis={canDeleteThis}
+            canViewReceipts={canViewReceipts}
+            onEdit={() => setEditAnn(a)}
+            onDelete={() => setDelAnn(a.id)}
+            onShowReceipts={() => setReceiptsAnn(a.id)}
+          />
         );
       })}
 
