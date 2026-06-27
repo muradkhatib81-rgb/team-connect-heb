@@ -474,6 +474,7 @@ function SentTab({ userId, canManage, canViewReceipts }: { userId: string; canMa
           onClose={() => setSelected(null)}
           viewerMode="sent"
           canManage={canManage}
+          canViewReceipts={canViewReceipts}
         />
       )}
     </div>
