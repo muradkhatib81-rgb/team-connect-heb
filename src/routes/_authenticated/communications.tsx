@@ -1659,3 +1659,129 @@ function ComposeAnnouncementDialog({
     </Dialog>
   );
 }
+
+// ---------------- Read Receipts Dialog ----------------
+function ReadReceiptsDialog({
+  kind,
+  targetId,
+  onClose,
+}: {
+  kind: "message" | "announcement";
+  targetId: string;
+  onClose: () => void;
+}) {
+  const q = useQuery({
+    queryKey: ["comm", "receipts", kind, targetId],
+    queryFn: async () => {
+      const fn = kind === "message" ? "get_message_read_receipts" : "get_announcement_read_receipts";
+      const arg = kind === "message" ? { _message_id: targetId } : { _ann_id: targetId };
+      const { data, error } = await supabase.rpc(fn as any, arg as any);
+      if (error) throw error;
+      return (data ?? []) as Array<{
+        user_id: string;
+        full_name: string;
+        department_name: string | null;
+        job_title: string | null;
+        read_at: string | null;
+        acknowledged_at?: string | null;
+      }>;
+    },
+  });
+
+  const rows = q.data ?? [];
+  const total = rows.length;
+  const read = rows.filter((r) => r.read_at).length;
+  const unread = total - read;
+  const pct = total ? Math.round((read / total) * 100) : 0;
+
+  const readRows = rows.filter((r) => r.read_at);
+  const unreadRows = rows.filter((r) => !r.read_at);
+
+  return (
+    <Dialog open onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto" dir="rtl">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <Eye className="size-5" /> אישורי קריאה
+          </DialogTitle>
+          <DialogDescription>פירוט מי קרא ומי טרם קרא</DialogDescription>
+        </DialogHeader>
+
+        {q.isLoading ? (
+          <Loader2 className="mx-auto size-5 animate-spin text-muted-foreground" />
+        ) : q.isError ? (
+          <p className="text-sm text-destructive">{(q.error as any)?.message ?? "שגיאה בטעינה"}</p>
+        ) : (
+          <>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+              <Card className="p-3 text-center">
+                <p className="text-xs text-muted-foreground">נמענים</p>
+                <p className="text-2xl font-bold">{total}</p>
+              </Card>
+              <Card className="p-3 text-center bg-emerald-50">
+                <p className="text-xs text-emerald-900">קראו</p>
+                <p className="text-2xl font-bold text-emerald-900">{read}</p>
+              </Card>
+              <Card className="p-3 text-center bg-amber-50">
+                <p className="text-xs text-amber-900">לא קראו</p>
+                <p className="text-2xl font-bold text-amber-900">{unread}</p>
+              </Card>
+              <Card className="p-3 text-center bg-sky-50">
+                <p className="text-xs text-sky-900">אחוז קריאה</p>
+                <p className="text-2xl font-bold text-sky-900">{pct}%</p>
+              </Card>
+            </div>
+
+            <Tabs defaultValue="read" className="mt-2">
+              <TabsList className="grid grid-cols-2 w-full">
+                <TabsTrigger value="read">קראו ({read})</TabsTrigger>
+                <TabsTrigger value="unread">עדיין לא קראו ({unread})</TabsTrigger>
+              </TabsList>
+              <TabsContent value="read" className="mt-3">
+                {readRows.length === 0 ? (
+                  <p className="text-sm text-muted-foreground text-center py-4">אף אחד עדיין לא קרא</p>
+                ) : (
+                  <div className="border rounded-md divide-y max-h-72 overflow-y-auto">
+                    {readRows.map((r) => (
+                      <div key={r.user_id} className="px-3 py-2 text-sm flex items-center justify-between gap-2">
+                        <div>
+                          <p className="font-medium">{r.full_name}</p>
+                          <p className="text-xs text-muted-foreground">
+                            {r.department_name ?? "—"} · {r.job_title ?? "—"}
+                          </p>
+                        </div>
+                        <div className="text-xs text-muted-foreground text-left">
+                          {r.read_at && formatHeDateTime(r.read_at)}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </TabsContent>
+              <TabsContent value="unread" className="mt-3">
+                {unreadRows.length === 0 ? (
+                  <p className="text-sm text-muted-foreground text-center py-4">כולם קראו 🎉</p>
+                ) : (
+                  <div className="border rounded-md divide-y max-h-72 overflow-y-auto">
+                    {unreadRows.map((r) => (
+                      <div key={r.user_id} className="px-3 py-2 text-sm">
+                        <p className="font-medium">{r.full_name}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {r.department_name ?? "—"} · {r.job_title ?? "—"}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </TabsContent>
+            </Tabs>
+          </>
+        )}
+
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose}>סגור</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
