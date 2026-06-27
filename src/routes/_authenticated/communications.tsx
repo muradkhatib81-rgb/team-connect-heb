@@ -58,9 +58,23 @@ import {
   deleteAnnouncement,
   restoreAnnouncement,
   getAttachmentUrl,
+  editMessage,
+  editAnnouncement,
+  permanentDeleteMessage,
+  permanentDeleteAnnouncement,
   type CommPriority,
 } from "@/lib/communications.functions";
 import { cn } from "@/lib/utils";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 export const Route = createFileRoute("/_authenticated/communications")({
   component: CommunicationsPage,
