@@ -482,7 +482,7 @@ function SentTab({ userId, canManage, canViewReceipts }: { userId: string; canMa
 }
 
 // ---------------- Announcements ----------------
-function AnnouncementsTab({ userId, canManage }: { userId: string; canManage: boolean }) {
+function AnnouncementsTab({ userId, canManage, canViewReceipts }: { userId: string; canManage: boolean; canViewReceipts: boolean }) {
   const qc = useQueryClient();
   const q = useQuery({
     queryKey: ["comm", "announcements", userId],
