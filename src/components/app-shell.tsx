@@ -164,7 +164,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   }
 
   const SidebarContent = (
-    <div className="flex h-full flex-col bg-sidebar text-sidebar-foreground">
+    <div className="flex h-full min-h-0 flex-col bg-sidebar text-sidebar-foreground">
       <div className="px-5 py-6 border-b border-sidebar-border">
         <div className="flex items-center gap-3">
           <div className="size-10 rounded-xl gradient-brand flex items-center justify-center shadow-soft shrink-0 overflow-hidden">
