@@ -1,8 +1,10 @@
-import { useQuery } from "@tanstack/react-query";
+import { useEffect } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Trophy, Settings, Loader2 } from "lucide-react";
+import { Trophy, Settings, Loader2, UserRound } from "lucide-react";
+
 import { supabase } from "@/integrations/supabase/client";
 import { useCanManageEom } from "@/lib/use-eom-perm";
 
@@ -35,9 +37,26 @@ async function signUrl(bucket: string, path: string | null): Promise<string | nu
 
 export function EmployeeOfMonthSection() {
   const canManage = useCanManageEom();
+  const qc = useQueryClient();
   const now = new Date();
   const year = now.getFullYear();
   const month = now.getMonth() + 1;
+
+  useEffect(() => {
+    const channel = supabase
+      .channel("eom-realtime")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "employee_of_month" },
+        () => qc.invalidateQueries({ queryKey: ["eom", "current", year, month] }),
+      )
+      .subscribe();
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [qc, year, month]);
+
+
 
   const q = useQuery({
     queryKey: ["eom", "current", year, month],
@@ -108,9 +127,22 @@ export function EmployeeOfMonthSection() {
           <Loader2 className="size-5 animate-spin text-primary" />
         </Card>
       ) : count === 0 ? (
-        <Card className="card-elevated p-6 text-sm text-muted-foreground text-center">
-          {canManage ? "עדיין לא נבחרו עובדים לחודש זה. לחץ על \"ניהול\" כדי לבחור." : "עדיין לא נבחרו עובדים לחודש זה."}
+        <Card className="card-elevated p-6 text-center bg-gradient-to-b from-amber-50/60 to-background dark:from-amber-950/20 border-amber-200/60">
+          <div className="flex justify-center mb-3">
+            <div className="size-20 rounded-full ring-4 ring-amber-300/60 bg-accent text-accent-foreground flex items-center justify-center shadow-md">
+              <UserRound className="size-9 opacity-60" />
+            </div>
+          </div>
+          <div className="flex justify-center mb-2">
+            <Trophy className="size-5 text-amber-500" />
+          </div>
+          <h3 className="font-bold text-base">🏆 עובד החודש</h3>
+          <p className="text-sm text-muted-foreground mt-2">טרם נבחר עובד החודש.</p>
+          {canManage && (
+            <p className="text-xs text-muted-foreground mt-1">לחץ על "ניהול" כדי לבחור.</p>
+          )}
         </Card>
+
       ) : (
         <>
           {/* Desktop / tablet grid */}

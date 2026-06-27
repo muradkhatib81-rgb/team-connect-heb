@@ -4,6 +4,8 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Loader2, KeyRound, User } from "lucide-react";
 import { ROLE_LABELS, DEPARTMENT_LABELS } from "@/lib/constants";
+import { EmployeeOfMonthSection } from "@/components/employee-of-month-section";
+
 
 export const Route = createFileRoute("/_authenticated/profile")({
   component: ProfilePage,
@@ -55,9 +57,12 @@ function ProfilePage() {
           </Link>
         </Button>
       </Card>
+
+      <EmployeeOfMonthSection />
     </div>
   );
 }
+
 
 function Row({ label, value }: { label: string; value: string }) {
   return (

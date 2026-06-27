@@ -164,7 +164,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   }
 
   const SidebarContent = (
-    <div className="flex h-full flex-col bg-sidebar text-sidebar-foreground">
+    <div className="flex h-full min-h-0 flex-col bg-sidebar text-sidebar-foreground">
       <div className="px-5 py-6 border-b border-sidebar-border">
         <div className="flex items-center gap-3">
           <div className="size-10 rounded-xl gradient-brand flex items-center justify-center shadow-soft shrink-0 overflow-hidden">
@@ -181,7 +181,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         </div>
       </div>
 
-      <nav className="flex-1 p-3 space-y-1">
+      <nav className="flex-1 min-h-0 overflow-y-auto p-3 space-y-1">
         {nav.map((item) => {
           const active = pathname === item.to || pathname.startsWith(item.to + "/");
           return (
@@ -208,7 +208,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         })}
       </nav>
 
-      <div className="border-t border-sidebar-border p-4 space-y-3">
+      <div className="shrink-0 border-t border-sidebar-border p-4 space-y-3 bg-sidebar">
         <div className="flex items-center gap-3">
           <div className="size-9 rounded-full bg-accent text-accent-foreground flex items-center justify-center text-sm font-semibold shrink-0">
             {profile.full_name?.charAt(0) || "?"}
@@ -220,10 +220,19 @@ export function AppShell({ children }: { children: ReactNode }) {
             </p>
           </div>
         </div>
-        <Button onClick={handleSignOut} variant="outline" size="sm" className="w-full gap-2">
-          <LogOut className="size-4" />
-          התנתקות
-        </Button>
+        <div className="grid grid-cols-2 gap-2">
+          <Button asChild variant="outline" size="sm" className="gap-2" onClick={() => setMobileOpen(false)}>
+            <Link to="/profile">
+              <UserCircle className="size-4" />
+              פרופיל
+            </Link>
+          </Button>
+          <Button onClick={handleSignOut} variant="outline" size="sm" className="gap-2">
+            <LogOut className="size-4" />
+            התנתקות
+          </Button>
+        </div>
+
       </div>
     </div>
   );
