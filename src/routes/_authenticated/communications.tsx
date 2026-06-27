@@ -275,7 +275,7 @@ interface InboxRow {
   sender?: { full_name: string | null } | null;
 }
 
-function InboxTab({ userId }: { userId: string }) {
+function InboxTab({ userId, canDelete }: { userId: string; canDelete: boolean }) {
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState<"all" | "unread" | "important">("all");
   const [selected, setSelected] = useState<string | null>(null);
