@@ -14,17 +14,17 @@ import {
   ListTodo,
   CalendarDays,
   Coffee,
+  Building,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/use-auth";
+import { useCompanySettings } from "@/lib/use-company-settings";
 import {
   APP_NAME,
-  BRANCH_NAME,
   ROLE_LABELS,
-  DEPARTMENT_LABELS,
   isAdmin,
   canManageUsers,
   highestRole,
@@ -42,6 +42,7 @@ interface NavItem {
 
 export function AppShell({ children }: { children: ReactNode }) {
   const { data: profile, isLoading } = useAuth();
+  const { data: company } = useCompanySettings();
   const [mobileOpen, setMobileOpen] = useState(false);
   const navigate = useNavigate();
   const qc = useQueryClient();
@@ -113,6 +114,7 @@ export function AppShell({ children }: { children: ReactNode }) {
     { to: "/employees", label: "ניהול עובדים", icon: Users, visible: admin },
     { to: "/departments", label: "מחלקות", icon: Building2, visible: admin },
     { to: "/permissions", label: "הרשאות", icon: ShieldCheck, visible: canManageUsers(profile.roles) },
+    { to: "/company-settings", label: "הגדרות חברה", icon: Building, visible: isMainAdmin },
     { to: "/profile", label: "הפרופיל שלי", icon: UserCircle, visible: isPlainEmployee },
   ].filter((n) => n.visible);
 
@@ -129,12 +131,16 @@ export function AppShell({ children }: { children: ReactNode }) {
     <div className="flex h-full flex-col bg-sidebar text-sidebar-foreground">
       <div className="px-5 py-6 border-b border-sidebar-border">
         <div className="flex items-center gap-3">
-          <div className="size-10 rounded-xl gradient-brand flex items-center justify-center shadow-soft shrink-0">
-            <Store className="size-5 text-primary-foreground" />
+          <div className="size-10 rounded-xl gradient-brand flex items-center justify-center shadow-soft shrink-0 overflow-hidden">
+            {company?.logo_url ? (
+              <img src={company.logo_url} alt={company.company_name} className="size-full object-contain bg-white" />
+            ) : (
+              <Store className="size-5 text-primary-foreground" />
+            )}
           </div>
           <div className="min-w-0">
             <p className="font-bold text-sm truncate">{APP_NAME}</p>
-            <p className="text-xs text-muted-foreground truncate">{BRANCH_NAME}</p>
+            <p className="text-xs text-muted-foreground truncate">{company?.company_name}</p>
           </div>
         </div>
       </div>
@@ -201,7 +207,11 @@ export function AppShell({ children }: { children: ReactNode }) {
           </SheetContent>
         </Sheet>
         <div className="flex items-center gap-2 min-w-0">
-          <Store className="size-5 text-primary shrink-0" />
+          {company?.logo_url ? (
+            <img src={company.logo_url} alt={company.company_name} className="size-6 rounded object-contain shrink-0" />
+          ) : (
+            <Store className="size-5 text-primary shrink-0" />
+          )}
           <span className="font-semibold text-sm truncate">{APP_NAME}</span>
         </div>
         <NotificationsBell />
