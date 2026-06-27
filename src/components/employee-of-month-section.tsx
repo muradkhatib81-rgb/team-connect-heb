@@ -127,9 +127,22 @@ export function EmployeeOfMonthSection() {
           <Loader2 className="size-5 animate-spin text-primary" />
         </Card>
       ) : count === 0 ? (
-        <Card className="card-elevated p-6 text-sm text-muted-foreground text-center">
-          {canManage ? "עדיין לא נבחרו עובדים לחודש זה. לחץ על \"ניהול\" כדי לבחור." : "עדיין לא נבחרו עובדים לחודש זה."}
+        <Card className="card-elevated p-6 text-center bg-gradient-to-b from-amber-50/60 to-background dark:from-amber-950/20 border-amber-200/60">
+          <div className="flex justify-center mb-3">
+            <div className="size-20 rounded-full ring-4 ring-amber-300/60 bg-accent text-accent-foreground flex items-center justify-center shadow-md">
+              <UserRound className="size-9 opacity-60" />
+            </div>
+          </div>
+          <div className="flex justify-center mb-2">
+            <Trophy className="size-5 text-amber-500" />
+          </div>
+          <h3 className="font-bold text-base">🏆 עובד החודש</h3>
+          <p className="text-sm text-muted-foreground mt-2">טרם נבחר עובד החודש.</p>
+          {canManage && (
+            <p className="text-xs text-muted-foreground mt-1">לחץ על "ניהול" כדי לבחור.</p>
+          )}
         </Card>
+
       ) : (
         <>
           {/* Desktop / tablet grid */}
