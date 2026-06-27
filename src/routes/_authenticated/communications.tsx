@@ -863,11 +863,13 @@ function MessageDetailDialog({
   onClose,
   viewerMode,
   canManage,
+  canViewReceipts,
 }: {
   messageId: string;
   onClose: () => void;
   viewerMode: "inbox" | "sent";
   canManage?: boolean;
+  canViewReceipts?: boolean;
 }) {
   const qc = useQueryClient();
   const q = useQuery({
