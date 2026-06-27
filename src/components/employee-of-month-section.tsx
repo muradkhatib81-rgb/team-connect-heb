@@ -37,9 +37,26 @@ async function signUrl(bucket: string, path: string | null): Promise<string | nu
 
 export function EmployeeOfMonthSection() {
   const canManage = useCanManageEom();
+  const qc = useQueryClient();
   const now = new Date();
   const year = now.getFullYear();
   const month = now.getMonth() + 1;
+
+  useEffect(() => {
+    const channel = supabase
+      .channel("eom-realtime")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "employee_of_month" },
+        () => qc.invalidateQueries({ queryKey: ["eom", "current", year, month] }),
+      )
+      .subscribe();
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [qc, year, month]);
+
+
 
   const q = useQuery({
     queryKey: ["eom", "current", year, month],
