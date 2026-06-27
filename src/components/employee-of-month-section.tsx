@@ -1,8 +1,10 @@
-import { useQuery } from "@tanstack/react-query";
+import { useEffect } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Trophy, Settings, Loader2 } from "lucide-react";
+import { Trophy, Settings, Loader2, UserRound } from "lucide-react";
+
 import { supabase } from "@/integrations/supabase/client";
 import { useCanManageEom } from "@/lib/use-eom-perm";
 
