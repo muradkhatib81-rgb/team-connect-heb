@@ -445,9 +445,15 @@ function SentTab({ userId, canManage }: { userId: string; canManage: boolean }) 
                   <div className="flex items-center gap-2 flex-wrap">
                     <p className="font-semibold text-sm">{m.title}</p>
                     <PriorityBadge p={m.priority} />
+                    {m.edited_at && (
+                      <Badge variant="outline" className="gap-1 text-[10px]">
+                        <Pencil className="size-3" /> נערך
+                      </Badge>
+                    )}
                   </div>
                   <p className="text-xs text-muted-foreground mt-0.5">
                     נשלח {formatHeDateTime(m.created_at)}
+                    {m.edited_at && ` · עודכן ${formatHeDateTime(m.edited_at)}`}
                   </p>
                 </div>
                 <div className="text-xs text-muted-foreground text-left">
