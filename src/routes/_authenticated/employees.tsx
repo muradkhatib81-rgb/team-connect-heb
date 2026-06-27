@@ -220,6 +220,8 @@ function EmployeesPage() {
     const data = employeesQuery.data ?? [];
     const term = searchTerm.trim().toLowerCase();
     return data.filter((e) => {
+      // Hide department manager from their own employees list
+      if (isDeptManagerOnly && e.id === me?.id) return false;
       if (deptFilter !== "all" && e.department_id !== deptFilter) return false;
       if (filterMode === "active" && (!e.is_active || e.on_leave)) return false;
       if (filterMode === "inactive" && e.is_active) return false;
@@ -231,7 +233,27 @@ function EmployeesPage() {
         (e.phone ?? "").includes(term)
       );
     });
-  }, [employeesQuery.data, searchTerm, deptFilter, filterMode]);
+  }, [employeesQuery.data, searchTerm, deptFilter, filterMode, isDeptManagerOnly, me?.id]);
+
+  // Manager's own department stats (excluding the manager themselves)
+  const managerDeptStats = useMemo(() => {
+    if (!isDeptManagerOnly || !me?.department_id) return null;
+    const data = employeesQuery.data ?? [];
+    const dept = data.filter((e) => e.department_id === me.department_id && e.id !== me.id);
+    return {
+      total: dept.length,
+      active: dept.filter((e) => e.is_active && !e.on_leave).length,
+      onLeave: dept.filter((e) => e.on_leave).length,
+    };
+  }, [employeesQuery.data, isDeptManagerOnly, me?.id, me?.department_id]);
+
+  // Ensure manager's own avatar is signed too
+  const managerAvatarQ = useSignedAvatarUrls(
+    isDeptManagerOnly
+      ? [(employeesQuery.data ?? []).find((e) => e.id === me?.id)?.avatar_url]
+      : [],
+  );
+  const managerAvatarMap = managerAvatarQ.data ?? {};
 
   // Populate signed URL cache for avatars in current list
   const avatarsQ = useSignedAvatarUrls((employeesQuery.data ?? []).map((e) => e.avatar_url));
@@ -272,6 +294,43 @@ function EmployeesPage() {
           </Button>
         )}
       </header>
+
+      {isDeptManagerOnly && me && managerDeptStats && (
+        <Card className="card-elevated p-4">
+          <div className="flex items-center gap-4">
+            <div className="size-16 rounded-full bg-accent overflow-hidden flex items-center justify-center shrink-0 border border-border">
+              {(() => {
+                const path = (employeesQuery.data ?? []).find((e) => e.id === me.id)?.avatar_url;
+                const url = path ? (managerAvatarMap[path] ?? avatarUrlFor(path)) : null;
+                return url ? (
+                  <img src={url} alt="" className="w-full h-full object-cover" />
+                ) : (
+                  <span className="text-xl font-semibold text-muted-foreground">
+                    {(me.full_name || "?").charAt(0)}
+                  </span>
+                );
+              })()}
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="text-xs text-muted-foreground">👤 אחראי המחלקה</div>
+              <div className="font-semibold truncate">{me.full_name}</div>
+              <div className="text-sm text-muted-foreground truncate">
+                {me.department_name ?? (me.department_id ? deptMap[me.department_id] : "")}
+                {me.job_title ? ` · ${me.job_title}` : ""}
+              </div>
+            </div>
+            <div className="flex flex-wrap gap-2 justify-end">
+              <Badge variant="secondary">עובדים: {managerDeptStats.total}</Badge>
+              <Badge variant="outline">פעילים: {managerDeptStats.active}</Badge>
+              {managerDeptStats.onLeave > 0 && (
+                <Badge variant="outline">בחופש: {managerDeptStats.onLeave}</Badge>
+              )}
+            </div>
+          </div>
+        </Card>
+      )}
+
+
 
       <Card className="card-elevated p-4">
         <div className="flex flex-col sm:flex-row gap-3">
