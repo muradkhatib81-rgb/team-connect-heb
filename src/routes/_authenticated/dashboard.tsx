@@ -93,7 +93,7 @@ function DashboardPage() {
           .select("id, full_name, job_title, avatar_url")
           .eq("id", profile!.id)
           .maybeSingle();
-        if (mgr) manager = mgr as typeof manager;
+        if (mgr) manager = mgr as NonNullable<typeof manager>;
       }
 
       return { dept, employees, manager };
