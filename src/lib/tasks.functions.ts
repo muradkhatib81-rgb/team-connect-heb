@@ -548,18 +548,51 @@ export const rejectTask = createServerFn({ method: "POST" })
 
 // ---------- GRANULAR USER PERMISSIONS (main admin only) ----------
 export const PERMISSION_KEYS = [
+  // Dashboard
+  "can_view_dashboard",
+  // Employees
+  "can_view_all_employees",
+  "can_view_employee_details",
+  "can_add_employee",
+  "can_edit_employee",
+  "can_delete_employee",
+  "can_reset_employee_password",
+  "can_manage_departments",
+  "can_export_employees",
+  // Schedules
+  "can_view_schedule",
+  "can_create_schedule",
+  "can_edit_schedule",
+  "can_approve_schedule",
+  "can_publish_schedule",
+  // Leave
+  "can_view_leave",
+  "can_approve_leave",
+  "can_reject_leave",
+  "can_edit_leave_balance",
+  // Breaks
+  "can_view_breaks",
+  "can_manage_breaks",
+  // Tasks
+  "can_view_tasks",
   "can_create_tasks",
   "can_edit_tasks",
   "can_delete_tasks",
   "can_approve_tasks",
-  "can_create_schedule",
-  "can_approve_schedule",
-  "can_publish_schedule",
-  "can_approve_leave",
-  "can_view_breaks",
-  "can_manage_breaks",
+  // Messages
+  "can_view_messages",
   "can_send_messages",
-
+  "can_send_message_employee",
+  "can_send_message_department",
+  "can_send_message_all",
+  // Reports
+  "can_view_reports",
+  "can_export_reports",
+  // System
+  "can_manage_permissions",
+  "can_manage_company_settings",
+  "can_view_activity_log",
+  "can_manage_users",
 ] as const;
 
 const setPermsSchema = z.object({
