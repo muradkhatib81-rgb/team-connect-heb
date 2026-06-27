@@ -1120,6 +1120,7 @@ function OnBreakSection({ profile }: { profile: any }) {
   const navigate = useNavigate();
   const isMainAdmin = profile.roles.includes("main_admin");
   const [open, setOpen] = useState(false);
+  const [logOpen, setLogOpen] = useState(false);
 
   const permQ = useQuery({
     enabled: !!profile.id && !isMainAdmin,
@@ -1297,7 +1298,6 @@ function OnBreakSection({ profile }: { profile: any }) {
     cancelled: "destructive",
   };
 
-  const [logOpen, setLogOpen] = useState(false);
 
   return (
     <>
