@@ -544,6 +544,7 @@ function AnnouncementsTab({ userId, canManage, canViewReceipts }: { userId: stri
 
   const [editAnn, setEditAnn] = useState<any | null>(null);
   const [delAnn, setDelAnn] = useState<string | null>(null);
+  const [receiptsAnn, setReceiptsAnn] = useState<string | null>(null);
 
   if (q.isLoading) return <Loader2 className="mx-auto size-5 animate-spin text-muted-foreground" />;
   const list = q.data ?? [];
