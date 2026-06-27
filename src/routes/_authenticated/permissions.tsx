@@ -177,6 +177,14 @@ const CATEGORIES: Category[] = [
     ],
   },
   {
+    id: "recognition",
+    title: "הוקרת עובדים",
+    icon: Trophy,
+    perms: [
+      { key: "can_manage_employee_of_month", label: "🏆 ניהול עובד החודש", description: "מאפשר לבחור עובדים מצטיינים לחודש, לעדכן סיבת בחירה, להעלות תמונות ולמחוק רשומות." },
+    ],
+  },
+  {
     id: "system",
     title: "מערכת",
     icon: Cog,
