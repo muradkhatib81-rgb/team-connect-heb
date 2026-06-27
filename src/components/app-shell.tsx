@@ -181,7 +181,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         </div>
       </div>
 
-      <nav className="flex-1 p-3 space-y-1">
+      <nav className="flex-1 min-h-0 overflow-y-auto p-3 space-y-1">
         {nav.map((item) => {
           const active = pathname === item.to || pathname.startsWith(item.to + "/");
           return (
