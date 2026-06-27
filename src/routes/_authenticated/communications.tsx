@@ -209,17 +209,19 @@ function CommunicationsPage() {
         </div>
       </header>
 
-      <Tabs value={tab} onValueChange={setTab}>
-        <TabsList className="grid grid-cols-2 sm:grid-cols-4 w-full">
+      <Tabs value={canSeeSent ? tab : tab === "sent" ? "inbox" : tab} onValueChange={setTab}>
+        <TabsList className={`grid ${canSeeSent ? "grid-cols-2 sm:grid-cols-4" : "grid-cols-3"} w-full`}>
           <TabsTrigger value="inbox" className="gap-1.5">
             <Inbox className="size-4" /> דואר נכנס
           </TabsTrigger>
           <TabsTrigger value="announcements" className="gap-1.5">
             <Megaphone className="size-4" /> הכרזות
           </TabsTrigger>
-          <TabsTrigger value="sent" className="gap-1.5">
-            <Send className="size-4" /> שנשלחו
-          </TabsTrigger>
+          {canSeeSent && (
+            <TabsTrigger value="sent" className="gap-1.5">
+              <Send className="size-4" /> שנשלחו
+            </TabsTrigger>
+          )}
           <TabsTrigger value="archive" className="gap-1.5">
             <Archive className="size-4" /> ארכיון
           </TabsTrigger>
@@ -231,13 +233,16 @@ function CommunicationsPage() {
         <TabsContent value="announcements" className="mt-4">
           <AnnouncementsTab userId={userId!} canDelete={canDelete} canViewReceipts={canViewReceipts} />
         </TabsContent>
-        <TabsContent value="sent" className="mt-4">
-          <SentTab userId={userId!} canManage={canManage} canDelete={canDelete} canViewReceipts={canViewReceipts} />
-        </TabsContent>
+        {canSeeSent && (
+          <TabsContent value="sent" className="mt-4">
+            <SentTab userId={userId!} canManage={canManage} canDelete={canDelete} canViewReceipts={canViewReceipts} />
+          </TabsContent>
+        )}
         <TabsContent value="archive" className="mt-4">
           <ArchiveTab userId={userId!} canDelete={canDelete} />
         </TabsContent>
       </Tabs>
+
 
       {composeOpen && (
         <ComposeMessageDialog
