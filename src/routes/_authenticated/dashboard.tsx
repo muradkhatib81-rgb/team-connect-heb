@@ -237,7 +237,11 @@ function DeptManagerDashboard({
   data,
   loading,
 }: {
-  data?: { dept: { id: string; name: string } | null; employees: DeptEmp[] };
+  data?: {
+    dept: { id: string; name: string } | null;
+    employees: DeptEmp[];
+    manager: { id: string; full_name: string; job_title: string | null; avatar_url: string | null } | null;
+  };
   loading: boolean;
 }) {
   const navigate = useNavigate();
@@ -255,22 +259,51 @@ function DeptManagerDashboard({
       </Card>
     );
   }
-  const emps = data.employees.filter((e) => e.department_id === data.dept!.id);
+  // Manager is already excluded at the Query level (see deptManagerQuery).
+  const emps = data.employees;
   const total = emps.length;
   const active = emps.filter((e) => e.is_active && !e.on_leave).length;
   const onLeave = emps.filter((e) => e.on_leave).length;
   const inactive = emps.filter((e) => !e.is_active).length;
   const go = () =>
     navigate({ to: "/employees", search: { filter: "all", dept: data.dept!.id } as any });
+  const mgr = data.manager;
+  const mgrInitial = (mgr?.full_name || "?").charAt(0);
 
   return (
     <>
+      {mgr && (
+        <Card className="card-elevated p-4">
+          <div className="flex items-center gap-4">
+            <div className="size-16 rounded-full bg-accent overflow-hidden flex items-center justify-center shrink-0 border border-border text-xl font-semibold text-muted-foreground">
+              {mgr.avatar_url ? (
+                <span>{mgrInitial}</span>
+              ) : (
+                <span>{mgrInitial}</span>
+              )}
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="text-xs text-muted-foreground">👤 אחראי המחלקה</div>
+              <div className="font-semibold truncate">{mgr.full_name}</div>
+              <div className="text-sm text-muted-foreground truncate">
+                {data.dept.name}
+                {mgr.job_title ? ` · ${mgr.job_title}` : ""}
+              </div>
+            </div>
+            <div className="text-sm text-muted-foreground whitespace-nowrap">
+              עובדים במחלקה: <span className="font-semibold text-foreground">{total}</span>
+            </div>
+          </div>
+        </Card>
+      )}
+
       <section className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard label="עובדי המחלקה" value={total} icon={Users} tone="primary" onClick={go} />
         <StatCard label="פעילים" value={active} icon={UserCheck} tone="success" onClick={go} />
         <StatCard label="בחופש" value={onLeave} icon={Plane} tone="warning" onClick={go} />
         <StatCard label="לא פעילים" value={inactive} icon={UserX} tone="muted" onClick={go} />
       </section>
+
 
       <section>
         <div className="flex items-center justify-between mb-4">
