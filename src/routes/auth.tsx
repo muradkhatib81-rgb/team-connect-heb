@@ -29,6 +29,7 @@ function AuthPage() {
   const navigate = useNavigate();
   const router = useRouter();
   const search = useSearch({ from: "/auth" });
+  const { data: company } = useCompanySettings();
   const [loading, setLoading] = useState(false);
   const [checking, setChecking] = useState(true);
   const [hasUsers, setHasUsers] = useState<boolean | null>(null);
@@ -154,12 +155,16 @@ function AuthPage() {
       <div className="flex-1 flex items-center justify-center px-4 py-10">
         <div className="w-full max-w-md">
           <div className="flex flex-col items-center gap-3 mb-8">
-            <div className="size-14 rounded-2xl gradient-brand flex items-center justify-center shadow-card">
-              <Store className="size-7 text-primary-foreground" />
+            <div className="size-16 rounded-2xl gradient-brand flex items-center justify-center shadow-card overflow-hidden">
+              {company?.logo_url ? (
+                <img src={company.logo_url} alt={company.company_name} className="size-full object-contain bg-white" />
+              ) : (
+                <Store className="size-7 text-primary-foreground" />
+              )}
             </div>
             <div className="text-center">
               <h1 className="text-2xl font-bold text-foreground">{APP_NAME}</h1>
-              <p className="text-sm text-muted-foreground mt-1">{BRANCH_NAME}</p>
+              <p className="text-sm text-muted-foreground mt-1">{company?.company_name}</p>
             </div>
           </div>
 
