@@ -1275,6 +1275,10 @@ export type Database = {
         Args: { _approver_id: string; _task_id: string }
         Returns: boolean
       }
+      can_view_announcement: {
+        Args: { _ann_id: string; _user_id: string }
+        Returns: boolean
+      }
       get_department_coworkers: {
         Args: never
         Returns: {
@@ -1346,6 +1350,18 @@ export type Database = {
         Returns: boolean
       }
       is_admin: { Args: { _user_id: string }; Returns: boolean }
+      is_announcement_sender: {
+        Args: { _ann_id: string; _user_id: string }
+        Returns: boolean
+      }
+      is_message_recipient: {
+        Args: { _msg_id: string; _user_id: string }
+        Returns: boolean
+      }
+      is_message_sender: {
+        Args: { _msg_id: string; _user_id: string }
+        Returns: boolean
+      }
       list_profiles_contact: {
         Args: never
         Returns: {
