@@ -235,7 +235,7 @@ function CommunicationsPage() {
         </TabsContent>
         {canSeeSent && (
           <TabsContent value="sent" className="mt-4">
-            <SentTab userId={userId!} canManage={canManage} canDelete={canDelete} canViewReceipts={canViewReceipts} />
+            <SentTab userId={userId!} canManage={canManage} canDelete={canDelete} canViewReceipts={canViewReceipts} admin={admin} />
           </TabsContent>
         )}
         <TabsContent value="archive" className="mt-4">
@@ -413,8 +413,26 @@ function InboxTab({ userId, canDelete }: { userId: string; canDelete: boolean })
 }
 
 // ---------------- Sent ----------------
-function SentTab({ userId, canManage, canDelete, canViewReceipts }: { userId: string; canManage: boolean; canDelete: boolean; canViewReceipts: boolean }) {
+function SentTab({
+  userId,
+  canManage,
+  canDelete,
+  canViewReceipts,
+  admin,
+}: {
+  userId: string;
+  canManage: boolean;
+  canDelete: boolean;
+  canViewReceipts: boolean;
+  admin: boolean;
+}) {
+  const qc = useQueryClient();
   const [selected, setSelected] = useState<string | null>(null);
+  const [selectedAnn, setSelectedAnn] = useState<string | null>(null);
+  const [editAnn, setEditAnn] = useState<any | null>(null);
+  const [delAnn, setDelAnn] = useState<string | null>(null);
+  const [receiptsAnn, setReceiptsAnn] = useState<string | null>(null);
+
   const q = useQuery({
     queryKey: ["comm", "sent", userId],
     queryFn: async () => {
@@ -444,46 +462,175 @@ function SentTab({ userId, canManage, canDelete, canViewReceipts }: { userId: st
     },
   });
 
+  // Sent announcements — own (or all when main_admin)
+  const annsQ = useQuery({
+    queryKey: ["comm", "sent-anns", userId, admin],
+    queryFn: async () => {
+      let qy = supabase
+        .from("announcements")
+        .select("id, title, body, priority, image_url, starts_at, ends_at, sender_id, created_at, deleted_at, edited_at")
+        .is("deleted_at", null)
+        .order("created_at", { ascending: false });
+      if (!admin) qy = qy.eq("sender_id", userId);
+      const { data, error } = await qy;
+      if (error) throw error;
+      const rows = (data ?? []) as any[];
+      // Read counts
+      const ids = rows.map((r) => r.id);
+      let readMap: Record<string, number> = {};
+      if (ids.length) {
+        const { data: reads } = await supabase
+          .from("announcement_reads")
+          .select("announcement_id")
+          .in("announcement_id", ids);
+        (reads ?? []).forEach((r: any) => {
+          readMap[r.announcement_id] = (readMap[r.announcement_id] ?? 0) + 1;
+        });
+      }
+      // Sender names for admin view
+      const senderIds = [...new Set(rows.map((r) => r.sender_id).filter(Boolean))];
+      let senderMap: Record<string, string> = {};
+      if (senderIds.length) {
+        const { data: sp } = await supabase.from("profiles").select("id, full_name").in("id", senderIds);
+        (sp ?? []).forEach((p: any) => (senderMap[p.id] = p.full_name));
+      }
+      return rows.map((a) => ({
+        ...a,
+        reads: readMap[a.id] ?? 0,
+        sender_name: senderMap[a.sender_id] ?? "—",
+      }));
+    },
+  });
+
+  const delAnnMut = useMutation({
+    mutationFn: (id: string) => deleteAnnouncement(id),
+    onSuccess: () => {
+      toast.success("ההכרזה הועברה לארכיון");
+      qc.invalidateQueries({ queryKey: ["comm"] });
+    },
+    onError: (e: any) => toast.error(e?.message ?? "שגיאה"),
+  });
+  const permDelAnnMut = useMutation({
+    mutationFn: (id: string) => permanentDeleteAnnouncement(id),
+    onSuccess: () => {
+      toast.success("ההכרזה נמחקה לצמיתות");
+      qc.invalidateQueries({ queryKey: ["comm"] });
+    },
+    onError: (e: any) => toast.error(e?.message ?? "שגיאה במחיקה"),
+  });
+
   return (
-    <div className="space-y-2">
-      {q.isLoading ? (
-        <Loader2 className="mx-auto size-5 animate-spin text-muted-foreground" />
-      ) : (q.data ?? []).length === 0 ? (
-        <Card className="p-8 text-center text-sm text-muted-foreground">לא שלחת הודעות עדיין</Card>
-      ) : (
-        (q.data ?? []).map((m: any) => {
-          const pct = m.stats.total ? Math.round((m.stats.read / m.stats.total) * 100) : 0;
-          return (
-            <Card
-              key={m.id}
-              onClick={() => setSelected(m.id)}
-              className="p-3 cursor-pointer hover:bg-accent/50 transition-colors"
-            >
-              <div className="flex items-start justify-between gap-2 flex-wrap">
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <p className="font-semibold text-sm">{m.title}</p>
-                    <PriorityBadge p={m.priority} />
-                    {m.edited_at && (
-                      <Badge variant="outline" className="gap-1 text-[10px]">
-                        <Pencil className="size-3" /> נערך
-                      </Badge>
-                    )}
+    <div className="space-y-6">
+      <section className="space-y-2">
+        <h3 className="text-sm font-semibold text-muted-foreground flex items-center gap-1.5">
+          <Send className="size-4" /> הודעות שנשלחו
+        </h3>
+        {q.isLoading ? (
+          <Loader2 className="mx-auto size-5 animate-spin text-muted-foreground" />
+        ) : (q.data ?? []).length === 0 ? (
+          <Card className="p-6 text-center text-sm text-muted-foreground">לא שלחת הודעות עדיין</Card>
+        ) : (
+          (q.data ?? []).map((m: any) => {
+            const pct = m.stats.total ? Math.round((m.stats.read / m.stats.total) * 100) : 0;
+            return (
+              <Card
+                key={m.id}
+                onClick={() => setSelected(m.id)}
+                className="p-3 cursor-pointer hover:bg-accent/50 transition-colors"
+              >
+                <div className="flex items-start justify-between gap-2 flex-wrap">
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <p className="font-semibold text-sm">{m.title}</p>
+                      <PriorityBadge p={m.priority} />
+                      {m.edited_at && (
+                        <Badge variant="outline" className="gap-1 text-[10px]">
+                          <Pencil className="size-3" /> נערך
+                        </Badge>
+                      )}
+                    </div>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      נשלח {formatHeDateTime(m.created_at)}
+                      {m.edited_at && ` · עודכן ${formatHeDateTime(m.edited_at)}`}
+                    </p>
                   </div>
-                  <p className="text-xs text-muted-foreground mt-0.5">
-                    נשלח {formatHeDateTime(m.created_at)}
-                    {m.edited_at && ` · עודכן ${formatHeDateTime(m.edited_at)}`}
-                  </p>
+                  <div className="text-xs text-muted-foreground text-left">
+                    <div>{m.stats.read}/{m.stats.total} קראו ({pct}%)</div>
+                    {m.requires_acknowledgment && <div>{m.stats.ack}/{m.stats.total} אישרו</div>}
+                  </div>
                 </div>
-                <div className="text-xs text-muted-foreground text-left">
-                  <div>{m.stats.read}/{m.stats.total} קראו ({pct}%)</div>
-                  {m.requires_acknowledgment && <div>{m.stats.ack}/{m.stats.total} אישרו</div>}
+              </Card>
+            );
+          })
+        )}
+      </section>
+
+      <section className="space-y-2">
+        <h3 className="text-sm font-semibold text-muted-foreground flex items-center gap-1.5">
+          <Megaphone className="size-4" /> הכרזות שנשלחו
+        </h3>
+        {annsQ.isLoading ? (
+          <Loader2 className="mx-auto size-5 animate-spin text-muted-foreground" />
+        ) : (annsQ.data ?? []).length === 0 ? (
+          <Card className="p-6 text-center text-sm text-muted-foreground">לא פרסמת הכרזות עדיין</Card>
+        ) : (
+          (annsQ.data ?? []).map((a: any) => {
+            const ownThis = a.sender_id === userId;
+            const canEditThis = ownThis && canManage;
+            const canDeleteThis = (ownThis || admin) && canDelete;
+            return (
+              <Card key={a.id} className="p-3 hover:bg-accent/50 transition-colors">
+                <div className="flex items-start justify-between gap-2 flex-wrap">
+                  <div
+                    className="min-w-0 flex-1 cursor-pointer"
+                    onClick={() => setSelectedAnn(a.id)}
+                  >
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <p className="font-semibold text-sm">{a.title}</p>
+                      <PriorityBadge p={a.priority} />
+                      {a.edited_at && (
+                        <Badge variant="outline" className="gap-1 text-[10px]">
+                          <Pencil className="size-3" /> נערך
+                        </Badge>
+                      )}
+                    </div>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      פורסם {formatHeDateTime(a.created_at)}
+                      {admin && !ownThis && ` · מאת ${a.sender_name}`}
+                      {a.ends_at && ` · עד ${formatHeDateTime(a.ends_at)}`}
+                    </p>
+                  </div>
+                  <div className="text-xs text-muted-foreground text-left flex flex-col items-end gap-1">
+                    <div>{a.reads} קראו</div>
+                    <div className="flex gap-1">
+                      {(canViewReceipts || ownThis) && (
+                        <Button size="sm" variant="ghost" className="h-7 px-2 gap-1" onClick={() => setReceiptsAnn(a.id)}>
+                          <Eye className="size-3.5" /> אישורי קריאה
+                        </Button>
+                      )}
+                      {canEditThis && (
+                        <Button size="sm" variant="ghost" className="h-7 px-2 gap-1" onClick={() => setEditAnn(a)}>
+                          <Pencil className="size-3.5" /> ערוך
+                        </Button>
+                      )}
+                      {canDeleteThis && (
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="h-7 px-2 gap-1 text-destructive"
+                          onClick={() => setDelAnn(a.id)}
+                        >
+                          <Trash2 className="size-3.5" /> מחק
+                        </Button>
+                      )}
+                    </div>
+                  </div>
                 </div>
-              </div>
-            </Card>
-          );
-        })
-      )}
+              </Card>
+            );
+          })
+        )}
+      </section>
 
       {selected && (
         <MessageDetailDialog
@@ -495,7 +642,105 @@ function SentTab({ userId, canManage, canDelete, canViewReceipts }: { userId: st
           canViewReceipts={canViewReceipts}
         />
       )}
+
+      {selectedAnn && (
+        <AnnouncementDetailDialog
+          annId={selectedAnn}
+          onClose={() => setSelectedAnn(null)}
+        />
+      )}
+
+      {editAnn && (
+        <EditAnnouncementDialog ann={editAnn} onClose={() => setEditAnn(null)} />
+      )}
+
+      {receiptsAnn && (
+        <ReadReceiptsDialog
+          kind="announcement"
+          targetId={receiptsAnn}
+          onClose={() => setReceiptsAnn(null)}
+        />
+      )}
+
+      <AlertDialog open={!!delAnn} onOpenChange={(o) => !o && setDelAnn(null)}>
+        <AlertDialogContent dir="rtl">
+          <AlertDialogHeader>
+            <AlertDialogTitle>מחיקת הכרזה</AlertDialogTitle>
+            <AlertDialogDescription>
+              בחר כיצד למחוק את ההכרזה. מחיקה לצמיתות אינה ניתנת לשחזור.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter className="gap-2 flex-wrap">
+            <AlertDialogCancel>ביטול</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                const id = delAnn!;
+                setDelAnn(null);
+                delAnnMut.mutate(id);
+              }}
+            >
+              📁 העבר לארכיון
+            </AlertDialogAction>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={() => {
+                const id = delAnn!;
+                setDelAnn(null);
+                permDelAnnMut.mutate(id);
+              }}
+            >
+              🗑️ מחק לצמיתות
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
+  );
+}
+
+// Lightweight announcement preview for the Sent screen
+function AnnouncementDetailDialog({ annId, onClose }: { annId: string; onClose: () => void }) {
+  const q = useQuery({
+    queryKey: ["comm", "ann-detail", annId],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("announcements")
+        .select("id, title, body, priority, image_url, starts_at, ends_at, created_at, edited_at")
+        .eq("id", annId)
+        .single();
+      if (error) throw error;
+      return data as any;
+    },
+  });
+  const d = q.data;
+  return (
+    <Dialog open onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="max-w-xl max-h-[90vh] overflow-y-auto" dir="rtl">
+        {!d ? (
+          <Loader2 className="mx-auto size-5 animate-spin" />
+        ) : (
+          <>
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2 flex-wrap">
+                {d.title}
+                <PriorityBadge p={d.priority} />
+              </DialogTitle>
+              <DialogDescription>
+                פורסם {formatHeDateTime(d.created_at)}
+                {d.ends_at && ` · בתוקף עד ${formatHeDateTime(d.ends_at)}`}
+              </DialogDescription>
+            </DialogHeader>
+            {d.image_url && (
+              <img src={d.image_url} alt="" className="w-full max-h-64 object-cover rounded-md" />
+            )}
+            <div className="whitespace-pre-wrap text-sm leading-relaxed">{d.body}</div>
+            <DialogFooter>
+              <Button variant="outline" onClick={onClose}>סגור</Button>
+            </DialogFooter>
+          </>
+        )}
+      </DialogContent>
+    </Dialog>
   );
 }
 

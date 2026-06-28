@@ -133,8 +133,8 @@ export function AppShell({ children }: { children: ReactNode }) {
 
   // Managers of breaks: main admin, branch/assistant manager, or any user with the explicit perm.
   const isBreaksManager = isMainAdmin || isBranchOrAssistant || !!breakPermQ.data?.breaks;
-  // Only employees and department managers (without manager role / breaks perm) can request a break.
-  const canRequestBreak = !isBreaksManager;
+  // Every user (including managers) can request their own break — managers are also employees.
+  const canRequestBreak = true;
   const canManageEom = isMainAdmin || !!breakPermQ.data?.eom;
 
 

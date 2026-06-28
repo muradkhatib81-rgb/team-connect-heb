@@ -139,18 +139,11 @@ function BreaksPage() {
   const isBreaksManager =
     isMainAdmin || isBranchOrAssistant || !!permQ.data;
 
-  // Hard redirect: managers/admins must use the dedicated management screen.
-  useEffect(() => {
-    if (!me) return;
-    if (permQ.isLoading) return;
-    if (isBreaksManager) {
-      // Use replace to avoid leaving /breaks in the back-stack for managers.
-      window.location.replace("/breaks-admin");
-    }
-  }, [me, permQ.isLoading, isBreaksManager]);
+  // Managers are also employees: they may request their own break here.
+  // The dedicated /breaks-admin screen remains for approval/management.
 
   const settingsQ = useQuery({
-    enabled: !!me && !isBreaksManager,
+    enabled: !!me,
     queryKey: ["break-settings-active"],
     queryFn: async () => {
       const { data, error } = await supabase
@@ -164,7 +157,7 @@ function BreaksPage() {
   });
 
   const myReqQ = useQuery({
-    enabled: !!me?.id && !isBreaksManager,
+    enabled: !!me?.id,
     queryKey: ["my-break-requests", me?.id],
     queryFn: async () => {
       const { data, error } = await supabase
@@ -178,9 +171,8 @@ function BreaksPage() {
     },
   });
 
-  // Realtime — only for the employee's own requests
+  // Realtime — refresh own requests and active break settings
   useEffect(() => {
-    if (isBreaksManager) return;
     const ch = supabase
       .channel("break-requests-self-rt")
       .on(
@@ -199,7 +191,7 @@ function BreaksPage() {
     return () => {
       supabase.removeChannel(ch);
     };
-  }, [qc, isBreaksManager]);
+  }, [qc]);
 
   // ---- Submit form
   const [settingId, setSettingId] = useState("");
@@ -250,13 +242,7 @@ function BreaksPage() {
 
   if (!me) return null;
 
-  if (isBreaksManager) {
-    return (
-      <div className="flex justify-center py-12">
-        <Loader2 className="size-6 animate-spin text-primary" />
-      </div>
-    );
-  }
+
 
   const myReqs = myReqQ.data ?? [];
 
