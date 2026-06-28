@@ -78,6 +78,7 @@ interface ProfileRow {
   is_active: boolean;
   on_leave: boolean;
   avatar_url: string | null;
+  deactivated_at: string | null;
 }
 
 const FILTER_LABELS: Record<FilterMode, string> = {
@@ -203,7 +204,7 @@ function EmployeesPage() {
       const [{ data, error }, { data: contacts, error: cErr }] = await Promise.all([
         supabase
           .from("profiles")
-          .select("id, full_name, department_id, job_title, is_active, on_leave, avatar_url")
+          .select("id, full_name, department_id, job_title, is_active, on_leave, avatar_url, deactivated_at")
           .order("full_name"),
         supabase.rpc("list_profiles_contact"),
       ]);
@@ -635,24 +636,38 @@ function CreateEmployeeDialog({
     on_leave: boolean;
   };
   const [duplicate, setDuplicate] = useState<DuplicateInfo | null>(null);
+  type ArchivedInfo = {
+    id: string;
+    full_name: string;
+    job_title: string | null;
+    department_name: string | null;
+    archived_at: string;
+    deactivated_at: string | null;
+  };
+  const [archived, setArchived] = useState<ArchivedInfo | null>(null);
+  const [viewingArchive, setViewingArchive] = useState<ArchivedInfo | null>(null);
   const setActiveFn = useServerFn(setEmployeeActive);
 
-  const mutation = useMutation({
-    mutationFn: async () => {
-      if (!form.department_id) throw new Error("יש לבחור מחלקה");
-      if (!/^\d{5,15}$/.test(form.id_number)) throw new Error("מספר זהות חייב להכיל 5–15 ספרות");
-      if (form.password.length < 6) throw new Error("סיסמה ראשונית של 6 תווים לפחות");
-      if (!form.full_name.trim()) throw new Error("יש למלא שם עובד");
-      const res = await createFn({ data: { ...form, job_title: "", avatar_url: null } });
-      if (avatarFile && res?.id) {
-        try {
-          const path = await uploadAvatar(avatarFile, res.id);
-          await supabase.from("profiles").update({ avatar_url: path }).eq("id", res.id);
-        } catch (e: any) {
-          toast.error("העובד נוצר אך העלאת התמונה נכשלה: " + (e?.message ?? ""));
-        }
+  const runCreate = async (forceArchived: boolean) => {
+    if (!form.department_id) throw new Error("יש לבחור מחלקה");
+    if (!/^\d{5,15}$/.test(form.id_number)) throw new Error("מספר זהות חייב להכיל 5–15 ספרות");
+    if (form.password.length < 6) throw new Error("סיסמה ראשונית של 6 תווים לפחות");
+    if (!form.full_name.trim()) throw new Error("יש למלא שם עובד");
+    const res = await createFn({
+      data: { ...form, job_title: "", avatar_url: null, force_archived: forceArchived },
+    });
+    if (avatarFile && res?.id) {
+      try {
+        const path = await uploadAvatar(avatarFile, res.id);
+        await supabase.from("profiles").update({ avatar_url: path }).eq("id", res.id);
+      } catch (e: any) {
+        toast.error("העובד נוצר אך העלאת התמונה נכשלה: " + (e?.message ?? ""));
       }
-    },
+    }
+  };
+
+  const mutation = useMutation({
+    mutationFn: () => runCreate(false),
     onSuccess: () => {
       toast.success("העובד נוצר. סיסמה ראשונית — העובד יחויב להחליפה בכניסה הראשונה.");
       qc.invalidateQueries({ queryKey: ["employees"] });
@@ -669,6 +684,16 @@ function CreateEmployeeDialog({
         try {
           const parsed = JSON.parse(msg.slice(idx + "DUPLICATE_EMPLOYEE::".length));
           setDuplicate(parsed as DuplicateInfo);
+          return;
+        } catch {
+          // fall through to toast
+        }
+      }
+      const aidx = msg.indexOf("ARCHIVED_EXISTS::");
+      if (aidx >= 0) {
+        try {
+          const parsed = JSON.parse(msg.slice(aidx + "ARCHIVED_EXISTS::".length));
+          setArchived(parsed as ArchivedInfo);
           return;
         } catch {
           // fall through to toast
@@ -691,6 +716,22 @@ function CreateEmployeeDialog({
       toast.error(msg);
     },
   });
+
+  const forceCreateMutation = useMutation({
+    mutationFn: () => runCreate(true),
+    onSuccess: () => {
+      toast.success("עובד חדש נוצר בהצלחה");
+      qc.invalidateQueries({ queryKey: ["employees"] });
+      qc.invalidateQueries({ queryKey: ["all-roles"] });
+      qc.invalidateQueries({ queryKey: ["departments"] });
+      qc.invalidateQueries({ queryKey: ["dashboard", "stats"] });
+      qc.invalidateQueries({ queryKey: ["dashboard", "employees-total", "active"] });
+      setArchived(null);
+      onClose();
+    },
+    onError: (e: any) => toast.error(e?.message ?? "שגיאה ביצירת עובד"),
+  });
+
 
   const reactivateMutation = useMutation({
     mutationFn: async (userId: string) =>
@@ -885,6 +926,68 @@ function CreateEmployeeDialog({
           </AlertDialogContent>
         </AlertDialog>
       )}
+      {archived && (
+        <AlertDialog open onOpenChange={(o) => !o && setArchived(null)}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>ℹ️ מספר זהות זה היה קיים בעבר במערכת</AlertDialogTitle>
+              <AlertDialogDescription asChild>
+                <div className="space-y-3 text-right">
+                  <p className="text-sm text-muted-foreground">
+                    עובד עם מספר זהות זה הועבר לארכיון בעבר. ניתן ליצור עובד חדש לחלוטין — הרשומה החדשה לא תהיה מקושרת לארכיון.
+                  </p>
+                  <div className="rounded-md border border-border bg-muted/40 p-3 text-sm space-y-1.5">
+                    <div>👤 <span className="text-muted-foreground">שם:</span> <strong>{archived.full_name || "—"}</strong></div>
+                    <div>💼 <span className="text-muted-foreground">תפקיד:</span> <strong>{archived.job_title || "—"}</strong></div>
+                    <div>🏬 <span className="text-muted-foreground">מחלקה:</span> <strong>{archived.department_name || "—"}</strong></div>
+                    <div>📁 <span className="text-muted-foreground">הועבר לארכיון:</span> <strong>{new Date(archived.archived_at).toLocaleString("he-IL")}</strong></div>
+                  </div>
+                </div>
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter className="flex-col-reverse sm:flex-row sm:justify-end gap-2">
+              <AlertDialogCancel disabled={forceCreateMutation.isPending}>❌ ביטול</AlertDialogCancel>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setViewingArchive(archived)}
+              >
+                👁️ הצג נתוני הארכיון
+              </Button>
+              <AlertDialogAction
+                disabled={forceCreateMutation.isPending}
+                onClick={(e) => {
+                  e.preventDefault();
+                  forceCreateMutation.mutate();
+                }}
+              >
+                {forceCreateMutation.isPending ? <Loader2 className="size-4 animate-spin" /> : "✅ צור עובד חדש"}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+      )}
+      {viewingArchive && (
+        <Dialog open onOpenChange={(o) => !o && setViewingArchive(null)}>
+          <DialogContent className="max-w-md">
+            <DialogHeader>
+              <DialogTitle>📁 נתוני ארכיון (לצפייה בלבד)</DialogTitle>
+            </DialogHeader>
+            <div className="space-y-2 text-sm">
+              <div>👤 <span className="text-muted-foreground">שם:</span> <strong>{viewingArchive.full_name || "—"}</strong></div>
+              <div>💼 <span className="text-muted-foreground">תפקיד:</span> <strong>{viewingArchive.job_title || "—"}</strong></div>
+              <div>🏬 <span className="text-muted-foreground">מחלקה:</span> <strong>{viewingArchive.department_name || "—"}</strong></div>
+              {viewingArchive.deactivated_at && (
+                <div>🔴 <span className="text-muted-foreground">הושבת:</span> <strong>{new Date(viewingArchive.deactivated_at).toLocaleString("he-IL")}</strong></div>
+              )}
+              <div>📁 <span className="text-muted-foreground">הועבר לארכיון:</span> <strong>{new Date(viewingArchive.archived_at).toLocaleString("he-IL")}</strong></div>
+            </div>
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={() => setViewingArchive(null)}>סגור</Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      )}
     </Dialog>
   );
 }
@@ -919,6 +1022,14 @@ function EmployeeRow({
   canDelete: boolean;
   canReactivate: boolean;
 }) {
+  // Final-deletion is only allowed after a 30-day cooldown from deactivation.
+  // For active employees the button is not shown at all.
+  const daysSinceDeact = !emp.is_active && emp.deactivated_at
+    ? Math.floor((Date.now() - new Date(emp.deactivated_at).getTime()) / 86400000)
+    : null;
+  const daysRemaining = daysSinceDeact !== null ? Math.max(0, 30 - daysSinceDeact) : null;
+  const canFinalDelete = canDelete && !emp.is_active && daysRemaining === 0;
+  const showCountdown = canDelete && !emp.is_active && daysRemaining !== null && daysRemaining > 0;
 
   return (
     <Card className="card-elevated p-4">
@@ -935,6 +1046,11 @@ function EmployeeRow({
             <p className="font-semibold truncate">{emp.full_name || "ללא שם"}</p>
             {!emp.is_active && <Badge variant="destructive" className="rounded-full text-xs">לא פעיל</Badge>}
             {emp.on_leave && <Badge variant="secondary" className="rounded-full text-xs">בחופש</Badge>}
+            {showCountdown && (
+              <Badge variant="outline" className="rounded-full text-xs">
+                🗓️ מחיקה סופית בעוד {daysRemaining} ימים
+              </Badge>
+            )}
           </div>
           <p className="text-xs text-muted-foreground mt-0.5 truncate">
             {deptName ?? "ללא מחלקה"}
@@ -974,10 +1090,10 @@ function EmployeeRow({
               <Pencil className="size-4" />
             </Button>
           )}
-          {canDelete && (
-            <Button variant="ghost" size="sm" className="gap-1.5 text-destructive hover:text-destructive hover:bg-destructive/10" onClick={onDelete} aria-label="מחק עובד לצמיתות">
+          {canFinalDelete && (
+            <Button variant="ghost" size="sm" className="gap-1.5 text-destructive hover:text-destructive hover:bg-destructive/10" onClick={onDelete} aria-label="מחיקה סופית">
               <Trash2 className="size-4" />
-              <span className="hidden sm:inline">מחק לצמיתות</span>
+              <span className="hidden sm:inline">🗑️ מחיקה סופית</span>
             </Button>
           )}
         </div>
@@ -985,6 +1101,7 @@ function EmployeeRow({
     </Card>
   );
 }
+
 
 function DeleteEmployeeDialog({ employee, onClose }: { employee: ProfileRow; onClose: () => void }) {
   const qc = useQueryClient();
@@ -994,7 +1111,7 @@ function DeleteEmployeeDialog({ employee, onClose }: { employee: ProfileRow; onC
       await deleteFn({ data: { user_id: employee.id } });
     },
     onSuccess: () => {
-      toast.success("העובד נמחק לצמיתות מהמערכת");
+      toast.success("העובד הועבר לארכיון והוסר מהמערכת הפעילה");
       qc.invalidateQueries({ queryKey: ["employees"] });
       qc.invalidateQueries({ queryKey: ["all-roles"] });
       qc.invalidateQueries({ queryKey: ["departments"] });
@@ -1008,9 +1125,18 @@ function DeleteEmployeeDialog({ employee, onClose }: { employee: ProfileRow; onC
     <AlertDialog open onOpenChange={(o) => !o && !mutation.isPending && onClose()}>
       <AlertDialogContent>
         <AlertDialogHeader>
-          <AlertDialogTitle>מחיקת עובד לצמיתות</AlertDialogTitle>
-          <AlertDialogDescription>
-            פעולה זו תמחק את <strong>{employee.full_name || "העובד"}</strong> לצמיתות: חשבון ההתחברות, פרטי המחלקה, ההרשאות, תמונת הפרופיל וכל הנתונים. לא ניתן לבטל פעולה זו.
+          <AlertDialogTitle>🗑️ מחיקה סופית — {employee.full_name || "עובד"}</AlertDialogTitle>
+          <AlertDialogDescription asChild>
+            <div className="space-y-2 text-right">
+              <p>
+                ⚠️ פעולה זו תעביר את העובד <strong>לארכיון</strong> ותסיר אותו מהמערכת הפעילה.
+              </p>
+              <p>
+                הנתונים יישמרו לצורכי Audit בלבד ולא יוצגו במסכים הרגילים.
+                לאחר מכן <strong>לא ניתן יהיה לשחזר</strong> את העובד דרך המערכת.
+              </p>
+              <p>האם להמשיך?</p>
+            </div>
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
@@ -1023,13 +1149,14 @@ function DeleteEmployeeDialog({ employee, onClose }: { employee: ProfileRow; onC
             }}
             className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
           >
-            {mutation.isPending ? <Loader2 className="size-4 animate-spin" /> : "מחק לצמיתות"}
+            {mutation.isPending ? <Loader2 className="size-4 animate-spin" /> : "🗑️ העבר לארכיון"}
           </AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>
     </AlertDialog>
   );
 }
+
 
 function ResetPasswordDialog({ employee, onClose }: { employee: ProfileRow; onClose: () => void }) {
   const resetFn = useServerFn(resetEmployeePassword);

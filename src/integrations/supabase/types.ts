@@ -380,6 +380,65 @@ export type Database = {
         }
         Relationships: []
       }
+      employee_archive: {
+        Row: {
+          archived_at: string
+          archived_by: string | null
+          avatar_url: string | null
+          deactivated_at: string | null
+          department_id: string | null
+          department_name: string | null
+          full_name: string
+          id: string
+          id_number: string | null
+          job_title: string | null
+          original_id: string
+          phone: string | null
+          reason: string | null
+          snapshot: Json | null
+        }
+        Insert: {
+          archived_at?: string
+          archived_by?: string | null
+          avatar_url?: string | null
+          deactivated_at?: string | null
+          department_id?: string | null
+          department_name?: string | null
+          full_name: string
+          id?: string
+          id_number?: string | null
+          job_title?: string | null
+          original_id: string
+          phone?: string | null
+          reason?: string | null
+          snapshot?: Json | null
+        }
+        Update: {
+          archived_at?: string
+          archived_by?: string | null
+          avatar_url?: string | null
+          deactivated_at?: string | null
+          department_id?: string | null
+          department_name?: string | null
+          full_name?: string
+          id?: string
+          id_number?: string | null
+          job_title?: string | null
+          original_id?: string
+          phone?: string | null
+          reason?: string | null
+          snapshot?: Json | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "employee_archive_archived_by_fkey"
+            columns: ["archived_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       employee_of_month: {
         Row: {
           created_at: string
@@ -627,6 +686,7 @@ export type Database = {
         Row: {
           avatar_url: string | null
           created_at: string
+          deactivated_at: string | null
           department_id: string
           full_name: string
           id: string
@@ -641,6 +701,7 @@ export type Database = {
         Insert: {
           avatar_url?: string | null
           created_at?: string
+          deactivated_at?: string | null
           department_id: string
           full_name?: string
           id: string
@@ -655,6 +716,7 @@ export type Database = {
         Update: {
           avatar_url?: string | null
           created_at?: string
+          deactivated_at?: string | null
           department_id?: string
           full_name?: string
           id?: string
@@ -1410,6 +1472,10 @@ export type Database = {
       }
     }
     Functions: {
+      archive_employee: {
+        Args: { _reason?: string; _user_id: string }
+        Returns: string
+      }
       can_approve_task: {
         Args: { _approver_id: string; _task_id: string }
         Returns: boolean
@@ -1423,6 +1489,19 @@ export type Database = {
         Returns: boolean
       }
       end_my_break: { Args: { _id: string }; Returns: undefined }
+      find_archived_by_id_number: {
+        Args: { _id_number: string }
+        Returns: {
+          archived_at: string
+          deactivated_at: string
+          department_name: string
+          full_name: string
+          id: string
+          job_title: string
+          original_id: string
+          snapshot: Json
+        }[]
+      }
       find_profile_by_id_number: {
         Args: { _id_number: string }
         Returns: {
