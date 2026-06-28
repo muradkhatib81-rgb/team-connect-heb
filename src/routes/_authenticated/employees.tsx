@@ -512,7 +512,22 @@ function EmployeesPage() {
       )}
 
       {creating && isMainAdmin && (
-        <CreateEmployeeDialog depts={deptsQuery.data ?? []} onClose={() => setCreating(false)} />
+        <CreateEmployeeDialog
+          depts={deptsQuery.data ?? []}
+          onClose={() => setCreating(false)}
+          onEditExisting={(id) => {
+            const emp = (employeesQuery.data ?? []).find((e) => e.id === id);
+            if (emp) {
+              setCreating(false);
+              setEditing(emp);
+            }
+          }}
+          onViewExisting={(idNumber) => {
+            setCreating(false);
+            setSearchTerm(idNumber);
+            setFilter("all");
+          }}
+        />
       )}
     </div>
   );
