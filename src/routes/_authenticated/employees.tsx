@@ -786,7 +786,21 @@ function EmployeeRow({
           )}
         </div>
         <div className="flex items-center gap-1 shrink-0">
+          {canReactivate && !emp.is_active && (
+            <Button
+              variant="default"
+              size="sm"
+              className="gap-1.5 bg-green-600 hover:bg-green-700 text-white"
+              onClick={onReactivate}
+              disabled={reactivating}
+              aria-label="הפעל עובד"
+            >
+              {reactivating ? <Loader2 className="size-4 animate-spin" /> : <Power className="size-4" />}
+              <span className="hidden sm:inline">✅ הפעל עובד</span>
+            </Button>
+          )}
           {canResetPassword && (
+
             <Button variant="ghost" size="sm" className="gap-1.5" onClick={onResetPassword} aria-label="איפוס סיסמה">
               <KeyRound className="size-4" />
               <span className="hidden sm:inline">איפוס סיסמה</span>
