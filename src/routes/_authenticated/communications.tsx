@@ -763,26 +763,63 @@ function SentTab({
   );
 }
 
-// Lightweight announcement preview for the Sent screen
-function AnnouncementDetailDialog({ annId, onClose }: { annId: string; onClose: () => void }) {
+// Announcement preview dialog – used in Sent screen and as deep-link target
+function AnnouncementDetailDialog({
+  annId,
+  onClose,
+  showSender = false,
+}: {
+  annId: string;
+  onClose: () => void;
+  showSender?: boolean;
+}) {
+  const qc = useQueryClient();
   const q = useQuery({
     queryKey: ["comm", "ann-detail", annId],
     queryFn: async () => {
       const { data, error } = await supabase
         .from("announcements")
-        .select("id, title, body, priority, image_url, starts_at, ends_at, created_at, edited_at")
+        .select(
+          "id, title, body, priority, image_url, starts_at, ends_at, created_at, edited_at, sender_id, deleted_at",
+        )
         .eq("id", annId)
-        .single();
+        .maybeSingle();
       if (error) throw error;
       return data as any;
     },
   });
+
+  useEffect(() => {
+    if (!q.data || q.data.deleted_at) return;
+    markAnnouncementRead(annId)
+      .then(() => {
+        qc.invalidateQueries({ queryKey: ["comm"] });
+        qc.invalidateQueries({ queryKey: ["notif"] });
+        qc.invalidateQueries({ queryKey: ["shell-comm-unread"] });
+      })
+      .catch(() => {});
+  }, [annId, q.data, qc]);
+
   const d = q.data;
+  const missing = !q.isLoading && (!d || d.deleted_at);
+
   return (
     <Dialog open onOpenChange={(o) => !o && onClose()}>
       <DialogContent className="max-w-xl max-h-[90vh] overflow-y-auto" dir="rtl">
-        {!d ? (
+        {q.isLoading ? (
           <Loader2 className="mx-auto size-5 animate-spin" />
+        ) : missing ? (
+          <>
+            <DialogHeader>
+              <DialogTitle>הפריט אינו קיים עוד.</DialogTitle>
+              <DialogDescription>
+                הכרזה זו נמחקה או אינה זמינה. ההתראה הישנה הוסרה מהמערכת.
+              </DialogDescription>
+            </DialogHeader>
+            <DialogFooter>
+              <Button onClick={onClose}>סגור</Button>
+            </DialogFooter>
+          </>
         ) : (
           <>
             <DialogHeader>
@@ -795,6 +832,9 @@ function AnnouncementDetailDialog({ annId, onClose }: { annId: string; onClose: 
                 {d.ends_at && ` · בתוקף עד ${formatHeDateTime(d.ends_at)}`}
               </DialogDescription>
             </DialogHeader>
+            {showSender && d.sender_id && (
+              <CommSenderHeader senderId={d.sender_id} sentAt={d.created_at} />
+            )}
             {d.image_url && (
               <img src={d.image_url} alt="" className="w-full max-h-64 object-cover rounded-md" />
             )}
