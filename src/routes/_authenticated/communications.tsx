@@ -235,7 +235,7 @@ function CommunicationsPage() {
         </TabsContent>
         {canSeeSent && (
           <TabsContent value="sent" className="mt-4">
-            <SentTab userId={userId!} canManage={canManage} canDelete={canDelete} canViewReceipts={canViewReceipts} />
+            <SentTab userId={userId!} canManage={canManage} canDelete={canDelete} canViewReceipts={canViewReceipts} admin={admin} />
           </TabsContent>
         )}
         <TabsContent value="archive" className="mt-4">
