@@ -55,14 +55,23 @@ export const createEmployee = createServerFn({ method: "POST" })
 
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
 
-    // Pre-check: prevent duplicate ID numbers with a clear Hebrew message
+    // Pre-check: prevent duplicate ID numbers. If the existing employee is inactive, surface
+    // a structured error so the UI can offer reactivation instead of creating a new record.
     const { data: existing, error: exErr } = await supabaseAdmin
       .from("profiles")
-      .select("id")
+      .select("id, full_name, is_active")
       .eq("id_number", data.id_number)
       .maybeSingle();
     if (exErr) throw new Error(exErr.message);
-    if (existing) throw new Error("כבר קיים עובד עם מספר זהות זה.");
+    if (existing) {
+      if (existing.is_active === false) {
+        throw new Error(
+          `INACTIVE_EXISTS::${existing.id}::${existing.full_name ?? ""}`,
+        );
+      }
+      throw new Error("כבר קיים עובד פעיל עם מספר זהות זה.");
+    }
+
 
     const { data: created, error } = await supabaseAdmin.auth.admin.createUser({
       email: idEmail(data.id_number),
@@ -186,3 +195,27 @@ export const changeOwnPassword = createServerFn({ method: "POST" })
     if (pErr) throw new Error(pErr.message);
     return { ok: true };
   });
+
+const setActiveSchema = z.object({
+  user_id: z.string().uuid(),
+  is_active: z.boolean(),
+  note: z.string().trim().max(500).optional(),
+});
+
+export const setEmployeeActive = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((data: unknown) => setActiveSchema.parse(data))
+  .handler(async ({ data, context }) => {
+    await assertMainAdmin(context.supabase, context.userId);
+    if (data.user_id === context.userId && !data.is_active) {
+      throw new Error("לא ניתן להשבית את החשבון של עצמך");
+    }
+    const { error } = await context.supabase.rpc("set_employee_active", {
+      _user_id: data.user_id,
+      _active: data.is_active,
+      _note: data.note ?? undefined,
+    });
+    if (error) throw new Error(error.message);
+    return { ok: true };
+  });
+

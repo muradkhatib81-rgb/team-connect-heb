@@ -3,7 +3,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { useState, useMemo, useRef, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { createEmployee, resetEmployeePassword, deleteEmployee } from "@/lib/employees.functions";
+import { createEmployee, resetEmployeePassword, deleteEmployee, setEmployeeActive } from "@/lib/employees.functions";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -42,7 +42,7 @@ import {
   DialogTitle,
   DialogFooter,
 } from "@/components/ui/dialog";
-import { Search, Loader2, Pencil, UserPlus, Filter, ImagePlus, X, KeyRound, Trash2, Users, UserCheck, UserX, Plane, Coffee, Shield } from "lucide-react";
+import { Search, Loader2, Pencil, UserPlus, Filter, ImagePlus, X, KeyRound, Trash2, Users, UserCheck, UserX, Plane, Coffee, Shield, Power } from "lucide-react";
 import { toast } from "sonner";
 
 type FilterMode = "all" | "active" | "inactive" | "on_leave";
@@ -81,11 +81,12 @@ interface ProfileRow {
 }
 
 const FILTER_LABELS: Record<FilterMode, string> = {
-  all: "כל העובדים",
-  active: "פעילים בלבד",
-  inactive: "לא פעילים",
-  on_leave: "בחופש",
+  all: "👥 כל העובדים",
+  active: "🟢 עובדים פעילים",
+  inactive: "🔴 עובדים לא פעילים",
+  on_leave: "🟡 בחופש",
 };
+
 
 async function uploadAvatar(file: File, userId: string): Promise<string> {
   const ext = file.name.split(".").pop()?.toLowerCase() || "jpg";
@@ -141,7 +142,7 @@ function EmployeesPage() {
   const [resetting, setResetting] = useState<ProfileRow | null>(null);
   const [deleting, setDeleting] = useState<ProfileRow | null>(null);
 
-  const filterMode: FilterMode = search.filter ?? "all";
+  const filterMode: FilterMode = search.filter ?? "active";
   const allowedAdmin = me ? isAdmin(me.roles) : false;
   const isDeptManagerOnly =
     me ? me.roles.includes("department_manager") && !allowedAdmin : false;
@@ -157,6 +158,23 @@ function EmployeesPage() {
   const isDeptManager = me ? me.roles.includes("department_manager") : false;
   const allowed = allowedAdmin || isDeptManager;
   const isMainAdmin = me ? canManageUsers(me.roles) : false;
+
+  // Reactivation flow — flip is_active back to true and write an audit entry via RPC.
+  const setActiveFn = useServerFn(setEmployeeActive);
+  const reactivateMutation = useMutation({
+    mutationFn: async (userId: string) =>
+      setActiveFn({ data: { user_id: userId, is_active: true } }),
+    onSuccess: () => {
+      toast.success("העובד הופעל מחדש");
+      qcPage.invalidateQueries({ queryKey: ["employees"] });
+      qcPage.invalidateQueries({ queryKey: ["all-roles"] });
+      qcPage.invalidateQueries({ queryKey: ["departments"] });
+      qcPage.invalidateQueries({ queryKey: ["dashboard", "stats"] });
+      qcPage.invalidateQueries({ queryKey: ["dashboard", "employees-total", "active"] });
+    },
+    onError: (e: any) => toast.error(e?.message ?? "שגיאה בהפעלת העובד"),
+  });
+
 
   const deptsQuery = useQuery({
     enabled: allowed,
@@ -421,12 +439,13 @@ function EmployeesPage() {
           <div className="flex items-center gap-2">
             <Filter className="size-4 text-muted-foreground" />
             <Select value={filterMode} onValueChange={(v) => setFilter(v as FilterMode)}>
-              <SelectTrigger className="w-36"><SelectValue /></SelectTrigger>
+              <SelectTrigger className="w-48"><SelectValue /></SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">{FILTER_LABELS.all}</SelectItem>
                 <SelectItem value="active">{FILTER_LABELS.active}</SelectItem>
-                <SelectItem value="on_leave">{FILTER_LABELS.on_leave}</SelectItem>
                 <SelectItem value="inactive">{FILTER_LABELS.inactive}</SelectItem>
+                <SelectItem value="all">{FILTER_LABELS.all}</SelectItem>
+                <SelectItem value="on_leave">{FILTER_LABELS.on_leave}</SelectItem>
+
               </SelectContent>
             </Select>
             {!isDeptManagerOnly && (
@@ -462,11 +481,15 @@ function EmployeesPage() {
               onEdit={() => setEditing(emp)}
               onResetPassword={() => setResetting(emp)}
               onDelete={() => setDeleting(emp)}
+              onReactivate={() => reactivateMutation.mutate(emp.id)}
+              reactivating={reactivateMutation.isPending && reactivateMutation.variables === emp.id}
               canEdit={isMainAdmin}
               canResetPassword={isMainAdmin}
               canDelete={isMainAdmin && emp.id !== me?.id}
+              canReactivate={isMainAdmin}
             />
           ))}
+
         </div>
       )}
 
@@ -568,6 +591,10 @@ function CreateEmployeeDialog({ depts, onClose }: { depts: DeptOption[]; onClose
     role: "employee" as AppRole,
   });
   const [avatarFile, setAvatarFile] = useState<File | null>(null);
+  // When the server reports the id_number already belongs to an inactive employee
+  // we offer to reactivate that record instead of creating a duplicate.
+  const [inactiveMatch, setInactiveMatch] = useState<{ id: string; name: string } | null>(null);
+  const setActiveFn = useServerFn(setEmployeeActive);
 
   const mutation = useMutation({
     mutationFn: async () => {
@@ -591,10 +618,36 @@ function CreateEmployeeDialog({ depts, onClose }: { depts: DeptOption[]; onClose
       qc.invalidateQueries({ queryKey: ["all-roles"] });
       qc.invalidateQueries({ queryKey: ["departments"] });
       qc.invalidateQueries({ queryKey: ["dashboard", "stats"] });
+      qc.invalidateQueries({ queryKey: ["dashboard", "employees-total", "active"] });
       onClose();
     },
-    onError: (e: any) => toast.error(e?.message ?? "שגיאה ביצירת עובד"),
+    onError: (e: any) => {
+      const msg: string = e?.message ?? "שגיאה ביצירת עובד";
+      const m = msg.match(/INACTIVE_EXISTS::([0-9a-f-]+)::(.*)$/);
+      if (m) {
+        setInactiveMatch({ id: m[1], name: m[2] || "עובד" });
+        return;
+      }
+      toast.error(msg);
+    },
   });
+
+  const reactivateMutation = useMutation({
+    mutationFn: async (userId: string) =>
+      setActiveFn({ data: { user_id: userId, is_active: true } }),
+    onSuccess: () => {
+      toast.success("העובד הופעל מחדש");
+      qc.invalidateQueries({ queryKey: ["employees"] });
+      qc.invalidateQueries({ queryKey: ["all-roles"] });
+      qc.invalidateQueries({ queryKey: ["departments"] });
+      qc.invalidateQueries({ queryKey: ["dashboard", "stats"] });
+      qc.invalidateQueries({ queryKey: ["dashboard", "employees-total", "active"] });
+      setInactiveMatch(null);
+      onClose();
+    },
+    onError: (e: any) => toast.error(e?.message ?? "שגיאה בהפעלת העובד"),
+  });
+
 
   return (
     <Dialog open onOpenChange={(o) => !o && onClose()}>
@@ -700,9 +753,35 @@ function CreateEmployeeDialog({ depts, onClose }: { depts: DeptOption[]; onClose
           </DialogFooter>
         </form>
       </DialogContent>
+      {inactiveMatch && (
+        <AlertDialog open onOpenChange={(o) => !o && setInactiveMatch(null)}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>העובד כבר קיים במערכת</AlertDialogTitle>
+              <AlertDialogDescription>
+                העובד <strong>{inactiveMatch.name}</strong> כבר קיים במערכת ומוגדר כ-<strong>לא פעיל</strong>. כל הנתונים שלו נשמרו. ניתן להפעיל את העובד מחדש במקום ליצור רשומה חדשה.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel disabled={reactivateMutation.isPending}>סגירה</AlertDialogCancel>
+              <AlertDialogAction
+                disabled={reactivateMutation.isPending}
+                onClick={(e) => {
+                  e.preventDefault();
+                  reactivateMutation.mutate(inactiveMatch.id);
+                }}
+                className="bg-green-600 hover:bg-green-700 text-white"
+              >
+                {reactivateMutation.isPending ? <Loader2 className="size-4 animate-spin" /> : "✅ הפעל מחדש את העובד"}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+      )}
     </Dialog>
   );
 }
+
 
 function EmployeeRow({
   emp,
@@ -712,9 +791,12 @@ function EmployeeRow({
   onEdit,
   onResetPassword,
   onDelete,
+  onReactivate,
+  reactivating,
   canEdit,
   canResetPassword,
   canDelete,
+  canReactivate,
 }: {
   emp: ProfileRow;
   deptName: string | null;
@@ -723,10 +805,14 @@ function EmployeeRow({
   onEdit: () => void;
   onResetPassword: () => void;
   onDelete: () => void;
+  onReactivate: () => void;
+  reactivating: boolean;
   canEdit: boolean;
   canResetPassword: boolean;
   canDelete: boolean;
+  canReactivate: boolean;
 }) {
+
   return (
     <Card className="card-elevated p-4">
       <div className="flex items-center gap-4">
@@ -756,7 +842,21 @@ function EmployeeRow({
           )}
         </div>
         <div className="flex items-center gap-1 shrink-0">
+          {canReactivate && !emp.is_active && (
+            <Button
+              variant="default"
+              size="sm"
+              className="gap-1.5 bg-green-600 hover:bg-green-700 text-white"
+              onClick={onReactivate}
+              disabled={reactivating}
+              aria-label="הפעל עובד"
+            >
+              {reactivating ? <Loader2 className="size-4 animate-spin" /> : <Power className="size-4" />}
+              <span className="hidden sm:inline">✅ הפעל עובד</span>
+            </Button>
+          )}
           {canResetPassword && (
+
             <Button variant="ghost" size="sm" className="gap-1.5" onClick={onResetPassword} aria-label="איפוס סיסמה">
               <KeyRound className="size-4" />
               <span className="hidden sm:inline">איפוס סיסמה</span>

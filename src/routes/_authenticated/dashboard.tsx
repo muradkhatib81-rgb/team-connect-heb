@@ -66,18 +66,20 @@ function DashboardPage() {
   });
   const canSeeEmployeesCard = admin || !!employeesCardPermQ.data;
 
-  // Total employees count (company-wide, RLS-scoped)
+  // Active employees count (company-wide, RLS-scoped). Inactive employees are not counted here.
   const employeesTotalQ = useQuery({
     enabled: canSeeEmployeesCard,
-    queryKey: ["dashboard", "employees-total"],
+    queryKey: ["dashboard", "employees-total", "active"],
     queryFn: async () => {
       const { count, error } = await supabase
         .from("profiles")
-        .select("id", { count: "exact", head: true });
+        .select("id", { count: "exact", head: true })
+        .eq("is_active", true);
       if (error) throw error;
       return count ?? 0;
     },
   });
+
 
   const statsQuery = useQuery({
     enabled: admin,
@@ -922,7 +924,7 @@ function EmployeesTotalCard({ total, loading }: { total: number; loading: boolea
     <section>
       <button
         type="button"
-        onClick={() => navigate({ to: "/employees", search: { filter: "all", dept: "all" } as any })}
+        onClick={() => navigate({ to: "/employees", search: { filter: "active", dept: "all" } as any })}
         className="block w-full text-right"
         aria-label="פתח ניהול עובדים"
       >
@@ -933,7 +935,8 @@ function EmployeesTotalCard({ total, loading }: { total: number; loading: boolea
               <p className="text-3xl font-bold mt-2">
                 {loading ? <Loader2 className="size-6 animate-spin text-primary" /> : total}
               </p>
-              <p className="text-xs text-muted-foreground mt-1">סך העובדים הכולל של החברה</p>
+              <p className="text-xs text-muted-foreground mt-1">סך העובדים הפעילים</p>
+
             </div>
             <div className="size-12 rounded-xl bg-primary/10 text-primary flex items-center justify-center">
               <Users className="size-6" />
