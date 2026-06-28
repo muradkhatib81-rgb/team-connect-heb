@@ -202,30 +202,40 @@ function EmployeesPage() {
     return map;
   }, [deptsQuery.data]);
 
+  // Single source of truth: same profiles query the Dashboard uses.
+  // Contact details (id_number, phone) come from a separate RPC and are
+  // merged in as optional — a failure there must NOT empty the employees list.
   const employeesQuery = useQuery({
     enabled: allowed,
     queryKey: ["employees"],
     queryFn: async () => {
-      const [{ data, error }, { data: contacts, error: cErr }] = await Promise.all([
-        supabase
-          .from("profiles")
-          .select("id, full_name, department_id, job_title, is_active, on_leave, avatar_url, deactivated_at")
-          .order("full_name"),
-        supabase.rpc("list_profiles_contact"),
-      ]);
+      const { data, error } = await supabase
+        .from("profiles")
+        .select("id, full_name, department_id, job_title, is_active, on_leave, avatar_url, deactivated_at")
+        .order("full_name");
       if (error) throw error;
-      if (cErr) throw cErr;
-      const cmap: Record<string, { id_number: string | null; phone: string | null }> = {};
-      (contacts ?? []).forEach((c: any) => {
-        cmap[c.id] = { id_number: c.id_number ?? null, phone: c.phone ?? null };
-      });
-      return (data ?? []).map((p: any) => ({
-        ...p,
-        id_number: cmap[p.id]?.id_number ?? null,
-        phone: cmap[p.id]?.phone ?? null,
-      })) as ProfileRow[];
+      return (data ?? []) as ProfileRow[];
     },
   });
+
+  const contactsQuery = useQuery({
+    enabled: allowed,
+    queryKey: ["employees-contacts"],
+    queryFn: async () => {
+      const { data, error } = await supabase.rpc("list_profiles_contact");
+      if (error) {
+        // Non-fatal: viewer may lack the perm. Return empty map.
+        console.warn("list_profiles_contact failed:", error.message);
+        return {} as Record<string, { id_number: string | null; phone: string | null }>;
+      }
+      const cmap: Record<string, { id_number: string | null; phone: string | null }> = {};
+      (data ?? []).forEach((c: any) => {
+        cmap[c.id] = { id_number: c.id_number ?? null, phone: c.phone ?? null };
+      });
+      return cmap;
+    },
+  });
+
 
   const rolesQuery = useQuery({
     enabled: allowed,
@@ -286,10 +296,20 @@ function EmployeesPage() {
     return r.some((role) => role !== "employee");
   };
 
+  // Merge optional contact details (id_number, phone) into the profiles list.
+  const employees: ProfileRow[] = useMemo(() => {
+    const list = employeesQuery.data ?? [];
+    const cmap = contactsQuery.data ?? {};
+    return list.map((p) => ({
+      ...p,
+      id_number: cmap[p.id]?.id_number ?? null,
+      phone: cmap[p.id]?.phone ?? null,
+    }));
+  }, [employeesQuery.data, contactsQuery.data]);
+
   const filtered = useMemo(() => {
-    const data = employeesQuery.data ?? [];
     const term = searchTerm.trim().toLowerCase();
-    return data.filter((e) => {
+    return employees.filter((e) => {
       // Hide department manager from their own employees list
       if (isDeptManagerOnly && e.id === me?.id) return false;
       if (deptFilter !== "all" && e.department_id !== deptFilter) return false;
@@ -306,7 +326,8 @@ function EmployeesPage() {
         (e.phone ?? "").includes(term)
       );
     });
-  }, [employeesQuery.data, searchTerm, deptFilter, filterMode, isDeptManagerOnly, me?.id, onBreakSet, rolesMap]);
+  }, [employees, searchTerm, deptFilter, filterMode, isDeptManagerOnly, me?.id, onBreakSet, rolesMap]);
+
 
 
   // Manager's own department stats (excluding the manager themselves)
@@ -333,16 +354,16 @@ function EmployeesPage() {
   const avatarsQ = useSignedAvatarUrls((employeesQuery.data ?? []).map((e) => e.avatar_url));
   const avatarMap = avatarsQ.data ?? {};
 
-  // Top-level summary stats (company-wide, scoped by RLS via employeesQuery)
+  // Top-level summary stats — derived from the SAME merged employees list
+  // used by the table below, so every counter and the rendered rows stay in sync.
   const summaryStats = useMemo(() => {
-    const list = employeesQuery.data ?? [];
     const roles = rolesQuery.data ?? {};
     let managers = 0;
     let workers = 0;
     let active = 0;
     let onLeave = 0;
     let inactive = 0;
-    list.forEach((e) => {
+    employees.forEach((e) => {
       const r = roles[e.id] ?? [];
       const isManager = r.some((role) => role !== "employee");
       if (isManager) managers += 1;
@@ -352,7 +373,7 @@ function EmployeesPage() {
       if (!e.is_active) inactive += 1;
     });
     return {
-      total: list.length,
+      total: employees.length,
       active,
       managers,
       workers,
@@ -360,7 +381,8 @@ function EmployeesPage() {
       inactive,
       onBreak: onBreakSet.size,
     };
-  }, [employeesQuery.data, rolesQuery.data, onBreakSet]);
+  }, [employees, rolesQuery.data, onBreakSet]);
+
 
   if (meLoading) {
     return <div className="flex justify-center py-12"><Loader2 className="size-6 animate-spin text-primary" /></div>;
@@ -376,7 +398,7 @@ function EmployeesPage() {
     );
   }
 
-  const headerSubtitle = `${filtered.length} מתוך ${employeesQuery.data?.length ?? 0} עובדים · ${FILTER_LABELS[filterMode]}${deptFilter !== "all" && deptMap[deptFilter] ? ` · ${deptMap[deptFilter]}` : ""}`;
+  const headerSubtitle = `${filtered.length} מתוך ${employees.length} עובדים · ${FILTER_LABELS[filterMode]}${deptFilter !== "all" && deptMap[deptFilter] ? ` · ${deptMap[deptFilter]}` : ""}`;
 
   return (
     <div className="space-y-6">
@@ -493,11 +515,18 @@ function EmployeesPage() {
 
       {employeesQuery.isLoading ? (
         <div className="flex justify-center py-12"><Loader2 className="size-6 animate-spin text-primary" /></div>
+      ) : employeesQuery.isError ? (
+        <Card className="card-elevated p-6 text-center space-y-3">
+          <div className="text-destructive font-medium">שגיאה בטעינת רשימת העובדים</div>
+          <div className="text-sm text-muted-foreground">{(employeesQuery.error as Error)?.message ?? "לא ניתן לטעון נתונים"}</div>
+          <Button variant="outline" onClick={() => employeesQuery.refetch()}>נסה שוב</Button>
+        </Card>
       ) : filtered.length === 0 ? (
         <Card className="card-elevated p-10 text-center text-muted-foreground">
           לא נמצאו עובדים
         </Card>
       ) : (
+
         <div className="grid gap-3">
           {filtered.map((emp) => (
             <EmployeeRow
