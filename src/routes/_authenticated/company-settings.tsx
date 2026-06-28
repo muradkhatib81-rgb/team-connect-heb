@@ -1,16 +1,17 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/use-auth";
-import { useCompanySettings } from "@/lib/use-company-settings";
+import { useCompanySettings, type ScheduleType } from "@/lib/use-company-settings";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { toast } from "sonner";
-import { Loader2, Upload, Trash2, Building2 } from "lucide-react";
+import { Loader2, Upload, Trash2, Building2, CalendarRange } from "lucide-react";
 
 export const Route = createFileRoute("/_authenticated/company-settings")({
   ssr: false,
