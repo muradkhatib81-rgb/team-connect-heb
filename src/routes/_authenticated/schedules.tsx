@@ -819,13 +819,50 @@ function SchedulesPage() {
         </Card>
       ) : (
         <>
-          {visible.status === "rejected" && visible.rejection_note && (
-            <Card className="card-elevated p-4 border-destructive/40 bg-destructive/5">
+          {(visible.status === "rejected" || visible.status === "approved") && (
+            <Card
+              className={`card-elevated p-4 ${
+                visible.status === "rejected"
+                  ? "border-destructive/40 bg-destructive/5"
+                  : "border-success/40 bg-success/5"
+              }`}
+            >
               <div className="flex gap-2 items-start">
-                <AlertTriangle className="size-4 text-destructive mt-0.5" />
-                <div>
-                  <p className="font-semibold text-sm">הסידור נדחה — נדרשים תיקונים</p>
-                  <p className="text-sm mt-1">{visible.rejection_note}</p>
+                {visible.status === "rejected" ? (
+                  <AlertTriangle className="size-4 text-destructive mt-0.5" />
+                ) : (
+                  <CheckCircle2 className="size-4 text-success mt-0.5" />
+                )}
+                <div className="flex-1 min-w-0">
+                  <p className="font-semibold text-sm">
+                    {visible.status === "rejected" ? "הסידור נדחה — נדרשים תיקונים" : "הסידור אושר ופורסם"}
+                  </p>
+                  <div className="text-xs text-muted-foreground mt-1 space-y-0.5">
+                    <p>
+                      {visible.status === "rejected" ? "נדחה על ידי: " : "אושר על ידי: "}
+                      <span className="font-medium text-foreground">
+                        {decisionPersonQ.data?.full_name ?? "—"}
+                      </span>
+                      {decisionPersonQ.data?.role_label && (
+                        <span className="text-muted-foreground"> · {decisionPersonQ.data.role_label}</span>
+                      )}
+                      {decisionPersonQ.data?.job_title && (
+                        <span className="text-muted-foreground"> ({decisionPersonQ.data.job_title})</span>
+                      )}
+                    </p>
+                    <p>
+                      תאריך ושעה:{" "}
+                      <span className="font-medium text-foreground">
+                        {decisionPersonQ.data?.at ? formatHeDateTime(decisionPersonQ.data.at) : "—"}
+                      </span>
+                    </p>
+                  </div>
+                  {visible.status === "rejected" && visible.rejection_note && (
+                    <p className="text-sm mt-2 p-2 rounded bg-background/60 border border-destructive/20">
+                      <span className="font-semibold">סיבת דחייה: </span>
+                      {visible.rejection_note}
+                    </p>
+                  )}
                 </div>
               </div>
             </Card>
