@@ -688,12 +688,16 @@ function CreateEmployeeDialog({
     id: string;
     full_name: string;
     job_title: string | null;
+    department_id?: string | null;
     department_name: string | null;
+    phone?: string | null;
     archived_at: string;
     deactivated_at: string | null;
+    snapshot?: any;
   };
   const [archived, setArchived] = useState<ArchivedInfo | null>(null);
   const [viewingArchive, setViewingArchive] = useState<ArchivedInfo | null>(null);
+
   const setActiveFn = useServerFn(setEmployeeActive);
 
   const runCreate = async (forceArchived: boolean) => {
@@ -907,14 +911,14 @@ function CreateEmployeeDialog({
           <AlertDialogContent>
             <AlertDialogHeader>
               <AlertDialogTitle>
-                ⚠️ {duplicate.is_active ? "עובד זה כבר פעיל במערכת" : "מספר הזהות כבר קיים במערכת"}
+                ⚠️ {duplicate.is_active ? "עובד זה כבר רשום במערכת." : "עובד זה קיים במערכת ומסומן כלא פעיל."}
               </AlertDialogTitle>
               <AlertDialogDescription asChild>
                 <div className="space-y-3 text-right">
                   <p className="text-sm text-muted-foreground">
                     {duplicate.is_active
                       ? "לא ניתן ליצור עובד נוסף עם אותו מספר זהות. להלן פרטי העובד הקיים:"
-                      : "כל הנתונים של העובד נשמרו. ניתן להפעיל את העובד מחדש במקום ליצור רשומה חדשה."}
+                      : "כל הנתונים וההיסטוריה של העובד נשמרו. ניתן להפעיל אותו מחדש במקום ליצור רשומה חדשה."}
                   </p>
                   <div className="rounded-md border border-border bg-muted/40 p-3 text-sm space-y-1.5">
                     <div>👤 <span className="text-muted-foreground">שם:</span> <strong>{duplicate.name || "—"}</strong></div>
@@ -978,11 +982,11 @@ function CreateEmployeeDialog({
         <AlertDialog open onOpenChange={(o) => !o && setArchived(null)}>
           <AlertDialogContent>
             <AlertDialogHeader>
-              <AlertDialogTitle>ℹ️ מספר זהות זה היה קיים בעבר במערכת</AlertDialogTitle>
+              <AlertDialogTitle>ℹ️ עובד זה היה רשום בעבר במערכת.</AlertDialogTitle>
               <AlertDialogDescription asChild>
                 <div className="space-y-3 text-right">
                   <p className="text-sm text-muted-foreground">
-                    עובד עם מספר זהות זה הועבר לארכיון בעבר. ניתן ליצור עובד חדש לחלוטין — הרשומה החדשה לא תהיה מקושרת לארכיון.
+                    ניתן לשחזר את העובד הקודם עם כל הנתונים שנשמרו בארכיון, או לפתוח עבורו תקופת העסקה חדשה. ההיסטוריה הקודמת תישמר בארכיון בכל מקרה.
                   </p>
                   <div className="rounded-md border border-border bg-muted/40 p-3 text-sm space-y-1.5">
                     <div>👤 <span className="text-muted-foreground">שם:</span> <strong>{archived.full_name || "—"}</strong></div>
@@ -1002,19 +1006,44 @@ function CreateEmployeeDialog({
               >
                 👁️ הצג נתוני הארכיון
               </Button>
+              <Button
+                type="button"
+                variant="outline"
+                disabled={forceCreateMutation.isPending}
+                onClick={() => {
+                  // Restore: pre-fill the form from the archived snapshot so the
+                  // re-created profile carries the same name, job title, department
+                  // and phone. id_number stays the same. The archive row is kept
+                  // as historical record of the previous employment period.
+                  const snap = archived.snapshot ?? {};
+                  setForm((f) => ({
+                    ...f,
+                    full_name: archived.full_name || snap.full_name || f.full_name,
+                    department_id: archived.department_id || snap.department_id || f.department_id,
+                    phone: archived.phone || snap.phone || "",
+                  }));
+                  setArchived(null);
+                  setTimeout(() => forceCreateMutation.mutate(), 0);
+                }}
+              >
+                ♻️ שחזר את העובד הקודם
+              </Button>
               <AlertDialogAction
                 disabled={forceCreateMutation.isPending}
                 onClick={(e) => {
                   e.preventDefault();
+                  // Open a new employment period — keep the form as-is, force past
+                  // the archive guard. Archive row is preserved.
                   forceCreateMutation.mutate();
                 }}
               >
-                {forceCreateMutation.isPending ? <Loader2 className="size-4 animate-spin" /> : "✅ צור עובד חדש"}
+                {forceCreateMutation.isPending ? <Loader2 className="size-4 animate-spin" /> : "🆕 פתח העסקה חדשה"}
               </AlertDialogAction>
             </AlertDialogFooter>
           </AlertDialogContent>
         </AlertDialog>
       )}
+
       {viewingArchive && (
         <Dialog open onOpenChange={(o) => !o && setViewingArchive(null)}>
           <DialogContent className="max-w-md">
