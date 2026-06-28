@@ -469,7 +469,10 @@ function InboxTab({
       {selected && (
         <MessageDetailDialog
           messageId={selected}
-          onClose={() => setSelected(null)}
+          onClose={() => {
+            setSelected(null);
+            onClearDeepLink?.();
+          }}
           viewerMode="inbox"
           canDelete={canDelete}
         />
