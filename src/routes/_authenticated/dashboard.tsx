@@ -558,17 +558,7 @@ function EmployeeScheduleCard({ profile }: { profile: any }) {
   const SHIFT_LABEL: Record<string, string> = { morning: "בוקר", evening: "ערב", off: "חופש" };
 
   return (
-    <Card
-      className={`card-elevated p-4 relative ${
-        q.data?.scheduleModified ? "ring-2 ring-orange-500 border border-orange-500" : ""
-      }`}
-    >
-      {q.data?.scheduleModified && (
-        <RefreshCw
-          className="size-3 text-orange-600 absolute -top-1 -left-1 bg-background rounded-full p-0.5 box-content border border-orange-500"
-          aria-label="עודכן לאחר פרסום"
-        />
-      )}
+    <Card className="card-elevated p-4 relative">
       <div className="flex items-center justify-between mb-3">
         <h2 className="font-semibold text-base flex items-center gap-2">
           <CalendarDays className="size-5 text-primary" />
