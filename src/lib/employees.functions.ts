@@ -162,7 +162,7 @@ export const deleteEmployee = createServerFn({ method: "POST" })
     // Archive snapshot + cleanup (RPC enforces the 30-day window and admin check)
     const { error: arcErr } = await context.supabase.rpc("archive_employee", {
       _user_id: data.user_id,
-      _reason: data.reason ?? null,
+      _reason: data.reason ?? undefined,
     });
     if (arcErr) throw new Error(arcErr.message);
 
