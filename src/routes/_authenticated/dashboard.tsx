@@ -687,7 +687,6 @@ function EmployeeNotificationsCard({ userId }: { userId: string }) {
 
 function EmployeeNewMessagesCard({ userId }: { userId: string }) {
   const qc = useQueryClient();
-  const invalidateMessages = () => qc.invalidateQueries({ queryKey: ["emp-dash-msgs", userId] });
   const q = useQuery({
     queryKey: ["emp-dash-msgs", userId],
     queryFn: async () => {
@@ -704,6 +703,7 @@ function EmployeeNewMessagesCard({ userId }: { userId: string }) {
     },
   });
   useEffect(() => {
+    const invalidateMessages = () => qc.invalidateQueries({ queryKey: ["emp-dash-msgs", userId] });
     const ch = supabase
       .channel(`emp-dash-msg-${userId}`)
       .on(
@@ -765,7 +765,6 @@ function EmployeeNewMessagesCard({ userId }: { userId: string }) {
 
 function EmployeeNewAnnouncementsCard({ userId }: { userId: string }) {
   const qc = useQueryClient();
-  const invalidateAnnouncements = () => qc.invalidateQueries({ queryKey: ["emp-dash-anns", userId] });
   const q = useQuery({
     queryKey: ["emp-dash-anns", userId],
     queryFn: async () => {
@@ -795,6 +794,7 @@ function EmployeeNewAnnouncementsCard({ userId }: { userId: string }) {
     },
   });
   useEffect(() => {
+    const invalidateAnnouncements = () => qc.invalidateQueries({ queryKey: ["emp-dash-anns", userId] });
     const ch = supabase
       .channel(`emp-dash-ann-${userId}`)
       .on("postgres_changes", { event: "*", schema: "public", table: "announcements" }, () =>
