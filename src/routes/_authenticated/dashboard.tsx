@@ -194,6 +194,9 @@ function DashboardPage() {
       .on("postgres_changes", { event: "*", schema: "public", table: "tasks" }, () => {
         queryClient.invalidateQueries({ queryKey: ["dashboard", "tasks-stats"] });
       })
+      .on("postgres_changes", { event: "*", schema: "public", table: "break_requests" }, () => {
+        queryClient.invalidateQueries({ queryKey: ["dashboard", "stats"] });
+      })
       .subscribe();
     return () => {
       supabase.removeChannel(channel);
