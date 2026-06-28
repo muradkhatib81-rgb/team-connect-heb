@@ -897,8 +897,8 @@ function AnnouncementsTab({
   const list = q.data ?? [];
 
   return (
-    <>
-      {!list.length && !openAnn ? (
+    <div className="space-y-3">
+      {list.length === 0 ? (
         <Card className="p-8 text-center text-sm text-muted-foreground">אין הכרזות פעילות</Card>
       ) : (
         <div className="grid sm:grid-cols-2 gap-3">
@@ -906,25 +906,36 @@ function AnnouncementsTab({
             const canEditThis = a.sender_id === userId;
             const canDeleteThis = canDelete;
             return (
-          <AnnouncementCard
-            key={a.id}
-            ann={a}
-            userId={userId}
-            canEditThis={canEditThis}
-            canDeleteThis={canDeleteThis}
-            canViewReceipts={canViewReceipts}
-            onEdit={() => setEditAnn(a)}
-            onDelete={() => setDelAnn(a.id)}
-            onShowReceipts={() => setReceiptsAnn(a.id)}
-          />
-        );
-      })}
+              <AnnouncementCard
+                key={a.id}
+                ann={a}
+                userId={userId}
+                canEditThis={canEditThis}
+                canDeleteThis={canDeleteThis}
+                canViewReceipts={canViewReceipts}
+                onOpen={() => setOpenAnn(a.id)}
+                onEdit={() => setEditAnn(a)}
+                onDelete={() => setDelAnn(a.id)}
+                onShowReceipts={() => setReceiptsAnn(a.id)}
+              />
+            );
+          })}
+        </div>
+      )}
+
+      {openAnn && (
+        <AnnouncementDetailDialog
+          annId={openAnn}
+          showSender
+          onClose={() => {
+            setOpenAnn(null);
+            onClearDeepLink?.();
+          }}
+        />
+      )}
 
       {editAnn && (
-        <EditAnnouncementDialog
-          ann={editAnn}
-          onClose={() => setEditAnn(null)}
-        />
+        <EditAnnouncementDialog ann={editAnn} onClose={() => setEditAnn(null)} />
       )}
 
       {receiptsAnn && (
@@ -962,7 +973,6 @@ function AnnouncementsTab({
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-
     </div>
   );
 }
