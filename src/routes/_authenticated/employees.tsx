@@ -398,7 +398,7 @@ function EmployeesPage() {
     );
   }
 
-  const headerSubtitle = `${filtered.length} מתוך ${employeesQuery.data?.length ?? 0} עובדים · ${FILTER_LABELS[filterMode]}${deptFilter !== "all" && deptMap[deptFilter] ? ` · ${deptMap[deptFilter]}` : ""}`;
+  const headerSubtitle = `${filtered.length} מתוך ${employees.length} עובדים · ${FILTER_LABELS[filterMode]}${deptFilter !== "all" && deptMap[deptFilter] ? ` · ${deptMap[deptFilter]}` : ""}`;
 
   return (
     <div className="space-y-6">
