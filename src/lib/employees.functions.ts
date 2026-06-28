@@ -195,3 +195,27 @@ export const changeOwnPassword = createServerFn({ method: "POST" })
     if (pErr) throw new Error(pErr.message);
     return { ok: true };
   });
+
+const setActiveSchema = z.object({
+  user_id: z.string().uuid(),
+  is_active: z.boolean(),
+  note: z.string().trim().max(500).optional().nullable(),
+});
+
+export const setEmployeeActive = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((data: unknown) => setActiveSchema.parse(data))
+  .handler(async ({ data, context }) => {
+    await assertMainAdmin(context.supabase, context.userId);
+    if (data.user_id === context.userId && !data.is_active) {
+      throw new Error("לא ניתן להשבית את החשבון של עצמך");
+    }
+    const { error } = await context.supabase.rpc("set_employee_active", {
+      _user_id: data.user_id,
+      _active: data.is_active,
+      _note: data.note ?? null,
+    });
+    if (error) throw new Error(error.message);
+    return { ok: true };
+  });
+
