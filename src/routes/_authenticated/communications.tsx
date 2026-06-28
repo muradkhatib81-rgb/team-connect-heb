@@ -810,7 +810,19 @@ function AnnouncementDetailDialog({ annId, onClose }: { annId: string; onClose: 
 }
 
 // ---------------- Announcements ----------------
-function AnnouncementsTab({ userId, canDelete, canViewReceipts }: { userId: string; canDelete: boolean; canViewReceipts: boolean }) {
+function AnnouncementsTab({
+  userId,
+  canDelete,
+  canViewReceipts,
+  initialAnnouncementId,
+  onClearDeepLink,
+}: {
+  userId: string;
+  canDelete: boolean;
+  canViewReceipts: boolean;
+  initialAnnouncementId?: string | null;
+  onClearDeepLink?: () => void;
+}) {
   const qc = useQueryClient();
   const q = useQuery({
     queryKey: ["comm", "announcements", userId],
