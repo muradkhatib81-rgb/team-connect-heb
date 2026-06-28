@@ -280,6 +280,12 @@ function EmployeesPage() {
     };
   }, [allowed, qcPage]);
 
+  const rolesMap = rolesQuery.data ?? {};
+  const isManagerRole = (uid: string) => {
+    const r = rolesMap[uid] ?? [];
+    return r.some((role) => role !== "employee");
+  };
+
   const filtered = useMemo(() => {
     const data = employeesQuery.data ?? [];
     const term = searchTerm.trim().toLowerCase();
@@ -287,10 +293,12 @@ function EmployeesPage() {
       // Hide department manager from their own employees list
       if (isDeptManagerOnly && e.id === me?.id) return false;
       if (deptFilter !== "all" && e.department_id !== deptFilter) return false;
-      if (filterMode === "active" && (!e.is_active || e.on_leave)) return false;
+      if (filterMode === "active" && !e.is_active) return false;
       if (filterMode === "inactive" && e.is_active) return false;
       if (filterMode === "on_leave" && !e.on_leave) return false;
       if (filterMode === "on_break" && !onBreakSet.has(e.id)) return false;
+      if (filterMode === "managers" && !isManagerRole(e.id)) return false;
+      if (filterMode === "workers" && isManagerRole(e.id)) return false;
       if (!term) return true;
       return (
         e.full_name.toLowerCase().includes(term) ||
@@ -298,7 +306,8 @@ function EmployeesPage() {
         (e.phone ?? "").includes(term)
       );
     });
-  }, [employeesQuery.data, searchTerm, deptFilter, filterMode, isDeptManagerOnly, me?.id, onBreakSet]);
+  }, [employeesQuery.data, searchTerm, deptFilter, filterMode, isDeptManagerOnly, me?.id, onBreakSet, rolesMap]);
+
 
   // Manager's own department stats (excluding the manager themselves)
   const managerDeptStats = useMemo(() => {
