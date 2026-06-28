@@ -139,18 +139,11 @@ function BreaksPage() {
   const isBreaksManager =
     isMainAdmin || isBranchOrAssistant || !!permQ.data;
 
-  // Hard redirect: managers/admins must use the dedicated management screen.
-  useEffect(() => {
-    if (!me) return;
-    if (permQ.isLoading) return;
-    if (isBreaksManager) {
-      // Use replace to avoid leaving /breaks in the back-stack for managers.
-      window.location.replace("/breaks-admin");
-    }
-  }, [me, permQ.isLoading, isBreaksManager]);
+  // Managers are also employees: they may request their own break here.
+  // The dedicated /breaks-admin screen remains for approval/management.
 
   const settingsQ = useQuery({
-    enabled: !!me && !isBreaksManager,
+    enabled: !!me,
     queryKey: ["break-settings-active"],
     queryFn: async () => {
       const { data, error } = await supabase
