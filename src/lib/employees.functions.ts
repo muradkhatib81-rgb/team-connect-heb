@@ -83,7 +83,7 @@ export const createEmployee = createServerFn({ method: "POST" })
     if (!data.force_archived) {
       const { data: arch, error: aErr } = await supabaseAdmin
         .from("employee_archive")
-        .select("id, full_name, job_title, department_name, archived_at, deactivated_at")
+        .select("id, full_name, job_title, department_id, department_name, phone, archived_at, deactivated_at, snapshot")
         .eq("id_number", data.id_number)
         .order("archived_at", { ascending: false })
         .limit(1)
