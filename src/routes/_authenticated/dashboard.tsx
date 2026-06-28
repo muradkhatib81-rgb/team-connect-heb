@@ -415,14 +415,352 @@ function AdminDashboard({
   );
 }
 
-function EmployeeDashboard() {
+function EmployeeDashboard({ profile }: { profile: any }) {
   return (
-    <Card className="card-elevated p-6">
-      <h2 className="font-semibold text-lg mb-2">ברוך הבא למערכת</h2>
-      <p className="text-sm text-muted-foreground leading-relaxed">
-        כאן יוצגו בקרוב המשמרות, המשימות והעדכונים האישיים שלך.
-        בשלב זה ניתן לעיין בפרטי הפרופיל האישי שלך דרך התפריט.
+    <div className="space-y-6">
+      <EmployeeScheduleCard profile={profile} />
+      <EmployeeNotificationsCard userId={profile.id} />
+      <EmployeeNewMessagesCard userId={profile.id} />
+      <EmployeeNewAnnouncementsCard userId={profile.id} />
+    </div>
+  );
+}
+
+function getCurrentWeek() {
+  const now = new Date();
+  const d = new Date(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate()));
+  const dowFromSat = (d.getUTCDay() + 1) % 7;
+  d.setUTCDate(d.getUTCDate() - dowFromSat);
+  const start = d.toISOString().slice(0, 10);
+  const days = Array.from({ length: 7 }, (_, i) => {
+    const x = new Date(d);
+    x.setUTCDate(d.getUTCDate() + i);
+    return x.toISOString().slice(0, 10);
+  });
+  return { weekStart: start, weekEnd: days[6], weekDays: days };
+}
+
+function EmployeeScheduleCard({ profile }: { profile: any }) {
+  const qc = useQueryClient();
+  const { weekStart, weekEnd, weekDays } = useMemo(() => getCurrentWeek(), []);
+  const DAY_NAMES = ["שבת", "ראשון", "שני", "שלישי", "רביעי", "חמישי", "שישי"];
+  const heDate = (iso: string) =>
+    new Intl.DateTimeFormat("he-IL", {
+      timeZone: "Asia/Jerusalem",
+      day: "2-digit",
+      month: "2-digit",
+      numberingSystem: "latn",
+      calendar: "gregory",
+    }).format(new Date(iso + "T00:00:00Z"));
+
+  const q = useQuery({
+    enabled: !!profile?.department_id,
+    queryKey: ["emp-dash-schedule", profile.id, weekStart],
+    queryFn: async () => {
+      const { data: sched } = await supabase
+        .from("schedules")
+        .select("id, status, week_start, week_end, published_at, updated_at, approved_at")
+        .eq("department_id", profile.department_id)
+        .eq("week_start", weekStart)
+        .eq("status", "approved")
+        .maybeSingle();
+      if (!sched) return { sched: null, shifts: [] as any[] };
+      const { data: shifts } = await supabase
+        .from("schedule_shifts")
+        .select("day_date, shift, published_shift")
+        .eq("schedule_id", sched.id)
+        .eq("employee_id", profile.id);
+      return { sched, shifts: (shifts ?? []) as any[] };
+    },
+  });
+
+  useEffect(() => {
+    if (!profile?.department_id) return;
+    const ch = supabase
+      .channel(`emp-dash-sched-${profile.id}`)
+      .on("postgres_changes", { event: "*", schema: "public", table: "schedules" }, () =>
+        qc.invalidateQueries({ queryKey: ["emp-dash-schedule"] }),
+      )
+      .on("postgres_changes", { event: "*", schema: "public", table: "schedule_shifts" }, () =>
+        qc.invalidateQueries({ queryKey: ["emp-dash-schedule"] }),
+      )
+      .subscribe();
+    return () => {
+      supabase.removeChannel(ch);
+    };
+  }, [profile?.id, profile?.department_id, qc]);
+
+  const sched = q.data?.sched as any;
+  const shifts = (q.data?.shifts ?? []) as any[];
+  const shiftByDay = new Map<string, { shift: string; published_shift: string | null }>();
+  for (const s of shifts) shiftByDay.set(s.day_date, s);
+
+  // "Updated after publish" marker for the current week schedule.
+  // Persists for the whole week (driven by the schedule row itself).
+  // Resets naturally when a new week's schedule is created/published — this is a
+  // different row entirely so the previous week's marker is no longer queried.
+  const updatedAfterPublish =
+    !!sched &&
+    !!sched.published_at &&
+    !!sched.updated_at &&
+    new Date(sched.updated_at).getTime() - new Date(sched.published_at).getTime() > 1000;
+
+  const SHIFT_LABEL: Record<string, string> = { morning: "בוקר", evening: "ערב", off: "חופש" };
+
+  return (
+    <Card
+      className={`card-elevated p-4 ${
+        updatedAfterPublish ? "ring-2 ring-orange-500 border border-orange-500" : ""
+      }`}
+    >
+      <div className="flex items-center justify-between mb-3">
+        <h2 className="font-semibold text-base flex items-center gap-2">
+          <CalendarDays className="size-5 text-primary" />
+          סידור העבודה
+        </h2>
+        <Link to="/schedules" className="text-sm text-primary hover:underline">
+          לסידור המלא ←
+        </Link>
+      </div>
+
+      <p className="text-xs text-muted-foreground mb-3">
+        {heDate(weekStart)} – {heDate(weekEnd)}
       </p>
+
+      {updatedAfterPublish && (
+        <div className="mb-3 flex items-center gap-2 text-sm p-2 rounded bg-orange-500/10 border border-orange-500/30 text-orange-900 dark:text-orange-200">
+          <RefreshCw className="size-4 text-orange-600" />
+          <span>
+            🕒 עודכן לאחרונה:{" "}
+            <span className="font-medium">{formatHeDateTime(sched.updated_at)}</span>
+          </span>
+        </div>
+      )}
+
+      {!sched ? (
+        <p className="text-sm text-muted-foreground py-4">
+          טרם פורסם סידור עבודה מאושר לשבוע זה.
+        </p>
+      ) : (
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+          {weekDays.map((d, i) => {
+            const cell = shiftByDay.get(d);
+            const sh = cell?.shift ?? "off";
+            const tone =
+              sh === "morning"
+                ? "bg-amber-50 text-amber-900"
+                : sh === "evening"
+                  ? "bg-sky-50 text-sky-900"
+                  : "bg-emerald-50 text-emerald-900";
+            return (
+              <div key={d} className={`rounded-md p-2 text-center ${tone}`}>
+                <div className="text-xs font-medium">{DAY_NAMES[i]}</div>
+                <div className="text-[11px] text-muted-foreground">{heDate(d)}</div>
+                <div className="font-semibold mt-1">{SHIFT_LABEL[sh] ?? sh}</div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </Card>
+  );
+}
+
+function EmployeeNotificationsCard({ userId }: { userId: string }) {
+  const qc = useQueryClient();
+  const q = useQuery({
+    queryKey: ["emp-dash-notif", userId],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("schedule_notifications")
+        .select("id, message, created_at, read_at")
+        .eq("user_id", userId)
+        .order("created_at", { ascending: false })
+        .limit(5);
+      return data ?? [];
+    },
+  });
+  useEffect(() => {
+    const ch = supabase
+      .channel(`emp-dash-notif-${userId}`)
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "schedule_notifications", filter: `user_id=eq.${userId}` },
+        () => qc.invalidateQueries({ queryKey: ["emp-dash-notif", userId] }),
+      )
+      .subscribe();
+    return () => {
+      supabase.removeChannel(ch);
+    };
+  }, [userId, qc]);
+  const items = q.data ?? [];
+  return (
+    <Card className="card-elevated p-4">
+      <h2 className="font-semibold text-base flex items-center gap-2 mb-3">
+        <AlertTriangle className="size-5 text-primary" />
+        התראות
+      </h2>
+      {items.length === 0 ? (
+        <p className="text-sm text-muted-foreground">אין התראות חדשות.</p>
+      ) : (
+        <ul className="divide-y">
+          {items.map((n: any) => (
+            <li key={n.id} className="py-2 text-sm">
+              <p className={!n.read_at ? "font-medium" : ""}>{n.message}</p>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                {new Date(n.created_at).toLocaleString("he-IL")}
+              </p>
+            </li>
+          ))}
+        </ul>
+      )}
+    </Card>
+  );
+}
+
+function EmployeeNewMessagesCard({ userId }: { userId: string }) {
+  const qc = useQueryClient();
+  const q = useQuery({
+    queryKey: ["emp-dash-msgs", userId],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("message_recipients")
+        .select("message_id, delivered_at, message:messages!inner(id, title, created_at, deleted_at)")
+        .eq("user_id", userId)
+        .is("read_at", null)
+        .is("archived_at", null)
+        .order("delivered_at", { ascending: false })
+        .limit(5);
+      return ((data ?? []) as any[]).filter((r) => !r.message?.deleted_at);
+    },
+  });
+  useEffect(() => {
+    const ch = supabase
+      .channel(`emp-dash-msg-${userId}`)
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "message_recipients", filter: `user_id=eq.${userId}` },
+        () => qc.invalidateQueries({ queryKey: ["emp-dash-msgs", userId] }),
+      )
+      .subscribe();
+    return () => {
+      supabase.removeChannel(ch);
+    };
+  }, [userId, qc]);
+  const items = q.data ?? [];
+  return (
+    <Card className="card-elevated p-4">
+      <div className="flex items-center justify-between mb-3">
+        <h2 className="font-semibold text-base">📨 הודעות חדשות</h2>
+        <Link
+          to="/communications"
+          search={{ tab: "inbox" } as any}
+          className="text-sm text-primary hover:underline"
+        >
+          לכל ההודעות ←
+        </Link>
+      </div>
+      {items.length === 0 ? (
+        <p className="text-sm text-muted-foreground">אין הודעות חדשות.</p>
+      ) : (
+        <ul className="divide-y">
+          {items.map((r: any) => (
+            <li key={r.message_id} className="py-2 text-sm">
+              <Link
+                to="/communications"
+                search={{ tab: "inbox", msg: r.message_id } as any}
+                className="hover:underline font-medium"
+              >
+                {r.message.title}
+              </Link>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                {new Date(r.delivered_at ?? r.message.created_at).toLocaleString("he-IL")}
+              </p>
+            </li>
+          ))}
+        </ul>
+      )}
+    </Card>
+  );
+}
+
+function EmployeeNewAnnouncementsCard({ userId }: { userId: string }) {
+  const qc = useQueryClient();
+  const q = useQuery({
+    queryKey: ["emp-dash-anns", userId],
+    queryFn: async () => {
+      const nowIso = new Date().toISOString();
+      const { data: anns } = await supabase
+        .from("announcements")
+        .select("id, title, starts_at, ends_at, created_at, sender_id")
+        .is("deleted_at", null)
+        .neq("sender_id", userId)
+        .lte("starts_at", nowIso)
+        .order("starts_at", { ascending: false })
+        .limit(10);
+      const rows = ((anns ?? []) as any[]).filter((a) => !a.ends_at || a.ends_at > nowIso);
+      if (!rows.length) return [];
+      const { data: reads } = await supabase
+        .from("announcement_reads")
+        .select("announcement_id")
+        .in(
+          "announcement_id",
+          rows.map((r) => r.id),
+        )
+        .eq("user_id", userId);
+      const readSet = new Set((reads ?? []).map((r: any) => r.announcement_id));
+      return rows.filter((r) => !readSet.has(r.id)).slice(0, 5);
+    },
+  });
+  useEffect(() => {
+    const ch = supabase
+      .channel(`emp-dash-ann-${userId}`)
+      .on("postgres_changes", { event: "*", schema: "public", table: "announcements" }, () =>
+        qc.invalidateQueries({ queryKey: ["emp-dash-anns", userId] }),
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "announcement_reads", filter: `user_id=eq.${userId}` },
+        () => qc.invalidateQueries({ queryKey: ["emp-dash-anns", userId] }),
+      )
+      .subscribe();
+    return () => {
+      supabase.removeChannel(ch);
+    };
+  }, [userId, qc]);
+  const items = q.data ?? [];
+  return (
+    <Card className="card-elevated p-4">
+      <div className="flex items-center justify-between mb-3">
+        <h2 className="font-semibold text-base">📢 הכרזות חדשות</h2>
+        <Link
+          to="/communications"
+          search={{ tab: "announcements" } as any}
+          className="text-sm text-primary hover:underline"
+        >
+          לכל ההכרזות ←
+        </Link>
+      </div>
+      {items.length === 0 ? (
+        <p className="text-sm text-muted-foreground">אין הכרזות חדשות.</p>
+      ) : (
+        <ul className="divide-y">
+          {items.map((a: any) => (
+            <li key={a.id} className="py-2 text-sm">
+              <Link
+                to="/communications"
+                search={{ tab: "announcements", ann: a.id } as any}
+                className="hover:underline font-medium"
+              >
+                {a.title}
+              </Link>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                {new Date(a.starts_at ?? a.created_at).toLocaleString("he-IL")}
+              </p>
+            </li>
+          ))}
+        </ul>
+      )}
     </Card>
   );
 }
