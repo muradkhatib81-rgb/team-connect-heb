@@ -1984,7 +1984,7 @@ function OnBreakSection({ profile }: { profile: any }) {
     const t = setInterval(() => {
       qc.invalidateQueries({ queryKey: ["dashboard-on-break"] });
       qc.invalidateQueries({ queryKey: ["dashboard-daily-breaks"] });
-    }, 30_000);
+    }, 10_000);
     return () => {
       supabase.removeChannel(ch);
       clearInterval(t);
