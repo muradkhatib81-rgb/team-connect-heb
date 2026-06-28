@@ -424,10 +424,11 @@ function EmployeesPage() {
             <Select value={filterMode} onValueChange={(v) => setFilter(v as FilterMode)}>
               <SelectTrigger className="w-36"><SelectValue /></SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">{FILTER_LABELS.all}</SelectItem>
                 <SelectItem value="active">{FILTER_LABELS.active}</SelectItem>
-                <SelectItem value="on_leave">{FILTER_LABELS.on_leave}</SelectItem>
                 <SelectItem value="inactive">{FILTER_LABELS.inactive}</SelectItem>
+                <SelectItem value="all">{FILTER_LABELS.all}</SelectItem>
+                <SelectItem value="on_leave">{FILTER_LABELS.on_leave}</SelectItem>
+
               </SelectContent>
             </Select>
             {!isDeptManagerOnly && (
