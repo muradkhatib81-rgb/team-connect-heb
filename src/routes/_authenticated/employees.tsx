@@ -920,6 +920,14 @@ function EmployeeRow({
   canDelete: boolean;
   canReactivate: boolean;
 }) {
+  // Final-deletion is only allowed after a 30-day cooldown from deactivation.
+  // For active employees the button is not shown at all.
+  const daysSinceDeact = !emp.is_active && emp.deactivated_at
+    ? Math.floor((Date.now() - new Date(emp.deactivated_at).getTime()) / 86400000)
+    : null;
+  const daysRemaining = daysSinceDeact !== null ? Math.max(0, 30 - daysSinceDeact) : null;
+  const canFinalDelete = canDelete && !emp.is_active && daysRemaining === 0;
+  const showCountdown = canDelete && !emp.is_active && daysRemaining !== null && daysRemaining > 0;
 
   return (
     <Card className="card-elevated p-4">
@@ -936,6 +944,11 @@ function EmployeeRow({
             <p className="font-semibold truncate">{emp.full_name || "ללא שם"}</p>
             {!emp.is_active && <Badge variant="destructive" className="rounded-full text-xs">לא פעיל</Badge>}
             {emp.on_leave && <Badge variant="secondary" className="rounded-full text-xs">בחופש</Badge>}
+            {showCountdown && (
+              <Badge variant="outline" className="rounded-full text-xs">
+                🗓️ מחיקה סופית בעוד {daysRemaining} ימים
+              </Badge>
+            )}
           </div>
           <p className="text-xs text-muted-foreground mt-0.5 truncate">
             {deptName ?? "ללא מחלקה"}
@@ -975,10 +988,10 @@ function EmployeeRow({
               <Pencil className="size-4" />
             </Button>
           )}
-          {canDelete && (
-            <Button variant="ghost" size="sm" className="gap-1.5 text-destructive hover:text-destructive hover:bg-destructive/10" onClick={onDelete} aria-label="מחק עובד לצמיתות">
+          {canFinalDelete && (
+            <Button variant="ghost" size="sm" className="gap-1.5 text-destructive hover:text-destructive hover:bg-destructive/10" onClick={onDelete} aria-label="מחיקה סופית">
               <Trash2 className="size-4" />
-              <span className="hidden sm:inline">מחק לצמיתות</span>
+              <span className="hidden sm:inline">🗑️ מחיקה סופית</span>
             </Button>
           )}
         </div>
@@ -986,6 +999,7 @@ function EmployeeRow({
     </Card>
   );
 }
+
 
 function DeleteEmployeeDialog({ employee, onClose }: { employee: ProfileRow; onClose: () => void }) {
   const qc = useQueryClient();
