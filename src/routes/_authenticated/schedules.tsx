@@ -94,6 +94,39 @@ const STATUS_VARIANT: Record<string, "default" | "secondary" | "outline" | "dest
 };
 const DAY_NAMES = ["ש'", "א'", "ב'", "ג'", "ד'", "ה'", "ו'"];
 
+type SchedulePersonMeta = {
+  id: string;
+  full_name: string;
+  job_title: string | null;
+  role_label: string | null;
+  at: string | null;
+} | null;
+
+function SchedulePersonMetaRow({
+  label,
+  person,
+  className = "text-muted-foreground",
+  fallback = "לא ידוע",
+}: {
+  label: string;
+  person: SchedulePersonMeta;
+  className?: string;
+  fallback?: string;
+}) {
+  const name = person?.full_name?.trim() || fallback;
+  const role = person?.role_label?.trim() || fallback;
+  const at = person?.at ? formatHeDateTime(person.at) : fallback;
+  return (
+    <div className={`text-xs flex flex-wrap gap-x-2 gap-y-0.5 ${className}`}>
+      <span>{label}</span>
+      <span className="font-medium text-foreground">👤 {name}</span>
+      <span>· 💼 {role}</span>
+      {person?.job_title && <span>({person.job_title})</span>}
+      <span>· 📅🕒 {at}</span>
+    </div>
+  );
+}
+
 function getWeekStart(date: Date): string {
   const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
   // Week starts on Saturday. getUTCDay(): 0=Sun..6=Sat → offset = (dow + 1) % 7
