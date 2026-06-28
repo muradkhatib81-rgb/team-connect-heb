@@ -558,17 +558,7 @@ function EmployeeScheduleCard({ profile }: { profile: any }) {
   const SHIFT_LABEL: Record<string, string> = { morning: "בוקר", evening: "ערב", off: "חופש" };
 
   return (
-    <Card
-      className={`card-elevated p-4 relative ${
-        q.data?.scheduleModified ? "ring-2 ring-orange-500 border border-orange-500" : ""
-      }`}
-    >
-      {q.data?.scheduleModified && (
-        <RefreshCw
-          className="size-3 text-orange-600 absolute -top-1 -left-1 bg-background rounded-full p-0.5 box-content border border-orange-500"
-          aria-label="עודכן לאחר פרסום"
-        />
-      )}
+    <Card className="card-elevated p-4 relative">
       <div className="flex items-center justify-between mb-3">
         <h2 className="font-semibold text-base flex items-center gap-2">
           <CalendarDays className="size-5 text-primary" />
@@ -999,24 +989,29 @@ function SchedulesStatsSection({ profile }: { profile: any }) {
       );
       const ids = weekScheds.map((s) => s.id);
       const weekCounts: Record<string, { morning: number; evening: number; off: number }> = {};
-      const hasScheduleModified = weekScheds.some(
-        (s) =>
-          !!s.published_at &&
-          !!s.updated_at &&
-          new Date(s.updated_at).getTime() > new Date(s.published_at).getTime(),
-      );
-      for (const d of weekDays) weekCounts[d] = { morning: 0, evening: 0, off: 0 };
+      const modifiedCells: Record<string, { morning: boolean; evening: boolean; off: boolean }> = {};
+      for (const d of weekDays) {
+        weekCounts[d] = { morning: 0, evening: 0, off: 0 };
+        modifiedCells[d] = { morning: false, evening: false, off: false };
+      }
       if (ids.length) {
         const { data: shifts } = await supabase
           .from("schedule_shifts")
-          .select("shift, day_date")
+          .select("shift, day_date, published_shift")
           .in("schedule_id", ids)
           .gte("day_date", weekStart)
           .lte("day_date", weekEnd);
-        for (const s of (shifts ?? []) as { shift: string; day_date: string }[]) {
+        for (const s of (shifts ?? []) as { shift: string; day_date: string; published_shift: string | null }[]) {
           const b = weekCounts[s.day_date];
           if (b && (s.shift === "morning" || s.shift === "evening" || s.shift === "off")) {
             (b as any)[s.shift] += 1;
+          }
+          const m = modifiedCells[s.day_date];
+          if (m && (s.shift ?? null) !== (s.published_shift ?? null)) {
+            const cur = s.shift as "morning" | "evening" | "off" | null;
+            const pub = (s.published_shift ?? null) as "morning" | "evening" | "off" | null;
+            if (cur && (cur === "morning" || cur === "evening" || cur === "off")) m[cur] = true;
+            if (pub && (pub === "morning" || pub === "evening" || pub === "off")) m[pub] = true;
           }
         }
       }
@@ -1025,7 +1020,7 @@ function SchedulesStatsSection({ profile }: { profile: any }) {
         approved,
         weekCounts,
         hasAnyApproved: ids.length > 0,
-        hasScheduleModified,
+        modifiedCells,
         notSubmittedCount: notSubmittedDepts.length,
         notSubmittedDepts,
       };
@@ -1097,17 +1092,7 @@ function SchedulesStatsSection({ profile }: { profile: any }) {
       )}
 
 
-      <Card
-        className={`card-elevated p-0 overflow-auto relative ${
-          s.hasScheduleModified ? "ring-2 ring-orange-500 border border-orange-500" : ""
-        }`}
-      >
-        {s.hasScheduleModified && (
-          <RefreshCw
-            className="size-3 text-orange-600 absolute -top-1 -left-1 bg-background rounded-full p-0.5 box-content border border-orange-500"
-            aria-label="עודכן לאחר פרסום"
-          />
-        )}
+      <Card className="card-elevated p-0 overflow-auto relative">
         <div className="px-4 pt-4 pb-2 flex items-center justify-between">
           <p className="font-semibold text-sm">סיכום שבועי</p>
           <p className="text-xs text-muted-foreground">
@@ -1131,6 +1116,7 @@ function SchedulesStatsSection({ profile }: { profile: any }) {
             <tbody>
               {weekDays.map((d, i) => {
                 const c = s.weekCounts[d];
+                const m = s.modifiedCells?.[d];
                 return (
                   <tr key={d} className="border-t">
                     <td className="p-3 font-medium">
@@ -1140,15 +1126,26 @@ function SchedulesStatsSection({ profile }: { profile: any }) {
                     {(["morning", "evening", "off"] as const).map((sh) => {
                       const shiftBg =
                         sh === "morning" ? "bg-amber-50" : sh === "evening" ? "bg-sky-50" : "bg-emerald-50";
+                      const isModified = !!m?.[sh];
                       return (
                         <td key={sh} className={`p-2 text-center ${shiftBg}`}>
-                          <button
-                            type="button"
-                            onClick={() => setShiftCell({ day: d, shift: sh })}
-                            className="inline-flex min-w-12 px-3 py-1.5 rounded-md hover:bg-accent/40 font-semibold"
-                          >
-                            {c[sh]}
-                          </button>
+                          <div className={`relative inline-block ${isModified ? "" : ""}`}>
+                            <button
+                              type="button"
+                              onClick={() => setShiftCell({ day: d, shift: sh })}
+                              className={`relative inline-flex min-w-12 px-3 py-1.5 rounded-md hover:bg-accent/40 font-semibold ${
+                                isModified ? "ring-2 ring-orange-500 border border-orange-500" : ""
+                              }`}
+                            >
+                              {c[sh]}
+                              {isModified && (
+                                <RefreshCw
+                                  className="size-3 text-orange-600 absolute -top-1 -left-1 bg-background rounded-full p-0.5 box-content border border-orange-500"
+                                  aria-label="עודכן לאחר פרסום"
+                                />
+                              )}
+                            </button>
+                          </div>
                         </td>
                       );
                     })}
@@ -1159,6 +1156,7 @@ function SchedulesStatsSection({ profile }: { profile: any }) {
           </table>
         )}
       </Card>
+
 
       <ApprovedSchedulesDialog
         open={approvedOpen}
