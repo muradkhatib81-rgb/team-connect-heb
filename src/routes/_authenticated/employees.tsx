@@ -324,6 +324,7 @@ function EmployeesPage() {
     const roles = rolesQuery.data ?? {};
     let managers = 0;
     let workers = 0;
+    let active = 0;
     let onLeave = 0;
     let inactive = 0;
     list.forEach((e) => {
@@ -331,18 +332,20 @@ function EmployeesPage() {
       const isManager = r.some((role) => role !== "employee");
       if (isManager) managers += 1;
       else workers += 1;
+      if (e.is_active && !e.on_leave) active += 1;
       if (e.on_leave) onLeave += 1;
       if (!e.is_active) inactive += 1;
     });
     return {
       total: list.length,
+      active,
       managers,
       workers,
       onLeave,
       inactive,
-      onBreak: activeBreaksQ.data ?? 0,
+      onBreak: onBreakSet.size,
     };
-  }, [employeesQuery.data, rolesQuery.data, activeBreaksQ.data]);
+  }, [employeesQuery.data, rolesQuery.data, onBreakSet]);
 
   if (meLoading) {
     return <div className="flex justify-center py-12"><Loader2 className="size-6 animate-spin text-primary" /></div>;
