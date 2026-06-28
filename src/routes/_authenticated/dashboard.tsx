@@ -989,24 +989,29 @@ function SchedulesStatsSection({ profile }: { profile: any }) {
       );
       const ids = weekScheds.map((s) => s.id);
       const weekCounts: Record<string, { morning: number; evening: number; off: number }> = {};
-      const hasScheduleModified = weekScheds.some(
-        (s) =>
-          !!s.published_at &&
-          !!s.updated_at &&
-          new Date(s.updated_at).getTime() > new Date(s.published_at).getTime(),
-      );
-      for (const d of weekDays) weekCounts[d] = { morning: 0, evening: 0, off: 0 };
+      const modifiedCells: Record<string, { morning: boolean; evening: boolean; off: boolean }> = {};
+      for (const d of weekDays) {
+        weekCounts[d] = { morning: 0, evening: 0, off: 0 };
+        modifiedCells[d] = { morning: false, evening: false, off: false };
+      }
       if (ids.length) {
         const { data: shifts } = await supabase
           .from("schedule_shifts")
-          .select("shift, day_date")
+          .select("shift, day_date, published_shift")
           .in("schedule_id", ids)
           .gte("day_date", weekStart)
           .lte("day_date", weekEnd);
-        for (const s of (shifts ?? []) as { shift: string; day_date: string }[]) {
+        for (const s of (shifts ?? []) as { shift: string; day_date: string; published_shift: string | null }[]) {
           const b = weekCounts[s.day_date];
           if (b && (s.shift === "morning" || s.shift === "evening" || s.shift === "off")) {
             (b as any)[s.shift] += 1;
+          }
+          const m = modifiedCells[s.day_date];
+          if (m && (s.shift ?? null) !== (s.published_shift ?? null)) {
+            const cur = s.shift as "morning" | "evening" | "off" | null;
+            const pub = (s.published_shift ?? null) as "morning" | "evening" | "off" | null;
+            if (cur && (cur === "morning" || cur === "evening" || cur === "off")) m[cur] = true;
+            if (pub && (pub === "morning" || pub === "evening" || pub === "off")) m[pub] = true;
           }
         }
       }
@@ -1015,7 +1020,7 @@ function SchedulesStatsSection({ profile }: { profile: any }) {
         approved,
         weekCounts,
         hasAnyApproved: ids.length > 0,
-        hasScheduleModified,
+        modifiedCells,
         notSubmittedCount: notSubmittedDepts.length,
         notSubmittedDepts,
       };
