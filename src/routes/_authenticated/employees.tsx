@@ -735,9 +735,12 @@ function EmployeeRow({
   onEdit,
   onResetPassword,
   onDelete,
+  onReactivate,
+  reactivating,
   canEdit,
   canResetPassword,
   canDelete,
+  canReactivate,
 }: {
   emp: ProfileRow;
   deptName: string | null;
@@ -746,10 +749,14 @@ function EmployeeRow({
   onEdit: () => void;
   onResetPassword: () => void;
   onDelete: () => void;
+  onReactivate: () => void;
+  reactivating: boolean;
   canEdit: boolean;
   canResetPassword: boolean;
   canDelete: boolean;
+  canReactivate: boolean;
 }) {
+
   return (
     <Card className="card-elevated p-4">
       <div className="flex items-center gap-4">
