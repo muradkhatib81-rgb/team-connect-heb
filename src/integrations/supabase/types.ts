@@ -1371,6 +1371,17 @@ export type Database = {
           user_id: string
         }[]
       }
+      get_communication_sender: {
+        Args: { _user_id: string }
+        Returns: {
+          avatar_url: string
+          department_name: string
+          full_name: string
+          job_title: string
+          top_role: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }[]
+      }
       get_department_coworkers: {
         Args: never
         Returns: {
