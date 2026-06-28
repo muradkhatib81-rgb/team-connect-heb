@@ -2070,25 +2070,39 @@ function OnBreakSection({ profile }: { profile: any }) {
       );
       const dids = Array.from(new Set(rows.map((r) => r.department_id).filter(Boolean)));
       const sids = Array.from(new Set(rows.map((r) => r.break_setting_id).filter(Boolean)));
-      const [{ data: profs }, { data: depts }, { data: settings }] = await Promise.all([
-        uids.length
-          ? supabase.from("profiles").select("id, full_name").in("id", uids)
-          : Promise.resolve({ data: [] as any[] }),
-        dids.length
-          ? supabase.from("departments").select("id, name").in("id", dids)
-          : Promise.resolve({ data: [] as any[] }),
-        sids.length
-          ? supabase.from("break_settings").select("id, name").in("id", sids)
-          : Promise.resolve({ data: [] as any[] }),
-      ]);
-      const pMap = new Map((profs ?? []).map((p: any) => [p.id, p.full_name]));
+      const [{ data: profs }, { data: depts }, { data: settings }, { data: meta }] =
+        await Promise.all([
+          uids.length
+            ? supabase.from("profiles").select("id, full_name, job_title").in("id", uids)
+            : Promise.resolve({ data: [] as any[] }),
+          dids.length
+            ? supabase.from("departments").select("id, name").in("id", dids)
+            : Promise.resolve({ data: [] as any[] }),
+          sids.length
+            ? supabase.from("break_settings").select("id, name").in("id", sids)
+            : Promise.resolve({ data: [] as any[] }),
+          uids.length
+            ? (supabase as any).rpc("get_profiles_basic_info", { user_ids: uids })
+            : Promise.resolve({ data: [] as any[] }),
+        ]);
+      const pMap = new Map((profs ?? []).map((p: any) => [p.id, p]));
       const dMap = new Map((depts ?? []).map((d: any) => [d.id, d.name]));
       const sMap = new Map((settings ?? []).map((s: any) => [s.id, s.name]));
+      const mMap = new Map((meta ?? []).map((m: any) => [m.id, m]));
       return rows.map((r) => ({
         id: r.id,
-        name: pMap.get(r.user_id) ?? "—",
+        userId: r.user_id as string,
+        name: (pMap.get(r.user_id) as any)?.full_name ?? "—",
+        jobTitle:
+          (mMap.get(r.user_id) as any)?.job_title ??
+          (pMap.get(r.user_id) as any)?.job_title ??
+          null,
+        roleLabel: (mMap.get(r.user_id) as any)?.role_label ?? null,
+        departmentId: r.department_id as string | null,
         department: dMap.get(r.department_id) ?? "—",
+        typeId: r.break_setting_id as string | null,
         type: sMap.get(r.break_setting_id) ?? "הפסקה",
+        durationMinutes: r.duration_minutes as number,
         createdAt: r.created_at as string | null,
         requestedTime: r.requested_at as string | null,
         approvedTime: r.approved_at_time as string | null,
@@ -2097,10 +2111,11 @@ function OnBreakSection({ profile }: { profile: any }) {
         endsAt: r.ends_at as string | null,
         completedAt: r.completed_at as string | null,
         status: r.status as string,
-        approverName: r.approved_by ? pMap.get(r.approved_by) ?? "—" : "—",
+        approverName: r.approved_by ? (pMap.get(r.approved_by) as any)?.full_name ?? "—" : "—",
       }));
     },
   });
+
 
 
   // Realtime + minute tick for countdown
