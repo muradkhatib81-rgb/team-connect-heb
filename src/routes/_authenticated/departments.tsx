@@ -171,9 +171,8 @@ function DepartmentsPage() {
                     <Building2 className="size-5" />
                   </div>
                 </div>
-                <div className="mt-4 grid grid-cols-2 gap-3">
+                <div className="mt-4">
                   <Stat label="סך עובדים" value={c.total} />
-                  <Stat label="פעילים" value={c.active} />
                 </div>
                 <div className="flex items-center justify-between mt-4">
                   {!d.is_active && (
