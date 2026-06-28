@@ -284,6 +284,7 @@ function EmployeesPage() {
       if (filterMode === "active" && (!e.is_active || e.on_leave)) return false;
       if (filterMode === "inactive" && e.is_active) return false;
       if (filterMode === "on_leave" && !e.on_leave) return false;
+      if (filterMode === "on_break" && !onBreakSet.has(e.id)) return false;
       if (!term) return true;
       return (
         e.full_name.toLowerCase().includes(term) ||
@@ -291,7 +292,7 @@ function EmployeesPage() {
         (e.phone ?? "").includes(term)
       );
     });
-  }, [employeesQuery.data, searchTerm, deptFilter, filterMode, isDeptManagerOnly, me?.id]);
+  }, [employeesQuery.data, searchTerm, deptFilter, filterMode, isDeptManagerOnly, me?.id, onBreakSet]);
 
   // Manager's own department stats (excluding the manager themselves)
   const managerDeptStats = useMemo(() => {
