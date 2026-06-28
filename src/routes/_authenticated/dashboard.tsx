@@ -475,11 +475,13 @@ function EmployeeScheduleCard({ profile }: { profile: any }) {
       const { data: shifts, error: shiftsErr } = await supabase
         .from("schedule_shifts")
         .select("employee_id, day_date, shift, published_shift")
-        .eq("schedule_id", sched.id);
+        .eq("schedule_id", sched.id)
+        .eq("employee_id", profile.id);
       if (shiftsErr) throw shiftsErr;
-      const scheduleModified = ((shifts ?? []) as any[]).some(
-        (row) => (row.shift ?? null) !== (row.published_shift ?? null),
-      );
+      const scheduleModified =
+        !!sched.published_at &&
+        !!sched.updated_at &&
+        new Date(sched.updated_at).getTime() > new Date(sched.published_at).getTime();
 
       let approver: any = null;
       let editedBeforeApproval = false;
@@ -524,7 +526,7 @@ function EmployeeScheduleCard({ profile }: { profile: any }) {
       }
       return {
         sched,
-        shifts: ((shifts ?? []) as any[]).filter((row) => row.employee_id === profile.id),
+        shifts: (shifts ?? []) as any[],
         approver,
         editedBeforeApproval,
         scheduleModified,
@@ -954,7 +956,7 @@ function SchedulesStatsSection({ profile }: { profile: any }) {
     queryKey: ["dashboard-schedules", profile.id, weekStart],
     queryFn: async () => {
       const [{ data: scheds }, { data: deptRows }] = await Promise.all([
-        supabase.from("schedules").select("id, status, department_id, week_start, week_end"),
+        supabase.from("schedules").select("id, status, department_id, week_start, week_end, published_at, updated_at"),
         supabase.from("departments").select("id, name, is_active").eq("is_active", true).order("name"),
       ]);
       const all = (scheds ?? []) as {
@@ -963,6 +965,8 @@ function SchedulesStatsSection({ profile }: { profile: any }) {
         department_id: string;
         week_start: string;
         week_end: string;
+        published_at: string | null;
+        updated_at: string | null;
       }[];
       const scoped = isMainAdmin || canApprove
         ? all
@@ -995,15 +999,21 @@ function SchedulesStatsSection({ profile }: { profile: any }) {
       );
       const ids = weekScheds.map((s) => s.id);
       const weekCounts: Record<string, { morning: number; evening: number; off: number }> = {};
-      let hasScheduleModified = false;
+      const hasScheduleModified = weekScheds.some(
+        (s) =>
+          !!s.published_at &&
+          !!s.updated_at &&
+          new Date(s.updated_at).getTime() > new Date(s.published_at).getTime(),
+      );
       for (const d of weekDays) weekCounts[d] = { morning: 0, evening: 0, off: 0 };
       if (ids.length) {
         const { data: shifts } = await supabase
           .from("schedule_shifts")
-          .select("shift, day_date, published_shift")
-          .in("schedule_id", ids);
-        for (const s of (shifts ?? []) as { shift: string; day_date: string; published_shift: string | null }[]) {
-          if ((s.shift ?? null) !== (s.published_shift ?? null)) hasScheduleModified = true;
+          .select("shift, day_date")
+          .in("schedule_id", ids)
+          .gte("day_date", weekStart)
+          .lte("day_date", weekEnd);
+        for (const s of (shifts ?? []) as { shift: string; day_date: string }[]) {
           const b = weekCounts[s.day_date];
           if (b && (s.shift === "morning" || s.shift === "evening" || s.shift === "off")) {
             (b as any)[s.shift] += 1;
