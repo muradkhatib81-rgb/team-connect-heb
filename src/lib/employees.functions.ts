@@ -138,8 +138,17 @@ export const createEmployee = createServerFn({ method: "POST" })
     return { id: newUserId };
   });
 
-const deleteSchema = z.object({ user_id: z.string().uuid() });
+const deleteSchema = z.object({
+  user_id: z.string().uuid(),
+  reason: z.string().trim().max(500).optional(),
+});
 
+/**
+ * Final, irreversible removal of an employee.
+ * Enforces the 30-day inactive cooldown via the `archive_employee` RPC,
+ * which snapshots the row into `employee_archive` and removes the live profile.
+ * The auth user is removed here with the service-role key.
+ */
 export const deleteEmployee = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((data: unknown) => deleteSchema.parse(data))
@@ -150,7 +159,14 @@ export const deleteEmployee = createServerFn({ method: "POST" })
     }
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
 
-    // 1. Delete avatar files from storage (entire user folder)
+    // Archive snapshot + cleanup (RPC enforces the 30-day window and admin check)
+    const { error: arcErr } = await context.supabase.rpc("archive_employee", {
+      _user_id: data.user_id,
+      _reason: data.reason ?? null,
+    });
+    if (arcErr) throw new Error(arcErr.message);
+
+    // Delete avatar files from storage (entire user folder) — non-fatal
     try {
       const { data: files } = await supabaseAdmin.storage.from("avatars").list(data.user_id);
       if (files && files.length > 0) {
@@ -161,19 +177,13 @@ export const deleteEmployee = createServerFn({ method: "POST" })
       // non-fatal
     }
 
-    // 2. Unlink department manager assignments
-    await supabaseAdmin.from("departments").update({ manager_id: null }).eq("manager_id", data.user_id);
-
-    // 3. Delete user_roles + profile rows explicitly (in case no FK cascade)
-    await supabaseAdmin.from("user_roles").delete().eq("user_id", data.user_id);
-    await supabaseAdmin.from("profiles").delete().eq("id", data.user_id);
-
-    // 4. Delete auth user (permanent)
+    // Delete auth user (the profile + roles were already removed by the RPC)
     const { error } = await supabaseAdmin.auth.admin.deleteUser(data.user_id);
     if (error) throw new Error(error.message);
 
     return { ok: true };
   });
+
 
 
 const resetSchema = z.object({
