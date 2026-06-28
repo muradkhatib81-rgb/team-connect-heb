@@ -134,6 +134,7 @@ function EmployeesPage() {
   const navigate = useNavigate();
   const search = useSearch({ from: "/_authenticated/employees" });
   const { data: me, isLoading: meLoading } = useAuth();
+  const qcPage = useQueryClient();
   const [searchTerm, setSearchTerm] = useState("");
   const [editing, setEditing] = useState<ProfileRow | null>(null);
   const [creating, setCreating] = useState(false);
