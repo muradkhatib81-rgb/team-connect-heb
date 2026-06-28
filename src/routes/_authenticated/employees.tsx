@@ -688,12 +688,16 @@ function CreateEmployeeDialog({
     id: string;
     full_name: string;
     job_title: string | null;
+    department_id?: string | null;
     department_name: string | null;
+    phone?: string | null;
     archived_at: string;
     deactivated_at: string | null;
+    snapshot?: any;
   };
   const [archived, setArchived] = useState<ArchivedInfo | null>(null);
   const [viewingArchive, setViewingArchive] = useState<ArchivedInfo | null>(null);
+
   const setActiveFn = useServerFn(setEmployeeActive);
 
   const runCreate = async (forceArchived: boolean) => {
