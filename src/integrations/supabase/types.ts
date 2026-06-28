@@ -769,6 +769,7 @@ export type Database = {
           submitted_at: string | null
           submitted_by: string | null
           updated_at: string
+          updated_by: string | null
           week_end: string
           week_start: string
         }
@@ -788,6 +789,7 @@ export type Database = {
           submitted_at?: string | null
           submitted_by?: string | null
           updated_at?: string
+          updated_by?: string | null
           week_end: string
           week_start: string
         }
@@ -807,6 +809,7 @@ export type Database = {
           submitted_at?: string | null
           submitted_by?: string | null
           updated_at?: string
+          updated_by?: string | null
           week_end?: string
           week_start?: string
         }
@@ -816,6 +819,13 @@ export type Database = {
             columns: ["department_id"]
             isOneToOne: false
             referencedRelation: "departments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "schedules_updated_by_fkey"
+            columns: ["updated_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
         ]
@@ -1437,6 +1447,14 @@ export type Database = {
           id_number: string
           must_change_password: boolean
           phone: string
+        }[]
+      }
+      get_profiles_basic_info: {
+        Args: { user_ids: string[] }
+        Returns: {
+          full_name: string
+          id: string
+          job_title: string
         }[]
       }
       get_task_assignees: {
