@@ -882,12 +882,18 @@ function SchedulesPage() {
                       </span>
                     </p>
                   </div>
+                  {visible.status === "approved" && decisionPersonQ.data?.editedBeforeApproval && (
+                    <p className="text-sm mt-2 p-2 rounded bg-amber-500/10 border border-amber-500/30 text-amber-900 dark:text-amber-200">
+                      ✏️ הסידור עודכן לפני אישורו.
+                    </p>
+                  )}
                   {visible.status === "rejected" && visible.rejection_note && (
                     <p className="text-sm mt-2 p-2 rounded bg-background/60 border border-destructive/20">
                       <span className="font-semibold">סיבת דחייה: </span>
                       {visible.rejection_note}
                     </p>
                   )}
+
                 </div>
               </div>
             </Card>
