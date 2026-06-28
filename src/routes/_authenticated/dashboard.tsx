@@ -176,6 +176,11 @@ function DashboardPage() {
           ) : (
             <DeptManagerDashboard data={deptManagerQuery.data} loading={deptManagerQuery.isLoading} />
           )}
+
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            <EmployeeNewMessagesCard userId={profile.id} />
+            <EmployeeNewAnnouncementsCard userId={profile.id} />
+          </div>
         </>
       ) : (
         <EmployeeDashboard profile={profile} />
