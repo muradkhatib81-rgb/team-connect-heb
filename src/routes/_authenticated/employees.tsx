@@ -422,7 +422,7 @@ function EmployeesPage() {
           <div className="flex items-center gap-2">
             <Filter className="size-4 text-muted-foreground" />
             <Select value={filterMode} onValueChange={(v) => setFilter(v as FilterMode)}>
-              <SelectTrigger className="w-36"><SelectValue /></SelectTrigger>
+              <SelectTrigger className="w-48"><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="active">{FILTER_LABELS.active}</SelectItem>
                 <SelectItem value="inactive">{FILTER_LABELS.inactive}</SelectItem>
