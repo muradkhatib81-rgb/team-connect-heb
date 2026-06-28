@@ -48,6 +48,21 @@ function CompanySettingsPage() {
 
   const isMainAdmin = !!profile?.roles?.includes("main_admin");
 
+  // Permission: can_manage_schedule (used to change schedule type)
+  const manageSchedQ = useQuery({
+    enabled: !!profile?.id && !isMainAdmin,
+    queryKey: ["perm", "can_manage_schedule", profile?.id],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("user_task_permissions")
+        .select("can_manage_schedule")
+        .eq("user_id", profile!.id)
+        .maybeSingle();
+      return !!(data as any)?.can_manage_schedule;
+    },
+  });
+  const canManageSchedule = isMainAdmin || !!manageSchedQ.data;
+
   useEffect(() => {
     if (company) {
       setForm({
@@ -57,14 +72,15 @@ function CompanySettingsPage() {
         email: company.email ?? "",
         primary_color: company.primary_color ?? "",
         logo_url: company.logo_url ?? "",
+        schedule_type: company.schedule_type ?? "weekly",
       });
     }
-  }, [company?.id]);
+  }, [company?.id, company?.schedule_type]);
 
   const saveMut = useMutation({
     mutationFn: async () => {
       if (!form.company_name.trim()) throw new Error("שם החברה הוא שדה חובה");
-      const payload = {
+      const payload: Record<string, unknown> = {
         company_name: form.company_name.trim(),
         address: form.address.trim() || null,
         phone: form.phone.trim() || null,
@@ -72,6 +88,9 @@ function CompanySettingsPage() {
         primary_color: form.primary_color.trim() || null,
         logo_url: form.logo_url || null,
       };
+      if (canManageSchedule) {
+        payload.schedule_type = form.schedule_type;
+      }
 
       // Always resolve the current active row id directly from the DB,
       // so saves never create duplicate rows due to a stale client id.
