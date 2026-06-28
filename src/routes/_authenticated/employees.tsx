@@ -468,7 +468,11 @@ function EmployeesPage() {
                 <SelectItem value="active">{FILTER_LABELS.active}</SelectItem>
                 <SelectItem value="inactive">{FILTER_LABELS.inactive}</SelectItem>
                 <SelectItem value="all">{FILTER_LABELS.all}</SelectItem>
+                <SelectItem value="managers">{FILTER_LABELS.managers}</SelectItem>
+                <SelectItem value="workers">{FILTER_LABELS.workers}</SelectItem>
                 <SelectItem value="on_leave">{FILTER_LABELS.on_leave}</SelectItem>
+                <SelectItem value="on_break">{FILTER_LABELS.on_break}</SelectItem>
+
 
               </SelectContent>
             </Select>
