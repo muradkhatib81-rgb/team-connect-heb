@@ -591,6 +591,10 @@ function CreateEmployeeDialog({ depts, onClose }: { depts: DeptOption[]; onClose
     role: "employee" as AppRole,
   });
   const [avatarFile, setAvatarFile] = useState<File | null>(null);
+  // When the server reports the id_number already belongs to an inactive employee
+  // we offer to reactivate that record instead of creating a duplicate.
+  const [inactiveMatch, setInactiveMatch] = useState<{ id: string; name: string } | null>(null);
+  const setActiveFn = useServerFn(setEmployeeActive);
 
   const mutation = useMutation({
     mutationFn: async () => {
@@ -614,10 +618,36 @@ function CreateEmployeeDialog({ depts, onClose }: { depts: DeptOption[]; onClose
       qc.invalidateQueries({ queryKey: ["all-roles"] });
       qc.invalidateQueries({ queryKey: ["departments"] });
       qc.invalidateQueries({ queryKey: ["dashboard", "stats"] });
+      qc.invalidateQueries({ queryKey: ["dashboard", "employees-total", "active"] });
       onClose();
     },
-    onError: (e: any) => toast.error(e?.message ?? "שגיאה ביצירת עובד"),
+    onError: (e: any) => {
+      const msg: string = e?.message ?? "שגיאה ביצירת עובד";
+      const m = msg.match(/INACTIVE_EXISTS::([0-9a-f-]+)::(.*)$/);
+      if (m) {
+        setInactiveMatch({ id: m[1], name: m[2] || "עובד" });
+        return;
+      }
+      toast.error(msg);
+    },
   });
+
+  const reactivateMutation = useMutation({
+    mutationFn: async (userId: string) =>
+      setActiveFn({ data: { user_id: userId, is_active: true } }),
+    onSuccess: () => {
+      toast.success("העובד הופעל מחדש");
+      qc.invalidateQueries({ queryKey: ["employees"] });
+      qc.invalidateQueries({ queryKey: ["all-roles"] });
+      qc.invalidateQueries({ queryKey: ["departments"] });
+      qc.invalidateQueries({ queryKey: ["dashboard", "stats"] });
+      qc.invalidateQueries({ queryKey: ["dashboard", "employees-total", "active"] });
+      setInactiveMatch(null);
+      onClose();
+    },
+    onError: (e: any) => toast.error(e?.message ?? "שגיאה בהפעלת העובד"),
+  });
+
 
   return (
     <Dialog open onOpenChange={(o) => !o && onClose()}>
