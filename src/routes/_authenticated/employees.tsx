@@ -481,11 +481,15 @@ function EmployeesPage() {
               onEdit={() => setEditing(emp)}
               onResetPassword={() => setResetting(emp)}
               onDelete={() => setDeleting(emp)}
+              onReactivate={() => reactivateMutation.mutate(emp.id)}
+              reactivating={reactivateMutation.isPending && reactivateMutation.variables === emp.id}
               canEdit={isMainAdmin}
               canResetPassword={isMainAdmin}
               canDelete={isMainAdmin && emp.id !== me?.id}
+              canReactivate={isMainAdmin}
             />
           ))}
+
         </div>
       )}
 
