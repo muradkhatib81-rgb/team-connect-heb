@@ -277,10 +277,20 @@ export function NotificationsBell() {
             <ul className="divide-y">
               {items.map((n) => {
                 const Icon = iconFor(n.kind);
+                const search =
+                  n.kind === "message" && n.messageId
+                    ? { tab: "inbox" as const, msg: n.messageId }
+                    : n.kind === "announcement" && n.announcementId
+                      ? { tab: "announcements" as const, ann: n.announcementId }
+                      : undefined;
                 return (
                   <li key={n.id}>
                     <Link
                       to={n.to}
+                      search={search as any}
+                      onClick={() => {
+                        void markOneRead(n);
+                      }}
                       className={cn(
                         "flex items-start gap-2 px-3 py-2.5 text-sm hover:bg-accent transition-colors",
                         !n.read && "bg-primary/5",
