@@ -164,20 +164,20 @@ function DashboardPage() {
 
       <EmployeeOfMonthSection />
 
-      <TasksStatsSection stats={tasksStatsQuery.data} loading={tasksStatsQuery.isLoading} />
+      {admin || isDeptManager ? (
+        <>
+          <TasksStatsSection stats={tasksStatsQuery.data} loading={tasksStatsQuery.isLoading} />
+          <SchedulesStatsSection profile={profile} />
+          <OnBreakSection profile={profile} />
 
-      <SchedulesStatsSection profile={profile} />
-
-      <OnBreakSection profile={profile} />
-
-
-
-      {admin ? (
-        <AdminDashboard stats={statsQuery.data} loading={statsQuery.isLoading} onSelectDept={setDeptDialogId} />
-      ) : isDeptManager ? (
-        <DeptManagerDashboard data={deptManagerQuery.data} loading={deptManagerQuery.isLoading} />
+          {admin ? (
+            <AdminDashboard stats={statsQuery.data} loading={statsQuery.isLoading} onSelectDept={setDeptDialogId} />
+          ) : (
+            <DeptManagerDashboard data={deptManagerQuery.data} loading={deptManagerQuery.isLoading} />
+          )}
+        </>
       ) : (
-        <EmployeeDashboard />
+        <EmployeeDashboard profile={profile} />
       )}
 
       <DepartmentEmployeesDialog
