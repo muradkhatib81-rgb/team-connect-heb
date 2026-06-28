@@ -1374,21 +1374,17 @@ function MessageDetailDialog({
             <AlertDialog open={delOpen} onOpenChange={setDelOpen}>
               <AlertDialogContent dir="rtl">
                 <AlertDialogHeader>
-                  <AlertDialogTitle>מחיקת הודעה</AlertDialogTitle>
+                  <AlertDialogTitle>⚠️ אישור מחיקה</AlertDialogTitle>
                   <AlertDialogDescription>
-                    בחר כיצד למחוק את ההודעה. מחיקה לצמיתות אינה ניתנת לשחזור.
+                    האם אתה בטוח שברצונך למחוק פריט זה?
+                    <br />
+                    המחיקה תסיר את ההודעה ואת כל ההתראות הקשורות מכל הנמענים.
+                    <br />
+                    לאחר המחיקה לא ניתן יהיה לשחזר את הנתונים.
                   </AlertDialogDescription>
                 </AlertDialogHeader>
                 <AlertDialogFooter className="gap-2 flex-wrap">
-                  <AlertDialogCancel>ביטול</AlertDialogCancel>
-                  <AlertDialogAction
-                    onClick={() => {
-                      setDelOpen(false);
-                      delMut.mutate();
-                    }}
-                  >
-                    📁 העבר לארכיון
-                  </AlertDialogAction>
+                  <AlertDialogCancel>❌ ביטול</AlertDialogCancel>
                   <AlertDialogAction
                     className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
                     onClick={() => {
@@ -1396,11 +1392,12 @@ function MessageDetailDialog({
                       permDelMut.mutate();
                     }}
                   >
-                    🗑️ מחק לצמיתות
+                    🗑️ מחק
                   </AlertDialogAction>
                 </AlertDialogFooter>
               </AlertDialogContent>
             </AlertDialog>
+
           </>
         )}
       </DialogContent>
