@@ -338,10 +338,25 @@ interface InboxRow {
   sender?: { full_name: string | null } | null;
 }
 
-function InboxTab({ userId, canDelete }: { userId: string; canDelete: boolean }) {
+function InboxTab({
+  userId,
+  canDelete,
+  initialMessageId,
+  onClearDeepLink,
+}: {
+  userId: string;
+  canDelete: boolean;
+  initialMessageId?: string | null;
+  onClearDeepLink?: () => void;
+}) {
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState<"all" | "unread" | "important">("all");
-  const [selected, setSelected] = useState<string | null>(null);
+  const [selected, setSelected] = useState<string | null>(initialMessageId ?? null);
+
+  // React to deep-link changes after initial mount
+  useEffect(() => {
+    if (initialMessageId) setSelected(initialMessageId);
+  }, [initialMessageId]);
 
   const q = useQuery({
     queryKey: ["comm", "inbox", userId],
