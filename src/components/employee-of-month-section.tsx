@@ -50,6 +50,11 @@ export function EmployeeOfMonthSection() {
         { event: "*", schema: "public", table: "employee_of_month" },
         () => qc.invalidateQueries({ queryKey: ["eom", "current", year, month] }),
       )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "profiles" },
+        () => qc.invalidateQueries({ queryKey: ["eom", "current", year, month] }),
+      )
       .subscribe();
     return () => {
       supabase.removeChannel(channel);

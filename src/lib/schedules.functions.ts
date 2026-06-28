@@ -169,17 +169,19 @@ export const saveScheduleShifts = createServerFn({ method: "POST" })
       const { error: insErr } = await context.supabase.from("schedule_shifts").insert(rows);
       if (insErr) throw new Error(insErr.message);
     }
-    await context.supabase
-      .from("schedules")
-      .update({ updated_at: new Date().toISOString() })
-      .eq("id", data.schedule_id);
-    await context.supabase
-      .from("schedule_audit_log")
-      .insert({
-        schedule_id: data.schedule_id,
-        actor_id: context.userId,
-        action: "updated",
-      });
+    if (changed) {
+      await context.supabase
+        .from("schedules")
+        .update({ updated_by: context.userId, updated_at: new Date().toISOString() })
+        .eq("id", data.schedule_id);
+      await context.supabase
+        .from("schedule_audit_log")
+        .insert({
+          schedule_id: data.schedule_id,
+          actor_id: context.userId,
+          action: "updated",
+        });
+    }
 
     if (isApproved && changed) {
       // All department employees + the department manager (in case they're not in the dept)
@@ -569,6 +571,10 @@ export const copyPreviousWeek = createServerFn({ method: "POST" })
     });
     await context.supabase.from("schedule_shifts").delete().eq("schedule_id", data.schedule_id);
     if (next.length) await context.supabase.from("schedule_shifts").insert(next);
+    await context.supabase
+      .from("schedules")
+      .update({ updated_by: context.userId, updated_at: new Date().toISOString() })
+      .eq("id", data.schedule_id);
     await context.supabase
       .from("schedule_audit_log")
       .insert({ schedule_id: data.schedule_id, actor_id: context.userId, action: "copied" });
