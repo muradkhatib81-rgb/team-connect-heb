@@ -2213,11 +2213,11 @@ function OnBreakSection({ profile }: { profile: any }) {
       </div>
 
       <Dialog open={logOpen} onOpenChange={setLogOpen}>
-        <DialogContent className="max-w-5xl">
+        <DialogContent className="max-w-6xl">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Coffee className="size-5 text-primary" />
-              יומן הפסקות יומי
+              📋 יומן ההפסקות
               <span className="text-xs font-normal text-muted-foreground mr-2">
                 {new Intl.DateTimeFormat("he-IL", {
                   timeZone: "Asia/Jerusalem",
@@ -2228,71 +2228,217 @@ function OnBreakSection({ profile }: { profile: any }) {
               </span>
             </DialogTitle>
           </DialogHeader>
-          <div className="overflow-auto max-h-[70vh]">
-            {dailyLogQ.isLoading ? (
-              <div className="flex justify-center py-8">
-                <Loader2 className="size-5 animate-spin text-primary" />
-              </div>
-            ) : log.length === 0 ? (
-              <p className="p-6 text-sm text-muted-foreground text-center">
-                עדיין אין בקשות הפסקה היום.
-              </p>
-            ) : (
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="bg-muted/40">
-                    <th className="text-right p-2">עובד</th>
-                    <th className="text-right p-2">מחלקה</th>
-                    <th className="text-right p-2">סוג</th>
-                    <th className="text-right p-2">נשלחה</th>
-                    <th className="text-right p-2">שעה מבוקשת</th>
-                    <th className="text-right p-2">שעה מאושרת</th>
-                    <th className="text-right p-2">אישר</th>
-                    <th className="text-right p-2">התחלה בפועל</th>
-                    <th className="text-right p-2">סיום בפועל</th>
-                    <th className="text-right p-2">סטטוס</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {log.map((r) => {
-                    const changed =
-                      r.requestedTime &&
-                      r.approvedTime &&
-                      new Date(r.requestedTime).getTime() !==
-                        new Date(r.approvedTime).getTime();
-                    return (
-                      <tr key={r.id} className="border-t align-top">
-                        <td className="p-2 font-medium">{r.name}</td>
-                        <td className="p-2">{r.department}</td>
-                        <td className="p-2">{r.type}</td>
-                        <td className="p-2 whitespace-nowrap">{fmtT(r.createdAt)}</td>
-                        <td className="p-2 whitespace-nowrap">{fmtT(r.requestedTime)}</td>
-                        <td className="p-2 whitespace-nowrap">
-                          {fmtT(r.approvedTime)}
-                          {changed ? (
-                            <span className="mr-1 text-[10px] text-amber-600">שונתה</span>
-                          ) : null}
-                        </td>
-                        <td className="p-2">{r.approverName}</td>
-                        <td className="p-2 whitespace-nowrap">{fmtT(r.startedAt)}</td>
-                        <td className="p-2 whitespace-nowrap">
-                          {fmtT(r.completedAt ?? (r.status === "completed" ? r.endsAt : null))}
-                        </td>
-                        <td className="p-2">
-                          <Badge variant={STATUS_TONE[r.status] ?? "secondary"}>
-                            {STATUS_LABEL[r.status] ?? r.status}
-                          </Badge>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
 
-            )}
-          </div>
+          {(() => {
+            const employees = Array.from(
+              new Map(log.map((r) => [r.userId, r.name])).entries(),
+            ).sort((a, b) => a[1].localeCompare(b[1], "he"));
+            const departments = Array.from(new Set(log.map((r) => r.department))).sort();
+            const types = Array.from(new Set(log.map((r) => r.type))).sort();
+            const statuses = Array.from(new Set(log.map((r) => r.status)));
+
+            const enriched = log.map((r) => {
+              const startedMs = r.startedAt ? new Date(r.startedAt).getTime() : null;
+              const endsMs = r.endsAt ? new Date(r.endsAt).getTime() : null;
+              const completedMs = r.completedAt ? new Date(r.completedAt).getTime() : null;
+              const actualDurMin =
+                startedMs && completedMs
+                  ? Math.max(0, Math.round((completedMs - startedMs) / 60000))
+                  : null;
+              const overrunMin =
+                completedMs && endsMs && completedMs > endsMs
+                  ? Math.round((completedMs - endsMs) / 60000)
+                  : r.status === "active" && endsMs && Date.now() > endsMs
+                    ? Math.round((Date.now() - endsMs) / 60000)
+                    : 0;
+              const returnedOnTime =
+                r.status === "completed" && completedMs && endsMs && completedMs <= endsMs;
+              const returnedLate = r.status === "completed" && overrunMin > 0;
+              return {
+                ...r,
+                actualDurMin,
+                overrunMin,
+                returnedOnTime: !!returnedOnTime,
+                returnedLate,
+              };
+            });
+
+            const filtered = enriched.filter((r) => {
+              if (logEmpFilter !== "__all" && r.userId !== logEmpFilter) return false;
+              if (logDeptFilter !== "__all" && r.department !== logDeptFilter) return false;
+              if (logTypeFilter !== "__all" && r.type !== logTypeFilter) return false;
+              if (logStatusFilter !== "__all" && r.status !== logStatusFilter) return false;
+              if (logSearch.trim()) {
+                const q = logSearch.trim().toLowerCase();
+                const hay = [r.name, r.department, r.type, r.jobTitle, r.roleLabel, r.approverName]
+                  .filter(Boolean)
+                  .join(" ")
+                  .toLowerCase();
+                if (!hay.includes(q)) return false;
+              }
+              return true;
+            });
+
+            const sorted = [...filtered].sort((a, b) => {
+              if (logSort === "overrun") return (b.overrunMin || 0) - (a.overrunMin || 0);
+              if (logSort === "return") {
+                const av = a.completedAt ? new Date(a.completedAt).getTime() : 0;
+                const bv = b.completedAt ? new Date(b.completedAt).getTime() : 0;
+                return bv - av;
+              }
+              const av = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+              const bv = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+              return av - bv;
+            });
+
+            return (
+              <>
+                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-2 mb-3">
+                  <Input
+                    placeholder="🔎 חיפוש..."
+                    value={logSearch}
+                    onChange={(e) => setLogSearch(e.target.value)}
+                  />
+                  <Select value={logEmpFilter} onValueChange={setLogEmpFilter}>
+                    <SelectTrigger><SelectValue placeholder="עובד" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="__all">כל העובדים</SelectItem>
+                      {employees.map(([id, name]) => (
+                        <SelectItem key={id} value={id}>{name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <Select value={logDeptFilter} onValueChange={setLogDeptFilter}>
+                    <SelectTrigger><SelectValue placeholder="מחלקה" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="__all">כל המחלקות</SelectItem>
+                      {departments.map((d) => (
+                        <SelectItem key={d} value={d}>{d}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <Select value={logTypeFilter} onValueChange={setLogTypeFilter}>
+                    <SelectTrigger><SelectValue placeholder="סוג הפסקה" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="__all">כל הסוגים</SelectItem>
+                      {types.map((t) => (
+                        <SelectItem key={t} value={t}>{t}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <Select value={logStatusFilter} onValueChange={setLogStatusFilter}>
+                    <SelectTrigger><SelectValue placeholder="סטטוס" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="__all">כל הסטטוסים</SelectItem>
+                      {statuses.map((s) => (
+                        <SelectItem key={s} value={s}>{STATUS_LABEL[s] ?? s}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <Select value={logSort} onValueChange={(v: any) => setLogSort(v)}>
+                    <SelectTrigger><SelectValue placeholder="מיון" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="created">לפי שעת בקשה</SelectItem>
+                      <SelectItem value="overrun">לפי זמן חריגה</SelectItem>
+                      <SelectItem value="return">לפי זמן חזרה</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="overflow-auto max-h-[65vh] border rounded-md">
+                  {dailyLogQ.isLoading ? (
+                    <div className="flex justify-center py-8">
+                      <Loader2 className="size-5 animate-spin text-primary" />
+                    </div>
+                  ) : sorted.length === 0 ? (
+                    <p className="p-6 text-sm text-muted-foreground text-center">
+                      לא נמצאו רשומות התואמות את הסינון.
+                    </p>
+                  ) : (
+                    <table className="w-full text-xs sm:text-sm">
+                      <thead className="bg-muted/40 sticky top-0">
+                        <tr>
+                          <th className="text-right p-2">👤 עובד</th>
+                          <th className="text-right p-2">💼 תפקיד</th>
+                          <th className="text-right p-2">🏬 מחלקה</th>
+                          <th className="text-right p-2">☕ סוג</th>
+                          <th className="text-right p-2">👤 אישר</th>
+                          <th className="text-right p-2">🕒 התחלה</th>
+                          <th className="text-right p-2">🏁 סיום מתוכנן</th>
+                          <th className="text-right p-2">🕒 חזרה בפועל</th>
+                          <th className="text-right p-2">⏱️ משך בפועל</th>
+                          <th className="text-right p-2">🔴 חריגה</th>
+                          <th className="text-right p-2">📅 תאריך</th>
+                          <th className="text-right p-2">📌 סטטוס</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {sorted.map((r) => {
+                          const dateStr = r.createdAt
+                            ? new Intl.DateTimeFormat("he-IL", {
+                                timeZone: "Asia/Jerusalem",
+                                day: "2-digit",
+                                month: "2-digit",
+                                year: "numeric",
+                                numberingSystem: "latn",
+                              }).format(new Date(r.createdAt))
+                            : "—";
+                          const isLate = r.returnedLate;
+                          const isOnTime = r.returnedOnTime;
+                          const isActiveRow = r.status === "active";
+                          const statusBadge = isActiveRow ? (
+                            <Badge className="bg-amber-500 text-white hover:bg-amber-500">🟡 בהפסקה</Badge>
+                          ) : isOnTime ? (
+                            <Badge className="bg-green-600 text-white hover:bg-green-600">🟢 חזר בזמן</Badge>
+                          ) : isLate ? (
+                            <Badge className="bg-red-600 text-white hover:bg-red-600">🔴 חזר באיחור</Badge>
+                          ) : (
+                            <Badge variant={STATUS_TONE[r.status] ?? "secondary"}>
+                              {STATUS_LABEL[r.status] ?? r.status}
+                            </Badge>
+                          );
+                          return (
+                            <tr key={r.id} className="border-t align-top">
+                              <td className="p-2 font-medium whitespace-nowrap">{r.name}</td>
+                              <td className="p-2 whitespace-nowrap text-muted-foreground">
+                                {r.roleLabel ?? "—"}
+                                {r.jobTitle ? ` · ${r.jobTitle}` : ""}
+                              </td>
+                              <td className="p-2 whitespace-nowrap">{r.department}</td>
+                              <td className="p-2 whitespace-nowrap">{r.type}</td>
+                              <td className="p-2 whitespace-nowrap">{r.approverName}</td>
+                              <td className="p-2 whitespace-nowrap">{fmtT(r.startedAt)}</td>
+                              <td className="p-2 whitespace-nowrap">{fmtT(r.endsAt)}</td>
+                              <td className="p-2 whitespace-nowrap">{fmtT(r.completedAt)}</td>
+                              <td className="p-2 whitespace-nowrap">
+                                {r.actualDurMin != null ? `${r.actualDurMin} דק׳` : "—"}
+                              </td>
+                              <td className="p-2 whitespace-nowrap">
+                                {r.overrunMin > 0 ? (
+                                  <span className="text-red-600 font-bold">+{r.overrunMin} דק׳</span>
+                                ) : (
+                                  <span className="text-muted-foreground">—</span>
+                                )}
+                              </td>
+                              <td className="p-2 whitespace-nowrap">{dateStr}</td>
+                              <td className="p-2">{statusBadge}</td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  )}
+                </div>
+                <div className="text-xs text-muted-foreground mt-2">
+                  סה״כ: {sorted.length} מתוך {log.length}
+                </div>
+              </>
+            );
+          })()}
         </DialogContent>
       </Dialog>
+
+
 
 
       <Dialog open={open} onOpenChange={setOpen}>
