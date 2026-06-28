@@ -1,7 +1,7 @@
 import { createFileRoute, useNavigate, useSearch } from "@tanstack/react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { useState, useMemo, useRef } from "react";
+import { useState, useMemo, useRef, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { createEmployee, resetEmployeePassword, deleteEmployee } from "@/lib/employees.functions";
 import {
