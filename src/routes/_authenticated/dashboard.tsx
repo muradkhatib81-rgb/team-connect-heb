@@ -1007,11 +1007,15 @@ function SchedulesStatsSection({ profile }: { profile: any }) {
             (b as any)[s.shift] += 1;
           }
           const m = modifiedCells[s.day_date];
-          if (m && (s.shift ?? null) !== (s.published_shift ?? null)) {
+          // Mark ONLY the actual updated cell (the new shift value) — never the
+          // previous shift, and never the entire day/row.
+          if (
+            m &&
+            s.published_shift != null &&
+            (s.shift ?? null) !== (s.published_shift ?? null)
+          ) {
             const cur = s.shift as "morning" | "evening" | "off" | null;
-            const pub = (s.published_shift ?? null) as "morning" | "evening" | "off" | null;
-            if (cur && (cur === "morning" || cur === "evening" || cur === "off")) m[cur] = true;
-            if (pub && (pub === "morning" || pub === "evening" || pub === "off")) m[pub] = true;
+            if (cur === "morning" || cur === "evening" || cur === "off") m[cur] = true;
           }
         }
       }
