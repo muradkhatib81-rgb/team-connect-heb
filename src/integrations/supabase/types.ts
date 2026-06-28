@@ -1455,6 +1455,8 @@ export type Database = {
           full_name: string
           id: string
           job_title: string
+          role: string
+          role_label: string
         }[]
       }
       get_task_assignees: {
