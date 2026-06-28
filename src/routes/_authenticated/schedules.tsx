@@ -330,7 +330,7 @@ function SchedulesPage() {
           id: uid,
           full_name: p?.full_name ?? "—",
           job_title: p?.job_title ?? null,
-          role_label: topRole ? roleLabels[topRole] ?? topRole : null,
+          role_label: topRole ? roleLabels[topRole] ?? topRole : p?.role_label ?? null,
           at,
         };
       };
