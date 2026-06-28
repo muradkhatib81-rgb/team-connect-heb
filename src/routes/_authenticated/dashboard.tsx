@@ -889,35 +889,6 @@ function EmployeeNewAnnouncementsCard({ userId }: { userId: string }) {
   );
 }
 
-function EmployeesTotalCard({ total, loading }: { total: number; loading: boolean }) {
-  const navigate = useNavigate();
-  return (
-    <section>
-      <button
-        type="button"
-        onClick={() => navigate({ to: "/employees", search: { filter: "active", dept: "all" } as any })}
-        className="block w-full text-right"
-        aria-label="פתח ניהול עובדים"
-      >
-        <Card className="card-elevated p-5 cursor-pointer hover:bg-accent/30 transition-colors">
-          <div className="flex items-center justify-between gap-4">
-            <div>
-              <p className="text-sm text-muted-foreground">👥 עובדים</p>
-              <p className="text-3xl font-bold mt-2">
-                {loading ? <Loader2 className="size-6 animate-spin text-primary" /> : total}
-              </p>
-              <p className="text-xs text-muted-foreground mt-1">סך העובדים הפעילים</p>
-
-            </div>
-            <div className="size-12 rounded-xl bg-primary/10 text-primary flex items-center justify-center">
-              <Users className="size-6" />
-            </div>
-          </div>
-        </Card>
-      </button>
-    </section>
-  );
-}
 
 function StatCard({
 
