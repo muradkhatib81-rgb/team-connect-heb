@@ -78,6 +78,7 @@ interface ProfileRow {
   is_active: boolean;
   on_leave: boolean;
   avatar_url: string | null;
+  deactivated_at: string | null;
 }
 
 const FILTER_LABELS: Record<FilterMode, string> = {
