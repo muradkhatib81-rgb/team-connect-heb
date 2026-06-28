@@ -1645,6 +1645,188 @@ function ProfileRow({ label, value }: { label: string; value: string }) {
   );
 }
 
+function fmtHM(iso: string | null) {
+  if (!iso) return "—";
+  return new Intl.DateTimeFormat("he-IL", {
+    timeZone: "Asia/Jerusalem",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).format(new Date(iso));
+}
+
+function fmtMinsHM(totalMins: number) {
+  const m = Math.max(0, Math.floor(totalMins));
+  const h = Math.floor(m / 60);
+  const r = m % 60;
+  return h > 0 ? `${h}:${String(r).padStart(2, "0")}` : `${r} דק׳`;
+}
+
+function MyActiveBreakCard({ userId }: { userId: string }) {
+  const qc = useQueryClient();
+  const [, setTick] = useState(0);
+
+  const breakQ = useQuery({
+    enabled: !!userId,
+    queryKey: ["my-active-break", userId],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("break_requests")
+        .select(
+          "id, user_id, status, break_setting_id, approved_by, approved_at_time, approval_decided_at, started_at, ends_at, completed_at, duration_minutes",
+        )
+        .eq("user_id", userId)
+        .in("status", ["approved", "active"])
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (error) throw error;
+      if (!data) return null;
+      const row = data as any;
+      const [{ data: setting }, approverMeta] = await Promise.all([
+        supabase
+          .from("break_settings")
+          .select("name")
+          .eq("id", row.break_setting_id)
+          .maybeSingle(),
+        row.approved_by
+          ? supabase.rpc("get_profiles_basic_info", { user_ids: [row.approved_by] })
+          : Promise.resolve({ data: [] as any[] }),
+      ]);
+      const ap = (approverMeta.data ?? [])[0] as any;
+      return {
+        ...row,
+        setting_name: (setting as any)?.name ?? "הפסקה",
+        approver_name: ap?.full_name ?? "—",
+        approver_role: ap?.role_label ?? null,
+        approver_job: ap?.job_title ?? null,
+      };
+    },
+  });
+
+  useEffect(() => {
+    const ch = supabase
+      .channel(`my-break-rt-${userId}`)
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "break_requests", filter: `user_id=eq.${userId}` },
+        () => qc.invalidateQueries({ queryKey: ["my-active-break", userId] }),
+      )
+      .subscribe();
+    const id = setInterval(() => setTick((t) => t + 1), 1000);
+    return () => {
+      supabase.removeChannel(ch);
+      clearInterval(id);
+    };
+  }, [qc, userId]);
+
+  const endMut = useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await (supabase as any).rpc("end_my_break", { _id: id });
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      toast.success("סומן: חזרת מההפסקה");
+      qc.invalidateQueries({ queryKey: ["my-active-break", userId] });
+      qc.invalidateQueries({ queryKey: ["dashboard-on-break"] });
+      qc.invalidateQueries({ queryKey: ["dashboard-daily-breaks"] });
+    },
+    onError: (e: any) => toast.error(e?.message ?? "שגיאה"),
+  });
+
+  const r = breakQ.data;
+  if (!r) return null;
+
+  const now = Date.now();
+  const isActive = r.status === "active";
+  const startsAt = r.approved_at_time ?? r.started_at;
+  const endsAt = r.ends_at
+    ? new Date(r.ends_at).getTime()
+    : startsAt
+      ? new Date(startsAt).getTime() + (r.duration_minutes ?? 0) * 60000
+      : null;
+  const remainingMs = endsAt ? endsAt - now : 0;
+  const overrunMs = endsAt && now > endsAt ? now - endsAt : 0;
+  const overrun = overrunMs > 0;
+  const remainingMin = Math.max(0, Math.ceil(remainingMs / 60000));
+  const overrunMin = Math.ceil(overrunMs / 60000);
+
+  return (
+    <Card
+      className={
+        "card-elevated p-5 border-r-4 " +
+        (overrun ? "border-r-red-500" : isActive ? "border-r-primary" : "border-r-amber-500")
+      }
+    >
+      <div className="flex items-start gap-3">
+        <div
+          className={
+            "size-10 rounded-xl flex items-center justify-center shrink-0 " +
+            (overrun
+              ? "bg-red-500/10 text-red-600"
+              : "bg-primary/10 text-primary")
+          }
+        >
+          <Coffee className="size-5" />
+        </div>
+        <div className="flex-1 min-w-0 space-y-2">
+          <div className="flex flex-wrap items-center gap-2">
+            <h3 className="font-semibold">ההפסקה שלי</h3>
+            <Badge variant={isActive ? "default" : "secondary"}>
+              {isActive ? "בהפסקה" : "אושרה · ממתינה להתחלה"}
+            </Badge>
+            <span className="text-sm text-muted-foreground">
+              {r.setting_name} · {r.duration_minutes} דק׳
+            </span>
+          </div>
+
+          {isActive && endsAt && (
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
+              <div className={overrun ? "text-red-600 font-bold" : "text-foreground font-bold"}>
+                {overrun ? (
+                  <>חריגה: {fmtMinsHM(overrunMin)}</>
+                ) : (
+                  <>נותרו: {fmtMinsHM(remainingMin)}</>
+                )}
+              </div>
+              <div className="text-muted-foreground">
+                שעת חזרה משוערת: {fmtHM(new Date(endsAt).toISOString())}
+              </div>
+            </div>
+          )}
+
+          <div className="grid sm:grid-cols-2 gap-x-4 gap-y-1 text-xs text-muted-foreground">
+            <div>✅ אושר על ידי: <span className="text-foreground font-medium">{r.approver_name}</span></div>
+            {r.approver_role && (
+              <div>💼 תפקיד: <span className="text-foreground">{r.approver_role}{r.approver_job ? ` · ${r.approver_job}` : ""}</span></div>
+            )}
+            {r.approval_decided_at && (
+              <div>📅 תאריך אישור: <span className="text-foreground">{formatHeDateTime(r.approval_decided_at)}</span></div>
+            )}
+            {r.started_at && (
+              <div>🕒 התחלה בפועל: <span className="text-foreground">{fmtHM(r.started_at)}</span></div>
+            )}
+          </div>
+
+          {isActive && (
+            <div className="pt-1">
+              <Button
+                size="sm"
+                className="gap-2"
+                onClick={() => endMut.mutate(r.id)}
+                disabled={endMut.isPending}
+              >
+                {endMut.isPending ? <Loader2 className="size-4 animate-spin" /> : <CheckCircle2 className="size-4" />}
+                חזרתי מהפסקה
+              </Button>
+            </div>
+          )}
+        </div>
+      </div>
+    </Card>
+  );
+}
+
 function OnBreakSection({ profile }: { profile: any }) {
   const qc = useQueryClient();
   const navigate = useNavigate();
