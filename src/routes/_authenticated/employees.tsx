@@ -1009,7 +1009,7 @@ function DeleteEmployeeDialog({ employee, onClose }: { employee: ProfileRow; onC
       await deleteFn({ data: { user_id: employee.id } });
     },
     onSuccess: () => {
-      toast.success("העובד נמחק לצמיתות מהמערכת");
+      toast.success("העובד הועבר לארכיון והוסר מהמערכת הפעילה");
       qc.invalidateQueries({ queryKey: ["employees"] });
       qc.invalidateQueries({ queryKey: ["all-roles"] });
       qc.invalidateQueries({ queryKey: ["departments"] });
@@ -1023,9 +1023,18 @@ function DeleteEmployeeDialog({ employee, onClose }: { employee: ProfileRow; onC
     <AlertDialog open onOpenChange={(o) => !o && !mutation.isPending && onClose()}>
       <AlertDialogContent>
         <AlertDialogHeader>
-          <AlertDialogTitle>מחיקת עובד לצמיתות</AlertDialogTitle>
-          <AlertDialogDescription>
-            פעולה זו תמחק את <strong>{employee.full_name || "העובד"}</strong> לצמיתות: חשבון ההתחברות, פרטי המחלקה, ההרשאות, תמונת הפרופיל וכל הנתונים. לא ניתן לבטל פעולה זו.
+          <AlertDialogTitle>🗑️ מחיקה סופית — {employee.full_name || "עובד"}</AlertDialogTitle>
+          <AlertDialogDescription asChild>
+            <div className="space-y-2 text-right">
+              <p>
+                ⚠️ פעולה זו תעביר את העובד <strong>לארכיון</strong> ותסיר אותו מהמערכת הפעילה.
+              </p>
+              <p>
+                הנתונים יישמרו לצורכי Audit בלבד ולא יוצגו במסכים הרגילים.
+                לאחר מכן <strong>לא ניתן יהיה לשחזר</strong> את העובד דרך המערכת.
+              </p>
+              <p>האם להמשיך?</p>
+            </div>
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
@@ -1038,13 +1047,14 @@ function DeleteEmployeeDialog({ employee, onClose }: { employee: ProfileRow; onC
             }}
             className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
           >
-            {mutation.isPending ? <Loader2 className="size-4 animate-spin" /> : "מחק לצמיתות"}
+            {mutation.isPending ? <Loader2 className="size-4 animate-spin" /> : "🗑️ העבר לארכיון"}
           </AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>
     </AlertDialog>
   );
 }
+
 
 function ResetPasswordDialog({ employee, onClose }: { employee: ProfileRow; onClose: () => void }) {
   const resetFn = useServerFn(resetEmployeePassword);
