@@ -354,16 +354,16 @@ function EmployeesPage() {
   const avatarsQ = useSignedAvatarUrls((employeesQuery.data ?? []).map((e) => e.avatar_url));
   const avatarMap = avatarsQ.data ?? {};
 
-  // Top-level summary stats (company-wide, scoped by RLS via employeesQuery)
+  // Top-level summary stats — derived from the SAME merged employees list
+  // used by the table below, so every counter and the rendered rows stay in sync.
   const summaryStats = useMemo(() => {
-    const list = employeesQuery.data ?? [];
     const roles = rolesQuery.data ?? {};
     let managers = 0;
     let workers = 0;
     let active = 0;
     let onLeave = 0;
     let inactive = 0;
-    list.forEach((e) => {
+    employees.forEach((e) => {
       const r = roles[e.id] ?? [];
       const isManager = r.some((role) => role !== "employee");
       if (isManager) managers += 1;
@@ -373,7 +373,7 @@ function EmployeesPage() {
       if (!e.is_active) inactive += 1;
     });
     return {
-      total: list.length,
+      total: employees.length,
       active,
       managers,
       workers,
@@ -381,7 +381,8 @@ function EmployeesPage() {
       inactive,
       onBreak: onBreakSet.size,
     };
-  }, [employeesQuery.data, rolesQuery.data, onBreakSet]);
+  }, [employees, rolesQuery.data, onBreakSet]);
+
 
   if (meLoading) {
     return <div className="flex justify-center py-12"><Loader2 className="size-6 animate-spin text-primary" /></div>;
