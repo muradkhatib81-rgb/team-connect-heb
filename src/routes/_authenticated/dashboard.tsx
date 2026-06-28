@@ -410,7 +410,7 @@ function AdminDashboard({
   loading,
   onSelectDept,
 }: {
-  stats?: { total: number; active: number; inactive: number; onLeave: number; byDept: Record<string, number>; departments: DeptRow[] };
+  stats?: { total: number; active: number; inactive: number; onLeave: number; onBreak: number; byDept: Record<string, number>; departments: DeptRow[] };
   loading: boolean;
   onSelectDept?: (id: string) => void;
 }) {
@@ -429,11 +429,12 @@ function AdminDashboard({
 
   return (
     <>
-      <section className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard label="סך עובדים" value={stats.total} icon={Users} tone="primary" onClick={() => go("all")} />
-        <StatCard label="עובדים פעילים" value={stats.active} icon={UserCheck} tone="success" onClick={() => go("active")} />
-        <StatCard label="בחופש" value={stats.onLeave} icon={Plane} tone="warning" onClick={() => go("on_leave")} />
-        <StatCard label="לא פעילים" value={stats.inactive} icon={UserX} tone="muted" onClick={() => go("inactive")} />
+      <section className="grid grid-cols-2 lg:grid-cols-5 gap-4">
+        <StatCard label="👥 סך עובדים" value={stats.total} icon={Users} tone="primary" onClick={() => go("all")} />
+        <StatCard label="🟢 עובדים פעילים" value={stats.active} icon={UserCheck} tone="success" onClick={() => go("active")} />
+        <StatCard label="🏖️ בחופשה" value={stats.onLeave} icon={Plane} tone="warning" onClick={() => go("on_leave")} />
+        <StatCard label="☕ בהפסקה" value={stats.onBreak} icon={Coffee} tone="warning" onClick={() => go("on_break")} />
+        <StatCard label="❌ עובדים לא פעילים" value={stats.inactive} icon={UserX} tone="muted" onClick={() => go("inactive")} />
       </section>
 
       <section>
