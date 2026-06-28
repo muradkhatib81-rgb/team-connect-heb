@@ -1332,11 +1332,12 @@ function MessageDetailDialog({
       const { data: m, error } = await supabase
         .from("messages")
         .select(
-          "id, title, body, priority, requires_acknowledgment, sender_id, created_at, edited_at, edited_by, edit_count",
+          "id, title, body, priority, requires_acknowledgment, sender_id, created_at, edited_at, edited_by, edit_count, deleted_at",
         )
         .eq("id", messageId)
-        .single();
+        .maybeSingle();
       if (error) throw error;
+      if (!m) return { missing: true } as any;
       const { data: sender } = await supabase
         .from("profiles")
         .select("full_name")
@@ -1363,16 +1364,29 @@ function MessageDetailDialog({
           .eq("message_id", messageId);
         recipients = recs ?? [];
       }
-      return { msg: m, sender_name: sender?.full_name ?? "—", editor_name, atts: atts ?? [], recipients };
+      return {
+        msg: m,
+        sender_name: sender?.full_name ?? "—",
+        editor_name,
+        atts: atts ?? [],
+        recipients,
+        missing: !!m.deleted_at,
+      };
     },
   });
 
   // Auto-mark read in inbox mode
   useEffect(() => {
-    if (viewerMode === "inbox") {
-      markMessageRead(messageId).then(() => qc.invalidateQueries({ queryKey: ["comm"] }));
-    }
-  }, [messageId, viewerMode, qc]);
+    if (viewerMode !== "inbox") return;
+    if (!q.data || q.data.missing) return;
+    markMessageRead(messageId)
+      .then(() => {
+        qc.invalidateQueries({ queryKey: ["comm"] });
+        qc.invalidateQueries({ queryKey: ["notif"] });
+        qc.invalidateQueries({ queryKey: ["shell-comm-unread"] });
+      })
+      .catch(() => {});
+  }, [messageId, viewerMode, qc, q.data]);
 
   const ackMut = useMutation({
     mutationFn: () => acknowledgeMessage(messageId),
