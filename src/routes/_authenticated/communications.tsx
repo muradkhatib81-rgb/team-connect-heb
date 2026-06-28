@@ -665,22 +665,17 @@ function SentTab({
       <AlertDialog open={!!delAnn} onOpenChange={(o) => !o && setDelAnn(null)}>
         <AlertDialogContent dir="rtl">
           <AlertDialogHeader>
-            <AlertDialogTitle>מחיקת הכרזה</AlertDialogTitle>
+            <AlertDialogTitle>⚠️ אישור מחיקה</AlertDialogTitle>
             <AlertDialogDescription>
-              בחר כיצד למחוק את ההכרזה. מחיקה לצמיתות אינה ניתנת לשחזור.
+              האם אתה בטוח שברצונך למחוק פריט זה?
+              <br />
+              המחיקה תסיר את ההכרזה ואת כל ההתראות הקשורות מכל הנמענים.
+              <br />
+              לאחר המחיקה לא ניתן יהיה לשחזר את הנתונים.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter className="gap-2 flex-wrap">
-            <AlertDialogCancel>ביטול</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={() => {
-                const id = delAnn!;
-                setDelAnn(null);
-                delAnnMut.mutate(id);
-              }}
-            >
-              📁 העבר לארכיון
-            </AlertDialogAction>
+            <AlertDialogCancel>❌ ביטול</AlertDialogCancel>
             <AlertDialogAction
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
               onClick={() => {
@@ -689,11 +684,12 @@ function SentTab({
                 permDelAnnMut.mutate(id);
               }}
             >
-              🗑️ מחק לצמיתות
+              🗑️ מחק
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
     </div>
   );
 }
@@ -757,9 +753,11 @@ function AnnouncementsTab({ userId, canDelete, canViewReceipts }: { userId: stri
           "id, title, body, priority, image_url, starts_at, ends_at, sender_id, created_at, deleted_at, edited_at, edited_by",
         )
         .is("deleted_at", null)
+        .neq("sender_id", userId)
         .lte("starts_at", nowIso)
         .order("starts_at", { ascending: false });
       if (error) throw error;
+
       const rows = ((data ?? []) as any[]).filter((a) => !a.ends_at || a.ends_at > nowIso);
       const senderIds = [...new Set(rows.map((r) => r.sender_id).filter(Boolean))];
       let senderMap: Record<string, string> = {};
@@ -852,22 +850,17 @@ function AnnouncementsTab({ userId, canDelete, canViewReceipts }: { userId: stri
       <AlertDialog open={!!delAnn} onOpenChange={(o) => !o && setDelAnn(null)}>
         <AlertDialogContent dir="rtl">
           <AlertDialogHeader>
-            <AlertDialogTitle>מחיקת הכרזה</AlertDialogTitle>
+            <AlertDialogTitle>⚠️ אישור מחיקה</AlertDialogTitle>
             <AlertDialogDescription>
-              בחר כיצד למחוק את ההכרזה. מחיקה לצמיתות אינה ניתנת לשחזור.
+              האם אתה בטוח שברצונך למחוק פריט זה?
+              <br />
+              המחיקה תסיר את ההכרזה ואת כל ההתראות הקשורות מכל הנמענים.
+              <br />
+              לאחר המחיקה לא ניתן יהיה לשחזר את הנתונים.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter className="gap-2 flex-wrap">
-            <AlertDialogCancel>ביטול</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={() => {
-                const id = delAnn!;
-                setDelAnn(null);
-                delMut.mutate(id);
-              }}
-            >
-              📁 העבר לארכיון
-            </AlertDialogAction>
+            <AlertDialogCancel>❌ ביטול</AlertDialogCancel>
             <AlertDialogAction
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
               onClick={() => {
@@ -876,11 +869,12 @@ function AnnouncementsTab({ userId, canDelete, canViewReceipts }: { userId: stri
                 permDelMut.mutate(id);
               }}
             >
-              🗑️ מחק לצמיתות
+              🗑️ מחק
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
     </div>
   );
 }
@@ -1380,21 +1374,17 @@ function MessageDetailDialog({
             <AlertDialog open={delOpen} onOpenChange={setDelOpen}>
               <AlertDialogContent dir="rtl">
                 <AlertDialogHeader>
-                  <AlertDialogTitle>מחיקת הודעה</AlertDialogTitle>
+                  <AlertDialogTitle>⚠️ אישור מחיקה</AlertDialogTitle>
                   <AlertDialogDescription>
-                    בחר כיצד למחוק את ההודעה. מחיקה לצמיתות אינה ניתנת לשחזור.
+                    האם אתה בטוח שברצונך למחוק פריט זה?
+                    <br />
+                    המחיקה תסיר את ההודעה ואת כל ההתראות הקשורות מכל הנמענים.
+                    <br />
+                    לאחר המחיקה לא ניתן יהיה לשחזר את הנתונים.
                   </AlertDialogDescription>
                 </AlertDialogHeader>
                 <AlertDialogFooter className="gap-2 flex-wrap">
-                  <AlertDialogCancel>ביטול</AlertDialogCancel>
-                  <AlertDialogAction
-                    onClick={() => {
-                      setDelOpen(false);
-                      delMut.mutate();
-                    }}
-                  >
-                    📁 העבר לארכיון
-                  </AlertDialogAction>
+                  <AlertDialogCancel>❌ ביטול</AlertDialogCancel>
                   <AlertDialogAction
                     className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
                     onClick={() => {
@@ -1402,11 +1392,12 @@ function MessageDetailDialog({
                       permDelMut.mutate();
                     }}
                   >
-                    🗑️ מחק לצמיתות
+                    🗑️ מחק
                   </AlertDialogAction>
                 </AlertDialogFooter>
               </AlertDialogContent>
             </AlertDialog>
+
           </>
         )}
       </DialogContent>

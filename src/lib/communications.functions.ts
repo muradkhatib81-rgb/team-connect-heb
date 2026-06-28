@@ -478,15 +478,20 @@ export async function editAnnouncement(annId: string, input: EditAnnouncementInp
   return { id: annId };
 }
 
-// ---------------- Permanent delete ----------------
+// ---------------- Permanent (global) delete ----------------
+// Removes the entity from every user — cascades clean up
+// recipients/targets/reads/attachments, and the RPC also wipes
+// any related schedule_notifications so no badges or notifications
+// remain for content that no longer exists.
 export async function permanentDeleteMessage(messageId: string) {
   await logAudit("message", messageId, "deleted", { permanent: true });
-  const { error } = await supabase.from("messages").delete().eq("id", messageId);
+  const { error } = await supabase.rpc("purge_message_global", { _message_id: messageId });
   if (error) throw error;
 }
 
 export async function permanentDeleteAnnouncement(annId: string) {
   await logAudit("announcement", annId, "deleted", { permanent: true });
-  const { error } = await supabase.from("announcements").delete().eq("id", annId);
+  const { error } = await supabase.rpc("purge_announcement_global", { _ann_id: annId });
   if (error) throw error;
 }
+
