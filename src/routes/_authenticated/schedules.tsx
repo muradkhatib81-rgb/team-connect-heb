@@ -278,6 +278,7 @@ function SchedulesPage() {
       schedQ.data?.approved_by,
       schedQ.data?.rejected_by,
       schedQ.data?.created_by,
+      (schedQ.data as any)?.updated_by,
       (schedQ.data as any)?.updated_at,
     ],
     queryFn: async () => {
@@ -334,30 +335,35 @@ function SchedulesPage() {
         };
       };
 
-      // Find the latest "updated" audit entry before approval that was not the creator.
+      // Find the latest explicit edit/copy event for the schedule. If an old row
+      // does not have such an audit row, fall back to schedules.updated_by and
+      // ultimately to the creator so the editor metadata is never blank.
       const auditList = (auditRows ?? []) as any[];
       let editor: ReturnType<typeof buildPerson> = null;
       const approvedT = s.approved_at ? new Date(s.approved_at).getTime() : Infinity;
       const submittedT = s.submitted_at ? new Date(s.submitted_at).getTime() : 0;
-      const updates = auditList.filter(
+      const updatesBeforeApproval = auditList.filter(
         (r) =>
-          r.action === "updated" &&
+          (r.action === "updated" || r.action === "copied") &&
           r.actor_id &&
           r.actor_id !== s.created_by &&
           new Date(r.created_at).getTime() <= approvedT &&
           new Date(r.created_at).getTime() >= submittedT,
       );
+      const editRows = auditList.filter(
+        (r) => (r.action === "updated" || r.action === "copied") && r.actor_id,
+      );
 
       let lastEditorId = s.updated_by;
       let lastUpdateAt = s.updated_at;
 
-      if (updates.length) {
-        const last = updates[updates.length - 1];
+      if (editRows.length) {
+        const last = editRows[editRows.length - 1];
         lastEditorId = last.actor_id;
         lastUpdateAt = last.created_at;
       }
 
-      if (lastEditorId && lastEditorId !== s.created_by) {
+      if (lastEditorId) {
         if (!rolesByUser.has(lastEditorId)) {
           const { data: extraRoles } = await supabase.from("user_roles").select("role").eq("user_id", lastEditorId);
           rolesByUser.set(lastEditorId, ((extraRoles ?? []) as any[]).map(r => (r as any).role));
@@ -370,6 +376,9 @@ function SchedulesPage() {
       const createdAt = createdRow?.created_at ?? s.created_at ?? null;
 
       const creator = buildPerson(s.created_by, createdAt);
+      if (!editor && s.created_by) {
+        editor = buildPerson(s.created_by, s.updated_at ?? createdAt);
+      }
       const approver = s.status === "approved" ? buildPerson(s.approved_by, s.approved_at) : null;
       const rejecter = s.status === "rejected" ? buildPerson(s.rejected_by, s.rejected_at) : null;
 
@@ -380,7 +389,7 @@ function SchedulesPage() {
         editor,
         approver,
         rejecter,
-        editedBeforeApproval: !!editor && s.status === "approved",
+        editedBeforeApproval: updatesBeforeApproval.length > 0 && s.status === "approved",
         full_name: decision?.full_name ?? "—",
         job_title: decision?.job_title ?? null,
         role_label: decision?.role_label ?? null,
