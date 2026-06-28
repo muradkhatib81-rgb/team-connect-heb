@@ -540,7 +540,10 @@ function SchedulesPage() {
     },
     onSuccess: () => {
       toast.success("נשמר");
+      qc.invalidateQueries({ queryKey: ["schedule", selectedDept, weekStart] });
       qc.invalidateQueries({ queryKey: ["schedule-shifts", visible?.id] });
+      qc.invalidateQueries({ queryKey: ["schedule-decision"] });
+      qc.invalidateQueries({ queryKey: ["dashboard-schedules"] });
     },
     onError: (e: any) => toast.error(e?.message ?? "שגיאה"),
   });
@@ -597,7 +600,10 @@ function SchedulesPage() {
     onSuccess: (r) => {
       toast.success(`הועתקו ${r.count} שיבוצים מהשבוע הקודם`);
       setCopyOpen(false);
+      qc.invalidateQueries({ queryKey: ["schedule", selectedDept, weekStart] });
       qc.invalidateQueries({ queryKey: ["schedule-shifts", visible?.id] });
+      qc.invalidateQueries({ queryKey: ["schedule-decision"] });
+      qc.invalidateQueries({ queryKey: ["dashboard-schedules"] });
     },
     onError: (e: any) => {
       toast.error(e?.message ?? "שגיאה");
