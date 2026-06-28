@@ -1968,6 +1968,12 @@ function OnBreakSection({ profile }: { profile: any }) {
   const isMainAdmin = profile.roles.includes("main_admin");
   const [open, setOpen] = useState(false);
   const [logOpen, setLogOpen] = useState(false);
+  const [logSearch, setLogSearch] = useState("");
+  const [logEmpFilter, setLogEmpFilter] = useState<string>("__all");
+  const [logDeptFilter, setLogDeptFilter] = useState<string>("__all");
+  const [logTypeFilter, setLogTypeFilter] = useState<string>("__all");
+  const [logStatusFilter, setLogStatusFilter] = useState<string>("__all");
+  const [logSort, setLogSort] = useState<"created" | "overrun" | "return">("created");
 
   const permQ = useQuery({
     enabled: !!profile.id && !isMainAdmin,
