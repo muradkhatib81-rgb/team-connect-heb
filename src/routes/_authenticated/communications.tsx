@@ -1064,6 +1064,7 @@ function AnnouncementCard({
   canEditThis,
   canDeleteThis,
   canViewReceipts,
+  onOpen,
   onEdit,
   onDelete,
   onShowReceipts,
@@ -1073,6 +1074,7 @@ function AnnouncementCard({
   canEditThis: boolean;
   canDeleteThis: boolean;
   canViewReceipts: boolean;
+  onOpen: () => void;
   onEdit: () => void;
   onDelete: () => void;
   onShowReceipts: () => void;
@@ -1087,7 +1089,13 @@ function AnnouncementCard({
   }, [ann.id, ann.is_read, qc]);
 
   return (
-    <Card className={cn("p-4 space-y-2 relative", !ann.is_read && "ring-2 ring-primary/40")}>
+    <Card
+      onClick={onOpen}
+      className={cn(
+        "p-4 space-y-2 relative cursor-pointer hover:bg-accent/40 transition-colors",
+        !ann.is_read && "ring-2 ring-primary/40",
+      )}
+    >
       {ann.image_url && (
         <img src={ann.image_url} alt="" className="w-full h-32 object-cover rounded-md" />
       )}
