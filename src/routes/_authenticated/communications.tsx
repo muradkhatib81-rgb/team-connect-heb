@@ -1116,7 +1116,10 @@ function AnnouncementCard({
         {ann.ends_at && ` · עד ${formatHeDateTime(ann.ends_at)}`}
         {ann.edited_at && ` · עודכן ${formatHeDateTime(ann.edited_at)}`}
       </p>
-      <div className="flex items-center justify-end pt-1 flex-wrap gap-1">
+      <div
+        className="flex items-center justify-end pt-1 flex-wrap gap-1"
+        onClick={(e) => e.stopPropagation()}
+      >
         {(canViewReceipts || ann.sender_id === userId) && (
           <Button size="sm" variant="outline" onClick={onShowReceipts} className="gap-1.5">
             <Eye className="size-4" /> 👁️ אישורי קריאה
