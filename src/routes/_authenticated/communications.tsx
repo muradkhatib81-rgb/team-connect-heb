@@ -198,9 +198,31 @@ function CommunicationsPage() {
     };
   }, [userId, qc]);
 
-  const [tab, setTab] = useState("inbox");
+  const search = Route.useSearch();
+  const navigate = useNavigate();
+  const initialTab: "inbox" | "announcements" | "sent" | "archive" =
+    search.tab ?? (search.ann ? "announcements" : search.msg ? "inbox" : "inbox");
+  const [tab, setTab] = useState<string>(initialTab);
   const [composeOpen, setComposeOpen] = useState(false);
   const [annOpen, setAnnOpen] = useState(false);
+
+  // React to incoming search params (e.g. clicking a different notification while page is open)
+  useEffect(() => {
+    if (search.tab) setTab(search.tab);
+    else if (search.ann) setTab("announcements");
+    else if (search.msg) setTab("inbox");
+  }, [search.tab, search.ann, search.msg]);
+
+  // Clears the deep-link search params (used after a dialog is closed)
+  const clearDeepLink = () => {
+    if (search.msg || search.ann || search.tab) {
+      navigate({
+        to: "/communications",
+        search: {},
+        replace: true,
+      });
+    }
+  };
 
   if (!me) return null;
 
