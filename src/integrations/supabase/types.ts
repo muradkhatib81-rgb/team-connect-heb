@@ -581,6 +581,48 @@ export type Database = {
         }
         Relationships: []
       }
+      profile_status_log: {
+        Row: {
+          action: string
+          actor_id: string | null
+          created_at: string
+          id: string
+          note: string | null
+          profile_id: string
+        }
+        Insert: {
+          action: string
+          actor_id?: string | null
+          created_at?: string
+          id?: string
+          note?: string | null
+          profile_id: string
+        }
+        Update: {
+          action?: string
+          actor_id?: string | null
+          created_at?: string
+          id?: string
+          note?: string | null
+          profile_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "profile_status_log_actor_id_fkey"
+            columns: ["actor_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "profile_status_log_profile_id_fkey"
+            columns: ["profile_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       profiles: {
         Row: {
           avatar_url: string | null
@@ -1381,6 +1423,15 @@ export type Database = {
         Returns: boolean
       }
       end_my_break: { Args: { _id: string }; Returns: undefined }
+      find_profile_by_id_number: {
+        Args: { _id_number: string }
+        Returns: {
+          department_id: string
+          full_name: string
+          id: string
+          is_active: boolean
+        }[]
+      }
       get_announcement_read_receipts: {
         Args: { _ann_id: string }
         Returns: {
@@ -1564,6 +1615,10 @@ export type Database = {
       reset_breaks_log_daily: { Args: never; Returns: undefined }
       set_department_manager: {
         Args: { _dept_id: string; _new_manager_id: string }
+        Returns: undefined
+      }
+      set_employee_active: {
+        Args: { _active: boolean; _note?: string; _user_id: string }
         Returns: undefined
       }
     }
