@@ -384,13 +384,14 @@ function EmployeesPage() {
       </header>
 
       {!isDeptManagerOnly && (
-        <section className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
-          <SummaryStatCard label="סך עובדים" value={summaryStats.total} icon={<Users className="size-5" />} tone="primary" emoji="👥" />
+        <section className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-7 gap-3">
+          <SummaryStatCard label="סך עובדים" value={summaryStats.total} icon={<Users className="size-5" />} tone="primary" emoji="👥" active={filterMode === "all"} onClick={() => setFilter("all")} />
+          <SummaryStatCard label="עובדים פעילים" value={summaryStats.active} icon={<UserCheck className="size-5" />} tone="green" emoji="🟢" active={filterMode === "active"} onClick={() => setFilter("active")} />
           <SummaryStatCard label="מנהלים" value={summaryStats.managers} icon={<Shield className="size-5" />} tone="indigo" emoji="👔" />
           <SummaryStatCard label="עובדים" value={summaryStats.workers} icon={<UserCheck className="size-5" />} tone="green" emoji="👤" />
-          <SummaryStatCard label="בחופשה" value={summaryStats.onLeave} icon={<Plane className="size-5" />} tone="sky" emoji="🏖️" />
-          <SummaryStatCard label="בהפסקה" value={summaryStats.onBreak} icon={<Coffee className="size-5" />} tone="amber" emoji="☕" />
-          <SummaryStatCard label="לא פעילים" value={summaryStats.inactive} icon={<UserX className="size-5" />} tone="red" emoji="🚫" />
+          <SummaryStatCard label="בחופשה" value={summaryStats.onLeave} icon={<Plane className="size-5" />} tone="sky" emoji="🏖️" active={filterMode === "on_leave"} onClick={() => setFilter("on_leave")} />
+          <SummaryStatCard label="בהפסקה" value={summaryStats.onBreak} icon={<Coffee className="size-5" />} tone="amber" emoji="☕" active={filterMode === "on_break"} onClick={() => setFilter("on_break")} />
+          <SummaryStatCard label="לא פעילים" value={summaryStats.inactive} icon={<UserX className="size-5" />} tone="red" emoji="❌" active={filterMode === "inactive"} onClick={() => setFilter("inactive")} />
         </section>
       )}
 
