@@ -514,11 +514,18 @@ function EmployeesPage() {
 
       {employeesQuery.isLoading ? (
         <div className="flex justify-center py-12"><Loader2 className="size-6 animate-spin text-primary" /></div>
+      ) : employeesQuery.isError ? (
+        <Card className="card-elevated p-6 text-center space-y-3">
+          <div className="text-destructive font-medium">שגיאה בטעינת רשימת העובדים</div>
+          <div className="text-sm text-muted-foreground">{(employeesQuery.error as Error)?.message ?? "לא ניתן לטעון נתונים"}</div>
+          <Button variant="outline" onClick={() => employeesQuery.refetch()}>נסה שוב</Button>
+        </Card>
       ) : filtered.length === 0 ? (
         <Card className="card-elevated p-10 text-center text-muted-foreground">
           לא נמצאו עובדים
         </Card>
       ) : (
+
         <div className="grid gap-3">
           {filtered.map((emp) => (
             <EmployeeRow
