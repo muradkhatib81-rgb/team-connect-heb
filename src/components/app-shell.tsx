@@ -133,7 +133,7 @@ export function AppShell({ children }: { children: ReactNode }) {
 
 
   const nav: { to: string; label: string; icon: typeof LayoutDashboard; visible: boolean; badge?: number }[] = [
-    { to: "/dashboard", label: "לוח בקרה", icon: LayoutDashboard, visible: !isPlainEmployee },
+    { to: "/dashboard", label: "לוח בקרה", icon: LayoutDashboard, visible: true },
     { to: "/tasks", label: "משימות", icon: ListTodo, visible: true },
     { to: "/schedules", label: "סידורי עבודה", icon: CalendarDays, visible: true },
     { to: "/communications", label: "מרכז תקשורת", icon: Megaphone, visible: true, badge: commUnreadQ.data ?? 0 },
