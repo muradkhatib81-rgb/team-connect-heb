@@ -461,20 +461,25 @@ function EmployeeScheduleCard({ profile }: { profile: any }) {
       const { data: sched, error: schedErr } = await supabase
         .from("schedules")
         .select(
-          "id, status, week_start, week_end, published_at, updated_at, approved_at, approved_by, submitted_at, created_by",
+          "id, status, week_start, week_end, published_at, updated_at, approved_at, approved_by, submitted_at, created_by, updated_by",
         )
         .eq("department_id", profile.department_id)
-        .eq("week_start", weekStart)
+        .lte("week_start", weekEnd)
+        .gte("week_end", weekStart)
         .eq("status", "approved")
+        .order("published_at", { ascending: false })
+        .limit(1)
         .maybeSingle();
       if (schedErr) throw schedErr;
-      if (!sched) return { sched: null, shifts: [] as any[], approver: null as any, editedBeforeApproval: false };
+      if (!sched) return { sched: null, shifts: [] as any[], approver: null as any, editedBeforeApproval: false, scheduleModified: false };
       const { data: shifts, error: shiftsErr } = await supabase
         .from("schedule_shifts")
-        .select("day_date, shift, published_shift")
-        .eq("schedule_id", sched.id)
-        .eq("employee_id", profile.id);
+        .select("employee_id, day_date, shift, published_shift")
+        .eq("schedule_id", sched.id);
       if (shiftsErr) throw shiftsErr;
+      const scheduleModified = ((shifts ?? []) as any[]).some(
+        (row) => (row.shift ?? null) !== (row.published_shift ?? null),
+      );
 
       let approver: any = null;
       let editedBeforeApproval = false;
@@ -517,7 +522,13 @@ function EmployeeScheduleCard({ profile }: { profile: any }) {
           });
         }
       }
-      return { sched, shifts: (shifts ?? []) as any[], approver, editedBeforeApproval };
+      return {
+        sched,
+        shifts: ((shifts ?? []) as any[]).filter((row) => row.employee_id === profile.id),
+        approver,
+        editedBeforeApproval,
+        scheduleModified,
+      };
     },
   });
 
@@ -545,7 +556,17 @@ function EmployeeScheduleCard({ profile }: { profile: any }) {
   const SHIFT_LABEL: Record<string, string> = { morning: "בוקר", evening: "ערב", off: "חופש" };
 
   return (
-    <Card className="card-elevated p-4">
+    <Card
+      className={`card-elevated p-4 relative ${
+        q.data?.scheduleModified ? "ring-2 ring-orange-500 border border-orange-500" : ""
+      }`}
+    >
+      {q.data?.scheduleModified && (
+        <RefreshCw
+          className="size-3 text-orange-600 absolute -top-1 -left-1 bg-background rounded-full p-0.5 box-content border border-orange-500"
+          aria-label="עודכן לאחר פרסום"
+        />
+      )}
       <div className="flex items-center justify-between mb-3">
         <h2 className="font-semibold text-base flex items-center gap-2">
           <CalendarDays className="size-5 text-primary" />
