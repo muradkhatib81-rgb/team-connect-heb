@@ -359,6 +359,17 @@ function EmployeesPage() {
         )}
       </header>
 
+      {!isDeptManagerOnly && (
+        <section className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+          <SummaryStatCard label="סך עובדים" value={summaryStats.total} icon={<Users className="size-5" />} tone="primary" emoji="👥" />
+          <SummaryStatCard label="מנהלים" value={summaryStats.managers} icon={<Shield className="size-5" />} tone="indigo" emoji="👔" />
+          <SummaryStatCard label="עובדים" value={summaryStats.workers} icon={<UserCheck className="size-5" />} tone="green" emoji="👤" />
+          <SummaryStatCard label="בחופשה" value={summaryStats.onLeave} icon={<Plane className="size-5" />} tone="sky" emoji="🏖️" />
+          <SummaryStatCard label="בהפסקה" value={summaryStats.onBreak} icon={<Coffee className="size-5" />} tone="amber" emoji="☕" />
+          <SummaryStatCard label="לא פעילים" value={summaryStats.inactive} icon={<UserX className="size-5" />} tone="red" emoji="🚫" />
+        </section>
+      )}
+
       {isDeptManagerOnly && me && managerDeptStats && (
         <Card className="card-elevated p-4">
           <div className="flex items-center gap-4">
