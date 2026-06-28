@@ -236,19 +236,20 @@ function EmployeesPage() {
     },
   });
 
-  // Live count of employees currently on an active break
+  // Live list of users currently on an active break (IDs, for filtering + count)
   const activeBreaksQ = useQuery({
     enabled: allowed,
     queryKey: ["employees-page-active-breaks"],
     queryFn: async () => {
-      const { count, error } = await supabase
+      const { data, error } = await supabase
         .from("break_requests")
-        .select("id", { count: "exact", head: true })
+        .select("user_id")
         .eq("status", "active");
       if (error) throw error;
-      return count ?? 0;
+      return Array.from(new Set((data ?? []).map((r: any) => r.user_id as string)));
     },
   });
+  const onBreakSet = useMemo(() => new Set(activeBreaksQ.data ?? []), [activeBreaksQ.data]);
 
   // Realtime: refresh stats when profiles, roles, departments, or breaks change
   useEffect(() => {
