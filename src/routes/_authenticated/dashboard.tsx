@@ -542,13 +542,6 @@ function EmployeeScheduleCard({ profile }: { profile: any }) {
   const shiftByDay = new Map<string, { shift: string; published_shift: string | null }>();
   for (const s of shifts) shiftByDay.set(s.day_date, s);
 
-  // Same modified-after-publication marker as the schedule screen:
-  // mark only the specific published cells whose current shift differs from the
-  // published snapshot, instead of relying on a broad schedule timestamp.
-  const updatedAfterPublish = shifts.some(
-    (s) => (s.shift ?? null) !== (s.published_shift ?? null),
-  );
-
   const SHIFT_LABEL: Record<string, string> = { morning: "בוקר", evening: "ערב", off: "חופש" };
 
   return (
