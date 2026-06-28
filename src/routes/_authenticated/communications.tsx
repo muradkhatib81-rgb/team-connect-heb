@@ -76,6 +76,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { CommSenderHeader } from "@/components/comm-sender-header";
 
 type CommSearch = {
   tab?: "inbox" | "announcements" | "sent" | "archive";
