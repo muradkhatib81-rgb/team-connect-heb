@@ -3,6 +3,8 @@ import { useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { BRANCH_NAME } from "@/lib/constants";
 
+export type ScheduleType = "weekly" | "monthly" | "custom";
+
 export interface CompanySettings {
   id: string;
   company_name: string;
@@ -11,6 +13,7 @@ export interface CompanySettings {
   phone: string | null;
   email: string | null;
   primary_color: string | null;
+  schedule_type: ScheduleType;
 }
 
 const DEFAULTS: CompanySettings = {
@@ -21,18 +24,24 @@ const DEFAULTS: CompanySettings = {
   phone: null,
   email: null,
   primary_color: null,
+  schedule_type: "weekly",
 };
 
 async function fetchCompanySettings(): Promise<CompanySettings> {
   const { data } = await supabase
     .from("company_settings" as any)
-    .select("id, company_name, logo_url, address, phone, email, primary_color")
+    .select("id, company_name, logo_url, address, phone, email, primary_color, schedule_type")
     .eq("is_active", true)
     .order("created_at", { ascending: true })
     .limit(1)
     .maybeSingle();
   if (!data) return DEFAULTS;
-  return data as unknown as CompanySettings;
+  const row = data as any;
+  return {
+    ...DEFAULTS,
+    ...row,
+    schedule_type: (row.schedule_type as ScheduleType) ?? "weekly",
+  };
 }
 
 export function useCompanySettings() {
