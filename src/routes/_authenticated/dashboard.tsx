@@ -582,6 +582,31 @@ function EmployeeScheduleCard({ profile }: { profile: any }) {
         </div>
       )}
 
+      {sched && q.data?.approver && (
+        <div
+          className={`mb-3 p-2 rounded text-xs border ${
+            q.data.editedBeforeApproval
+              ? "bg-amber-500/10 border-amber-500/30 text-amber-900 dark:text-amber-200"
+              : "bg-emerald-500/10 border-emerald-500/30 text-emerald-900 dark:text-emerald-200"
+          }`}
+        >
+          <p className="font-semibold">
+            {q.data.editedBeforeApproval ? "✏️ נערך ואושר על ידי" : "✅ אושר על ידי"}
+          </p>
+          <p className="mt-0.5">
+            👤 <span className="font-medium">{q.data.approver.full_name}</span>
+            {q.data.approver.role_label && <span> · 💼 {q.data.approver.role_label}</span>}
+            {q.data.approver.job_title && <span> ({q.data.approver.job_title})</span>}
+          </p>
+          <p>
+            📅🕒{" "}
+            <span className="font-medium">
+              {formatHeDateTime(sched.approved_at ?? sched.published_at ?? sched.updated_at)}
+            </span>
+          </p>
+        </div>
+      )}
+
       {!sched ? (
         <p className="text-sm text-muted-foreground py-4">
           טרם פורסם סידור עבודה מאושר לשבוע זה.
