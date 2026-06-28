@@ -268,10 +268,21 @@ function CommunicationsPage() {
         </TabsList>
 
         <TabsContent value="inbox" className="mt-4">
-          <InboxTab userId={userId!} canDelete={canDelete} />
+          <InboxTab
+            userId={userId!}
+            canDelete={canDelete}
+            initialMessageId={search.msg ?? null}
+            onClearDeepLink={clearDeepLink}
+          />
         </TabsContent>
         <TabsContent value="announcements" className="mt-4">
-          <AnnouncementsTab userId={userId!} canDelete={canDelete} canViewReceipts={canViewReceipts} />
+          <AnnouncementsTab
+            userId={userId!}
+            canDelete={canDelete}
+            canViewReceipts={canViewReceipts}
+            initialAnnouncementId={search.ann ?? null}
+            onClearDeepLink={clearDeepLink}
+          />
         </TabsContent>
         {canSeeSent && (
           <TabsContent value="sent" className="mt-4">
