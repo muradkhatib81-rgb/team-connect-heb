@@ -1,16 +1,17 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/use-auth";
-import { useCompanySettings } from "@/lib/use-company-settings";
+import { useCompanySettings, type ScheduleType } from "@/lib/use-company-settings";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { toast } from "sonner";
-import { Loader2, Upload, Trash2, Building2 } from "lucide-react";
+import { Loader2, Upload, Trash2, Building2, CalendarRange } from "lucide-react";
 
 export const Route = createFileRoute("/_authenticated/company-settings")({
   ssr: false,
@@ -42,9 +43,25 @@ function CompanySettingsPage() {
     email: "",
     primary_color: "",
     logo_url: "" as string | null | "",
+    schedule_type: "weekly" as ScheduleType,
   });
 
   const isMainAdmin = !!profile?.roles?.includes("main_admin");
+
+  // Permission: can_manage_schedule (used to change schedule type)
+  const manageSchedQ = useQuery({
+    enabled: !!profile?.id && !isMainAdmin,
+    queryKey: ["perm", "can_manage_schedule", profile?.id],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("user_task_permissions")
+        .select("can_manage_schedule")
+        .eq("user_id", profile!.id)
+        .maybeSingle();
+      return !!(data as any)?.can_manage_schedule;
+    },
+  });
+  const canManageSchedule = isMainAdmin || !!manageSchedQ.data;
 
   useEffect(() => {
     if (company) {
@@ -55,14 +72,15 @@ function CompanySettingsPage() {
         email: company.email ?? "",
         primary_color: company.primary_color ?? "",
         logo_url: company.logo_url ?? "",
+        schedule_type: company.schedule_type ?? "weekly",
       });
     }
-  }, [company?.id]);
+  }, [company?.id, company?.schedule_type]);
 
   const saveMut = useMutation({
     mutationFn: async () => {
       if (!form.company_name.trim()) throw new Error("שם החברה הוא שדה חובה");
-      const payload = {
+      const payload: Record<string, unknown> = {
         company_name: form.company_name.trim(),
         address: form.address.trim() || null,
         phone: form.phone.trim() || null,
@@ -70,6 +88,9 @@ function CompanySettingsPage() {
         primary_color: form.primary_color.trim() || null,
         logo_url: form.logo_url || null,
       };
+      if (canManageSchedule) {
+        payload.schedule_type = form.schedule_type;
+      }
 
       // Always resolve the current active row id directly from the DB,
       // so saves never create duplicate rows due to a stale client id.
@@ -128,7 +149,7 @@ function CompanySettingsPage() {
     );
   }
 
-  if (!isMainAdmin) {
+  if (!isMainAdmin && !canManageSchedule) {
     return (
       <div className="flex flex-col items-center justify-center py-20 text-center space-y-3">
         <div className="size-12 rounded-xl bg-destructive/10 flex items-center justify-center">
@@ -141,6 +162,8 @@ function CompanySettingsPage() {
       </div>
     );
   }
+
+  
 
   return (
     <div className="space-y-6">
@@ -156,6 +179,43 @@ function CompanySettingsPage() {
         </div>
       </div>
 
+      {canManageSchedule && (
+        <Card className="card-elevated p-6 space-y-4">
+          <div className="flex items-center gap-2">
+            <CalendarRange className="size-5 text-primary" />
+            <h2 className="text-lg font-semibold">📅 סוג סידור עבודה</h2>
+          </div>
+          <p className="text-xs text-muted-foreground">
+            ההגדרה משפיעה רק על סידורים חדשים. סידורים קיימים נשמרים ללא שינוי.
+          </p>
+          <RadioGroup
+            value={form.schedule_type}
+            onValueChange={(v) => setForm((f) => ({ ...f, schedule_type: v as ScheduleType }))}
+            className="grid sm:grid-cols-3 gap-2"
+          >
+            {[
+              { v: "weekly", label: "שבועי" },
+              { v: "monthly", label: "חודשי" },
+              { v: "custom", label: "מותאם אישית (בקרוב)" },
+            ].map((opt) => (
+              <label
+                key={opt.v}
+                className="flex items-center gap-2 border rounded-lg px-3 py-2 cursor-pointer hover:bg-muted/40"
+              >
+                <RadioGroupItem value={opt.v} id={`st-${opt.v}`} disabled={opt.v === "custom"} />
+                <span className="text-sm">{opt.label}</span>
+              </label>
+            ))}
+          </RadioGroup>
+          <div className="flex justify-end">
+            <Button onClick={() => saveMut.mutate()} disabled={saveMut.isPending} size="sm">
+              {saveMut.isPending ? <Loader2 className="size-4 animate-spin" /> : "שמירת סוג סידור"}
+            </Button>
+          </div>
+        </Card>
+      )}
+
+      {!isMainAdmin ? null : (
       <Card className="card-elevated p-6 space-y-5">
         <div className="space-y-2">
           <Label>לוגו החברה</Label>
@@ -283,6 +343,7 @@ function CompanySettingsPage() {
           </Button>
         </div>
       </Card>
+      )}
     </div>
   );
 }

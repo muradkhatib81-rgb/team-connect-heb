@@ -65,6 +65,14 @@ export const createOrGetSchedule = createServerFn({ method: "POST" })
       .eq("week_start", start)
       .maybeSingle();
     if (existing.data) return existing.data;
+    const { data: settings } = await context.supabase
+      .from("company_settings")
+      .select("schedule_type")
+      .eq("is_active", true)
+      .order("created_at", { ascending: true })
+      .limit(1)
+      .maybeSingle();
+    const scheduleType = (settings as any)?.schedule_type ?? "weekly";
     const { data: inserted, error } = await context.supabase
       .from("schedules")
       .insert({
@@ -73,6 +81,7 @@ export const createOrGetSchedule = createServerFn({ method: "POST" })
         week_end: end,
         status: "draft",
         created_by: context.userId,
+        schedule_type: scheduleType,
       })
       .select("*")
       .single();
