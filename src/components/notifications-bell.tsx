@@ -167,6 +167,38 @@ export function NotificationsBell() {
       .slice(0, 30);
   }, [schedQ.data, msgQ.data, annQ.data]);
 
+  const markOneRead = async (n: UnifiedItem) => {
+    if (!userId) return;
+    try {
+      if (n.kind === "schedule" && n.scheduleNotifId) {
+        await supabase
+          .from("schedule_notifications")
+          .update({ read_at: new Date().toISOString() })
+          .eq("id", n.scheduleNotifId);
+      } else if (n.kind === "message" && n.messageId) {
+        await supabase
+          .from("message_recipients")
+          .update({ read_at: new Date().toISOString() })
+          .eq("message_id", n.messageId)
+          .eq("user_id", userId);
+      } else if (n.kind === "announcement" && n.announcementId) {
+        await supabase.from("announcement_reads").upsert(
+          {
+            announcement_id: n.announcementId,
+            user_id: userId,
+            read_at: new Date().toISOString(),
+          },
+          { onConflict: "announcement_id,user_id" },
+        );
+      }
+    } finally {
+      qc.invalidateQueries({ queryKey: ["notif"] });
+      qc.invalidateQueries({ queryKey: ["shell-comm-unread"] });
+      qc.invalidateQueries({ queryKey: ["comm"] });
+    }
+  };
+
+
   const unreadCount = items.filter((i) => !i.read).length;
 
   const markAllRead = useMutation({
@@ -245,10 +277,20 @@ export function NotificationsBell() {
             <ul className="divide-y">
               {items.map((n) => {
                 const Icon = iconFor(n.kind);
+                const search =
+                  n.kind === "message" && n.messageId
+                    ? { tab: "inbox" as const, msg: n.messageId }
+                    : n.kind === "announcement" && n.announcementId
+                      ? { tab: "announcements" as const, ann: n.announcementId }
+                      : undefined;
                 return (
                   <li key={n.id}>
                     <Link
                       to={n.to}
+                      search={search as any}
+                      onClick={() => {
+                        void markOneRead(n);
+                      }}
                       className={cn(
                         "flex items-start gap-2 px-3 py-2.5 text-sm hover:bg-accent transition-colors",
                         !n.read && "bg-primary/5",

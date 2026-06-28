@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
@@ -76,9 +76,27 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { CommSenderHeader } from "@/components/comm-sender-header";
+
+type CommSearch = {
+  tab?: "inbox" | "announcements" | "sent" | "archive";
+  msg?: string;
+  ann?: string;
+};
 
 export const Route = createFileRoute("/_authenticated/communications")({
   component: CommunicationsPage,
+  validateSearch: (s: Record<string, unknown>): CommSearch => {
+    const tab = s.tab as string | undefined;
+    return {
+      tab:
+        tab === "inbox" || tab === "announcements" || tab === "sent" || tab === "archive"
+          ? tab
+          : undefined,
+      msg: typeof s.msg === "string" ? s.msg : undefined,
+      ann: typeof s.ann === "string" ? s.ann : undefined,
+    };
+  },
 });
 
 // ---------------- Shared helpers ----------------
@@ -180,9 +198,31 @@ function CommunicationsPage() {
     };
   }, [userId, qc]);
 
-  const [tab, setTab] = useState("inbox");
+  const search = Route.useSearch();
+  const navigate = useNavigate();
+  const initialTab: "inbox" | "announcements" | "sent" | "archive" =
+    search.tab ?? (search.ann ? "announcements" : search.msg ? "inbox" : "inbox");
+  const [tab, setTab] = useState<string>(initialTab);
   const [composeOpen, setComposeOpen] = useState(false);
   const [annOpen, setAnnOpen] = useState(false);
+
+  // React to incoming search params (e.g. clicking a different notification while page is open)
+  useEffect(() => {
+    if (search.tab) setTab(search.tab);
+    else if (search.ann) setTab("announcements");
+    else if (search.msg) setTab("inbox");
+  }, [search.tab, search.ann, search.msg]);
+
+  // Clears the deep-link search params (used after a dialog is closed)
+  const clearDeepLink = () => {
+    if (search.msg || search.ann || search.tab) {
+      navigate({
+        to: "/communications",
+        search: {},
+        replace: true,
+      });
+    }
+  };
 
   if (!me) return null;
 
@@ -228,10 +268,21 @@ function CommunicationsPage() {
         </TabsList>
 
         <TabsContent value="inbox" className="mt-4">
-          <InboxTab userId={userId!} canDelete={canDelete} />
+          <InboxTab
+            userId={userId!}
+            canDelete={canDelete}
+            initialMessageId={search.msg ?? null}
+            onClearDeepLink={clearDeepLink}
+          />
         </TabsContent>
         <TabsContent value="announcements" className="mt-4">
-          <AnnouncementsTab userId={userId!} canDelete={canDelete} canViewReceipts={canViewReceipts} />
+          <AnnouncementsTab
+            userId={userId!}
+            canDelete={canDelete}
+            canViewReceipts={canViewReceipts}
+            initialAnnouncementId={search.ann ?? null}
+            onClearDeepLink={clearDeepLink}
+          />
         </TabsContent>
         {canSeeSent && (
           <TabsContent value="sent" className="mt-4">
@@ -287,10 +338,25 @@ interface InboxRow {
   sender?: { full_name: string | null } | null;
 }
 
-function InboxTab({ userId, canDelete }: { userId: string; canDelete: boolean }) {
+function InboxTab({
+  userId,
+  canDelete,
+  initialMessageId,
+  onClearDeepLink,
+}: {
+  userId: string;
+  canDelete: boolean;
+  initialMessageId?: string | null;
+  onClearDeepLink?: () => void;
+}) {
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState<"all" | "unread" | "important">("all");
-  const [selected, setSelected] = useState<string | null>(null);
+  const [selected, setSelected] = useState<string | null>(initialMessageId ?? null);
+
+  // React to deep-link changes after initial mount
+  useEffect(() => {
+    if (initialMessageId) setSelected(initialMessageId);
+  }, [initialMessageId]);
 
   const q = useQuery({
     queryKey: ["comm", "inbox", userId],
@@ -403,7 +469,10 @@ function InboxTab({ userId, canDelete }: { userId: string; canDelete: boolean })
       {selected && (
         <MessageDetailDialog
           messageId={selected}
-          onClose={() => setSelected(null)}
+          onClose={() => {
+            setSelected(null);
+            onClearDeepLink?.();
+          }}
           viewerMode="inbox"
           canDelete={canDelete}
         />
@@ -694,26 +763,63 @@ function SentTab({
   );
 }
 
-// Lightweight announcement preview for the Sent screen
-function AnnouncementDetailDialog({ annId, onClose }: { annId: string; onClose: () => void }) {
+// Announcement preview dialog – used in Sent screen and as deep-link target
+function AnnouncementDetailDialog({
+  annId,
+  onClose,
+  showSender = false,
+}: {
+  annId: string;
+  onClose: () => void;
+  showSender?: boolean;
+}) {
+  const qc = useQueryClient();
   const q = useQuery({
     queryKey: ["comm", "ann-detail", annId],
     queryFn: async () => {
       const { data, error } = await supabase
         .from("announcements")
-        .select("id, title, body, priority, image_url, starts_at, ends_at, created_at, edited_at")
+        .select(
+          "id, title, body, priority, image_url, starts_at, ends_at, created_at, edited_at, sender_id, deleted_at",
+        )
         .eq("id", annId)
-        .single();
+        .maybeSingle();
       if (error) throw error;
       return data as any;
     },
   });
+
+  useEffect(() => {
+    if (!q.data || q.data.deleted_at) return;
+    markAnnouncementRead(annId)
+      .then(() => {
+        qc.invalidateQueries({ queryKey: ["comm"] });
+        qc.invalidateQueries({ queryKey: ["notif"] });
+        qc.invalidateQueries({ queryKey: ["shell-comm-unread"] });
+      })
+      .catch(() => {});
+  }, [annId, q.data, qc]);
+
   const d = q.data;
+  const missing = !q.isLoading && (!d || d.deleted_at);
+
   return (
     <Dialog open onOpenChange={(o) => !o && onClose()}>
       <DialogContent className="max-w-xl max-h-[90vh] overflow-y-auto" dir="rtl">
-        {!d ? (
+        {q.isLoading ? (
           <Loader2 className="mx-auto size-5 animate-spin" />
+        ) : missing ? (
+          <>
+            <DialogHeader>
+              <DialogTitle>הפריט אינו קיים עוד.</DialogTitle>
+              <DialogDescription>
+                הכרזה זו נמחקה או אינה זמינה. ההתראה הישנה הוסרה מהמערכת.
+              </DialogDescription>
+            </DialogHeader>
+            <DialogFooter>
+              <Button onClick={onClose}>סגור</Button>
+            </DialogFooter>
+          </>
         ) : (
           <>
             <DialogHeader>
@@ -726,6 +832,9 @@ function AnnouncementDetailDialog({ annId, onClose }: { annId: string; onClose: 
                 {d.ends_at && ` · בתוקף עד ${formatHeDateTime(d.ends_at)}`}
               </DialogDescription>
             </DialogHeader>
+            {showSender && d.sender_id && (
+              <CommSenderHeader senderId={d.sender_id} sentAt={d.created_at} />
+            )}
             {d.image_url && (
               <img src={d.image_url} alt="" className="w-full max-h-64 object-cover rounded-md" />
             )}
@@ -741,7 +850,19 @@ function AnnouncementDetailDialog({ annId, onClose }: { annId: string; onClose: 
 }
 
 // ---------------- Announcements ----------------
-function AnnouncementsTab({ userId, canDelete, canViewReceipts }: { userId: string; canDelete: boolean; canViewReceipts: boolean }) {
+function AnnouncementsTab({
+  userId,
+  canDelete,
+  canViewReceipts,
+  initialAnnouncementId,
+  onClearDeepLink,
+}: {
+  userId: string;
+  canDelete: boolean;
+  canViewReceipts: boolean;
+  initialAnnouncementId?: string | null;
+  onClearDeepLink?: () => void;
+}) {
   const qc = useQueryClient();
   const q = useQuery({
     queryKey: ["comm", "announcements", userId],
@@ -806,37 +927,55 @@ function AnnouncementsTab({ userId, canDelete, canViewReceipts }: { userId: stri
   const [editAnn, setEditAnn] = useState<any | null>(null);
   const [delAnn, setDelAnn] = useState<string | null>(null);
   const [receiptsAnn, setReceiptsAnn] = useState<string | null>(null);
+  const [openAnn, setOpenAnn] = useState<string | null>(initialAnnouncementId ?? null);
+
+  useEffect(() => {
+    if (initialAnnouncementId) setOpenAnn(initialAnnouncementId);
+  }, [initialAnnouncementId]);
 
   if (q.isLoading) return <Loader2 className="mx-auto size-5 animate-spin text-muted-foreground" />;
   const list = q.data ?? [];
-  if (!list.length)
-    return <Card className="p-8 text-center text-sm text-muted-foreground">אין הכרזות פעילות</Card>;
 
   return (
-    <div className="grid sm:grid-cols-2 gap-3">
-      {list.map((a: any) => {
-        const canEditThis = a.sender_id === userId;
-        const canDeleteThis = canDelete;
-        return (
-          <AnnouncementCard
-            key={a.id}
-            ann={a}
-            userId={userId}
-            canEditThis={canEditThis}
-            canDeleteThis={canDeleteThis}
-            canViewReceipts={canViewReceipts}
-            onEdit={() => setEditAnn(a)}
-            onDelete={() => setDelAnn(a.id)}
-            onShowReceipts={() => setReceiptsAnn(a.id)}
-          />
-        );
-      })}
+    <div className="space-y-3">
+      {list.length === 0 ? (
+        <Card className="p-8 text-center text-sm text-muted-foreground">אין הכרזות פעילות</Card>
+      ) : (
+        <div className="grid sm:grid-cols-2 gap-3">
+          {list.map((a: any) => {
+            const canEditThis = a.sender_id === userId;
+            const canDeleteThis = canDelete;
+            return (
+              <AnnouncementCard
+                key={a.id}
+                ann={a}
+                userId={userId}
+                canEditThis={canEditThis}
+                canDeleteThis={canDeleteThis}
+                canViewReceipts={canViewReceipts}
+                onOpen={() => setOpenAnn(a.id)}
+                onEdit={() => setEditAnn(a)}
+                onDelete={() => setDelAnn(a.id)}
+                onShowReceipts={() => setReceiptsAnn(a.id)}
+              />
+            );
+          })}
+        </div>
+      )}
+
+      {openAnn && (
+        <AnnouncementDetailDialog
+          annId={openAnn}
+          showSender
+          onClose={() => {
+            setOpenAnn(null);
+            onClearDeepLink?.();
+          }}
+        />
+      )}
 
       {editAnn && (
-        <EditAnnouncementDialog
-          ann={editAnn}
-          onClose={() => setEditAnn(null)}
-        />
+        <EditAnnouncementDialog ann={editAnn} onClose={() => setEditAnn(null)} />
       )}
 
       {receiptsAnn && (
@@ -874,7 +1013,6 @@ function AnnouncementsTab({ userId, canDelete, canViewReceipts }: { userId: stri
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-
     </div>
   );
 }
@@ -966,6 +1104,7 @@ function AnnouncementCard({
   canEditThis,
   canDeleteThis,
   canViewReceipts,
+  onOpen,
   onEdit,
   onDelete,
   onShowReceipts,
@@ -975,6 +1114,7 @@ function AnnouncementCard({
   canEditThis: boolean;
   canDeleteThis: boolean;
   canViewReceipts: boolean;
+  onOpen: () => void;
   onEdit: () => void;
   onDelete: () => void;
   onShowReceipts: () => void;
@@ -989,7 +1129,13 @@ function AnnouncementCard({
   }, [ann.id, ann.is_read, qc]);
 
   return (
-    <Card className={cn("p-4 space-y-2 relative", !ann.is_read && "ring-2 ring-primary/40")}>
+    <Card
+      onClick={onOpen}
+      className={cn(
+        "p-4 space-y-2 relative cursor-pointer hover:bg-accent/40 transition-colors",
+        !ann.is_read && "ring-2 ring-primary/40",
+      )}
+    >
       {ann.image_url && (
         <img src={ann.image_url} alt="" className="w-full h-32 object-cover rounded-md" />
       )}
@@ -1010,7 +1156,10 @@ function AnnouncementCard({
         {ann.ends_at && ` · עד ${formatHeDateTime(ann.ends_at)}`}
         {ann.edited_at && ` · עודכן ${formatHeDateTime(ann.edited_at)}`}
       </p>
-      <div className="flex items-center justify-end pt-1 flex-wrap gap-1">
+      <div
+        className="flex items-center justify-end pt-1 flex-wrap gap-1"
+        onClick={(e) => e.stopPropagation()}
+      >
         {(canViewReceipts || ann.sender_id === userId) && (
           <Button size="sm" variant="outline" onClick={onShowReceipts} className="gap-1.5">
             <Eye className="size-4" /> 👁️ אישורי קריאה
@@ -1183,11 +1332,12 @@ function MessageDetailDialog({
       const { data: m, error } = await supabase
         .from("messages")
         .select(
-          "id, title, body, priority, requires_acknowledgment, sender_id, created_at, edited_at, edited_by, edit_count",
+          "id, title, body, priority, requires_acknowledgment, sender_id, created_at, edited_at, edited_by, edit_count, deleted_at",
         )
         .eq("id", messageId)
-        .single();
+        .maybeSingle();
       if (error) throw error;
+      if (!m) return { missing: true } as any;
       const { data: sender } = await supabase
         .from("profiles")
         .select("full_name")
@@ -1214,16 +1364,29 @@ function MessageDetailDialog({
           .eq("message_id", messageId);
         recipients = recs ?? [];
       }
-      return { msg: m, sender_name: sender?.full_name ?? "—", editor_name, atts: atts ?? [], recipients };
+      return {
+        msg: m,
+        sender_name: sender?.full_name ?? "—",
+        editor_name,
+        atts: atts ?? [],
+        recipients,
+        missing: !!m.deleted_at,
+      };
     },
   });
 
   // Auto-mark read in inbox mode
   useEffect(() => {
-    if (viewerMode === "inbox") {
-      markMessageRead(messageId).then(() => qc.invalidateQueries({ queryKey: ["comm"] }));
-    }
-  }, [messageId, viewerMode, qc]);
+    if (viewerMode !== "inbox") return;
+    if (!q.data || q.data.missing) return;
+    markMessageRead(messageId)
+      .then(() => {
+        qc.invalidateQueries({ queryKey: ["comm"] });
+        qc.invalidateQueries({ queryKey: ["notif"] });
+        qc.invalidateQueries({ queryKey: ["shell-comm-unread"] });
+      })
+      .catch(() => {});
+  }, [messageId, viewerMode, qc, q.data]);
 
   const ackMut = useMutation({
     mutationFn: () => acknowledgeMessage(messageId),
@@ -1270,6 +1433,18 @@ function MessageDetailDialog({
       <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto" dir="rtl">
         {q.isLoading || !d ? (
           <Loader2 className="mx-auto size-5 animate-spin" />
+        ) : d.missing ? (
+          <>
+            <DialogHeader>
+              <DialogTitle>הפריט אינו קיים עוד.</DialogTitle>
+              <DialogDescription>
+                הודעה זו נמחקה או אינה זמינה. ההתראה הישנה הוסרה מהמערכת.
+              </DialogDescription>
+            </DialogHeader>
+            <DialogFooter>
+              <Button onClick={onClose}>סגור</Button>
+            </DialogFooter>
+          </>
         ) : (
           <>
             <DialogHeader>
@@ -1288,7 +1463,7 @@ function MessageDetailDialog({
                 )}
               </DialogTitle>
               <DialogDescription>
-                מאת {d.sender_name} · {formatHeDateTime(d.msg.created_at)}
+                {formatHeDateTime(d.msg.created_at)}
                 {d.msg.edited_at && (
                   <>
                     <br />
@@ -1297,6 +1472,10 @@ function MessageDetailDialog({
                 )}
               </DialogDescription>
             </DialogHeader>
+
+            {viewerMode === "inbox" && d.msg.sender_id && (
+              <CommSenderHeader senderId={d.msg.sender_id} sentAt={d.msg.created_at} />
+            )}
 
             <div className="whitespace-pre-wrap text-sm leading-relaxed">{d.msg.body}</div>
 
