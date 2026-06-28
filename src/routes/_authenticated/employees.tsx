@@ -1095,3 +1095,42 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
     </div>
   );
 }
+
+function SummaryStatCard({
+  label,
+  value,
+  icon,
+  tone,
+  emoji,
+}: {
+  label: string;
+  value: number;
+  icon: React.ReactNode;
+  tone: "primary" | "green" | "red" | "sky" | "amber" | "indigo";
+  emoji: string;
+}) {
+  const toneClasses: Record<string, string> = {
+    primary: "bg-primary/10 text-primary",
+    green: "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400",
+    red: "bg-red-500/10 text-red-600 dark:text-red-400",
+    sky: "bg-sky-500/10 text-sky-600 dark:text-sky-400",
+    amber: "bg-amber-500/10 text-amber-600 dark:text-amber-400",
+    indigo: "bg-indigo-500/10 text-indigo-600 dark:text-indigo-400",
+  };
+  return (
+    <Card className="card-elevated p-3">
+      <div className="flex items-center gap-3">
+        <div className={`size-10 rounded-xl flex items-center justify-center shrink-0 ${toneClasses[tone]}`}>
+          {icon}
+        </div>
+        <div className="min-w-0">
+          <p className="text-xs text-muted-foreground truncate">
+            <span className="me-1">{emoji}</span>
+            {label}
+          </p>
+          <p className="text-xl font-bold leading-tight">{value}</p>
+        </div>
+      </div>
+    </Card>
+  );
+}
