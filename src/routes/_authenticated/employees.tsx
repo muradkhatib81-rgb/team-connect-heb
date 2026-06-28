@@ -636,24 +636,38 @@ function CreateEmployeeDialog({
     on_leave: boolean;
   };
   const [duplicate, setDuplicate] = useState<DuplicateInfo | null>(null);
+  type ArchivedInfo = {
+    id: string;
+    full_name: string;
+    job_title: string | null;
+    department_name: string | null;
+    archived_at: string;
+    deactivated_at: string | null;
+  };
+  const [archived, setArchived] = useState<ArchivedInfo | null>(null);
+  const [viewingArchive, setViewingArchive] = useState<ArchivedInfo | null>(null);
   const setActiveFn = useServerFn(setEmployeeActive);
 
-  const mutation = useMutation({
-    mutationFn: async () => {
-      if (!form.department_id) throw new Error("יש לבחור מחלקה");
-      if (!/^\d{5,15}$/.test(form.id_number)) throw new Error("מספר זהות חייב להכיל 5–15 ספרות");
-      if (form.password.length < 6) throw new Error("סיסמה ראשונית של 6 תווים לפחות");
-      if (!form.full_name.trim()) throw new Error("יש למלא שם עובד");
-      const res = await createFn({ data: { ...form, job_title: "", avatar_url: null } });
-      if (avatarFile && res?.id) {
-        try {
-          const path = await uploadAvatar(avatarFile, res.id);
-          await supabase.from("profiles").update({ avatar_url: path }).eq("id", res.id);
-        } catch (e: any) {
-          toast.error("העובד נוצר אך העלאת התמונה נכשלה: " + (e?.message ?? ""));
-        }
+  const runCreate = async (forceArchived: boolean) => {
+    if (!form.department_id) throw new Error("יש לבחור מחלקה");
+    if (!/^\d{5,15}$/.test(form.id_number)) throw new Error("מספר זהות חייב להכיל 5–15 ספרות");
+    if (form.password.length < 6) throw new Error("סיסמה ראשונית של 6 תווים לפחות");
+    if (!form.full_name.trim()) throw new Error("יש למלא שם עובד");
+    const res = await createFn({
+      data: { ...form, job_title: "", avatar_url: null, force_archived: forceArchived },
+    });
+    if (avatarFile && res?.id) {
+      try {
+        const path = await uploadAvatar(avatarFile, res.id);
+        await supabase.from("profiles").update({ avatar_url: path }).eq("id", res.id);
+      } catch (e: any) {
+        toast.error("העובד נוצר אך העלאת התמונה נכשלה: " + (e?.message ?? ""));
       }
-    },
+    }
+  };
+
+  const mutation = useMutation({
+    mutationFn: () => runCreate(false),
     onSuccess: () => {
       toast.success("העובד נוצר. סיסמה ראשונית — העובד יחויב להחליפה בכניסה הראשונה.");
       qc.invalidateQueries({ queryKey: ["employees"] });
@@ -670,6 +684,16 @@ function CreateEmployeeDialog({
         try {
           const parsed = JSON.parse(msg.slice(idx + "DUPLICATE_EMPLOYEE::".length));
           setDuplicate(parsed as DuplicateInfo);
+          return;
+        } catch {
+          // fall through to toast
+        }
+      }
+      const aidx = msg.indexOf("ARCHIVED_EXISTS::");
+      if (aidx >= 0) {
+        try {
+          const parsed = JSON.parse(msg.slice(aidx + "ARCHIVED_EXISTS::".length));
+          setArchived(parsed as ArchivedInfo);
           return;
         } catch {
           // fall through to toast
@@ -692,6 +716,22 @@ function CreateEmployeeDialog({
       toast.error(msg);
     },
   });
+
+  const forceCreateMutation = useMutation({
+    mutationFn: () => runCreate(true),
+    onSuccess: () => {
+      toast.success("עובד חדש נוצר בהצלחה");
+      qc.invalidateQueries({ queryKey: ["employees"] });
+      qc.invalidateQueries({ queryKey: ["all-roles"] });
+      qc.invalidateQueries({ queryKey: ["departments"] });
+      qc.invalidateQueries({ queryKey: ["dashboard", "stats"] });
+      qc.invalidateQueries({ queryKey: ["dashboard", "employees-total", "active"] });
+      setArchived(null);
+      onClose();
+    },
+    onError: (e: any) => toast.error(e?.message ?? "שגיאה ביצירת עובד"),
+  });
+
 
   const reactivateMutation = useMutation({
     mutationFn: async (userId: string) =>
