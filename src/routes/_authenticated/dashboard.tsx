@@ -546,7 +546,7 @@ function EmployeeScheduleCard({ profile }: { profile: any }) {
   // mark only the specific published cells whose current shift differs from the
   // published snapshot, instead of relying on a broad schedule timestamp.
   const updatedAfterPublish = shifts.some(
-    (s) => s.published_shift !== null && s.shift !== s.published_shift,
+    (s) => (s.shift ?? null) !== (s.published_shift ?? null),
   );
 
   const SHIFT_LABEL: Record<string, string> = { morning: "בוקר", evening: "ערב", off: "חופש" };
@@ -601,7 +601,7 @@ function EmployeeScheduleCard({ profile }: { profile: any }) {
           {weekDays.map((d, i) => {
             const cell = shiftByDay.get(d);
             const sh = cell?.shift ?? "off";
-            const isModified = !!cell && cell.published_shift !== null && cell.shift !== cell.published_shift;
+            const isModified = !!cell && (cell.shift ?? null) !== (cell.published_shift ?? null);
             const tone =
               sh === "morning"
                 ? "bg-amber-50 text-amber-900"
