@@ -43,6 +43,7 @@ function CompanySettingsPage() {
     email: "",
     primary_color: "",
     logo_url: "" as string | null | "",
+    schedule_type: "weekly" as ScheduleType,
   });
 
   const isMainAdmin = !!profile?.roles?.includes("main_admin");
