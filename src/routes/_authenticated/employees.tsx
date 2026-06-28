@@ -84,7 +84,8 @@ const FILTER_LABELS: Record<FilterMode, string> = {
   all: "👥 כל העובדים",
   active: "🟢 עובדים פעילים",
   inactive: "🔴 עובדים לא פעילים",
-  on_leave: "🟡 בחופש",
+  on_leave: "🏖️ בחופשה",
+  on_break: "☕ בהפסקה",
 };
 
 
