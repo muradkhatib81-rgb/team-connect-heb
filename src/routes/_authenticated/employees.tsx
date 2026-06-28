@@ -753,9 +753,35 @@ function CreateEmployeeDialog({ depts, onClose }: { depts: DeptOption[]; onClose
           </DialogFooter>
         </form>
       </DialogContent>
+      {inactiveMatch && (
+        <AlertDialog open onOpenChange={(o) => !o && setInactiveMatch(null)}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>העובד כבר קיים במערכת</AlertDialogTitle>
+              <AlertDialogDescription>
+                העובד <strong>{inactiveMatch.name}</strong> כבר קיים במערכת ומוגדר כ-<strong>לא פעיל</strong>. כל הנתונים שלו נשמרו. ניתן להפעיל את העובד מחדש במקום ליצור רשומה חדשה.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel disabled={reactivateMutation.isPending}>סגירה</AlertDialogCancel>
+              <AlertDialogAction
+                disabled={reactivateMutation.isPending}
+                onClick={(e) => {
+                  e.preventDefault();
+                  reactivateMutation.mutate(inactiveMatch.id);
+                }}
+                className="bg-green-600 hover:bg-green-700 text-white"
+              >
+                {reactivateMutation.isPending ? <Loader2 className="size-4 animate-spin" /> : "✅ הפעל מחדש את העובד"}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+      )}
     </Dialog>
   );
 }
+
 
 function EmployeeRow({
   emp,
