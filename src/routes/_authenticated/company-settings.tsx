@@ -163,7 +163,7 @@ function CompanySettingsPage() {
     );
   }
 
-  const generalDisabled = !isMainAdmin;
+  
 
   return (
     <div className="space-y-6">
