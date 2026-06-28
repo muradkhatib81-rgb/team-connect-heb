@@ -606,9 +606,41 @@ function CreateEmployeeDialog({ depts, onClose }: { depts: DeptOption[]; onClose
     role: "employee" as AppRole,
   });
   const [avatarFile, setAvatarFile] = useState<File | null>(null);
-  // When the server reports the id_number already belongs to an inactive employee
-  // we offer to reactivate that record instead of creating a duplicate.
-  const [inactiveMatch, setInactiveMatch] = useState<{ id: string; name: string } | null>(null);
+function CreateEmployeeDialog({
+  depts,
+  onClose,
+  onEditExisting,
+  onViewExisting,
+}: {
+  depts: DeptOption[];
+  onClose: () => void;
+  onEditExisting?: (id: string) => void;
+  onViewExisting?: (idNumber: string) => void;
+}) {
+  const qc = useQueryClient();
+  const createFn = useServerFn(createEmployee);
+  const defaultDept = depts[0]?.id ?? "";
+  const [form, setForm] = useState({
+    full_name: "",
+    id_number: "",
+    department_id: defaultDept,
+    phone: "",
+    password: "",
+    role: "employee" as AppRole,
+  });
+  const [avatarFile, setAvatarFile] = useState<File | null>(null);
+  // When the server reports the id_number already belongs to an existing employee
+  // (active or inactive) we surface a rich dialog with details and contextual actions.
+  type DuplicateInfo = {
+    id: string;
+    name: string;
+    job_title: string;
+    department_id: string | null;
+    department_name: string | null;
+    is_active: boolean;
+    on_leave: boolean;
+  };
+  const [duplicate, setDuplicate] = useState<DuplicateInfo | null>(null);
   const setActiveFn = useServerFn(setEmployeeActive);
 
   const mutation = useMutation({
@@ -638,9 +670,28 @@ function CreateEmployeeDialog({ depts, onClose }: { depts: DeptOption[]; onClose
     },
     onError: (e: any) => {
       const msg: string = e?.message ?? "שגיאה ביצירת עובד";
+      const idx = msg.indexOf("DUPLICATE_EMPLOYEE::");
+      if (idx >= 0) {
+        try {
+          const parsed = JSON.parse(msg.slice(idx + "DUPLICATE_EMPLOYEE::".length));
+          setDuplicate(parsed as DuplicateInfo);
+          return;
+        } catch {
+          // fall through to toast
+        }
+      }
+      // Backwards compatibility with the previous error format
       const m = msg.match(/INACTIVE_EXISTS::([0-9a-f-]+)::(.*)$/);
       if (m) {
-        setInactiveMatch({ id: m[1], name: m[2] || "עובד" });
+        setDuplicate({
+          id: m[1],
+          name: m[2] || "עובד",
+          job_title: "",
+          department_id: null,
+          department_name: null,
+          is_active: false,
+          on_leave: false,
+        });
         return;
       }
       toast.error(msg);
@@ -657,7 +708,7 @@ function CreateEmployeeDialog({ depts, onClose }: { depts: DeptOption[]; onClose
       qc.invalidateQueries({ queryKey: ["departments"] });
       qc.invalidateQueries({ queryKey: ["dashboard", "stats"] });
       qc.invalidateQueries({ queryKey: ["dashboard", "employees-total", "active"] });
-      setInactiveMatch(null);
+      setDuplicate(null);
       onClose();
     },
     onError: (e: any) => toast.error(e?.message ?? "שגיאה בהפעלת העובד"),
@@ -768,27 +819,74 @@ function CreateEmployeeDialog({ depts, onClose }: { depts: DeptOption[]; onClose
           </DialogFooter>
         </form>
       </DialogContent>
-      {inactiveMatch && (
-        <AlertDialog open onOpenChange={(o) => !o && setInactiveMatch(null)}>
+      {duplicate && (
+        <AlertDialog open onOpenChange={(o) => !o && setDuplicate(null)}>
           <AlertDialogContent>
             <AlertDialogHeader>
-              <AlertDialogTitle>העובד כבר קיים במערכת</AlertDialogTitle>
-              <AlertDialogDescription>
-                העובד <strong>{inactiveMatch.name}</strong> כבר קיים במערכת ומוגדר כ-<strong>לא פעיל</strong>. כל הנתונים שלו נשמרו. ניתן להפעיל את העובד מחדש במקום ליצור רשומה חדשה.
+              <AlertDialogTitle>
+                ⚠️ {duplicate.is_active ? "עובד זה כבר פעיל במערכת" : "מספר הזהות כבר קיים במערכת"}
+              </AlertDialogTitle>
+              <AlertDialogDescription asChild>
+                <div className="space-y-3 text-right">
+                  <p className="text-sm text-muted-foreground">
+                    {duplicate.is_active
+                      ? "לא ניתן ליצור עובד נוסף עם אותו מספר זהות. להלן פרטי העובד הקיים:"
+                      : "כל הנתונים של העובד נשמרו. ניתן להפעיל את העובד מחדש במקום ליצור רשומה חדשה."}
+                  </p>
+                  <div className="rounded-md border border-border bg-muted/40 p-3 text-sm space-y-1.5">
+                    <div>👤 <span className="text-muted-foreground">שם:</span> <strong>{duplicate.name || "—"}</strong></div>
+                    <div>💼 <span className="text-muted-foreground">תפקיד:</span> <strong>{duplicate.job_title || "—"}</strong></div>
+                    <div>🏬 <span className="text-muted-foreground">מחלקה:</span> <strong>{duplicate.department_name || "—"}</strong></div>
+                    <div>
+                      📌 <span className="text-muted-foreground">סטטוס:</span>{" "}
+                      {duplicate.is_active ? (
+                        <span className="inline-flex items-center gap-1 font-semibold text-green-600">🟢 פעיל{duplicate.on_leave ? " (בחופשה)" : ""}</span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1 font-semibold text-red-600">🔴 לא פעיל</span>
+                      )}
+                    </div>
+                  </div>
+                </div>
               </AlertDialogDescription>
             </AlertDialogHeader>
-            <AlertDialogFooter>
-              <AlertDialogCancel disabled={reactivateMutation.isPending}>סגירה</AlertDialogCancel>
-              <AlertDialogAction
-                disabled={reactivateMutation.isPending}
-                onClick={(e) => {
-                  e.preventDefault();
-                  reactivateMutation.mutate(inactiveMatch.id);
-                }}
-                className="bg-green-600 hover:bg-green-700 text-white"
-              >
-                {reactivateMutation.isPending ? <Loader2 className="size-4 animate-spin" /> : "✅ הפעל מחדש את העובד"}
-              </AlertDialogAction>
+            <AlertDialogFooter className="flex-col-reverse sm:flex-row sm:justify-end gap-2">
+              <AlertDialogCancel disabled={reactivateMutation.isPending}>❌ ביטול</AlertDialogCancel>
+              {duplicate.is_active && onViewExisting && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => {
+                    onViewExisting(form.id_number);
+                    setDuplicate(null);
+                  }}
+                >
+                  👁️ צפייה בכרטיס העובד
+                </Button>
+              )}
+              {onEditExisting && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => {
+                    onEditExisting(duplicate.id);
+                    setDuplicate(null);
+                  }}
+                >
+                  ✏️ ערוך את פרטי העובד
+                </Button>
+              )}
+              {!duplicate.is_active && (
+                <AlertDialogAction
+                  disabled={reactivateMutation.isPending}
+                  onClick={(e) => {
+                    e.preventDefault();
+                    reactivateMutation.mutate(duplicate.id);
+                  }}
+                  className="bg-green-600 hover:bg-green-700 text-white"
+                >
+                  {reactivateMutation.isPending ? <Loader2 className="size-4 animate-spin" /> : "✅ הפעל מחדש את העובד"}
+                </AlertDialogAction>
+              )}
             </AlertDialogFooter>
           </AlertDialogContent>
         </AlertDialog>
