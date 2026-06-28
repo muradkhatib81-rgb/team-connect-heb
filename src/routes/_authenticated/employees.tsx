@@ -159,6 +159,23 @@ function EmployeesPage() {
   const allowed = allowedAdmin || isDeptManager;
   const isMainAdmin = me ? canManageUsers(me.roles) : false;
 
+  // Reactivation flow — flip is_active back to true and write an audit entry via RPC.
+  const setActiveFn = useServerFn(setEmployeeActive);
+  const reactivateMutation = useMutation({
+    mutationFn: async (userId: string) =>
+      setActiveFn({ data: { user_id: userId, is_active: true } }),
+    onSuccess: () => {
+      toast.success("העובד הופעל מחדש");
+      qcPage.invalidateQueries({ queryKey: ["employees"] });
+      qcPage.invalidateQueries({ queryKey: ["all-roles"] });
+      qcPage.invalidateQueries({ queryKey: ["departments"] });
+      qcPage.invalidateQueries({ queryKey: ["dashboard", "stats"] });
+      qcPage.invalidateQueries({ queryKey: ["dashboard", "employees-total", "active"] });
+    },
+    onError: (e: any) => toast.error(e?.message ?? "שגיאה בהפעלת העובד"),
+  });
+
+
   const deptsQuery = useQuery({
     enabled: allowed,
     queryKey: ["departments", "options"],
