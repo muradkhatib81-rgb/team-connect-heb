@@ -141,7 +141,7 @@ function EmployeesPage() {
   const [resetting, setResetting] = useState<ProfileRow | null>(null);
   const [deleting, setDeleting] = useState<ProfileRow | null>(null);
 
-  const filterMode: FilterMode = search.filter ?? "all";
+  const filterMode: FilterMode = search.filter ?? "active";
   const allowedAdmin = me ? isAdmin(me.roles) : false;
   const isDeptManagerOnly =
     me ? me.roles.includes("department_manager") && !allowedAdmin : false;
