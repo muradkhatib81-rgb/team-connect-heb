@@ -887,18 +887,25 @@ function AnnouncementsTab({
   const [editAnn, setEditAnn] = useState<any | null>(null);
   const [delAnn, setDelAnn] = useState<string | null>(null);
   const [receiptsAnn, setReceiptsAnn] = useState<string | null>(null);
+  const [openAnn, setOpenAnn] = useState<string | null>(initialAnnouncementId ?? null);
+
+  useEffect(() => {
+    if (initialAnnouncementId) setOpenAnn(initialAnnouncementId);
+  }, [initialAnnouncementId]);
 
   if (q.isLoading) return <Loader2 className="mx-auto size-5 animate-spin text-muted-foreground" />;
   const list = q.data ?? [];
-  if (!list.length)
-    return <Card className="p-8 text-center text-sm text-muted-foreground">אין הכרזות פעילות</Card>;
 
   return (
-    <div className="grid sm:grid-cols-2 gap-3">
-      {list.map((a: any) => {
-        const canEditThis = a.sender_id === userId;
-        const canDeleteThis = canDelete;
-        return (
+    <>
+      {!list.length && !openAnn ? (
+        <Card className="p-8 text-center text-sm text-muted-foreground">אין הכרזות פעילות</Card>
+      ) : (
+        <div className="grid sm:grid-cols-2 gap-3">
+          {list.map((a: any) => {
+            const canEditThis = a.sender_id === userId;
+            const canDeleteThis = canDelete;
+            return (
           <AnnouncementCard
             key={a.id}
             ann={a}
