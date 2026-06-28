@@ -42,59 +42,29 @@ function DashboardPage() {
   const [deptDialogId, setDeptDialogId] = useState<string | null>(null);
   const [empDialogId, setEmpDialogId] = useState<string | null>(null);
 
-  // Permission to see the "employees" total card on the dashboard
-  const employeesCardPermQ = useQuery({
-    enabled: !!profile?.id && !admin,
-    queryKey: ["dashboard-employees-card-perm", profile?.id],
-    queryFn: async () => {
-      const { data } = await supabase
-        .from("user_task_permissions")
-        .select(
-          "can_view_all_employees, can_add_employee, can_edit_employee, can_delete_employee, can_view_employee_details",
-        )
-        .eq("user_id", profile!.id)
-        .maybeSingle();
-      const p: any = data ?? {};
-      return !!(
-        p.can_view_all_employees ||
-        p.can_add_employee ||
-        p.can_edit_employee ||
-        p.can_delete_employee ||
-        p.can_view_employee_details
-      );
-    },
-  });
-  const canSeeEmployeesCard = admin || !!employeesCardPermQ.data;
-
-  // Active employees count (company-wide, RLS-scoped). Inactive employees are not counted here.
-  const employeesTotalQ = useQuery({
-    enabled: canSeeEmployeesCard,
-    queryKey: ["dashboard", "employees-total", "active"],
-    queryFn: async () => {
-      const { count, error } = await supabase
-        .from("profiles")
-        .select("id", { count: "exact", head: true })
-        .eq("is_active", true);
-      if (error) throw error;
-      return count ?? 0;
-    },
-  });
 
 
   const statsQuery = useQuery({
     enabled: admin,
     queryKey: ["dashboard", "stats"],
     queryFn: async () => {
-      const [{ data: profs, error: pErr }, { data: depts, error: dErr }] = await Promise.all([
+      const [
+        { data: profs, error: pErr },
+        { data: depts, error: dErr },
+        { data: breaks, error: bErr },
+      ] = await Promise.all([
         supabase.from("profiles").select("id, is_active, on_leave, department_id"),
         supabase.from("departments").select("id, name, is_active").order("name"),
+        supabase.from("break_requests").select("user_id").eq("status", "active"),
       ]);
       if (pErr) throw pErr;
       if (dErr) throw dErr;
+      if (bErr) throw bErr;
       const total = profs!.length;
       const onLeave = profs!.filter((d: any) => d.on_leave).length;
       const active = profs!.filter((d: any) => d.is_active && !d.on_leave).length;
       const inactive = profs!.filter((d: any) => !d.is_active).length;
+      const onBreak = new Set((breaks ?? []).map((b: any) => b.user_id as string)).size;
       const byDept: Record<string, number> = {};
       (depts as DeptRow[]).forEach((d) => (byDept[d.id] = 0));
       profs!.forEach((p: any) => {
@@ -102,7 +72,7 @@ function DashboardPage() {
           byDept[p.department_id] += 1;
         }
       });
-      return { total, active, inactive, onLeave, byDept, departments: depts as DeptRow[] };
+      return { total, active, inactive, onLeave, onBreak, byDept, departments: depts as DeptRow[] };
     },
   });
 
@@ -187,6 +157,9 @@ function DashboardPage() {
       .on("postgres_changes", { event: "*", schema: "public", table: "tasks" }, () => {
         queryClient.invalidateQueries({ queryKey: ["dashboard", "tasks-stats"] });
       })
+      .on("postgres_changes", { event: "*", schema: "public", table: "break_requests" }, () => {
+        queryClient.invalidateQueries({ queryKey: ["dashboard", "stats"] });
+      })
       .subscribe();
     return () => {
       supabase.removeChannel(channel);
@@ -214,9 +187,6 @@ function DashboardPage() {
 
       <EmployeeOfMonthSection />
 
-      {canSeeEmployeesCard && (
-        <EmployeesTotalCard total={employeesTotalQ.data ?? 0} loading={employeesTotalQ.isLoading} />
-      )}
 
       {admin || isDeptManager ? (
         <>
@@ -413,7 +383,7 @@ function AdminDashboard({
   loading,
   onSelectDept,
 }: {
-  stats?: { total: number; active: number; inactive: number; onLeave: number; byDept: Record<string, number>; departments: DeptRow[] };
+  stats?: { total: number; active: number; inactive: number; onLeave: number; onBreak: number; byDept: Record<string, number>; departments: DeptRow[] };
   loading: boolean;
   onSelectDept?: (id: string) => void;
 }) {
@@ -432,11 +402,12 @@ function AdminDashboard({
 
   return (
     <>
-      <section className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard label="סך עובדים" value={stats.total} icon={Users} tone="primary" onClick={() => go("all")} />
-        <StatCard label="עובדים פעילים" value={stats.active} icon={UserCheck} tone="success" onClick={() => go("active")} />
-        <StatCard label="בחופש" value={stats.onLeave} icon={Plane} tone="warning" onClick={() => go("on_leave")} />
-        <StatCard label="לא פעילים" value={stats.inactive} icon={UserX} tone="muted" onClick={() => go("inactive")} />
+      <section className="grid grid-cols-2 lg:grid-cols-5 gap-4">
+        <StatCard label="👥 סך עובדים" value={stats.total} icon={Users} tone="primary" onClick={() => go("all")} />
+        <StatCard label="🟢 עובדים פעילים" value={stats.active} icon={UserCheck} tone="success" onClick={() => go("active")} />
+        <StatCard label="🏖️ בחופשה" value={stats.onLeave} icon={Plane} tone="warning" onClick={() => go("on_leave")} />
+        <StatCard label="☕ בהפסקה" value={stats.onBreak} icon={Coffee} tone="warning" onClick={() => go("on_break")} />
+        <StatCard label="❌ עובדים לא פעילים" value={stats.inactive} icon={UserX} tone="muted" onClick={() => go("inactive")} />
       </section>
 
       <section>
@@ -918,35 +889,6 @@ function EmployeeNewAnnouncementsCard({ userId }: { userId: string }) {
   );
 }
 
-function EmployeesTotalCard({ total, loading }: { total: number; loading: boolean }) {
-  const navigate = useNavigate();
-  return (
-    <section>
-      <button
-        type="button"
-        onClick={() => navigate({ to: "/employees", search: { filter: "active", dept: "all" } as any })}
-        className="block w-full text-right"
-        aria-label="פתח ניהול עובדים"
-      >
-        <Card className="card-elevated p-5 cursor-pointer hover:bg-accent/30 transition-colors">
-          <div className="flex items-center justify-between gap-4">
-            <div>
-              <p className="text-sm text-muted-foreground">👥 עובדים</p>
-              <p className="text-3xl font-bold mt-2">
-                {loading ? <Loader2 className="size-6 animate-spin text-primary" /> : total}
-              </p>
-              <p className="text-xs text-muted-foreground mt-1">סך העובדים הפעילים</p>
-
-            </div>
-            <div className="size-12 rounded-xl bg-primary/10 text-primary flex items-center justify-center">
-              <Users className="size-6" />
-            </div>
-          </div>
-        </Card>
-      </button>
-    </section>
-  );
-}
 
 function StatCard({
 

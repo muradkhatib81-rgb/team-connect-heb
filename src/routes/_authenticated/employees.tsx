@@ -45,7 +45,7 @@ import {
 import { Search, Loader2, Pencil, UserPlus, Filter, ImagePlus, X, KeyRound, Trash2, Users, UserCheck, UserX, Plane, Coffee, Shield, Power } from "lucide-react";
 import { toast } from "sonner";
 
-type FilterMode = "all" | "active" | "inactive" | "on_leave";
+type FilterMode = "all" | "active" | "inactive" | "on_leave" | "on_break";
 
 interface EmployeesSearch {
   filter?: FilterMode;
@@ -55,7 +55,7 @@ interface EmployeesSearch {
 export const Route = createFileRoute("/_authenticated/employees")({
   component: EmployeesPage,
   validateSearch: (s: Record<string, unknown>): EmployeesSearch => ({
-    filter: (["all", "active", "inactive", "on_leave"].includes(s.filter as string)
+    filter: (["all", "active", "inactive", "on_leave", "on_break"].includes(s.filter as string)
       ? (s.filter as FilterMode)
       : undefined),
     dept: typeof s.dept === "string" ? s.dept : undefined,
@@ -84,7 +84,8 @@ const FILTER_LABELS: Record<FilterMode, string> = {
   all: "👥 כל העובדים",
   active: "🟢 עובדים פעילים",
   inactive: "🔴 עובדים לא פעילים",
-  on_leave: "🟡 בחופש",
+  on_leave: "🏖️ בחופשה",
+  on_break: "☕ בהפסקה",
 };
 
 
@@ -235,19 +236,20 @@ function EmployeesPage() {
     },
   });
 
-  // Live count of employees currently on an active break
+  // Live list of users currently on an active break (IDs, for filtering + count)
   const activeBreaksQ = useQuery({
     enabled: allowed,
     queryKey: ["employees-page-active-breaks"],
     queryFn: async () => {
-      const { count, error } = await supabase
+      const { data, error } = await supabase
         .from("break_requests")
-        .select("id", { count: "exact", head: true })
+        .select("user_id")
         .eq("status", "active");
       if (error) throw error;
-      return count ?? 0;
+      return Array.from(new Set((data ?? []).map((r: any) => r.user_id as string)));
     },
   });
+  const onBreakSet = useMemo(() => new Set(activeBreaksQ.data ?? []), [activeBreaksQ.data]);
 
   // Realtime: refresh stats when profiles, roles, departments, or breaks change
   useEffect(() => {
@@ -282,6 +284,7 @@ function EmployeesPage() {
       if (filterMode === "active" && (!e.is_active || e.on_leave)) return false;
       if (filterMode === "inactive" && e.is_active) return false;
       if (filterMode === "on_leave" && !e.on_leave) return false;
+      if (filterMode === "on_break" && !onBreakSet.has(e.id)) return false;
       if (!term) return true;
       return (
         e.full_name.toLowerCase().includes(term) ||
@@ -289,7 +292,7 @@ function EmployeesPage() {
         (e.phone ?? "").includes(term)
       );
     });
-  }, [employeesQuery.data, searchTerm, deptFilter, filterMode, isDeptManagerOnly, me?.id]);
+  }, [employeesQuery.data, searchTerm, deptFilter, filterMode, isDeptManagerOnly, me?.id, onBreakSet]);
 
   // Manager's own department stats (excluding the manager themselves)
   const managerDeptStats = useMemo(() => {
@@ -321,6 +324,7 @@ function EmployeesPage() {
     const roles = rolesQuery.data ?? {};
     let managers = 0;
     let workers = 0;
+    let active = 0;
     let onLeave = 0;
     let inactive = 0;
     list.forEach((e) => {
@@ -328,18 +332,20 @@ function EmployeesPage() {
       const isManager = r.some((role) => role !== "employee");
       if (isManager) managers += 1;
       else workers += 1;
+      if (e.is_active && !e.on_leave) active += 1;
       if (e.on_leave) onLeave += 1;
       if (!e.is_active) inactive += 1;
     });
     return {
       total: list.length,
+      active,
       managers,
       workers,
       onLeave,
       inactive,
-      onBreak: activeBreaksQ.data ?? 0,
+      onBreak: onBreakSet.size,
     };
-  }, [employeesQuery.data, rolesQuery.data, activeBreaksQ.data]);
+  }, [employeesQuery.data, rolesQuery.data, onBreakSet]);
 
   if (meLoading) {
     return <div className="flex justify-center py-12"><Loader2 className="size-6 animate-spin text-primary" /></div>;
@@ -378,13 +384,14 @@ function EmployeesPage() {
       </header>
 
       {!isDeptManagerOnly && (
-        <section className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
-          <SummaryStatCard label="סך עובדים" value={summaryStats.total} icon={<Users className="size-5" />} tone="primary" emoji="👥" />
+        <section className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-7 gap-3">
+          <SummaryStatCard label="סך עובדים" value={summaryStats.total} icon={<Users className="size-5" />} tone="primary" emoji="👥" active={filterMode === "all"} onClick={() => setFilter("all")} />
+          <SummaryStatCard label="עובדים פעילים" value={summaryStats.active} icon={<UserCheck className="size-5" />} tone="green" emoji="🟢" active={filterMode === "active"} onClick={() => setFilter("active")} />
           <SummaryStatCard label="מנהלים" value={summaryStats.managers} icon={<Shield className="size-5" />} tone="indigo" emoji="👔" />
           <SummaryStatCard label="עובדים" value={summaryStats.workers} icon={<UserCheck className="size-5" />} tone="green" emoji="👤" />
-          <SummaryStatCard label="בחופשה" value={summaryStats.onLeave} icon={<Plane className="size-5" />} tone="sky" emoji="🏖️" />
-          <SummaryStatCard label="בהפסקה" value={summaryStats.onBreak} icon={<Coffee className="size-5" />} tone="amber" emoji="☕" />
-          <SummaryStatCard label="לא פעילים" value={summaryStats.inactive} icon={<UserX className="size-5" />} tone="red" emoji="🚫" />
+          <SummaryStatCard label="בחופשה" value={summaryStats.onLeave} icon={<Plane className="size-5" />} tone="sky" emoji="🏖️" active={filterMode === "on_leave"} onClick={() => setFilter("on_leave")} />
+          <SummaryStatCard label="בהפסקה" value={summaryStats.onBreak} icon={<Coffee className="size-5" />} tone="amber" emoji="☕" active={filterMode === "on_break"} onClick={() => setFilter("on_break")} />
+          <SummaryStatCard label="לא פעילים" value={summaryStats.inactive} icon={<UserX className="size-5" />} tone="red" emoji="❌" active={filterMode === "inactive"} onClick={() => setFilter("inactive")} />
         </section>
       )}
 
@@ -1302,12 +1309,16 @@ function SummaryStatCard({
   icon,
   tone,
   emoji,
+  active,
+  onClick,
 }: {
   label: string;
   value: number;
   icon: React.ReactNode;
   tone: "primary" | "green" | "red" | "sky" | "amber" | "indigo";
   emoji: string;
+  active?: boolean;
+  onClick?: () => void;
 }) {
   const toneClasses: Record<string, string> = {
     primary: "bg-primary/10 text-primary",
@@ -1317,20 +1328,31 @@ function SummaryStatCard({
     amber: "bg-amber-500/10 text-amber-600 dark:text-amber-400",
     indigo: "bg-indigo-500/10 text-indigo-600 dark:text-indigo-400",
   };
-  return (
-    <Card className="card-elevated p-3">
-      <div className="flex items-center gap-3">
-        <div className={`size-10 rounded-xl flex items-center justify-center shrink-0 ${toneClasses[tone]}`}>
-          {icon}
-        </div>
-        <div className="min-w-0">
-          <p className="text-xs text-muted-foreground truncate">
-            <span className="me-1">{emoji}</span>
-            {label}
-          </p>
-          <p className="text-xl font-bold leading-tight">{value}</p>
-        </div>
+  const inner = (
+    <div className="flex items-center gap-3">
+      <div className={`size-10 rounded-xl flex items-center justify-center shrink-0 ${toneClasses[tone]}`}>
+        {icon}
       </div>
-    </Card>
+      <div className="min-w-0 text-right">
+        <p className="text-xs text-muted-foreground truncate">
+          <span className="me-1">{emoji}</span>
+          {label}
+        </p>
+        <p className="text-xl font-bold leading-tight">{value}</p>
+      </div>
+    </div>
   );
+  if (onClick) {
+    return (
+      <button
+        type="button"
+        onClick={onClick}
+        className={`text-right transition-all ${active ? "ring-2 ring-primary" : "hover:bg-accent/40"} rounded-xl`}
+        aria-pressed={active}
+      >
+        <Card className="card-elevated p-3">{inner}</Card>
+      </button>
+    );
+  }
+  return <Card className="card-elevated p-3">{inner}</Card>;
 }
