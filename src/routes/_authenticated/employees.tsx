@@ -593,19 +593,6 @@ function AvatarPicker({
   );
 }
 
-function CreateEmployeeDialog({ depts, onClose }: { depts: DeptOption[]; onClose: () => void }) {
-  const qc = useQueryClient();
-  const createFn = useServerFn(createEmployee);
-  const defaultDept = depts[0]?.id ?? "";
-  const [form, setForm] = useState({
-    full_name: "",
-    id_number: "",
-    department_id: defaultDept,
-    phone: "",
-    password: "",
-    role: "employee" as AppRole,
-  });
-  const [avatarFile, setAvatarFile] = useState<File | null>(null);
 function CreateEmployeeDialog({
   depts,
   onClose,
