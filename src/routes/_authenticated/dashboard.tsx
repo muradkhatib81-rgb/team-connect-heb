@@ -1001,9 +1001,7 @@ function SchedulesStatsSection({ profile }: { profile: any }) {
         const { data: shifts } = await supabase
           .from("schedule_shifts")
           .select("shift, day_date, published_shift")
-          .in("schedule_id", ids)
-          .gte("day_date", weekStart)
-          .lte("day_date", weekEnd);
+          .in("schedule_id", ids);
         for (const s of (shifts ?? []) as { shift: string; day_date: string; published_shift: string | null }[]) {
           if ((s.shift ?? null) !== (s.published_shift ?? null)) hasScheduleModified = true;
           const b = weekCounts[s.day_date];
