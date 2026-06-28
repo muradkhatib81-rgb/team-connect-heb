@@ -1,7 +1,7 @@
 import { createFileRoute, useNavigate, useSearch } from "@tanstack/react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { useState, useMemo, useRef } from "react";
+import { useState, useMemo, useRef, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { createEmployee, resetEmployeePassword, deleteEmployee } from "@/lib/employees.functions";
 import {
@@ -42,7 +42,7 @@ import {
   DialogTitle,
   DialogFooter,
 } from "@/components/ui/dialog";
-import { Search, Loader2, Pencil, UserPlus, Filter, ImagePlus, X, KeyRound, Trash2 } from "lucide-react";
+import { Search, Loader2, Pencil, UserPlus, Filter, ImagePlus, X, KeyRound, Trash2, Users, UserCheck, UserX, Plane, Coffee, Shield } from "lucide-react";
 import { toast } from "sonner";
 
 type FilterMode = "all" | "active" | "inactive" | "on_leave";
@@ -134,6 +134,7 @@ function EmployeesPage() {
   const navigate = useNavigate();
   const search = useSearch({ from: "/_authenticated/employees" });
   const { data: me, isLoading: meLoading } = useAuth();
+  const qcPage = useQueryClient();
   const [searchTerm, setSearchTerm] = useState("");
   const [editing, setEditing] = useState<ProfileRow | null>(null);
   const [creating, setCreating] = useState(false);
@@ -216,6 +217,43 @@ function EmployeesPage() {
     },
   });
 
+  // Live count of employees currently on an active break
+  const activeBreaksQ = useQuery({
+    enabled: allowed,
+    queryKey: ["employees-page-active-breaks"],
+    queryFn: async () => {
+      const { count, error } = await supabase
+        .from("break_requests")
+        .select("id", { count: "exact", head: true })
+        .eq("status", "active");
+      if (error) throw error;
+      return count ?? 0;
+    },
+  });
+
+  // Realtime: refresh stats when profiles, roles, departments, or breaks change
+  useEffect(() => {
+    if (!allowed) return;
+    const ch = supabase
+      .channel("employees-page-realtime")
+      .on("postgres_changes", { event: "*", schema: "public", table: "profiles" }, () => {
+        qcPage.invalidateQueries({ queryKey: ["employees"] });
+      })
+      .on("postgres_changes", { event: "*", schema: "public", table: "user_roles" }, () => {
+        qcPage.invalidateQueries({ queryKey: ["all-roles"] });
+      })
+      .on("postgres_changes", { event: "*", schema: "public", table: "departments" }, () => {
+        qcPage.invalidateQueries({ queryKey: ["departments", "options"] });
+      })
+      .on("postgres_changes", { event: "*", schema: "public", table: "break_requests" }, () => {
+        qcPage.invalidateQueries({ queryKey: ["employees-page-active-breaks"] });
+      })
+      .subscribe();
+    return () => {
+      supabase.removeChannel(ch);
+    };
+  }, [allowed, qcPage]);
+
   const filtered = useMemo(() => {
     const data = employeesQuery.data ?? [];
     const term = searchTerm.trim().toLowerCase();
@@ -259,6 +297,32 @@ function EmployeesPage() {
   const avatarsQ = useSignedAvatarUrls((employeesQuery.data ?? []).map((e) => e.avatar_url));
   const avatarMap = avatarsQ.data ?? {};
 
+  // Top-level summary stats (company-wide, scoped by RLS via employeesQuery)
+  const summaryStats = useMemo(() => {
+    const list = employeesQuery.data ?? [];
+    const roles = rolesQuery.data ?? {};
+    let managers = 0;
+    let workers = 0;
+    let onLeave = 0;
+    let inactive = 0;
+    list.forEach((e) => {
+      const r = roles[e.id] ?? [];
+      const isManager = r.some((role) => role !== "employee");
+      if (isManager) managers += 1;
+      else workers += 1;
+      if (e.on_leave) onLeave += 1;
+      if (!e.is_active) inactive += 1;
+    });
+    return {
+      total: list.length,
+      managers,
+      workers,
+      onLeave,
+      inactive,
+      onBreak: activeBreaksQ.data ?? 0,
+    };
+  }, [employeesQuery.data, rolesQuery.data, activeBreaksQ.data]);
+
   if (meLoading) {
     return <div className="flex justify-center py-12"><Loader2 className="size-6 animate-spin text-primary" /></div>;
   }
@@ -294,6 +358,17 @@ function EmployeesPage() {
           </Button>
         )}
       </header>
+
+      {!isDeptManagerOnly && (
+        <section className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+          <SummaryStatCard label="סך עובדים" value={summaryStats.total} icon={<Users className="size-5" />} tone="primary" emoji="👥" />
+          <SummaryStatCard label="מנהלים" value={summaryStats.managers} icon={<Shield className="size-5" />} tone="indigo" emoji="👔" />
+          <SummaryStatCard label="עובדים" value={summaryStats.workers} icon={<UserCheck className="size-5" />} tone="green" emoji="👤" />
+          <SummaryStatCard label="בחופשה" value={summaryStats.onLeave} icon={<Plane className="size-5" />} tone="sky" emoji="🏖️" />
+          <SummaryStatCard label="בהפסקה" value={summaryStats.onBreak} icon={<Coffee className="size-5" />} tone="amber" emoji="☕" />
+          <SummaryStatCard label="לא פעילים" value={summaryStats.inactive} icon={<UserX className="size-5" />} tone="red" emoji="🚫" />
+        </section>
+      )}
 
       {isDeptManagerOnly && me && managerDeptStats && (
         <Card className="card-elevated p-4">
@@ -1018,5 +1093,44 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
       <Label className="text-xs text-muted-foreground">{label}</Label>
       {children}
     </div>
+  );
+}
+
+function SummaryStatCard({
+  label,
+  value,
+  icon,
+  tone,
+  emoji,
+}: {
+  label: string;
+  value: number;
+  icon: React.ReactNode;
+  tone: "primary" | "green" | "red" | "sky" | "amber" | "indigo";
+  emoji: string;
+}) {
+  const toneClasses: Record<string, string> = {
+    primary: "bg-primary/10 text-primary",
+    green: "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400",
+    red: "bg-red-500/10 text-red-600 dark:text-red-400",
+    sky: "bg-sky-500/10 text-sky-600 dark:text-sky-400",
+    amber: "bg-amber-500/10 text-amber-600 dark:text-amber-400",
+    indigo: "bg-indigo-500/10 text-indigo-600 dark:text-indigo-400",
+  };
+  return (
+    <Card className="card-elevated p-3">
+      <div className="flex items-center gap-3">
+        <div className={`size-10 rounded-xl flex items-center justify-center shrink-0 ${toneClasses[tone]}`}>
+          {icon}
+        </div>
+        <div className="min-w-0">
+          <p className="text-xs text-muted-foreground truncate">
+            <span className="me-1">{emoji}</span>
+            {label}
+          </p>
+          <p className="text-xl font-bold leading-tight">{value}</p>
+        </div>
+      </div>
+    </Card>
   );
 }

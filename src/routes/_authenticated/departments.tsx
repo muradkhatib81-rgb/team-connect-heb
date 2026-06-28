@@ -63,12 +63,29 @@ function DepartmentsPage() {
   const navigate = useNavigate();
   const { data: me, isLoading: meLoading } = useAuth();
   const isMainAdmin = me ? canManageUsers(me.roles) : false;
+  const qcRT = useQueryClient();
 
   const [creating, setCreating] = useState(false);
   const [editing, setEditing] = useState<DepartmentRow | null>(null);
   const [deleting, setDeleting] = useState<DepartmentRow | null>(null);
   const [deptDialogId, setDeptDialogId] = useState<string | null>(null);
   const [empDialogId, setEmpDialogId] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!me) return;
+    const ch = supabase
+      .channel("departments-page-realtime")
+      .on("postgres_changes", { event: "*", schema: "public", table: "profiles" }, () => {
+        qcRT.invalidateQueries({ queryKey: ["departments", "counts"] });
+      })
+      .on("postgres_changes", { event: "*", schema: "public", table: "departments" }, () => {
+        qcRT.invalidateQueries({ queryKey: ["departments", "list"] });
+      })
+      .subscribe();
+    return () => {
+      supabase.removeChannel(ch);
+    };
+  }, [me, qcRT]);
 
   const deptsQuery = useQuery({
     enabled: !!me,
@@ -171,9 +188,8 @@ function DepartmentsPage() {
                     <Building2 className="size-5" />
                   </div>
                 </div>
-                <div className="mt-4 grid grid-cols-2 gap-3">
+                <div className="mt-4">
                   <Stat label="סך עובדים" value={c.total} />
-                  <Stat label="פעילים" value={c.active} />
                 </div>
                 <div className="flex items-center justify-between mt-4">
                   {!d.is_active && (
