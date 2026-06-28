@@ -315,54 +315,37 @@ function SchedulesPage() {
     ],
     queryFn: async () => {
       const s: any = schedQ.data!;
-      const roleLabels: Record<string, string> = {
-        main_admin: "מנהל ראשי",
-        branch_manager: "מנהל סניף",
-        assistant_manager: "סגן מנהל",
-        department_manager: "אחראי מחלקה",
-        employee: "עובד",
-      };
-      const order = ["main_admin", "branch_manager", "assistant_manager", "department_manager", "employee"];
-
+      const auditRes = await supabase
+        .from("schedule_audit_log")
+        .select("actor_id, action, created_at")
+        .eq("schedule_id", s.id)
+        .order("created_at", { ascending: true });
+      const auditList = ((auditRes.data ?? []) as any[]).filter(Boolean);
+      const auditActorIds = auditList.map((r) => r.actor_id).filter(Boolean);
       const ids = Array.from(
         new Set(
-          [s.created_by, s.approved_by, s.rejected_by, s.submitted_by, s.updated_by].filter(
-            (v): v is string => !!v,
-          ),
+          [
+            s.created_by,
+            s.approved_by,
+            s.rejected_by,
+            s.submitted_by,
+            s.updated_by,
+            ...auditActorIds,
+          ].filter((v): v is string => !!v),
         ),
       );
-      const [{ data: profs }, { data: roles }, { data: auditRows }] = await Promise.all([
-        ids.length
-          ? (supabase as any).rpc("get_profiles_basic_info", { user_ids: ids })
-          : Promise.resolve({ data: [] as any[] }),
-        ids.length
-          ? supabase.from("user_roles").select("user_id, role").in("user_id", ids)
-          : Promise.resolve({ data: [] as any[] }),
-        supabase
-          .from("schedule_audit_log")
-          .select("actor_id, action, created_at")
-          .eq("schedule_id", s.id)
-          .order("created_at", { ascending: true }),
-      ]);
-
-      const profMap = new Map<string, any>((profs ?? []).map((p: any) => [p.id, p]));
-      const rolesByUser = new Map<string, string[]>();
-      for (const r of (roles ?? []) as any[]) {
-        const arr = rolesByUser.get(r.user_id) ?? [];
-        arr.push(r.role);
-        rolesByUser.set(r.user_id, arr);
-      }
+      const profRes = ids.length
+        ? await (supabase as any).rpc("get_profiles_basic_info", { user_ids: ids })
+        : { data: [] as any[] };
+      const profMap = new Map<string, any>(((profRes as any).data ?? []).map((p: any) => [p.id, p]));
       const buildPerson = (uid: string | null, at: string | null) => {
         if (!uid) return null;
         const p = profMap.get(uid);
-        const list = (rolesByUser.get(uid) ?? []).slice();
-        list.sort((a, b) => order.indexOf(a) - order.indexOf(b));
-        const topRole = list[0] ?? null;
         return {
           id: uid,
-          full_name: p?.full_name ?? "—",
+          full_name: p?.full_name ?? "לא ידוע",
           job_title: p?.job_title ?? null,
-          role_label: topRole ? roleLabels[topRole] ?? topRole : p?.role_label ?? null,
+          role_label: p?.role_label ?? "לא ידוע",
           at,
         };
       };
@@ -370,15 +353,18 @@ function SchedulesPage() {
       // Find the latest explicit edit/copy event for the schedule. If an old row
       // does not have such an audit row, fall back to schedules.updated_by and
       // ultimately to the creator so the editor metadata is never blank.
-      const auditList = (auditRows ?? []) as any[];
-      let editor: ReturnType<typeof buildPerson> = null;
+      let editor: SchedulePersonMeta = null;
+      const createdRow = auditList.find((r) => r.action === "created");
+      const approvedRow = [...auditList].reverse().find((r) => r.action === "approved" || r.action === "published");
+      const rejectedRow = [...auditList].reverse().find((r) => r.action === "rejected");
+      const creatorId = s.created_by ?? createdRow?.actor_id ?? null;
       const approvedT = s.approved_at ? new Date(s.approved_at).getTime() : Infinity;
       const submittedT = s.submitted_at ? new Date(s.submitted_at).getTime() : 0;
       const updatesBeforeApproval = auditList.filter(
         (r) =>
           (r.action === "updated" || r.action === "copied") &&
           r.actor_id &&
-          r.actor_id !== s.created_by &&
+          r.actor_id !== creatorId &&
           new Date(r.created_at).getTime() <= approvedT &&
           new Date(r.created_at).getTime() >= submittedT,
       );
@@ -396,23 +382,22 @@ function SchedulesPage() {
       }
 
       if (lastEditorId) {
-        if (!rolesByUser.has(lastEditorId)) {
-          const { data: extraRoles } = await supabase.from("user_roles").select("role").eq("user_id", lastEditorId);
-          rolesByUser.set(lastEditorId, ((extraRoles ?? []) as any[]).map(r => (r as any).role));
-        }
         editor = buildPerson(lastEditorId, lastUpdateAt);
       }
 
       // creation timestamp from audit (first "created"), fallback to schedule.created_at
-      const createdRow = auditList.find((r) => r.action === "created");
       const createdAt = createdRow?.created_at ?? s.created_at ?? null;
 
-      const creator = buildPerson(s.created_by, createdAt);
-      if (!editor && s.created_by) {
-        editor = buildPerson(s.created_by, s.updated_at ?? createdAt);
+      const creator = buildPerson(creatorId, createdAt);
+      if (!editor && creatorId) {
+        editor = buildPerson(creatorId, s.updated_at ?? createdAt);
       }
-      const approver = s.status === "approved" ? buildPerson(s.approved_by, s.approved_at) : null;
-      const rejecter = s.status === "rejected" ? buildPerson(s.rejected_by, s.rejected_at) : null;
+      const approver = s.status === "approved"
+        ? buildPerson(s.approved_by ?? approvedRow?.actor_id ?? null, s.approved_at ?? approvedRow?.created_at ?? null)
+        : null;
+      const rejecter = s.status === "rejected"
+        ? buildPerson(s.rejected_by ?? rejectedRow?.actor_id ?? null, s.rejected_at ?? rejectedRow?.created_at ?? null)
+        : null;
 
       // legacy fields used elsewhere in the file
       const decision = approver ?? rejecter;
