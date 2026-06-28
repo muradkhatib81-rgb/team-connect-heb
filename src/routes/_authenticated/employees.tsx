@@ -926,6 +926,68 @@ function CreateEmployeeDialog({
           </AlertDialogContent>
         </AlertDialog>
       )}
+      {archived && (
+        <AlertDialog open onOpenChange={(o) => !o && setArchived(null)}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>ℹ️ מספר זהות זה היה קיים בעבר במערכת</AlertDialogTitle>
+              <AlertDialogDescription asChild>
+                <div className="space-y-3 text-right">
+                  <p className="text-sm text-muted-foreground">
+                    עובד עם מספר זהות זה הועבר לארכיון בעבר. ניתן ליצור עובד חדש לחלוטין — הרשומה החדשה לא תהיה מקושרת לארכיון.
+                  </p>
+                  <div className="rounded-md border border-border bg-muted/40 p-3 text-sm space-y-1.5">
+                    <div>👤 <span className="text-muted-foreground">שם:</span> <strong>{archived.full_name || "—"}</strong></div>
+                    <div>💼 <span className="text-muted-foreground">תפקיד:</span> <strong>{archived.job_title || "—"}</strong></div>
+                    <div>🏬 <span className="text-muted-foreground">מחלקה:</span> <strong>{archived.department_name || "—"}</strong></div>
+                    <div>📁 <span className="text-muted-foreground">הועבר לארכיון:</span> <strong>{new Date(archived.archived_at).toLocaleString("he-IL")}</strong></div>
+                  </div>
+                </div>
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter className="flex-col-reverse sm:flex-row sm:justify-end gap-2">
+              <AlertDialogCancel disabled={forceCreateMutation.isPending}>❌ ביטול</AlertDialogCancel>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setViewingArchive(archived)}
+              >
+                👁️ הצג נתוני הארכיון
+              </Button>
+              <AlertDialogAction
+                disabled={forceCreateMutation.isPending}
+                onClick={(e) => {
+                  e.preventDefault();
+                  forceCreateMutation.mutate();
+                }}
+              >
+                {forceCreateMutation.isPending ? <Loader2 className="size-4 animate-spin" /> : "✅ צור עובד חדש"}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+      )}
+      {viewingArchive && (
+        <Dialog open onOpenChange={(o) => !o && setViewingArchive(null)}>
+          <DialogContent className="max-w-md">
+            <DialogHeader>
+              <DialogTitle>📁 נתוני ארכיון (לצפייה בלבד)</DialogTitle>
+            </DialogHeader>
+            <div className="space-y-2 text-sm">
+              <div>👤 <span className="text-muted-foreground">שם:</span> <strong>{viewingArchive.full_name || "—"}</strong></div>
+              <div>💼 <span className="text-muted-foreground">תפקיד:</span> <strong>{viewingArchive.job_title || "—"}</strong></div>
+              <div>🏬 <span className="text-muted-foreground">מחלקה:</span> <strong>{viewingArchive.department_name || "—"}</strong></div>
+              {viewingArchive.deactivated_at && (
+                <div>🔴 <span className="text-muted-foreground">הושבת:</span> <strong>{new Date(viewingArchive.deactivated_at).toLocaleString("he-IL")}</strong></div>
+              )}
+              <div>📁 <span className="text-muted-foreground">הועבר לארכיון:</span> <strong>{new Date(viewingArchive.archived_at).toLocaleString("he-IL")}</strong></div>
+            </div>
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={() => setViewingArchive(null)}>סגור</Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      )}
     </Dialog>
   );
 }
