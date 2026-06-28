@@ -105,13 +105,7 @@ export function AppShell({ children }: { children: ReactNode }) {
       navigate({ to: "/change-password", replace: true });
       return;
     }
-    if (pathname === "/dashboard") {
-      const admin2 = isAdmin(profile.roles);
-      const deptMgr = profile.roles.includes("department_manager");
-      if (!admin2 && !deptMgr) {
-        navigate({ to: "/profile", replace: true });
-      }
-    }
+    // Plain employees may now access /dashboard directly (clean employee view).
   }, [profile?.must_change_password, profile, pathname, navigate]);
 
   if (isLoading || !profile) {
