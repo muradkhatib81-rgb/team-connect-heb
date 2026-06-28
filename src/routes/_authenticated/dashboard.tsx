@@ -955,9 +955,10 @@ function SchedulesStatsSection({ profile }: { profile: any }) {
         : isDeptMgr
         ? all.filter((s) => s.department_id === profile.department_id)
         : all.filter((s) => s.department_id === profile.department_id && s.status === "approved");
+      const currentWeekScoped = scoped.filter((s) => s.week_start <= weekEnd && weekStart <= s.week_end);
 
-      const pending = scoped.filter((s) => s.status === "pending_approval").length;
-      const approved = scoped.filter((s) => s.status === "approved").length;
+      const pending = currentWeekScoped.filter((s) => s.status === "pending_approval").length;
+      const approved = currentWeekScoped.filter((s) => s.status === "approved").length;
 
 
       // Departments without a submitted schedule for the current week
