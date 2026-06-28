@@ -268,6 +268,38 @@ function SchedulesPage() {
     },
   });
 
+  // Approver/Rejector details for the visible schedule (name + role label + timestamp).
+  const decisionPersonQ = useQuery({
+    enabled: !!schedQ.data && (schedQ.data.status === "approved" || schedQ.data.status === "rejected"),
+    queryKey: ["schedule-decision", schedQ.data?.id, schedQ.data?.status, schedQ.data?.approved_by, schedQ.data?.rejected_by],
+    queryFn: async () => {
+      const s: any = schedQ.data!;
+      const uid = s.status === "approved" ? s.approved_by : s.rejected_by;
+      if (!uid) return null;
+      const [{ data: prof }, { data: roles }] = await Promise.all([
+        supabase.from("profiles").select("id, full_name, job_title").eq("id", uid).maybeSingle(),
+        supabase.from("user_roles").select("role").eq("user_id", uid),
+      ]);
+      const roleLabels: Record<string, string> = {
+        main_admin: "מנהל ראשי",
+        branch_manager: "מנהל סניף",
+        assistant_manager: "סגן מנהל",
+        department_manager: "אחראי מחלקה",
+        employee: "עובד",
+      };
+      const order = ["main_admin", "branch_manager", "assistant_manager", "department_manager", "employee"];
+      const list = (roles ?? []).map((r: any) => r.role);
+      list.sort((a, b) => order.indexOf(a) - order.indexOf(b));
+      const topRole = list[0] ?? null;
+      return {
+        full_name: prof?.full_name ?? "—",
+        job_title: prof?.job_title ?? null,
+        role_label: topRole ? roleLabels[topRole] ?? topRole : null,
+        at: s.status === "approved" ? s.approved_at : s.rejected_at,
+      };
+    },
+  });
+
   // For employees: only show schedule if approved
   const visible =
     isEmployee
