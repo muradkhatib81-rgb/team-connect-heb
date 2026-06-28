@@ -317,6 +317,7 @@ export type Database = {
           logo_url: string | null
           phone: string | null
           primary_color: string | null
+          schedule_type: string
           updated_at: string
         }
         Insert: {
@@ -330,6 +331,7 @@ export type Database = {
           logo_url?: string | null
           phone?: string | null
           primary_color?: string | null
+          schedule_type?: string
           updated_at?: string
         }
         Update: {
@@ -343,6 +345,7 @@ export type Database = {
           logo_url?: string | null
           phone?: string | null
           primary_color?: string | null
+          schedule_type?: string
           updated_at?: string
         }
         Relationships: []
@@ -761,6 +764,7 @@ export type Database = {
           rejected_at: string | null
           rejected_by: string | null
           rejection_note: string | null
+          schedule_type: string
           status: Database["public"]["Enums"]["schedule_status"]
           submitted_at: string | null
           submitted_by: string | null
@@ -779,6 +783,7 @@ export type Database = {
           rejected_at?: string | null
           rejected_by?: string | null
           rejection_note?: string | null
+          schedule_type?: string
           status?: Database["public"]["Enums"]["schedule_status"]
           submitted_at?: string | null
           submitted_by?: string | null
@@ -797,6 +802,7 @@ export type Database = {
           rejected_at?: string | null
           rejected_by?: string | null
           rejection_note?: string | null
+          schedule_type?: string
           status?: Database["public"]["Enums"]["schedule_status"]
           submitted_at?: string | null
           submitted_by?: string | null
@@ -1206,6 +1212,7 @@ export type Database = {
           can_manage_departments: boolean
           can_manage_employee_of_month: boolean
           can_manage_permissions: boolean
+          can_manage_schedule: boolean
           can_manage_tasks: boolean
           can_manage_users: boolean
           can_publish_schedule: boolean
@@ -1255,6 +1262,7 @@ export type Database = {
           can_manage_departments?: boolean
           can_manage_employee_of_month?: boolean
           can_manage_permissions?: boolean
+          can_manage_schedule?: boolean
           can_manage_tasks?: boolean
           can_manage_users?: boolean
           can_publish_schedule?: boolean
@@ -1304,6 +1312,7 @@ export type Database = {
           can_manage_departments?: boolean
           can_manage_employee_of_month?: boolean
           can_manage_permissions?: boolean
+          can_manage_schedule?: boolean
           can_manage_tasks?: boolean
           can_manage_users?: boolean
           can_publish_schedule?: boolean
@@ -1464,6 +1473,7 @@ export type Database = {
         Returns: boolean
       }
       has_schedule_create_perm: { Args: { _user_id: string }; Returns: boolean }
+      has_schedule_manage_perm: { Args: { _user_id: string }; Returns: boolean }
       has_schedule_publish_perm: {
         Args: { _user_id: string }
         Returns: boolean
