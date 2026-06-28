@@ -276,9 +276,14 @@ function SchedulesPage() {
       const s: any = schedQ.data!;
       const uid = s.status === "approved" ? s.approved_by : s.rejected_by;
       if (!uid) return null;
-      const [{ data: prof }, { data: roles }] = await Promise.all([
+      const [{ data: prof }, { data: roles }, { data: auditRows }] = await Promise.all([
         supabase.from("profiles").select("id, full_name, job_title").eq("id", uid).maybeSingle(),
         supabase.from("user_roles").select("role").eq("user_id", uid),
+        supabase
+          .from("schedule_audit_log")
+          .select("actor_id, action, created_at")
+          .eq("schedule_id", s.id)
+          .order("created_at", { ascending: true }),
       ]);
       const roleLabels: Record<string, string> = {
         main_admin: "מנהל ראשי",
@@ -291,14 +296,34 @@ function SchedulesPage() {
       const list = (roles ?? []).map((r: any) => r.role);
       list.sort((a, b) => order.indexOf(a) - order.indexOf(b));
       const topRole = list[0] ?? null;
+
+      // Detect "edited before approval": any 'updated' audit entry between
+      // submitted_at and approved_at by an actor other than the creator.
+      let editedBeforeApproval = false;
+      if (s.status === "approved" && s.submitted_at && s.approved_at && auditRows) {
+        const subT = new Date(s.submitted_at).getTime();
+        const appT = new Date(s.approved_at).getTime();
+        editedBeforeApproval = (auditRows as any[]).some((r) => {
+          const t = new Date(r.created_at).getTime();
+          return (
+            r.action === "updated" &&
+            t >= subT &&
+            t <= appT &&
+            r.actor_id && r.actor_id !== s.created_by
+          );
+        });
+      }
+
       return {
         full_name: prof?.full_name ?? "—",
         job_title: prof?.job_title ?? null,
         role_label: topRole ? roleLabels[topRole] ?? topRole : null,
         at: s.status === "approved" ? s.approved_at : s.rejected_at,
+        editedBeforeApproval,
       };
     },
   });
+
 
   // For employees: only show schedule if approved
   const visible =
