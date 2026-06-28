@@ -297,6 +297,32 @@ function EmployeesPage() {
   const avatarsQ = useSignedAvatarUrls((employeesQuery.data ?? []).map((e) => e.avatar_url));
   const avatarMap = avatarsQ.data ?? {};
 
+  // Top-level summary stats (company-wide, scoped by RLS via employeesQuery)
+  const summaryStats = useMemo(() => {
+    const list = employeesQuery.data ?? [];
+    const roles = rolesQuery.data ?? {};
+    let managers = 0;
+    let workers = 0;
+    let onLeave = 0;
+    let inactive = 0;
+    list.forEach((e) => {
+      const r = roles[e.id] ?? [];
+      const isManager = r.some((role) => role !== "employee");
+      if (isManager) managers += 1;
+      else workers += 1;
+      if (e.on_leave) onLeave += 1;
+      if (!e.is_active) inactive += 1;
+    });
+    return {
+      total: list.length,
+      managers,
+      workers,
+      onLeave,
+      inactive,
+      onBreak: activeBreaksQ.data ?? 0,
+    };
+  }, [employeesQuery.data, rolesQuery.data, activeBreaksQ.data]);
+
   if (meLoading) {
     return <div className="flex justify-center py-12"><Loader2 className="size-6 animate-spin text-primary" /></div>;
   }
