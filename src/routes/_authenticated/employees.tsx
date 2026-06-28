@@ -217,6 +217,43 @@ function EmployeesPage() {
     },
   });
 
+  // Live count of employees currently on an active break
+  const activeBreaksQ = useQuery({
+    enabled: allowed,
+    queryKey: ["employees-page-active-breaks"],
+    queryFn: async () => {
+      const { count, error } = await supabase
+        .from("break_requests")
+        .select("id", { count: "exact", head: true })
+        .eq("status", "active");
+      if (error) throw error;
+      return count ?? 0;
+    },
+  });
+
+  // Realtime: refresh stats when profiles, roles, departments, or breaks change
+  useEffect(() => {
+    if (!allowed) return;
+    const ch = supabase
+      .channel("employees-page-realtime")
+      .on("postgres_changes", { event: "*", schema: "public", table: "profiles" }, () => {
+        qcPage.invalidateQueries({ queryKey: ["employees"] });
+      })
+      .on("postgres_changes", { event: "*", schema: "public", table: "user_roles" }, () => {
+        qcPage.invalidateQueries({ queryKey: ["all-roles"] });
+      })
+      .on("postgres_changes", { event: "*", schema: "public", table: "departments" }, () => {
+        qcPage.invalidateQueries({ queryKey: ["departments", "options"] });
+      })
+      .on("postgres_changes", { event: "*", schema: "public", table: "break_requests" }, () => {
+        qcPage.invalidateQueries({ queryKey: ["employees-page-active-breaks"] });
+      })
+      .subscribe();
+    return () => {
+      supabase.removeChannel(ch);
+    };
+  }, [allowed, qcPage]);
+
   const filtered = useMemo(() => {
     const data = employeesQuery.data ?? [];
     const term = searchTerm.trim().toLowerCase();
