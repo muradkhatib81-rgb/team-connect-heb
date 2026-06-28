@@ -45,17 +45,19 @@ import {
 import { Search, Loader2, Pencil, UserPlus, Filter, ImagePlus, X, KeyRound, Trash2, Users, UserCheck, UserX, Plane, Coffee, Shield, Power } from "lucide-react";
 import { toast } from "sonner";
 
-type FilterMode = "all" | "active" | "inactive" | "on_leave" | "on_break";
+type FilterMode = "all" | "active" | "inactive" | "on_leave" | "on_break" | "managers" | "workers";
 
 interface EmployeesSearch {
   filter?: FilterMode;
   dept?: string;
 }
 
+const FILTER_VALUES: FilterMode[] = ["all", "active", "inactive", "on_leave", "on_break", "managers", "workers"];
+
 export const Route = createFileRoute("/_authenticated/employees")({
   component: EmployeesPage,
   validateSearch: (s: Record<string, unknown>): EmployeesSearch => ({
-    filter: (["all", "active", "inactive", "on_leave", "on_break"].includes(s.filter as string)
+    filter: (FILTER_VALUES.includes(s.filter as FilterMode)
       ? (s.filter as FilterMode)
       : undefined),
     dept: typeof s.dept === "string" ? s.dept : undefined,
@@ -87,7 +89,10 @@ const FILTER_LABELS: Record<FilterMode, string> = {
   inactive: "🔴 עובדים לא פעילים",
   on_leave: "🏖️ בחופשה",
   on_break: "☕ בהפסקה",
+  managers: "👔 מנהלים",
+  workers: "👤 עובדים",
 };
+
 
 
 async function uploadAvatar(file: File, userId: string): Promise<string> {
