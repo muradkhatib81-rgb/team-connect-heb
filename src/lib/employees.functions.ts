@@ -55,14 +55,23 @@ export const createEmployee = createServerFn({ method: "POST" })
 
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
 
-    // Pre-check: prevent duplicate ID numbers with a clear Hebrew message
+    // Pre-check: prevent duplicate ID numbers. If the existing employee is inactive, surface
+    // a structured error so the UI can offer reactivation instead of creating a new record.
     const { data: existing, error: exErr } = await supabaseAdmin
       .from("profiles")
-      .select("id")
+      .select("id, full_name, is_active")
       .eq("id_number", data.id_number)
       .maybeSingle();
     if (exErr) throw new Error(exErr.message);
-    if (existing) throw new Error("כבר קיים עובד עם מספר זהות זה.");
+    if (existing) {
+      if (existing.is_active === false) {
+        throw new Error(
+          `INACTIVE_EXISTS::${existing.id}::${existing.full_name ?? ""}`,
+        );
+      }
+      throw new Error("כבר קיים עובד פעיל עם מספר זהות זה.");
+    }
+
 
     const { data: created, error } = await supabaseAdmin.auth.admin.createUser({
       email: idEmail(data.id_number),
