@@ -77,8 +77,25 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 
+type CommSearch = {
+  tab?: "inbox" | "announcements" | "sent" | "archive";
+  msg?: string;
+  ann?: string;
+};
+
 export const Route = createFileRoute("/_authenticated/communications")({
   component: CommunicationsPage,
+  validateSearch: (s: Record<string, unknown>): CommSearch => {
+    const tab = s.tab as string | undefined;
+    return {
+      tab:
+        tab === "inbox" || tab === "announcements" || tab === "sent" || tab === "archive"
+          ? tab
+          : undefined,
+      msg: typeof s.msg === "string" ? s.msg : undefined,
+      ann: typeof s.ann === "string" ? s.ann : undefined,
+    };
+  },
 });
 
 // ---------------- Shared helpers ----------------
