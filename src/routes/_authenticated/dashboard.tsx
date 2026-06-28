@@ -1866,26 +1866,35 @@ function OnBreakSection({ profile }: { profile: any }) {
       const uids = Array.from(new Set(rows.flatMap((r) => [r.user_id, r.approved_by].filter(Boolean))));
       const dids = Array.from(new Set(rows.map((r) => r.department_id).filter(Boolean)));
       const sids = Array.from(new Set(rows.map((r) => r.break_setting_id).filter(Boolean)));
-      const [{ data: profs }, { data: depts }, { data: settings }] = await Promise.all([
-        supabase.from("profiles").select("id, full_name").in("id", uids),
-        dids.length
-          ? supabase.from("departments").select("id, name").in("id", dids)
-          : Promise.resolve({ data: [] as any[] }),
-        sids.length
-          ? supabase.from("break_settings").select("id, name").in("id", sids)
-          : Promise.resolve({ data: [] as any[] }),
-      ]);
-      const pMap = new Map((profs ?? []).map((p: any) => [p.id, p.full_name]));
+      const [{ data: profs }, { data: depts }, { data: settings }, { data: meta }] =
+        await Promise.all([
+          supabase.from("profiles").select("id, full_name, job_title").in("id", uids),
+          dids.length
+            ? supabase.from("departments").select("id, name").in("id", dids)
+            : Promise.resolve({ data: [] as any[] }),
+          sids.length
+            ? supabase.from("break_settings").select("id, name").in("id", sids)
+            : Promise.resolve({ data: [] as any[] }),
+          (supabase as any).rpc("get_profiles_basic_info", { user_ids: uids }),
+        ]);
+      const pMap = new Map((profs ?? []).map((p: any) => [p.id, p]));
       const dMap = new Map((depts ?? []).map((d: any) => [d.id, d.name]));
       const sMap = new Map((settings ?? []).map((s: any) => [s.id, s.name]));
+      const mMap = new Map((meta ?? []).map((m: any) => [m.id, m]));
       return rows.map((r) => ({
         id: r.id,
-        name: pMap.get(r.user_id) ?? "—",
+        name: (pMap.get(r.user_id) as any)?.full_name ?? "—",
+        job_title:
+          (mMap.get(r.user_id) as any)?.job_title ??
+          (pMap.get(r.user_id) as any)?.job_title ??
+          null,
+        role_label: (mMap.get(r.user_id) as any)?.role_label ?? null,
         department: dMap.get(r.department_id) ?? "—",
         type: sMap.get(r.break_setting_id) ?? "הפסקה",
         startedAt: r.started_at as string | null,
         endsAt: r.ends_at as string | null,
-        approverName: r.approved_by ? pMap.get(r.approved_by) ?? "—" : "—",
+        approverName:
+          r.approved_by ? (pMap.get(r.approved_by) as any)?.full_name ?? "—" : "—",
       }));
     },
   });
