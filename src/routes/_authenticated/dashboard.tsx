@@ -42,43 +42,6 @@ function DashboardPage() {
   const [deptDialogId, setDeptDialogId] = useState<string | null>(null);
   const [empDialogId, setEmpDialogId] = useState<string | null>(null);
 
-  // Permission to see the "employees" total card on the dashboard
-  const employeesCardPermQ = useQuery({
-    enabled: !!profile?.id && !admin,
-    queryKey: ["dashboard-employees-card-perm", profile?.id],
-    queryFn: async () => {
-      const { data } = await supabase
-        .from("user_task_permissions")
-        .select(
-          "can_view_all_employees, can_add_employee, can_edit_employee, can_delete_employee, can_view_employee_details",
-        )
-        .eq("user_id", profile!.id)
-        .maybeSingle();
-      const p: any = data ?? {};
-      return !!(
-        p.can_view_all_employees ||
-        p.can_add_employee ||
-        p.can_edit_employee ||
-        p.can_delete_employee ||
-        p.can_view_employee_details
-      );
-    },
-  });
-  const canSeeEmployeesCard = admin || !!employeesCardPermQ.data;
-
-  // Active employees count (company-wide, RLS-scoped). Inactive employees are not counted here.
-  const employeesTotalQ = useQuery({
-    enabled: canSeeEmployeesCard,
-    queryKey: ["dashboard", "employees-total", "active"],
-    queryFn: async () => {
-      const { count, error } = await supabase
-        .from("profiles")
-        .select("id", { count: "exact", head: true })
-        .eq("is_active", true);
-      if (error) throw error;
-      return count ?? 0;
-    },
-  });
 
 
   const statsQuery = useQuery({
