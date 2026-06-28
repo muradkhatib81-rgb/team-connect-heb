@@ -764,17 +764,30 @@ function EmployeeNewMessagesCard({ userId }: { userId: string }) {
     };
   }, [userId, qc]);
   const items = q.data ?? [];
+  const navigate = useNavigate();
   return (
-    <Card className="card-elevated p-4">
+    <Card
+      role="button"
+      tabIndex={0}
+      onClick={() => navigate({ to: "/communications", search: { tab: "inbox" } as any })}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          navigate({ to: "/communications", search: { tab: "inbox" } as any });
+        }
+      }}
+      className="card-elevated p-4 cursor-pointer hover:shadow-md hover:ring-1 hover:ring-primary/30 transition-all"
+    >
       <div className="flex items-center justify-between mb-3">
-        <h2 className="font-semibold text-base">📨 הודעות חדשות</h2>
-        <Link
-          to="/communications"
-          search={{ tab: "inbox" } as any}
-          className="text-sm text-primary hover:underline"
-        >
-          לכל ההודעות ←
-        </Link>
+        <h2 className="font-semibold text-base flex items-center gap-2">
+          📨 הודעות חדשות
+          {items.length > 0 && (
+            <span className="inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 rounded-full bg-destructive text-destructive-foreground text-[11px] font-bold">
+              {items.length}
+            </span>
+          )}
+        </h2>
+        <span className="text-sm text-primary">לכל ההודעות ←</span>
       </div>
       {items.length === 0 ? (
         <p className="text-sm text-muted-foreground">אין הודעות חדשות.</p>
@@ -782,13 +795,19 @@ function EmployeeNewMessagesCard({ userId }: { userId: string }) {
         <ul className="divide-y">
           {items.map((r: any) => (
             <li key={r.message_id} className="py-2 text-sm">
-              <Link
-                to="/communications"
-                search={{ tab: "inbox", msg: r.message_id } as any}
-                className="hover:underline font-medium"
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  navigate({
+                    to: "/communications",
+                    search: { tab: "inbox", msg: r.message_id } as any,
+                  });
+                }}
+                className="text-right hover:underline font-medium block w-full"
               >
                 {r.message.title}
-              </Link>
+              </button>
               <p className="text-xs text-muted-foreground mt-0.5">
                 {new Date(r.delivered_at ?? r.message.created_at).toLocaleString("he-IL")}
               </p>
