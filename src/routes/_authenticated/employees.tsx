@@ -45,17 +45,19 @@ import {
 import { Search, Loader2, Pencil, UserPlus, Filter, ImagePlus, X, KeyRound, Trash2, Users, UserCheck, UserX, Plane, Coffee, Shield, Power } from "lucide-react";
 import { toast } from "sonner";
 
-type FilterMode = "all" | "active" | "inactive" | "on_leave" | "on_break";
+type FilterMode = "all" | "active" | "inactive" | "on_leave" | "on_break" | "managers" | "workers";
 
 interface EmployeesSearch {
   filter?: FilterMode;
   dept?: string;
 }
 
+const FILTER_VALUES: FilterMode[] = ["all", "active", "inactive", "on_leave", "on_break", "managers", "workers"];
+
 export const Route = createFileRoute("/_authenticated/employees")({
   component: EmployeesPage,
   validateSearch: (s: Record<string, unknown>): EmployeesSearch => ({
-    filter: (["all", "active", "inactive", "on_leave", "on_break"].includes(s.filter as string)
+    filter: (FILTER_VALUES.includes(s.filter as FilterMode)
       ? (s.filter as FilterMode)
       : undefined),
     dept: typeof s.dept === "string" ? s.dept : undefined,
@@ -87,7 +89,10 @@ const FILTER_LABELS: Record<FilterMode, string> = {
   inactive: "🔴 עובדים לא פעילים",
   on_leave: "🏖️ בחופשה",
   on_break: "☕ בהפסקה",
+  managers: "👔 מנהלים",
+  workers: "👤 עובדים",
 };
+
 
 
 async function uploadAvatar(file: File, userId: string): Promise<string> {
@@ -275,6 +280,12 @@ function EmployeesPage() {
     };
   }, [allowed, qcPage]);
 
+  const rolesMap = rolesQuery.data ?? {};
+  const isManagerRole = (uid: string) => {
+    const r = rolesMap[uid] ?? [];
+    return r.some((role) => role !== "employee");
+  };
+
   const filtered = useMemo(() => {
     const data = employeesQuery.data ?? [];
     const term = searchTerm.trim().toLowerCase();
@@ -282,10 +293,12 @@ function EmployeesPage() {
       // Hide department manager from their own employees list
       if (isDeptManagerOnly && e.id === me?.id) return false;
       if (deptFilter !== "all" && e.department_id !== deptFilter) return false;
-      if (filterMode === "active" && (!e.is_active || e.on_leave)) return false;
+      if (filterMode === "active" && !e.is_active) return false;
       if (filterMode === "inactive" && e.is_active) return false;
       if (filterMode === "on_leave" && !e.on_leave) return false;
       if (filterMode === "on_break" && !onBreakSet.has(e.id)) return false;
+      if (filterMode === "managers" && !isManagerRole(e.id)) return false;
+      if (filterMode === "workers" && isManagerRole(e.id)) return false;
       if (!term) return true;
       return (
         e.full_name.toLowerCase().includes(term) ||
@@ -293,7 +306,8 @@ function EmployeesPage() {
         (e.phone ?? "").includes(term)
       );
     });
-  }, [employeesQuery.data, searchTerm, deptFilter, filterMode, isDeptManagerOnly, me?.id, onBreakSet]);
+  }, [employeesQuery.data, searchTerm, deptFilter, filterMode, isDeptManagerOnly, me?.id, onBreakSet, rolesMap]);
+
 
   // Manager's own department stats (excluding the manager themselves)
   const managerDeptStats = useMemo(() => {
@@ -333,7 +347,7 @@ function EmployeesPage() {
       const isManager = r.some((role) => role !== "employee");
       if (isManager) managers += 1;
       else workers += 1;
-      if (e.is_active && !e.on_leave) active += 1;
+      if (e.is_active) active += 1;
       if (e.on_leave) onLeave += 1;
       if (!e.is_active) inactive += 1;
     });
@@ -387,13 +401,15 @@ function EmployeesPage() {
       {!isDeptManagerOnly && (
         <section className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-7 gap-3">
           <SummaryStatCard label="סך עובדים" value={summaryStats.total} icon={<Users className="size-5" />} tone="primary" emoji="👥" active={filterMode === "all"} onClick={() => setFilter("all")} />
+          <SummaryStatCard label="מנהלים" value={summaryStats.managers} icon={<Shield className="size-5" />} tone="indigo" emoji="👔" active={filterMode === "managers"} onClick={() => setFilter("managers")} />
+          <SummaryStatCard label="עובדים" value={summaryStats.workers} icon={<UserCheck className="size-5" />} tone="green" emoji="👤" active={filterMode === "workers"} onClick={() => setFilter("workers")} />
           <SummaryStatCard label="עובדים פעילים" value={summaryStats.active} icon={<UserCheck className="size-5" />} tone="green" emoji="🟢" active={filterMode === "active"} onClick={() => setFilter("active")} />
-          <SummaryStatCard label="מנהלים" value={summaryStats.managers} icon={<Shield className="size-5" />} tone="indigo" emoji="👔" />
-          <SummaryStatCard label="עובדים" value={summaryStats.workers} icon={<UserCheck className="size-5" />} tone="green" emoji="👤" />
           <SummaryStatCard label="בחופשה" value={summaryStats.onLeave} icon={<Plane className="size-5" />} tone="sky" emoji="🏖️" active={filterMode === "on_leave"} onClick={() => setFilter("on_leave")} />
           <SummaryStatCard label="בהפסקה" value={summaryStats.onBreak} icon={<Coffee className="size-5" />} tone="amber" emoji="☕" active={filterMode === "on_break"} onClick={() => setFilter("on_break")} />
           <SummaryStatCard label="לא פעילים" value={summaryStats.inactive} icon={<UserX className="size-5" />} tone="red" emoji="❌" active={filterMode === "inactive"} onClick={() => setFilter("inactive")} />
         </section>
+
+
       )}
 
       {isDeptManagerOnly && me && managerDeptStats && (
@@ -452,7 +468,11 @@ function EmployeesPage() {
                 <SelectItem value="active">{FILTER_LABELS.active}</SelectItem>
                 <SelectItem value="inactive">{FILTER_LABELS.inactive}</SelectItem>
                 <SelectItem value="all">{FILTER_LABELS.all}</SelectItem>
+                <SelectItem value="managers">{FILTER_LABELS.managers}</SelectItem>
+                <SelectItem value="workers">{FILTER_LABELS.workers}</SelectItem>
                 <SelectItem value="on_leave">{FILTER_LABELS.on_leave}</SelectItem>
+                <SelectItem value="on_break">{FILTER_LABELS.on_break}</SelectItem>
+
 
               </SelectContent>
             </Select>
