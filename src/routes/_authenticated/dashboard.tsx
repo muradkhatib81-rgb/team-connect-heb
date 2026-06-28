@@ -458,7 +458,7 @@ function EmployeeScheduleCard({ profile }: { profile: any }) {
     enabled: !!profile?.department_id,
     queryKey: ["emp-dash-schedule", profile.id, weekStart],
     queryFn: async () => {
-      const { data: sched } = await supabase
+      const { data: sched, error: schedErr } = await supabase
         .from("schedules")
         .select(
           "id, status, week_start, week_end, published_at, updated_at, approved_at, approved_by, submitted_at, created_by",
@@ -467,12 +467,14 @@ function EmployeeScheduleCard({ profile }: { profile: any }) {
         .eq("week_start", weekStart)
         .eq("status", "approved")
         .maybeSingle();
+      if (schedErr) throw schedErr;
       if (!sched) return { sched: null, shifts: [] as any[], approver: null as any, editedBeforeApproval: false };
-      const { data: shifts } = await supabase
+      const { data: shifts, error: shiftsErr } = await supabase
         .from("schedule_shifts")
         .select("day_date, shift, published_shift")
         .eq("schedule_id", sched.id)
         .eq("employee_id", profile.id);
+      if (shiftsErr) throw shiftsErr;
 
       let approver: any = null;
       let editedBeforeApproval = false;
@@ -540,24 +542,17 @@ function EmployeeScheduleCard({ profile }: { profile: any }) {
   const shiftByDay = new Map<string, { shift: string; published_shift: string | null }>();
   for (const s of shifts) shiftByDay.set(s.day_date, s);
 
-  // "Updated after publish" marker for the current week schedule.
-  // Persists for the whole week (driven by the schedule row itself).
-  // Resets naturally when a new week's schedule is created/published — this is a
-  // different row entirely so the previous week's marker is no longer queried.
-  const updatedAfterPublish =
-    !!sched &&
-    !!sched.published_at &&
-    !!sched.updated_at &&
-    new Date(sched.updated_at).getTime() - new Date(sched.published_at).getTime() > 1000;
+  // Same modified-after-publication marker as the schedule screen:
+  // mark only the specific published cells whose current shift differs from the
+  // published snapshot, instead of relying on a broad schedule timestamp.
+  const updatedAfterPublish = shifts.some(
+    (s) => s.published_shift !== null && s.shift !== s.published_shift,
+  );
 
   const SHIFT_LABEL: Record<string, string> = { morning: "בוקר", evening: "ערב", off: "חופש" };
 
   return (
-    <Card
-      className={`card-elevated p-4 ${
-        updatedAfterPublish ? "ring-2 ring-orange-500 border border-orange-500" : ""
-      }`}
-    >
+    <Card className="card-elevated p-4">
       <div className="flex items-center justify-between mb-3">
         <h2 className="font-semibold text-base flex items-center gap-2">
           <CalendarDays className="size-5 text-primary" />
@@ -571,16 +566,6 @@ function EmployeeScheduleCard({ profile }: { profile: any }) {
       <p className="text-xs text-muted-foreground mb-3">
         {heDate(weekStart)} – {heDate(weekEnd)}
       </p>
-
-      {updatedAfterPublish && (
-        <div className="mb-3 flex items-center gap-2 text-sm p-2 rounded bg-orange-500/10 border border-orange-500/30 text-orange-900 dark:text-orange-200">
-          <RefreshCw className="size-4 text-orange-600" />
-          <span>
-            🕒 עודכן לאחרונה:{" "}
-            <span className="font-medium">{formatHeDateTime(sched.updated_at)}</span>
-          </span>
-        </div>
-      )}
 
       {sched && q.data?.approver && (
         <div
@@ -616,6 +601,7 @@ function EmployeeScheduleCard({ profile }: { profile: any }) {
           {weekDays.map((d, i) => {
             const cell = shiftByDay.get(d);
             const sh = cell?.shift ?? "off";
+            const isModified = !!cell && cell.published_shift !== null && cell.shift !== cell.published_shift;
             const tone =
               sh === "morning"
                 ? "bg-amber-50 text-amber-900"
@@ -623,10 +609,21 @@ function EmployeeScheduleCard({ profile }: { profile: any }) {
                   ? "bg-sky-50 text-sky-900"
                   : "bg-emerald-50 text-emerald-900";
             return (
-              <div key={d} className={`rounded-md p-2 text-center ${tone}`}>
+              <div
+                key={d}
+                className={`relative rounded-md p-2 text-center ${tone} ${
+                  isModified ? "ring-2 ring-orange-500 border border-orange-500" : ""
+                }`}
+              >
                 <div className="text-xs font-medium">{DAY_NAMES[i]}</div>
                 <div className="text-[11px] text-muted-foreground">{heDate(d)}</div>
                 <div className="font-semibold mt-1">{SHIFT_LABEL[sh] ?? sh}</div>
+                {isModified && (
+                  <RefreshCw
+                    className="size-3 text-orange-600 absolute -top-1 -left-1 bg-background rounded-full p-0.5 box-content border border-orange-500"
+                    aria-label="עודכן לאחר פרסום"
+                  />
+                )}
               </div>
             );
           })}
