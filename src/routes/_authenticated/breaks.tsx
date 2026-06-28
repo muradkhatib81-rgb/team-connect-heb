@@ -157,7 +157,7 @@ function BreaksPage() {
   });
 
   const myReqQ = useQuery({
-    enabled: !!me?.id && !isBreaksManager,
+    enabled: !!me?.id,
     queryKey: ["my-break-requests", me?.id],
     queryFn: async () => {
       const { data, error } = await supabase
@@ -171,9 +171,8 @@ function BreaksPage() {
     },
   });
 
-  // Realtime — only for the employee's own requests
+  // Realtime — refresh own requests and active break settings
   useEffect(() => {
-    if (isBreaksManager) return;
     const ch = supabase
       .channel("break-requests-self-rt")
       .on(
@@ -192,7 +191,7 @@ function BreaksPage() {
     return () => {
       supabase.removeChannel(ch);
     };
-  }, [qc, isBreaksManager]);
+  }, [qc]);
 
   // ---- Submit form
   const [settingId, setSettingId] = useState("");
