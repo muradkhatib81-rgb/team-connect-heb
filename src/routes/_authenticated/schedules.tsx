@@ -241,10 +241,9 @@ function SchedulesPage() {
     enabled: pendingCreatorIds.length > 0,
     queryKey: ["pending-people", pendingCreatorIds.join(",")],
     queryFn: async () => {
-      const { data } = await supabase
-        .from("profiles")
-        .select("id, full_name")
-        .in("id", pendingCreatorIds);
+      const { data } = await (supabase as any).rpc("get_profiles_basic_info", {
+        user_ids: pendingCreatorIds,
+      });
       const m: Record<string, string> = {};
       for (const r of data ?? []) m[r.id] = r.full_name;
       return m;
