@@ -4,6 +4,14 @@ import { useEffect, useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/use-auth";
 import {
@@ -1664,9 +1672,20 @@ function fmtMinsHM(totalMins: number) {
   return h > 0 ? `${h}:${String(r).padStart(2, "0")}` : `${r} דק׳`;
 }
 
+function fmtHMS(ms: number) {
+  const total = Math.max(0, Math.floor(ms / 1000));
+  const h = Math.floor(total / 3600);
+  const m = Math.floor((total % 3600) / 60);
+  const s = total % 60;
+  const mm = String(m).padStart(2, "0");
+  const ss = String(s).padStart(2, "0");
+  return h > 0 ? `${h}:${mm}:${ss}` : `${mm}:${ss}`;
+}
+
 function MyActiveBreakCard({ userId }: { userId: string }) {
   const qc = useQueryClient();
   const [, setTick] = useState(0);
+  const [detailOpen, setDetailOpen] = useState(false);
 
   const breakQ = useQuery({
     enabled: !!userId,
@@ -1729,6 +1748,7 @@ function MyActiveBreakCard({ userId }: { userId: string }) {
     },
     onSuccess: () => {
       toast.success("סומן: חזרת מההפסקה");
+      setDetailOpen(false);
       qc.invalidateQueries({ queryKey: ["my-active-break", userId] });
       qc.invalidateQueries({ queryKey: ["dashboard-on-break"] });
       qc.invalidateQueries({ queryKey: ["dashboard-daily-breaks"] });
@@ -1741,93 +1761,206 @@ function MyActiveBreakCard({ userId }: { userId: string }) {
 
   const now = Date.now();
   const isActive = r.status === "active";
-  const startsAt = r.approved_at_time ?? r.started_at;
-  const endsAt = r.ends_at
+  const startsAtIso: string | null = r.started_at ?? r.approved_at_time ?? null;
+  const endsAtMs = r.ends_at
     ? new Date(r.ends_at).getTime()
-    : startsAt
-      ? new Date(startsAt).getTime() + (r.duration_minutes ?? 0) * 60000
+    : startsAtIso
+      ? new Date(startsAtIso).getTime() + (r.duration_minutes ?? 0) * 60000
       : null;
-  const remainingMs = endsAt ? endsAt - now : 0;
-  const overrunMs = endsAt && now > endsAt ? now - endsAt : 0;
-  const overrun = overrunMs > 0;
-  const remainingMin = Math.max(0, Math.ceil(remainingMs / 60000));
-  const overrunMin = Math.ceil(overrunMs / 60000);
+  const remainingMs = endsAtMs ? endsAtMs - now : 0;
+  const overrunMs = endsAtMs && now > endsAtMs ? now - endsAtMs : 0;
+  const overrun = isActive && overrunMs > 0;
+
+  const tone = overrun
+    ? {
+        card: "border-red-500 bg-red-50 dark:bg-red-950/30",
+        icon: "bg-red-500/10 text-red-600",
+        timer: "text-red-600",
+        label: "🔴 חריגה",
+      }
+    : isActive
+      ? {
+          card: "border-green-500 bg-green-50 dark:bg-green-950/30",
+          icon: "bg-green-500/10 text-green-600",
+          timer: "text-green-600",
+          label: "🟢 בהפסקה",
+        }
+      : {
+          card: "border-amber-500 bg-amber-50 dark:bg-amber-950/30",
+          icon: "bg-amber-500/10 text-amber-600",
+          timer: "text-amber-600",
+          label: "🟡 אושרה · ממתינה להתחלה",
+        };
+
+  const bigTimer = overrun
+    ? `+${fmtHMS(overrunMs)}`
+    : isActive && endsAtMs
+      ? fmtHMS(remainingMs)
+      : endsAtMs
+        ? fmtHMS(Math.max(0, endsAtMs - now))
+        : "--:--";
+
+  const actualDurMin =
+    r.completed_at && startsAtIso
+      ? Math.max(
+          0,
+          Math.round(
+            (new Date(r.completed_at).getTime() - new Date(startsAtIso).getTime()) / 60000,
+          ),
+        )
+      : null;
 
   return (
-    <Card
-      className={
-        "card-elevated p-5 border-r-4 " +
-        (overrun ? "border-r-red-500" : isActive ? "border-r-primary" : "border-r-amber-500")
-      }
-    >
-      <div className="flex items-start gap-3">
-        <div
-          className={
-            "size-10 rounded-xl flex items-center justify-center shrink-0 " +
-            (overrun
-              ? "bg-red-500/10 text-red-600"
-              : "bg-primary/10 text-primary")
-          }
-        >
-          <Coffee className="size-5" />
-        </div>
-        <div className="flex-1 min-w-0 space-y-2">
-          <div className="flex flex-wrap items-center gap-2">
-            <h3 className="font-semibold">ההפסקה שלי</h3>
-            <Badge variant={isActive ? "default" : "secondary"}>
-              {isActive ? "בהפסקה" : "אושרה · ממתינה להתחלה"}
-            </Badge>
-            <span className="text-sm text-muted-foreground">
-              {r.setting_name} · {r.duration_minutes} דק׳
-            </span>
+    <>
+      <Card
+        role="button"
+        tabIndex={0}
+        onClick={() => setDetailOpen(true)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" || e.key === " ") setDetailOpen(true);
+        }}
+        className={
+          "card-elevated p-5 border-2 cursor-pointer transition-colors hover:brightness-[0.98] " +
+          tone.card
+        }
+      >
+        <div className="flex items-start gap-3">
+          <div className={"size-10 rounded-xl flex items-center justify-center shrink-0 " + tone.icon}>
+            <Coffee className="size-5" />
           </div>
+          <div className="flex-1 min-w-0 space-y-3">
+            <div className="flex flex-wrap items-center gap-2">
+              <h3 className="font-semibold">ההפסקה שלי</h3>
+              <Badge variant={overrun ? "destructive" : isActive ? "default" : "secondary"}>
+                {tone.label}
+              </Badge>
+              <span className="text-sm text-muted-foreground">
+                ☕ {r.setting_name} · {r.duration_minutes} דק׳
+              </span>
+            </div>
 
-          {isActive && endsAt && (
-            <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
-              <div className={overrun ? "text-red-600 font-bold" : "text-foreground font-bold"}>
-                {overrun ? (
-                  <>חריגה: {fmtMinsHM(overrunMin)}</>
-                ) : (
-                  <>נותרו: {fmtMinsHM(remainingMin)}</>
-                )}
+            <div className="flex flex-col items-center justify-center py-2 select-none">
+              <div className={"font-mono font-bold tabular-nums text-5xl sm:text-6xl tracking-wider " + tone.timer}>
+                {bigTimer}
               </div>
-              <div className="text-muted-foreground">
-                שעת חזרה משוערת: {fmtHM(new Date(endsAt).toISOString())}
+              <div className="mt-1 text-xs text-muted-foreground">
+                {overrun
+                  ? "זמן חריגה — נא לחזור לעבודה"
+                  : isActive
+                    ? "זמן נותר להפסקה"
+                    : "הפסקה מאושרת — תתחיל בקרוב"}
               </div>
             </div>
-          )}
 
-          <div className="grid sm:grid-cols-2 gap-x-4 gap-y-1 text-xs text-muted-foreground">
-            <div>✅ אושר על ידי: <span className="text-foreground font-medium">{r.approver_name}</span></div>
-            {r.approver_role && (
-              <div>💼 תפקיד: <span className="text-foreground">{r.approver_role}{r.approver_job ? ` · ${r.approver_job}` : ""}</span></div>
-            )}
-            {r.approval_decided_at && (
-              <div>📅 תאריך אישור: <span className="text-foreground">{formatHeDateTime(r.approval_decided_at)}</span></div>
-            )}
-            {r.started_at && (
-              <div>🕒 התחלה בפועל: <span className="text-foreground">{fmtHM(r.started_at)}</span></div>
+            <div className="grid sm:grid-cols-2 gap-x-4 gap-y-1 text-xs text-muted-foreground">
+              <div>👤 אושר על ידי: <span className="text-foreground font-medium">{r.approver_name}</span></div>
+              {r.approver_role && (
+                <div>💼 תפקיד: <span className="text-foreground">{r.approver_role}{r.approver_job ? ` · ${r.approver_job}` : ""}</span></div>
+              )}
+              {r.approval_decided_at && (
+                <div>📅 אישור: <span className="text-foreground">{formatHeDateTime(r.approval_decided_at)}</span></div>
+              )}
+              {startsAtIso && (
+                <div>▶️ התחלה: <span className="text-foreground">{fmtHM(startsAtIso)}</span></div>
+              )}
+              {endsAtMs && (
+                <div>🏁 סיום מתוכנן: <span className="text-foreground">{fmtHM(new Date(endsAtMs).toISOString())}</span></div>
+              )}
+              {endsAtMs && (
+                <div>🕒 חזרה משוערת: <span className="text-foreground">{fmtHM(new Date(endsAtMs).toISOString())}</span></div>
+              )}
+            </div>
+
+            {isActive && (
+              <div className="pt-1" onClick={(e) => e.stopPropagation()}>
+                <Button
+                  size="sm"
+                  className="gap-2"
+                  variant={overrun ? "destructive" : "default"}
+                  onClick={() => endMut.mutate(r.id)}
+                  disabled={endMut.isPending}
+                >
+                  {endMut.isPending ? <Loader2 className="size-4 animate-spin" /> : <CheckCircle2 className="size-4" />}
+                  ✅ חזרתי מהפסקה
+                </Button>
+              </div>
             )}
           </div>
+        </div>
+      </Card>
 
+      <Dialog open={detailOpen} onOpenChange={setDetailOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Coffee className="size-5 text-primary" />
+              פרטי ההפסקה שלי
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-2 text-sm">
+            <DetailRow k="☕ סוג הפסקה" v={r.setting_name} />
+            <DetailRow k="⏱️ משך מאושר" v={`${r.duration_minutes} דק׳`} />
+            <DetailRow k="▶️ שעת תחילת הפסקה" v={startsAtIso ? formatHeDateTime(startsAtIso) : "—"} />
+            <DetailRow
+              k="🏁 שעת סיום מתוכננת"
+              v={endsAtMs ? formatHeDateTime(new Date(endsAtMs).toISOString()) : "—"}
+            />
+            <DetailRow
+              k="🕒 שעת חזרה בפועל"
+              v={r.completed_at ? formatHeDateTime(r.completed_at) : "— (בהפסקה)"}
+            />
+            <DetailRow
+              k="⏳ משך הפסקה בפועל"
+              v={actualDurMin != null ? `${actualDurMin} דק׳` : "—"}
+            />
+            <DetailRow
+              k="🔴 זמן חריגה"
+              v={
+                overrun
+                  ? fmtHMS(overrunMs)
+                  : actualDurMin != null && r.duration_minutes && actualDurMin > r.duration_minutes
+                    ? `${actualDurMin - r.duration_minutes} דק׳`
+                    : "אין"
+              }
+            />
+            <DetailRow k="👤 שם המאשר" v={r.approver_name} />
+            <DetailRow
+              k="💼 תפקיד המאשר"
+              v={r.approver_role ? `${r.approver_role}${r.approver_job ? " · " + r.approver_job : ""}` : "—"}
+            />
+            <DetailRow
+              k="📅 תאריך ושעת אישור"
+              v={r.approval_decided_at ? formatHeDateTime(r.approval_decided_at) : "—"}
+            />
+          </div>
           {isActive && (
-            <div className="pt-1">
+            <div className="pt-2">
               <Button
-                size="sm"
-                className="gap-2"
+                className="gap-2 w-full"
+                variant={overrun ? "destructive" : "default"}
                 onClick={() => endMut.mutate(r.id)}
                 disabled={endMut.isPending}
               >
                 {endMut.isPending ? <Loader2 className="size-4 animate-spin" /> : <CheckCircle2 className="size-4" />}
-                חזרתי מהפסקה
+                ✅ חזרתי מהפסקה
               </Button>
             </div>
           )}
-        </div>
-      </div>
-    </Card>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }
+
+function DetailRow({ k, v }: { k: string; v: string }) {
+  return (
+    <div className="flex items-start justify-between gap-3 border-b border-border/60 py-1.5">
+      <span className="text-muted-foreground">{k}</span>
+      <span className="text-foreground font-medium text-right">{v}</span>
+    </div>
+  );
+}
+
 
 function OnBreakSection({ profile }: { profile: any }) {
   const qc = useQueryClient();
@@ -1835,6 +1968,12 @@ function OnBreakSection({ profile }: { profile: any }) {
   const isMainAdmin = profile.roles.includes("main_admin");
   const [open, setOpen] = useState(false);
   const [logOpen, setLogOpen] = useState(false);
+  const [logSearch, setLogSearch] = useState("");
+  const [logEmpFilter, setLogEmpFilter] = useState<string>("__all");
+  const [logDeptFilter, setLogDeptFilter] = useState<string>("__all");
+  const [logTypeFilter, setLogTypeFilter] = useState<string>("__all");
+  const [logStatusFilter, setLogStatusFilter] = useState<string>("__all");
+  const [logSort, setLogSort] = useState<"created" | "overrun" | "return">("created");
 
   const permQ = useQuery({
     enabled: !!profile.id && !isMainAdmin,
@@ -1937,25 +2076,39 @@ function OnBreakSection({ profile }: { profile: any }) {
       );
       const dids = Array.from(new Set(rows.map((r) => r.department_id).filter(Boolean)));
       const sids = Array.from(new Set(rows.map((r) => r.break_setting_id).filter(Boolean)));
-      const [{ data: profs }, { data: depts }, { data: settings }] = await Promise.all([
-        uids.length
-          ? supabase.from("profiles").select("id, full_name").in("id", uids)
-          : Promise.resolve({ data: [] as any[] }),
-        dids.length
-          ? supabase.from("departments").select("id, name").in("id", dids)
-          : Promise.resolve({ data: [] as any[] }),
-        sids.length
-          ? supabase.from("break_settings").select("id, name").in("id", sids)
-          : Promise.resolve({ data: [] as any[] }),
-      ]);
-      const pMap = new Map((profs ?? []).map((p: any) => [p.id, p.full_name]));
+      const [{ data: profs }, { data: depts }, { data: settings }, { data: meta }] =
+        await Promise.all([
+          uids.length
+            ? supabase.from("profiles").select("id, full_name, job_title").in("id", uids)
+            : Promise.resolve({ data: [] as any[] }),
+          dids.length
+            ? supabase.from("departments").select("id, name").in("id", dids)
+            : Promise.resolve({ data: [] as any[] }),
+          sids.length
+            ? supabase.from("break_settings").select("id, name").in("id", sids)
+            : Promise.resolve({ data: [] as any[] }),
+          uids.length
+            ? (supabase as any).rpc("get_profiles_basic_info", { user_ids: uids })
+            : Promise.resolve({ data: [] as any[] }),
+        ]);
+      const pMap = new Map((profs ?? []).map((p: any) => [p.id, p]));
       const dMap = new Map((depts ?? []).map((d: any) => [d.id, d.name]));
       const sMap = new Map((settings ?? []).map((s: any) => [s.id, s.name]));
+      const mMap = new Map((meta ?? []).map((m: any) => [m.id, m]));
       return rows.map((r) => ({
         id: r.id,
-        name: pMap.get(r.user_id) ?? "—",
+        userId: r.user_id as string,
+        name: (pMap.get(r.user_id) as any)?.full_name ?? "—",
+        jobTitle:
+          (mMap.get(r.user_id) as any)?.job_title ??
+          (pMap.get(r.user_id) as any)?.job_title ??
+          null,
+        roleLabel: (mMap.get(r.user_id) as any)?.role_label ?? null,
+        departmentId: r.department_id as string | null,
         department: dMap.get(r.department_id) ?? "—",
+        typeId: r.break_setting_id as string | null,
         type: sMap.get(r.break_setting_id) ?? "הפסקה",
+        durationMinutes: r.duration_minutes as number,
         createdAt: r.created_at as string | null,
         requestedTime: r.requested_at as string | null,
         approvedTime: r.approved_at_time as string | null,
@@ -1964,10 +2117,11 @@ function OnBreakSection({ profile }: { profile: any }) {
         endsAt: r.ends_at as string | null,
         completedAt: r.completed_at as string | null,
         status: r.status as string,
-        approverName: r.approved_by ? pMap.get(r.approved_by) ?? "—" : "—",
+        approverName: r.approved_by ? (pMap.get(r.approved_by) as any)?.full_name ?? "—" : "—",
       }));
     },
   });
+
 
 
   // Realtime + minute tick for countdown
@@ -2059,11 +2213,11 @@ function OnBreakSection({ profile }: { profile: any }) {
       </div>
 
       <Dialog open={logOpen} onOpenChange={setLogOpen}>
-        <DialogContent className="max-w-5xl">
+        <DialogContent className="max-w-6xl">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Coffee className="size-5 text-primary" />
-              יומן הפסקות יומי
+              📋 יומן ההפסקות
               <span className="text-xs font-normal text-muted-foreground mr-2">
                 {new Intl.DateTimeFormat("he-IL", {
                   timeZone: "Asia/Jerusalem",
@@ -2074,71 +2228,217 @@ function OnBreakSection({ profile }: { profile: any }) {
               </span>
             </DialogTitle>
           </DialogHeader>
-          <div className="overflow-auto max-h-[70vh]">
-            {dailyLogQ.isLoading ? (
-              <div className="flex justify-center py-8">
-                <Loader2 className="size-5 animate-spin text-primary" />
-              </div>
-            ) : log.length === 0 ? (
-              <p className="p-6 text-sm text-muted-foreground text-center">
-                עדיין אין בקשות הפסקה היום.
-              </p>
-            ) : (
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="bg-muted/40">
-                    <th className="text-right p-2">עובד</th>
-                    <th className="text-right p-2">מחלקה</th>
-                    <th className="text-right p-2">סוג</th>
-                    <th className="text-right p-2">נשלחה</th>
-                    <th className="text-right p-2">שעה מבוקשת</th>
-                    <th className="text-right p-2">שעה מאושרת</th>
-                    <th className="text-right p-2">אישר</th>
-                    <th className="text-right p-2">התחלה בפועל</th>
-                    <th className="text-right p-2">סיום בפועל</th>
-                    <th className="text-right p-2">סטטוס</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {log.map((r) => {
-                    const changed =
-                      r.requestedTime &&
-                      r.approvedTime &&
-                      new Date(r.requestedTime).getTime() !==
-                        new Date(r.approvedTime).getTime();
-                    return (
-                      <tr key={r.id} className="border-t align-top">
-                        <td className="p-2 font-medium">{r.name}</td>
-                        <td className="p-2">{r.department}</td>
-                        <td className="p-2">{r.type}</td>
-                        <td className="p-2 whitespace-nowrap">{fmtT(r.createdAt)}</td>
-                        <td className="p-2 whitespace-nowrap">{fmtT(r.requestedTime)}</td>
-                        <td className="p-2 whitespace-nowrap">
-                          {fmtT(r.approvedTime)}
-                          {changed ? (
-                            <span className="mr-1 text-[10px] text-amber-600">שונתה</span>
-                          ) : null}
-                        </td>
-                        <td className="p-2">{r.approverName}</td>
-                        <td className="p-2 whitespace-nowrap">{fmtT(r.startedAt)}</td>
-                        <td className="p-2 whitespace-nowrap">
-                          {fmtT(r.completedAt ?? (r.status === "completed" ? r.endsAt : null))}
-                        </td>
-                        <td className="p-2">
-                          <Badge variant={STATUS_TONE[r.status] ?? "secondary"}>
-                            {STATUS_LABEL[r.status] ?? r.status}
-                          </Badge>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
 
-            )}
-          </div>
+          {(() => {
+            const employees = Array.from(
+              new Map(log.map((r) => [r.userId, r.name])).entries(),
+            ).sort((a, b) => a[1].localeCompare(b[1], "he"));
+            const departments = Array.from(new Set(log.map((r) => r.department))).sort();
+            const types = Array.from(new Set(log.map((r) => r.type))).sort();
+            const statuses = Array.from(new Set(log.map((r) => r.status)));
+
+            const enriched = log.map((r) => {
+              const startedMs = r.startedAt ? new Date(r.startedAt).getTime() : null;
+              const endsMs = r.endsAt ? new Date(r.endsAt).getTime() : null;
+              const completedMs = r.completedAt ? new Date(r.completedAt).getTime() : null;
+              const actualDurMin =
+                startedMs && completedMs
+                  ? Math.max(0, Math.round((completedMs - startedMs) / 60000))
+                  : null;
+              const overrunMin =
+                completedMs && endsMs && completedMs > endsMs
+                  ? Math.round((completedMs - endsMs) / 60000)
+                  : r.status === "active" && endsMs && Date.now() > endsMs
+                    ? Math.round((Date.now() - endsMs) / 60000)
+                    : 0;
+              const returnedOnTime =
+                r.status === "completed" && completedMs && endsMs && completedMs <= endsMs;
+              const returnedLate = r.status === "completed" && overrunMin > 0;
+              return {
+                ...r,
+                actualDurMin,
+                overrunMin,
+                returnedOnTime: !!returnedOnTime,
+                returnedLate,
+              };
+            });
+
+            const filtered = enriched.filter((r) => {
+              if (logEmpFilter !== "__all" && r.userId !== logEmpFilter) return false;
+              if (logDeptFilter !== "__all" && r.department !== logDeptFilter) return false;
+              if (logTypeFilter !== "__all" && r.type !== logTypeFilter) return false;
+              if (logStatusFilter !== "__all" && r.status !== logStatusFilter) return false;
+              if (logSearch.trim()) {
+                const q = logSearch.trim().toLowerCase();
+                const hay = [r.name, r.department, r.type, r.jobTitle, r.roleLabel, r.approverName]
+                  .filter(Boolean)
+                  .join(" ")
+                  .toLowerCase();
+                if (!hay.includes(q)) return false;
+              }
+              return true;
+            });
+
+            const sorted = [...filtered].sort((a, b) => {
+              if (logSort === "overrun") return (b.overrunMin || 0) - (a.overrunMin || 0);
+              if (logSort === "return") {
+                const av = a.completedAt ? new Date(a.completedAt).getTime() : 0;
+                const bv = b.completedAt ? new Date(b.completedAt).getTime() : 0;
+                return bv - av;
+              }
+              const av = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+              const bv = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+              return av - bv;
+            });
+
+            return (
+              <>
+                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-2 mb-3">
+                  <Input
+                    placeholder="🔎 חיפוש..."
+                    value={logSearch}
+                    onChange={(e) => setLogSearch(e.target.value)}
+                  />
+                  <Select value={logEmpFilter} onValueChange={setLogEmpFilter}>
+                    <SelectTrigger><SelectValue placeholder="עובד" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="__all">כל העובדים</SelectItem>
+                      {employees.map(([id, name]) => (
+                        <SelectItem key={id} value={id}>{name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <Select value={logDeptFilter} onValueChange={setLogDeptFilter}>
+                    <SelectTrigger><SelectValue placeholder="מחלקה" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="__all">כל המחלקות</SelectItem>
+                      {departments.map((d) => (
+                        <SelectItem key={d} value={d}>{d}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <Select value={logTypeFilter} onValueChange={setLogTypeFilter}>
+                    <SelectTrigger><SelectValue placeholder="סוג הפסקה" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="__all">כל הסוגים</SelectItem>
+                      {types.map((t) => (
+                        <SelectItem key={t} value={t}>{t}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <Select value={logStatusFilter} onValueChange={setLogStatusFilter}>
+                    <SelectTrigger><SelectValue placeholder="סטטוס" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="__all">כל הסטטוסים</SelectItem>
+                      {statuses.map((s) => (
+                        <SelectItem key={s} value={s}>{STATUS_LABEL[s] ?? s}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <Select value={logSort} onValueChange={(v: any) => setLogSort(v)}>
+                    <SelectTrigger><SelectValue placeholder="מיון" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="created">לפי שעת בקשה</SelectItem>
+                      <SelectItem value="overrun">לפי זמן חריגה</SelectItem>
+                      <SelectItem value="return">לפי זמן חזרה</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="overflow-auto max-h-[65vh] border rounded-md">
+                  {dailyLogQ.isLoading ? (
+                    <div className="flex justify-center py-8">
+                      <Loader2 className="size-5 animate-spin text-primary" />
+                    </div>
+                  ) : sorted.length === 0 ? (
+                    <p className="p-6 text-sm text-muted-foreground text-center">
+                      לא נמצאו רשומות התואמות את הסינון.
+                    </p>
+                  ) : (
+                    <table className="w-full text-xs sm:text-sm">
+                      <thead className="bg-muted/40 sticky top-0">
+                        <tr>
+                          <th className="text-right p-2">👤 עובד</th>
+                          <th className="text-right p-2">💼 תפקיד</th>
+                          <th className="text-right p-2">🏬 מחלקה</th>
+                          <th className="text-right p-2">☕ סוג</th>
+                          <th className="text-right p-2">👤 אישר</th>
+                          <th className="text-right p-2">🕒 התחלה</th>
+                          <th className="text-right p-2">🏁 סיום מתוכנן</th>
+                          <th className="text-right p-2">🕒 חזרה בפועל</th>
+                          <th className="text-right p-2">⏱️ משך בפועל</th>
+                          <th className="text-right p-2">🔴 חריגה</th>
+                          <th className="text-right p-2">📅 תאריך</th>
+                          <th className="text-right p-2">📌 סטטוס</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {sorted.map((r) => {
+                          const dateStr = r.createdAt
+                            ? new Intl.DateTimeFormat("he-IL", {
+                                timeZone: "Asia/Jerusalem",
+                                day: "2-digit",
+                                month: "2-digit",
+                                year: "numeric",
+                                numberingSystem: "latn",
+                              }).format(new Date(r.createdAt))
+                            : "—";
+                          const isLate = r.returnedLate;
+                          const isOnTime = r.returnedOnTime;
+                          const isActiveRow = r.status === "active";
+                          const statusBadge = isActiveRow ? (
+                            <Badge className="bg-amber-500 text-white hover:bg-amber-500">🟡 בהפסקה</Badge>
+                          ) : isOnTime ? (
+                            <Badge className="bg-green-600 text-white hover:bg-green-600">🟢 חזר בזמן</Badge>
+                          ) : isLate ? (
+                            <Badge className="bg-red-600 text-white hover:bg-red-600">🔴 חזר באיחור</Badge>
+                          ) : (
+                            <Badge variant={STATUS_TONE[r.status] ?? "secondary"}>
+                              {STATUS_LABEL[r.status] ?? r.status}
+                            </Badge>
+                          );
+                          return (
+                            <tr key={r.id} className="border-t align-top">
+                              <td className="p-2 font-medium whitespace-nowrap">{r.name}</td>
+                              <td className="p-2 whitespace-nowrap text-muted-foreground">
+                                {r.roleLabel ?? "—"}
+                                {r.jobTitle ? ` · ${r.jobTitle}` : ""}
+                              </td>
+                              <td className="p-2 whitespace-nowrap">{r.department}</td>
+                              <td className="p-2 whitespace-nowrap">{r.type}</td>
+                              <td className="p-2 whitespace-nowrap">{r.approverName}</td>
+                              <td className="p-2 whitespace-nowrap">{fmtT(r.startedAt)}</td>
+                              <td className="p-2 whitespace-nowrap">{fmtT(r.endsAt)}</td>
+                              <td className="p-2 whitespace-nowrap">{fmtT(r.completedAt)}</td>
+                              <td className="p-2 whitespace-nowrap">
+                                {r.actualDurMin != null ? `${r.actualDurMin} דק׳` : "—"}
+                              </td>
+                              <td className="p-2 whitespace-nowrap">
+                                {r.overrunMin > 0 ? (
+                                  <span className="text-red-600 font-bold">+{r.overrunMin} דק׳</span>
+                                ) : (
+                                  <span className="text-muted-foreground">—</span>
+                                )}
+                              </td>
+                              <td className="p-2 whitespace-nowrap">{dateStr}</td>
+                              <td className="p-2">{statusBadge}</td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  )}
+                </div>
+                <div className="text-xs text-muted-foreground mt-2">
+                  סה״כ: {sorted.length} מתוך {log.length}
+                </div>
+              </>
+            );
+          })()}
         </DialogContent>
       </Dialog>
+
+
 
 
       <Dialog open={open} onOpenChange={setOpen}>
