@@ -213,7 +213,7 @@ export const setEmployeeActive = createServerFn({ method: "POST" })
     const { error } = await context.supabase.rpc("set_employee_active", {
       _user_id: data.user_id,
       _active: data.is_active,
-      _note: data.note ?? null,
+      _note: data.note ?? undefined,
     });
     if (error) throw new Error(error.message);
     return { ok: true };
