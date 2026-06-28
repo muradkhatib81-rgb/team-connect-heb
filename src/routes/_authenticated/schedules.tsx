@@ -293,14 +293,14 @@ function SchedulesPage() {
 
       const ids = Array.from(
         new Set(
-          [s.created_by, s.approved_by, s.rejected_by, s.submitted_by].filter(
+          [s.created_by, s.approved_by, s.rejected_by, s.submitted_by, s.updated_by].filter(
             (v): v is string => !!v,
           ),
         ),
       );
       const [{ data: profs }, { data: roles }, { data: auditRows }] = await Promise.all([
         ids.length
-          ? supabase.from("profiles").select("id, full_name, job_title").in("id", ids)
+          ? (supabase as any).rpc("get_profiles_basic_info", { user_ids: ids })
           : Promise.resolve({ data: [] as any[] }),
         ids.length
           ? supabase.from("user_roles").select("user_id, role").in("user_id", ids)
@@ -347,23 +347,22 @@ function SchedulesPage() {
           new Date(r.created_at).getTime() <= approvedT &&
           new Date(r.created_at).getTime() >= submittedT,
       );
+
+      let lastEditorId = s.updated_by;
+      let lastUpdateAt = s.updated_at;
+
       if (updates.length) {
         const last = updates[updates.length - 1];
-        // Make sure editor profile is loaded
-        if (!profMap.has(last.actor_id)) {
-          const { data: extraProf } = await supabase
-            .from("profiles")
-            .select("id, full_name, job_title")
-            .eq("id", last.actor_id)
-            .maybeSingle();
-          if (extraProf) profMap.set(last.actor_id, extraProf);
-          const { data: extraRoles } = await supabase
-            .from("user_roles")
-            .select("role")
-            .eq("user_id", last.actor_id);
-          rolesByUser.set(last.actor_id, ((extraRoles ?? []) as any[]).map((r) => r.role));
+        lastEditorId = last.actor_id;
+        lastUpdateAt = last.created_at;
+      }
+
+      if (lastEditorId && lastEditorId !== s.created_by) {
+        if (!rolesByUser.has(lastEditorId)) {
+          const { data: extraRoles } = await supabase.from("user_roles").select("role").eq("user_id", lastEditorId);
+          rolesByUser.set(lastEditorId, ((extraRoles ?? []) as any[]).map(r => (r as any).role));
         }
-        editor = buildPerson(last.actor_id, last.created_at);
+        editor = buildPerson(lastEditorId, lastUpdateAt);
       }
 
       // creation timestamp from audit (first "created"), fallback to schedule.created_at

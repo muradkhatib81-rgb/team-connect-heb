@@ -171,7 +171,7 @@ export const saveScheduleShifts = createServerFn({ method: "POST" })
     }
     await context.supabase
       .from("schedules")
-      .update({ updated_at: new Date().toISOString() })
+      .update({ updated_by: context.userId,  updated_at: new Date().toISOString() })
       .eq("id", data.schedule_id);
     await context.supabase
       .from("schedule_audit_log")
