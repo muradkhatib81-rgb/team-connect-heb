@@ -1309,12 +1309,16 @@ function SummaryStatCard({
   icon,
   tone,
   emoji,
+  active,
+  onClick,
 }: {
   label: string;
   value: number;
   icon: React.ReactNode;
   tone: "primary" | "green" | "red" | "sky" | "amber" | "indigo";
   emoji: string;
+  active?: boolean;
+  onClick?: () => void;
 }) {
   const toneClasses: Record<string, string> = {
     primary: "bg-primary/10 text-primary",
@@ -1324,20 +1328,31 @@ function SummaryStatCard({
     amber: "bg-amber-500/10 text-amber-600 dark:text-amber-400",
     indigo: "bg-indigo-500/10 text-indigo-600 dark:text-indigo-400",
   };
-  return (
-    <Card className="card-elevated p-3">
-      <div className="flex items-center gap-3">
-        <div className={`size-10 rounded-xl flex items-center justify-center shrink-0 ${toneClasses[tone]}`}>
-          {icon}
-        </div>
-        <div className="min-w-0">
-          <p className="text-xs text-muted-foreground truncate">
-            <span className="me-1">{emoji}</span>
-            {label}
-          </p>
-          <p className="text-xl font-bold leading-tight">{value}</p>
-        </div>
+  const inner = (
+    <div className="flex items-center gap-3">
+      <div className={`size-10 rounded-xl flex items-center justify-center shrink-0 ${toneClasses[tone]}`}>
+        {icon}
       </div>
-    </Card>
+      <div className="min-w-0 text-right">
+        <p className="text-xs text-muted-foreground truncate">
+          <span className="me-1">{emoji}</span>
+          {label}
+        </p>
+        <p className="text-xl font-bold leading-tight">{value}</p>
+      </div>
+    </div>
   );
+  if (onClick) {
+    return (
+      <button
+        type="button"
+        onClick={onClick}
+        className={`text-right transition-all ${active ? "ring-2 ring-primary" : "hover:bg-accent/40"} rounded-xl`}
+        aria-pressed={active}
+      >
+        <Card className="card-elevated p-3">{inner}</Card>
+      </button>
+    );
+  }
+  return <Card className="card-elevated p-3">{inner}</Card>;
 }
