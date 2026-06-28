@@ -687,10 +687,11 @@ function EmployeeNotificationsCard({ userId }: { userId: string }) {
 
 function EmployeeNewMessagesCard({ userId }: { userId: string }) {
   const qc = useQueryClient();
+  const invalidateMessages = () => qc.invalidateQueries({ queryKey: ["emp-dash-msgs", userId] });
   const q = useQuery({
     queryKey: ["emp-dash-msgs", userId],
     queryFn: async () => {
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from("message_recipients")
         .select("message_id, delivered_at, message:messages!inner(id, title, created_at, deleted_at)")
         .eq("user_id", userId)
@@ -698,6 +699,7 @@ function EmployeeNewMessagesCard({ userId }: { userId: string }) {
         .is("archived_at", null)
         .order("delivered_at", { ascending: false })
         .limit(5);
+      if (error) throw error;
       return ((data ?? []) as any[]).filter((r) => !r.message?.deleted_at);
     },
   });
@@ -707,7 +709,17 @@ function EmployeeNewMessagesCard({ userId }: { userId: string }) {
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "message_recipients", filter: `user_id=eq.${userId}` },
-        () => qc.invalidateQueries({ queryKey: ["emp-dash-msgs", userId] }),
+        invalidateMessages,
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "messages" },
+        invalidateMessages,
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "message_targets" },
+        invalidateMessages,
       )
       .subscribe();
     return () => {
@@ -753,11 +765,12 @@ function EmployeeNewMessagesCard({ userId }: { userId: string }) {
 
 function EmployeeNewAnnouncementsCard({ userId }: { userId: string }) {
   const qc = useQueryClient();
+  const invalidateAnnouncements = () => qc.invalidateQueries({ queryKey: ["emp-dash-anns", userId] });
   const q = useQuery({
     queryKey: ["emp-dash-anns", userId],
     queryFn: async () => {
       const nowIso = new Date().toISOString();
-      const { data: anns } = await supabase
+      const { data: anns, error: annsErr } = await supabase
         .from("announcements")
         .select("id, title, starts_at, ends_at, created_at, sender_id")
         .is("deleted_at", null)
@@ -765,9 +778,10 @@ function EmployeeNewAnnouncementsCard({ userId }: { userId: string }) {
         .lte("starts_at", nowIso)
         .order("starts_at", { ascending: false })
         .limit(10);
+      if (annsErr) throw annsErr;
       const rows = ((anns ?? []) as any[]).filter((a) => !a.ends_at || a.ends_at > nowIso);
       if (!rows.length) return [];
-      const { data: reads } = await supabase
+      const { data: reads, error: readsErr } = await supabase
         .from("announcement_reads")
         .select("announcement_id")
         .in(
@@ -775,6 +789,7 @@ function EmployeeNewAnnouncementsCard({ userId }: { userId: string }) {
           rows.map((r) => r.id),
         )
         .eq("user_id", userId);
+      if (readsErr) throw readsErr;
       const readSet = new Set((reads ?? []).map((r: any) => r.announcement_id));
       return rows.filter((r) => !readSet.has(r.id)).slice(0, 5);
     },
@@ -783,12 +798,17 @@ function EmployeeNewAnnouncementsCard({ userId }: { userId: string }) {
     const ch = supabase
       .channel(`emp-dash-ann-${userId}`)
       .on("postgres_changes", { event: "*", schema: "public", table: "announcements" }, () =>
-        qc.invalidateQueries({ queryKey: ["emp-dash-anns", userId] }),
+        invalidateAnnouncements(),
       )
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "announcement_reads", filter: `user_id=eq.${userId}` },
-        () => qc.invalidateQueries({ queryKey: ["emp-dash-anns", userId] }),
+        invalidateAnnouncements,
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "announcement_targets" },
+        invalidateAnnouncements,
       )
       .subscribe();
     return () => {
