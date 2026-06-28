@@ -268,23 +268,20 @@ function SchedulesPage() {
     },
   });
 
-  // Approver/Rejector details for the visible schedule (name + role label + timestamp).
+  // Creator / Editor / Approver details for the visible schedule.
   const decisionPersonQ = useQuery({
-    enabled: !!schedQ.data && (schedQ.data.status === "approved" || schedQ.data.status === "rejected"),
-    queryKey: ["schedule-decision", schedQ.data?.id, schedQ.data?.status, schedQ.data?.approved_by, schedQ.data?.rejected_by],
+    enabled: !!schedQ.data,
+    queryKey: [
+      "schedule-decision",
+      schedQ.data?.id,
+      schedQ.data?.status,
+      schedQ.data?.approved_by,
+      schedQ.data?.rejected_by,
+      schedQ.data?.created_by,
+      (schedQ.data as any)?.updated_at,
+    ],
     queryFn: async () => {
       const s: any = schedQ.data!;
-      const uid = s.status === "approved" ? s.approved_by : s.rejected_by;
-      if (!uid) return null;
-      const [{ data: prof }, { data: roles }, { data: auditRows }] = await Promise.all([
-        supabase.from("profiles").select("id, full_name, job_title").eq("id", uid).maybeSingle(),
-        supabase.from("user_roles").select("role").eq("user_id", uid),
-        supabase
-          .from("schedule_audit_log")
-          .select("actor_id, action, created_at")
-          .eq("schedule_id", s.id)
-          .order("created_at", { ascending: true }),
-      ]);
       const roleLabels: Record<string, string> = {
         main_admin: "מנהל ראשי",
         branch_manager: "מנהל סניף",
@@ -293,33 +290,102 @@ function SchedulesPage() {
         employee: "עובד",
       };
       const order = ["main_admin", "branch_manager", "assistant_manager", "department_manager", "employee"];
-      const list = (roles ?? []).map((r: any) => r.role);
-      list.sort((a, b) => order.indexOf(a) - order.indexOf(b));
-      const topRole = list[0] ?? null;
 
-      // Detect "edited before approval": any 'updated' audit entry between
-      // submitted_at and approved_at by an actor other than the creator.
-      let editedBeforeApproval = false;
-      if (s.status === "approved" && s.submitted_at && s.approved_at && auditRows) {
-        const subT = new Date(s.submitted_at).getTime();
-        const appT = new Date(s.approved_at).getTime();
-        editedBeforeApproval = (auditRows as any[]).some((r) => {
-          const t = new Date(r.created_at).getTime();
-          return (
-            r.action === "updated" &&
-            t >= subT &&
-            t <= appT &&
-            r.actor_id && r.actor_id !== s.created_by
-          );
-        });
+      const ids = Array.from(
+        new Set(
+          [s.created_by, s.approved_by, s.rejected_by, s.submitted_by].filter(
+            (v): v is string => !!v,
+          ),
+        ),
+      );
+      const [{ data: profs }, { data: roles }, { data: auditRows }] = await Promise.all([
+        ids.length
+          ? supabase.from("profiles").select("id, full_name, job_title").in("id", ids)
+          : Promise.resolve({ data: [] as any[] }),
+        ids.length
+          ? supabase.from("user_roles").select("user_id, role").in("user_id", ids)
+          : Promise.resolve({ data: [] as any[] }),
+        supabase
+          .from("schedule_audit_log")
+          .select("actor_id, action, created_at")
+          .eq("schedule_id", s.id)
+          .order("created_at", { ascending: true }),
+      ]);
+
+      const profMap = new Map<string, any>((profs ?? []).map((p: any) => [p.id, p]));
+      const rolesByUser = new Map<string, string[]>();
+      for (const r of (roles ?? []) as any[]) {
+        const arr = rolesByUser.get(r.user_id) ?? [];
+        arr.push(r.role);
+        rolesByUser.set(r.user_id, arr);
+      }
+      const buildPerson = (uid: string | null, at: string | null) => {
+        if (!uid) return null;
+        const p = profMap.get(uid);
+        const list = (rolesByUser.get(uid) ?? []).slice();
+        list.sort((a, b) => order.indexOf(a) - order.indexOf(b));
+        const topRole = list[0] ?? null;
+        return {
+          id: uid,
+          full_name: p?.full_name ?? "—",
+          job_title: p?.job_title ?? null,
+          role_label: topRole ? roleLabels[topRole] ?? topRole : null,
+          at,
+        };
+      };
+
+      // Find the latest "updated" audit entry before approval that was not the creator.
+      const auditList = (auditRows ?? []) as any[];
+      let editor: ReturnType<typeof buildPerson> = null;
+      const approvedT = s.approved_at ? new Date(s.approved_at).getTime() : Infinity;
+      const submittedT = s.submitted_at ? new Date(s.submitted_at).getTime() : 0;
+      const updates = auditList.filter(
+        (r) =>
+          r.action === "updated" &&
+          r.actor_id &&
+          r.actor_id !== s.created_by &&
+          new Date(r.created_at).getTime() <= approvedT &&
+          new Date(r.created_at).getTime() >= submittedT,
+      );
+      if (updates.length) {
+        const last = updates[updates.length - 1];
+        // Make sure editor profile is loaded
+        if (!profMap.has(last.actor_id)) {
+          const { data: extraProf } = await supabase
+            .from("profiles")
+            .select("id, full_name, job_title")
+            .eq("id", last.actor_id)
+            .maybeSingle();
+          if (extraProf) profMap.set(last.actor_id, extraProf);
+          const { data: extraRoles } = await supabase
+            .from("user_roles")
+            .select("role")
+            .eq("user_id", last.actor_id);
+          rolesByUser.set(last.actor_id, ((extraRoles ?? []) as any[]).map((r) => r.role));
+        }
+        editor = buildPerson(last.actor_id, last.created_at);
       }
 
+      // creation timestamp from audit (first "created"), fallback to schedule.created_at
+      const createdRow = auditList.find((r) => r.action === "created");
+      const createdAt = createdRow?.created_at ?? s.created_at ?? null;
+
+      const creator = buildPerson(s.created_by, createdAt);
+      const approver = s.status === "approved" ? buildPerson(s.approved_by, s.approved_at) : null;
+      const rejecter = s.status === "rejected" ? buildPerson(s.rejected_by, s.rejected_at) : null;
+
+      // legacy fields used elsewhere in the file
+      const decision = approver ?? rejecter;
       return {
-        full_name: prof?.full_name ?? "—",
-        job_title: prof?.job_title ?? null,
-        role_label: topRole ? roleLabels[topRole] ?? topRole : null,
-        at: s.status === "approved" ? s.approved_at : s.rejected_at,
-        editedBeforeApproval,
+        creator,
+        editor,
+        approver,
+        rejecter,
+        editedBeforeApproval: !!editor && s.status === "approved",
+        full_name: decision?.full_name ?? "—",
+        job_title: decision?.job_title ?? null,
+        role_label: decision?.role_label ?? null,
+        at: decision?.at ?? null,
       };
     },
   });
