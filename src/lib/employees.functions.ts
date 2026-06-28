@@ -199,7 +199,7 @@ export const changeOwnPassword = createServerFn({ method: "POST" })
 const setActiveSchema = z.object({
   user_id: z.string().uuid(),
   is_active: z.boolean(),
-  note: z.string().trim().max(500).optional().nullable(),
+  note: z.string().trim().max(500).optional(),
 });
 
 export const setEmployeeActive = createServerFn({ method: "POST" })
