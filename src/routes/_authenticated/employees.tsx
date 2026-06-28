@@ -422,7 +422,7 @@ function EmployeesPage() {
 
       {!isDeptManagerOnly && (
         <section className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
-          <SummaryStatCard label="עובדים" value={summaryStats.total} icon={<Users className="size-5" />} tone="primary" emoji="👥" active={filterMode === "all"} onClick={() => setFilter("all")} />
+          <SummaryStatCard label="עובדים" value={summaryStats.workers} icon={<Users className="size-5" />} tone="primary" emoji="👤" active={filterMode === "workers"} onClick={() => setFilter("workers")} />
           <SummaryStatCard label="מנהלים" value={summaryStats.managers} icon={<Shield className="size-5" />} tone="indigo" emoji="👔" active={filterMode === "managers"} onClick={() => setFilter("managers")} />
           <SummaryStatCard label="עובדים פעילים" value={summaryStats.active} icon={<UserCheck className="size-5" />} tone="green" emoji="🟢" active={filterMode === "active"} onClick={() => setFilter("active")} />
           <SummaryStatCard label="בחופשה" value={summaryStats.onLeave} icon={<Plane className="size-5" />} tone="sky" emoji="🏖️" active={filterMode === "on_leave"} onClick={() => setFilter("on_leave")} />
