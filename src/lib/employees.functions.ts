@@ -39,9 +39,13 @@ async function assertMainAdmin(supabase: any, userId: string) {
   }
 }
 
+const createEmployeeSchemaExt = createEmployeeSchema.extend({
+  force_archived: z.boolean().optional().default(false),
+});
+
 export const createEmployee = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((data: unknown) => createEmployeeSchema.parse(data))
+  .inputValidator((data: unknown) => createEmployeeSchemaExt.parse(data))
   .handler(async ({ data, context }) => {
     await assertMainAdmin(context.supabase, context.userId);
 
@@ -55,8 +59,7 @@ export const createEmployee = createServerFn({ method: "POST" })
 
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
 
-    // Pre-check: prevent duplicate ID numbers. Surface a structured error with the existing
-    // employee's details so the UI can offer reactivation/edit/view instead of creating a duplicate.
+    // Pre-check active duplicates (id_number on profiles)
     const { data: existing, error: exErr } = await supabaseAdmin
       .from("profiles")
       .select("id, full_name, is_active, job_title, department_id, on_leave, departments(name)")
@@ -75,6 +78,22 @@ export const createEmployee = createServerFn({ method: "POST" })
       };
       throw new Error(`DUPLICATE_EMPLOYEE::${JSON.stringify(payload)}`);
     }
+
+    // Pre-check archived duplicates — require explicit confirmation from the admin
+    if (!data.force_archived) {
+      const { data: arch, error: aErr } = await supabaseAdmin
+        .from("employee_archive")
+        .select("id, full_name, job_title, department_name, archived_at, deactivated_at")
+        .eq("id_number", data.id_number)
+        .order("archived_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (aErr) throw new Error(aErr.message);
+      if (arch) {
+        throw new Error(`ARCHIVED_EXISTS::${JSON.stringify(arch)}`);
+      }
+    }
+
 
 
     const { data: created, error } = await supabaseAdmin.auth.admin.createUser({
