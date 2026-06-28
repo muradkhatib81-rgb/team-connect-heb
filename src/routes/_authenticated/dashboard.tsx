@@ -2153,27 +2153,42 @@ function OnBreakSection({ profile }: { profile: any }) {
           ) : (
             <ul className="space-y-2 max-h-[60vh] overflow-y-auto">
               {list.map((r) => {
-                const remainingMs = r.endsAt
-                  ? new Date(r.endsAt).getTime() - Date.now()
-                  : 0;
+                const endsTs = r.endsAt ? new Date(r.endsAt).getTime() : 0;
+                const now = Date.now();
+                const remainingMs = endsTs ? endsTs - now : 0;
+                const overrunMs = endsTs && now > endsTs ? now - endsTs : 0;
                 const remMin = Math.max(0, Math.ceil(remainingMs / 60000));
+                const overMin = Math.ceil(overrunMs / 60000);
                 const startStr = fmtT(r.startedAt);
+                const endStr = fmtT(r.endsAt);
                 return (
                   <li
                     key={r.id}
-                    className="rounded-md border border-border/60 p-3 flex items-center justify-between gap-3"
+                    className={
+                      "rounded-md border p-3 flex items-center justify-between gap-3 " +
+                      (overrunMs > 0 ? "border-red-400 bg-red-50/40" : "border-border/60")
+                    }
                   >
                     <div className="min-w-0">
                       <p className="font-medium truncate">
-                        {r.name} · {r.department}
+                        👤 {r.name}
+                        {r.role_label ? ` · 💼 ${r.role_label}` : ""}
+                        {r.job_title ? ` · ${r.job_title}` : ""}
                       </p>
                       <p className="text-xs text-muted-foreground">
-                        {r.type} · התחיל ב־{startStr} · אישר/ה: {r.approverName}
+                        🏬 {r.department} · ☕ {r.type} · התחיל ב־{startStr} · 🕒 חזרה משוערת: {endStr}
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        אישר/ה: {r.approverName}
                       </p>
                     </div>
-                    <Badge variant="secondary" className="shrink-0">
-                      נותר {remMin} דק׳
-                    </Badge>
+                    <div className="shrink-0 flex flex-col items-end gap-1">
+                      {overrunMs > 0 ? (
+                        <Badge variant="destructive">🔴 חריגה {overMin} דק׳</Badge>
+                      ) : (
+                        <Badge variant="secondary">⏳ נותר {remMin} דק׳</Badge>
+                      )}
+                    </div>
                   </li>
                 );
               })}
