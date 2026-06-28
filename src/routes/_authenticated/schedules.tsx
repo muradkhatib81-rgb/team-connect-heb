@@ -935,45 +935,26 @@ function SchedulesPage() {
         </Card>
       ) : (
         <>
-          {/* Actor info: creator + editor (always shown when data is available) */}
-          {(decisionPersonQ.data?.creator || decisionPersonQ.data?.editor) && (
-            <Card className="card-elevated p-4 space-y-2">
-              {decisionPersonQ.data?.creator && (
-                <div className="text-xs text-muted-foreground flex flex-wrap gap-x-2 gap-y-0.5">
-                  <span>👤 נוצר על ידי:</span>
-                  <span className="font-medium text-foreground">
-                    {decisionPersonQ.data.creator.full_name}
-                  </span>
-                  {decisionPersonQ.data.creator.role_label && (
-                    <span>· 💼 {decisionPersonQ.data.creator.role_label}</span>
-                  )}
-                  {decisionPersonQ.data.creator.job_title && (
-                    <span>({decisionPersonQ.data.creator.job_title})</span>
-                  )}
-                  {decisionPersonQ.data.creator.at && (
-                    <span>· 📅🕒 {formatHeDateTime(decisionPersonQ.data.creator.at)}</span>
-                  )}
-                </div>
-              )}
-              {decisionPersonQ.data?.editor && (
-                <div className="text-xs text-amber-700 dark:text-amber-400 flex flex-wrap gap-x-2 gap-y-0.5">
-                  <span>✏️ נערך על ידי:</span>
-                  <span className="font-medium">
-                    {decisionPersonQ.data.editor.full_name}
-                  </span>
-                  {decisionPersonQ.data.editor.role_label && (
-                    <span>· 💼 {decisionPersonQ.data.editor.role_label}</span>
-                  )}
-                  {decisionPersonQ.data.editor.job_title && (
-                    <span>({decisionPersonQ.data.editor.job_title})</span>
-                  )}
-                  {decisionPersonQ.data.editor.at && (
-                    <span>· 📅🕒 {formatHeDateTime(decisionPersonQ.data.editor.at)}</span>
-                  )}
-                </div>
-              )}
-            </Card>
-          )}
+          {/* Actor info: creator + editor + approver */}
+          <Card className="card-elevated p-4 space-y-2">
+            <SchedulePersonMetaRow
+              label="נוצר על ידי:"
+              person={decisionPersonQ.data?.creator ?? null}
+              fallback={decisionPersonQ.isLoading ? "נטען..." : "לא ידוע"}
+            />
+            <SchedulePersonMetaRow
+              label="נערך על ידי:"
+              person={decisionPersonQ.data?.editor ?? null}
+              className="text-amber-700 dark:text-amber-400"
+              fallback={decisionPersonQ.isLoading ? "נטען..." : "לא ידוע"}
+            />
+            <SchedulePersonMetaRow
+              label="אושר על ידי:"
+              person={decisionPersonQ.data?.approver ?? null}
+              className="text-emerald-700 dark:text-emerald-400"
+              fallback={visible.status === "approved" ? (decisionPersonQ.isLoading ? "נטען..." : "לא ידוע") : "טרם אושר"}
+            />
+          </Card>
 
           {(visible.status === "rejected" || visible.status === "approved") && (
             <Card
