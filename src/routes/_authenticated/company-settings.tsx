@@ -343,6 +343,7 @@ function CompanySettingsPage() {
           </Button>
         </div>
       </Card>
+      )}
     </div>
   );
 }
