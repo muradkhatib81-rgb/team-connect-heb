@@ -347,7 +347,7 @@ function EmployeesPage() {
       const isManager = r.some((role) => role !== "employee");
       if (isManager) managers += 1;
       else workers += 1;
-      if (e.is_active && !e.on_leave) active += 1;
+      if (e.is_active) active += 1;
       if (e.on_leave) onLeave += 1;
       if (!e.is_active) inactive += 1;
     });
