@@ -45,7 +45,7 @@ import {
 import { Search, Loader2, Pencil, UserPlus, Filter, ImagePlus, X, KeyRound, Trash2, Users, UserCheck, UserX, Plane, Coffee, Shield, Power } from "lucide-react";
 import { toast } from "sonner";
 
-type FilterMode = "all" | "active" | "inactive" | "on_leave";
+type FilterMode = "all" | "active" | "inactive" | "on_leave" | "on_break";
 
 interface EmployeesSearch {
   filter?: FilterMode;
@@ -55,7 +55,7 @@ interface EmployeesSearch {
 export const Route = createFileRoute("/_authenticated/employees")({
   component: EmployeesPage,
   validateSearch: (s: Record<string, unknown>): EmployeesSearch => ({
-    filter: (["all", "active", "inactive", "on_leave"].includes(s.filter as string)
+    filter: (["all", "active", "inactive", "on_leave", "on_break"].includes(s.filter as string)
       ? (s.filter as FilterMode)
       : undefined),
     dept: typeof s.dept === "string" ? s.dept : undefined,
