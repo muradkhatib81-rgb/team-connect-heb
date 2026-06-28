@@ -42,7 +42,7 @@ import {
   DialogTitle,
   DialogFooter,
 } from "@/components/ui/dialog";
-import { Search, Loader2, Pencil, UserPlus, Filter, ImagePlus, X, KeyRound, Trash2 } from "lucide-react";
+import { Search, Loader2, Pencil, UserPlus, Filter, ImagePlus, X, KeyRound, Trash2, Users, UserCheck, UserX, Plane, Coffee, Shield } from "lucide-react";
 import { toast } from "sonner";
 
 type FilterMode = "all" | "active" | "inactive" | "on_leave";
