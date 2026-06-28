@@ -81,11 +81,12 @@ interface ProfileRow {
 }
 
 const FILTER_LABELS: Record<FilterMode, string> = {
-  all: "כל העובדים",
-  active: "פעילים בלבד",
-  inactive: "לא פעילים",
-  on_leave: "בחופש",
+  all: "👥 כל העובדים",
+  active: "🟢 עובדים פעילים",
+  inactive: "🔴 עובדים לא פעילים",
+  on_leave: "🟡 בחופש",
 };
+
 
 async function uploadAvatar(file: File, userId: string): Promise<string> {
   const ext = file.name.split(".").pop()?.toLowerCase() || "jpg";
