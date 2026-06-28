@@ -1092,17 +1092,7 @@ function SchedulesStatsSection({ profile }: { profile: any }) {
       )}
 
 
-      <Card
-        className={`card-elevated p-0 overflow-auto relative ${
-          s.hasScheduleModified ? "ring-2 ring-orange-500 border border-orange-500" : ""
-        }`}
-      >
-        {s.hasScheduleModified && (
-          <RefreshCw
-            className="size-3 text-orange-600 absolute -top-1 -left-1 bg-background rounded-full p-0.5 box-content border border-orange-500"
-            aria-label="עודכן לאחר פרסום"
-          />
-        )}
+      <Card className="card-elevated p-0 overflow-auto relative">
         <div className="px-4 pt-4 pb-2 flex items-center justify-between">
           <p className="font-semibold text-sm">סיכום שבועי</p>
           <p className="text-xs text-muted-foreground">
@@ -1126,6 +1116,7 @@ function SchedulesStatsSection({ profile }: { profile: any }) {
             <tbody>
               {weekDays.map((d, i) => {
                 const c = s.weekCounts[d];
+                const m = s.modifiedCells?.[d];
                 return (
                   <tr key={d} className="border-t">
                     <td className="p-3 font-medium">
@@ -1135,15 +1126,26 @@ function SchedulesStatsSection({ profile }: { profile: any }) {
                     {(["morning", "evening", "off"] as const).map((sh) => {
                       const shiftBg =
                         sh === "morning" ? "bg-amber-50" : sh === "evening" ? "bg-sky-50" : "bg-emerald-50";
+                      const isModified = !!m?.[sh];
                       return (
                         <td key={sh} className={`p-2 text-center ${shiftBg}`}>
-                          <button
-                            type="button"
-                            onClick={() => setShiftCell({ day: d, shift: sh })}
-                            className="inline-flex min-w-12 px-3 py-1.5 rounded-md hover:bg-accent/40 font-semibold"
-                          >
-                            {c[sh]}
-                          </button>
+                          <div className={`relative inline-block ${isModified ? "" : ""}`}>
+                            <button
+                              type="button"
+                              onClick={() => setShiftCell({ day: d, shift: sh })}
+                              className={`relative inline-flex min-w-12 px-3 py-1.5 rounded-md hover:bg-accent/40 font-semibold ${
+                                isModified ? "ring-2 ring-orange-500 border border-orange-500" : ""
+                              }`}
+                            >
+                              {c[sh]}
+                              {isModified && (
+                                <RefreshCw
+                                  className="size-3 text-orange-600 absolute -top-1 -left-1 bg-background rounded-full p-0.5 box-content border border-orange-500"
+                                  aria-label="עודכן לאחר פרסום"
+                                />
+                              )}
+                            </button>
+                          </div>
                         </td>
                       );
                     })}
@@ -1154,6 +1156,7 @@ function SchedulesStatsSection({ profile }: { profile: any }) {
           </table>
         )}
       </Card>
+
 
       <ApprovedSchedulesDialog
         open={approvedOpen}
