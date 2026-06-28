@@ -66,18 +66,20 @@ function DashboardPage() {
   });
   const canSeeEmployeesCard = admin || !!employeesCardPermQ.data;
 
-  // Total employees count (company-wide, RLS-scoped)
+  // Active employees count (company-wide, RLS-scoped). Inactive employees are not counted here.
   const employeesTotalQ = useQuery({
     enabled: canSeeEmployeesCard,
-    queryKey: ["dashboard", "employees-total"],
+    queryKey: ["dashboard", "employees-total", "active"],
     queryFn: async () => {
       const { count, error } = await supabase
         .from("profiles")
-        .select("id", { count: "exact", head: true });
+        .select("id", { count: "exact", head: true })
+        .eq("is_active", true);
       if (error) throw error;
       return count ?? 0;
     },
   });
+
 
   const statsQuery = useQuery({
     enabled: admin,
