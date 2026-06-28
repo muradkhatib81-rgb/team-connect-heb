@@ -855,38 +855,43 @@ function SchedulesPage() {
               <div className="flex gap-2 items-start">
                 {visible.status === "rejected" ? (
                   <AlertTriangle className="size-4 text-destructive mt-0.5" />
+                ) : decisionPersonQ.data?.editedBeforeApproval ? (
+                  <span className="mt-0.5">✏️</span>
                 ) : (
                   <CheckCircle2 className="size-4 text-emerald-600 mt-0.5" />
                 )}
                 <div className="flex-1 min-w-0">
                   <p className="font-semibold text-sm">
-                    {visible.status === "rejected" ? "הסידור נדחה — נדרשים תיקונים" : "הסידור אושר ופורסם"}
+                    {visible.status === "rejected"
+                      ? "הסידור נדחה — נדרשים תיקונים"
+                      : decisionPersonQ.data?.editedBeforeApproval
+                        ? "הסידור נערך ואושר"
+                        : "הסידור אושר ופורסם"}
                   </p>
                   <div className="text-xs text-muted-foreground mt-1 space-y-0.5">
                     <p>
-                      {visible.status === "rejected" ? "נדחה על ידי: " : "אושר על ידי: "}
+                      {visible.status === "rejected"
+                        ? "❌ נדחה על ידי: "
+                        : decisionPersonQ.data?.editedBeforeApproval
+                          ? "✏️ נערך ואושר על ידי: "
+                          : "✅ אושר על ידי: "}
                       <span className="font-medium text-foreground">
-                        {decisionPersonQ.data?.full_name ?? "—"}
+                        👤 {decisionPersonQ.data?.full_name ?? "—"}
                       </span>
                       {decisionPersonQ.data?.role_label && (
-                        <span className="text-muted-foreground"> · {decisionPersonQ.data.role_label}</span>
+                        <span className="text-muted-foreground"> · 💼 {decisionPersonQ.data.role_label}</span>
                       )}
                       {decisionPersonQ.data?.job_title && (
                         <span className="text-muted-foreground"> ({decisionPersonQ.data.job_title})</span>
                       )}
                     </p>
                     <p>
-                      תאריך ושעה:{" "}
+                      📅🕒 תאריך ושעה:{" "}
                       <span className="font-medium text-foreground">
                         {decisionPersonQ.data?.at ? formatHeDateTime(decisionPersonQ.data.at) : "—"}
                       </span>
                     </p>
                   </div>
-                  {visible.status === "approved" && decisionPersonQ.data?.editedBeforeApproval && (
-                    <p className="text-sm mt-2 p-2 rounded bg-amber-500/10 border border-amber-500/30 text-amber-900 dark:text-amber-200">
-                      ✏️ הסידור עודכן לפני אישורו.
-                    </p>
-                  )}
                   {visible.status === "rejected" && visible.rejection_note && (
                     <p className="text-sm mt-2 p-2 rounded bg-background/60 border border-destructive/20">
                       <span className="font-semibold">סיבת דחייה: </span>

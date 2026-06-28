@@ -460,18 +460,62 @@ function EmployeeScheduleCard({ profile }: { profile: any }) {
     queryFn: async () => {
       const { data: sched } = await supabase
         .from("schedules")
-        .select("id, status, week_start, week_end, published_at, updated_at, approved_at")
+        .select(
+          "id, status, week_start, week_end, published_at, updated_at, approved_at, approved_by, submitted_at, created_by",
+        )
         .eq("department_id", profile.department_id)
         .eq("week_start", weekStart)
         .eq("status", "approved")
         .maybeSingle();
-      if (!sched) return { sched: null, shifts: [] as any[] };
+      if (!sched) return { sched: null, shifts: [] as any[], approver: null as any, editedBeforeApproval: false };
       const { data: shifts } = await supabase
         .from("schedule_shifts")
         .select("day_date, shift, published_shift")
         .eq("schedule_id", sched.id)
         .eq("employee_id", profile.id);
-      return { sched, shifts: (shifts ?? []) as any[] };
+
+      let approver: any = null;
+      let editedBeforeApproval = false;
+      if (sched.approved_by) {
+        const [{ data: prof }, { data: roles }, { data: auditRows }] = await Promise.all([
+          supabase.from("profiles").select("id, full_name, job_title").eq("id", sched.approved_by).maybeSingle(),
+          supabase.from("user_roles").select("role").eq("user_id", sched.approved_by),
+          supabase
+            .from("schedule_audit_log")
+            .select("actor_id, action, created_at")
+            .eq("schedule_id", sched.id),
+        ]);
+        const roleLabels: Record<string, string> = {
+          main_admin: "מנהל ראשי",
+          branch_manager: "מנהל סניף",
+          assistant_manager: "סגן מנהל",
+          department_manager: "אחראי מחלקה",
+          employee: "עובד",
+        };
+        const order = ["main_admin", "branch_manager", "assistant_manager", "department_manager", "employee"];
+        const list = (roles ?? []).map((r: any) => r.role);
+        list.sort((a: string, b: string) => order.indexOf(a) - order.indexOf(b));
+        const topRole = list[0] ?? null;
+        approver = {
+          full_name: prof?.full_name ?? "—",
+          job_title: prof?.job_title ?? null,
+          role_label: topRole ? roleLabels[topRole] ?? topRole : null,
+        };
+        if (sched.submitted_at && sched.approved_at && auditRows) {
+          const subT = new Date(sched.submitted_at).getTime();
+          const appT = new Date(sched.approved_at).getTime();
+          editedBeforeApproval = (auditRows as any[]).some((r) => {
+            const t = new Date(r.created_at).getTime();
+            return (
+              r.action === "updated" &&
+              t >= subT &&
+              t <= appT &&
+              r.actor_id && r.actor_id !== sched.created_by
+            );
+          });
+        }
+      }
+      return { sched, shifts: (shifts ?? []) as any[], approver, editedBeforeApproval };
     },
   });
 
@@ -535,6 +579,31 @@ function EmployeeScheduleCard({ profile }: { profile: any }) {
             🕒 עודכן לאחרונה:{" "}
             <span className="font-medium">{formatHeDateTime(sched.updated_at)}</span>
           </span>
+        </div>
+      )}
+
+      {sched && q.data?.approver && (
+        <div
+          className={`mb-3 p-2 rounded text-xs border ${
+            q.data.editedBeforeApproval
+              ? "bg-amber-500/10 border-amber-500/30 text-amber-900 dark:text-amber-200"
+              : "bg-emerald-500/10 border-emerald-500/30 text-emerald-900 dark:text-emerald-200"
+          }`}
+        >
+          <p className="font-semibold">
+            {q.data.editedBeforeApproval ? "✏️ נערך ואושר על ידי" : "✅ אושר על ידי"}
+          </p>
+          <p className="mt-0.5">
+            👤 <span className="font-medium">{q.data.approver.full_name}</span>
+            {q.data.approver.role_label && <span> · 💼 {q.data.approver.role_label}</span>}
+            {q.data.approver.job_title && <span> ({q.data.approver.job_title})</span>}
+          </p>
+          <p>
+            📅🕒{" "}
+            <span className="font-medium">
+              {formatHeDateTime(sched.approved_at ?? sched.published_at ?? sched.updated_at)}
+            </span>
+          </p>
         </div>
       )}
 
