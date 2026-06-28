@@ -149,7 +149,7 @@ function CompanySettingsPage() {
     );
   }
 
-  if (!isMainAdmin) {
+  if (!isMainAdmin && !canManageSchedule) {
     return (
       <div className="flex flex-col items-center justify-center py-20 text-center space-y-3">
         <div className="size-12 rounded-xl bg-destructive/10 flex items-center justify-center">
@@ -162,6 +162,8 @@ function CompanySettingsPage() {
       </div>
     );
   }
+
+  const generalDisabled = !isMainAdmin;
 
   return (
     <div className="space-y-6">
