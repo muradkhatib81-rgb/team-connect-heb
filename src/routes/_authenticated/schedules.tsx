@@ -824,14 +824,14 @@ function SchedulesPage() {
               className={`card-elevated p-4 ${
                 visible.status === "rejected"
                   ? "border-destructive/40 bg-destructive/5"
-                  : "border-success/40 bg-success/5"
+                  : "border-emerald-500/40 bg-emerald-500/5"
               }`}
             >
               <div className="flex gap-2 items-start">
                 {visible.status === "rejected" ? (
                   <AlertTriangle className="size-4 text-destructive mt-0.5" />
                 ) : (
-                  <CheckCircle2 className="size-4 text-success mt-0.5" />
+                  <CheckCircle2 className="size-4 text-emerald-600 mt-0.5" />
                 )}
                 <div className="flex-1 min-w-0">
                   <p className="font-semibold text-sm">
