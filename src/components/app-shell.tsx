@@ -105,13 +105,7 @@ export function AppShell({ children }: { children: ReactNode }) {
       navigate({ to: "/change-password", replace: true });
       return;
     }
-    if (pathname === "/dashboard") {
-      const admin2 = isAdmin(profile.roles);
-      const deptMgr = profile.roles.includes("department_manager");
-      if (!admin2 && !deptMgr) {
-        navigate({ to: "/profile", replace: true });
-      }
-    }
+    // Plain employees may now access /dashboard directly (clean employee view).
   }, [profile?.must_change_password, profile, pathname, navigate]);
 
   if (isLoading || !profile) {
@@ -139,7 +133,7 @@ export function AppShell({ children }: { children: ReactNode }) {
 
 
   const nav: { to: string; label: string; icon: typeof LayoutDashboard; visible: boolean; badge?: number }[] = [
-    { to: "/dashboard", label: "לוח בקרה", icon: LayoutDashboard, visible: !isPlainEmployee },
+    { to: "/dashboard", label: "לוח בקרה", icon: LayoutDashboard, visible: true },
     { to: "/tasks", label: "משימות", icon: ListTodo, visible: true },
     { to: "/schedules", label: "סידורי עבודה", icon: CalendarDays, visible: true },
     { to: "/communications", label: "מרכז תקשורת", icon: Megaphone, visible: true, badge: commUnreadQ.data ?? 0 },
