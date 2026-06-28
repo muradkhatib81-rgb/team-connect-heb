@@ -77,12 +77,14 @@ export function NotificationsBell() {
       const nowIso = new Date().toISOString();
       const { data: anns } = await supabase
         .from("announcements")
-        .select("id, title, starts_at, ends_at, created_at")
+        .select("id, title, starts_at, ends_at, created_at, sender_id")
         .is("deleted_at", null)
+        .neq("sender_id", userId!)
         .lte("starts_at", nowIso)
         .order("starts_at", { ascending: false })
         .limit(20);
       const rows = ((anns ?? []) as any[]).filter((a) => !a.ends_at || a.ends_at > nowIso);
+
       if (!rows.length) return [];
       const { data: reads } = await supabase
         .from("announcement_reads")
