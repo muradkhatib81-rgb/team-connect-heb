@@ -202,30 +202,40 @@ function EmployeesPage() {
     return map;
   }, [deptsQuery.data]);
 
+  // Single source of truth: same profiles query the Dashboard uses.
+  // Contact details (id_number, phone) come from a separate RPC and are
+  // merged in as optional — a failure there must NOT empty the employees list.
   const employeesQuery = useQuery({
     enabled: allowed,
     queryKey: ["employees"],
     queryFn: async () => {
-      const [{ data, error }, { data: contacts, error: cErr }] = await Promise.all([
-        supabase
-          .from("profiles")
-          .select("id, full_name, department_id, job_title, is_active, on_leave, avatar_url, deactivated_at")
-          .order("full_name"),
-        supabase.rpc("list_profiles_contact"),
-      ]);
+      const { data, error } = await supabase
+        .from("profiles")
+        .select("id, full_name, department_id, job_title, is_active, on_leave, avatar_url, deactivated_at")
+        .order("full_name");
       if (error) throw error;
-      if (cErr) throw cErr;
-      const cmap: Record<string, { id_number: string | null; phone: string | null }> = {};
-      (contacts ?? []).forEach((c: any) => {
-        cmap[c.id] = { id_number: c.id_number ?? null, phone: c.phone ?? null };
-      });
-      return (data ?? []).map((p: any) => ({
-        ...p,
-        id_number: cmap[p.id]?.id_number ?? null,
-        phone: cmap[p.id]?.phone ?? null,
-      })) as ProfileRow[];
+      return (data ?? []) as ProfileRow[];
     },
   });
+
+  const contactsQuery = useQuery({
+    enabled: allowed,
+    queryKey: ["employees-contacts"],
+    queryFn: async () => {
+      const { data, error } = await supabase.rpc("list_profiles_contact");
+      if (error) {
+        // Non-fatal: viewer may lack the perm. Return empty map.
+        console.warn("list_profiles_contact failed:", error.message);
+        return {} as Record<string, { id_number: string | null; phone: string | null }>;
+      }
+      const cmap: Record<string, { id_number: string | null; phone: string | null }> = {};
+      (data ?? []).forEach((c: any) => {
+        cmap[c.id] = { id_number: c.id_number ?? null, phone: c.phone ?? null };
+      });
+      return cmap;
+    },
+  });
+
 
   const rolesQuery = useQuery({
     enabled: allowed,
