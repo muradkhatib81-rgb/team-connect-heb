@@ -204,7 +204,7 @@ function EmployeesPage() {
       const [{ data, error }, { data: contacts, error: cErr }] = await Promise.all([
         supabase
           .from("profiles")
-          .select("id, full_name, department_id, job_title, is_active, on_leave, avatar_url")
+          .select("id, full_name, department_id, job_title, is_active, on_leave, avatar_url, deactivated_at")
           .order("full_name"),
         supabase.rpc("list_profiles_contact"),
       ]);
