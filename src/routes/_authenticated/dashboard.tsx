@@ -924,7 +924,7 @@ function EmployeesTotalCard({ total, loading }: { total: number; loading: boolea
     <section>
       <button
         type="button"
-        onClick={() => navigate({ to: "/employees", search: { filter: "all", dept: "all" } as any })}
+        onClick={() => navigate({ to: "/employees", search: { filter: "active", dept: "all" } as any })}
         className="block w-full text-right"
         aria-label="פתח ניהול עובדים"
       >
@@ -935,7 +935,8 @@ function EmployeesTotalCard({ total, loading }: { total: number; loading: boolea
               <p className="text-3xl font-bold mt-2">
                 {loading ? <Loader2 className="size-6 animate-spin text-primary" /> : total}
               </p>
-              <p className="text-xs text-muted-foreground mt-1">סך העובדים הכולל של החברה</p>
+              <p className="text-xs text-muted-foreground mt-1">סך העובדים הפעילים</p>
+
             </div>
             <div className="size-12 rounded-xl bg-primary/10 text-primary flex items-center justify-center">
               <Users className="size-6" />
