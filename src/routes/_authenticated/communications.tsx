@@ -757,9 +757,11 @@ function AnnouncementsTab({ userId, canDelete, canViewReceipts }: { userId: stri
           "id, title, body, priority, image_url, starts_at, ends_at, sender_id, created_at, deleted_at, edited_at, edited_by",
         )
         .is("deleted_at", null)
+        .neq("sender_id", userId)
         .lte("starts_at", nowIso)
         .order("starts_at", { ascending: false });
       if (error) throw error;
+
       const rows = ((data ?? []) as any[]).filter((a) => !a.ends_at || a.ends_at > nowIso);
       const senderIds = [...new Set(rows.map((r) => r.sender_id).filter(Boolean))];
       let senderMap: Record<string, string> = {};
