@@ -179,6 +179,43 @@ function CompanySettingsPage() {
         </div>
       </div>
 
+      {canManageSchedule && (
+        <Card className="card-elevated p-6 space-y-4">
+          <div className="flex items-center gap-2">
+            <CalendarRange className="size-5 text-primary" />
+            <h2 className="text-lg font-semibold">📅 סוג סידור עבודה</h2>
+          </div>
+          <p className="text-xs text-muted-foreground">
+            ההגדרה משפיעה רק על סידורים חדשים. סידורים קיימים נשמרים ללא שינוי.
+          </p>
+          <RadioGroup
+            value={form.schedule_type}
+            onValueChange={(v) => setForm((f) => ({ ...f, schedule_type: v as ScheduleType }))}
+            className="grid sm:grid-cols-3 gap-2"
+          >
+            {[
+              { v: "weekly", label: "שבועי" },
+              { v: "monthly", label: "חודשי" },
+              { v: "custom", label: "מותאם אישית (בקרוב)" },
+            ].map((opt) => (
+              <label
+                key={opt.v}
+                className="flex items-center gap-2 border rounded-lg px-3 py-2 cursor-pointer hover:bg-muted/40"
+              >
+                <RadioGroupItem value={opt.v} id={`st-${opt.v}`} disabled={opt.v === "custom"} />
+                <span className="text-sm">{opt.label}</span>
+              </label>
+            ))}
+          </RadioGroup>
+          <div className="flex justify-end">
+            <Button onClick={() => saveMut.mutate()} disabled={saveMut.isPending} size="sm">
+              {saveMut.isPending ? <Loader2 className="size-4 animate-spin" /> : "שמירת סוג סידור"}
+            </Button>
+          </div>
+        </Card>
+      )}
+
+      {!isMainAdmin ? null : (
       <Card className="card-elevated p-6 space-y-5">
         <div className="space-y-2">
           <Label>לוגו החברה</Label>
