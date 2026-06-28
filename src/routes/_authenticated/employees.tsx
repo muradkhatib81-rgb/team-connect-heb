@@ -296,10 +296,20 @@ function EmployeesPage() {
     return r.some((role) => role !== "employee");
   };
 
+  // Merge optional contact details (id_number, phone) into the profiles list.
+  const employees: ProfileRow[] = useMemo(() => {
+    const list = employeesQuery.data ?? [];
+    const cmap = contactsQuery.data ?? {};
+    return list.map((p) => ({
+      ...p,
+      id_number: cmap[p.id]?.id_number ?? null,
+      phone: cmap[p.id]?.phone ?? null,
+    }));
+  }, [employeesQuery.data, contactsQuery.data]);
+
   const filtered = useMemo(() => {
-    const data = employeesQuery.data ?? [];
     const term = searchTerm.trim().toLowerCase();
-    return data.filter((e) => {
+    return employees.filter((e) => {
       // Hide department manager from their own employees list
       if (isDeptManagerOnly && e.id === me?.id) return false;
       if (deptFilter !== "all" && e.department_id !== deptFilter) return false;
@@ -316,7 +326,8 @@ function EmployeesPage() {
         (e.phone ?? "").includes(term)
       );
     });
-  }, [employeesQuery.data, searchTerm, deptFilter, filterMode, isDeptManagerOnly, me?.id, onBreakSet, rolesMap]);
+  }, [employees, searchTerm, deptFilter, filterMode, isDeptManagerOnly, me?.id, onBreakSet, rolesMap]);
+
 
 
   // Manager's own department stats (excluding the manager themselves)
