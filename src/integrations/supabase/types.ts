@@ -1511,6 +1511,14 @@ export type Database = {
         Returns: undefined
       }
       process_break_lifecycle: { Args: never; Returns: undefined }
+      purge_announcement_global: {
+        Args: { _ann_id: string }
+        Returns: undefined
+      }
+      purge_message_global: {
+        Args: { _message_id: string }
+        Returns: undefined
+      }
       reset_breaks_log_daily: { Args: never; Returns: undefined }
       set_department_manager: {
         Args: { _dept_id: string; _new_manager_id: string }
