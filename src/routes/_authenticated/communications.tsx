@@ -1433,6 +1433,18 @@ function MessageDetailDialog({
       <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto" dir="rtl">
         {q.isLoading || !d ? (
           <Loader2 className="mx-auto size-5 animate-spin" />
+        ) : d.missing ? (
+          <>
+            <DialogHeader>
+              <DialogTitle>הפריט אינו קיים עוד.</DialogTitle>
+              <DialogDescription>
+                הודעה זו נמחקה או אינה זמינה. ההתראה הישנה הוסרה מהמערכת.
+              </DialogDescription>
+            </DialogHeader>
+            <DialogFooter>
+              <Button onClick={onClose}>סגור</Button>
+            </DialogFooter>
+          </>
         ) : (
           <>
             <DialogHeader>
@@ -1451,7 +1463,7 @@ function MessageDetailDialog({
                 )}
               </DialogTitle>
               <DialogDescription>
-                מאת {d.sender_name} · {formatHeDateTime(d.msg.created_at)}
+                {formatHeDateTime(d.msg.created_at)}
                 {d.msg.edited_at && (
                   <>
                     <br />
@@ -1460,6 +1472,10 @@ function MessageDetailDialog({
                 )}
               </DialogDescription>
             </DialogHeader>
+
+            {viewerMode === "inbox" && d.msg.sender_id && (
+              <CommSenderHeader senderId={d.msg.sender_id} sentAt={d.msg.created_at} />
+            )}
 
             <div className="whitespace-pre-wrap text-sm leading-relaxed">{d.msg.body}</div>
 
