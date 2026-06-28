@@ -242,13 +242,7 @@ function BreaksPage() {
 
   if (!me) return null;
 
-  if (isBreaksManager) {
-    return (
-      <div className="flex justify-center py-12">
-        <Loader2 className="size-6 animate-spin text-primary" />
-      </div>
-    );
-  }
+
 
   const myReqs = myReqQ.data ?? [];
 
