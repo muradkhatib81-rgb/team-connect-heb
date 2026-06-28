@@ -1380,6 +1380,7 @@ export type Database = {
         Args: { _task_id: string; _user_id: string }
         Returns: boolean
       }
+      end_my_break: { Args: { _id: string }; Returns: undefined }
       get_announcement_read_receipts: {
         Args: { _ann_id: string }
         Returns: {
