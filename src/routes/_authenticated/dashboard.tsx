@@ -214,9 +214,6 @@ function DashboardPage() {
 
       <EmployeeOfMonthSection />
 
-      {canSeeEmployeesCard && (
-        <EmployeesTotalCard total={employeesTotalQ.data ?? 0} loading={employeesTotalQ.isLoading} />
-      )}
 
       {admin || isDeptManager ? (
         <>
