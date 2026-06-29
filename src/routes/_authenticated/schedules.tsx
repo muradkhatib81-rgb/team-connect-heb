@@ -135,12 +135,12 @@ function SchedulesPage() {
   const { data: me, isLoading: meLoading } = useAuth();
   const qc = useQueryClient();
   const search = Route.useSearch();
-  const shiftsQ = useShiftDefinitions();
-  const activeShifts = shiftsQ.list.filter((s) => s.is_active);
+  const shiftDefsQ = useShiftDefinitions();
+  const activeShifts = shiftDefsQ.list.filter((s) => s.is_active);
   const shiftLabel = (code: string | null | undefined, fallback = "—") =>
-    code ? (shiftsQ.map.get(code)?.name ?? code) : fallback;
+    code ? (shiftDefsQ.map.get(code)?.name ?? code) : fallback;
   const shiftColor = (code: string | null | undefined) =>
-    code ? shiftsQ.map.get(code)?.color : undefined;
+    code ? shiftDefsQ.map.get(code)?.color : undefined;
   const shiftStyle = (code: string | null | undefined): React.CSSProperties => {
     const c = shiftColor(code);
     if (!c) return {};
