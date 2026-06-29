@@ -20,7 +20,7 @@ async function getCaps(supabase: any, userId: string) {
     isMainAdmin,
     isBranchMgr,
     isDeptMgr,
-    canCreate: isMainAdmin || !!p.can_create_schedule,
+    canCreate: isMainAdmin || isDeptMgr || !!p.can_create_schedule,
     canApprove: isMainAdmin || !!p.can_approve_schedule,
     canPublishDirect: isMainAdmin || !!p.can_publish_schedule,
     departmentId: profile?.department_id ?? null,
