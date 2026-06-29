@@ -52,6 +52,7 @@ import {
   saveScheduleShifts,
   submitSchedule,
   approveSchedule,
+  publishSchedule,
   
   copyPreviousWeek,
   deleteSchedule,
@@ -84,6 +85,7 @@ const STATUS_VARIANT: Record<string, "default" | "secondary" | "outline" | "dest
   rejected: "destructive",
 };
 const DAY_NAMES = ["ש'", "א'", "ב'", "ג'", "ד'", "ה'", "ו'"];
+const FULL_DAY_NAMES = ["שבת", "ראשון", "שני", "שלישי", "רביעי", "חמישי", "שישי"];
 
 type SchedulePersonMeta = {
   id: string;
@@ -179,11 +181,17 @@ function SchedulesPage() {
       );
     },
   });
-  const canApprove = isMainAdmin || (isBranchMgr && !!permsQ.data?.can_approve_schedule);
-  const canPublishDirect =
-    isMainAdmin || (isBranchMgr && !!permsQ.data?.can_publish_schedule);
+  const canApprove = isMainAdmin || !!permsQ.data?.can_approve_schedule;
+  const canPublishDirect = isMainAdmin || !!permsQ.data?.can_publish_schedule;
+  const canSeeScheduleQueues = canApprove || canPublishDirect;
   const canCreate =
-    isMainAdmin || isDeptMgr || (isBranchMgr && !!permsQ.data?.can_create_schedule);
+    isMainAdmin || isDeptMgr || !!permsQ.data?.can_create_schedule;
+  const canViewPrePublishSummary =
+    isMainAdmin ||
+    isBranchMgr ||
+    !!permsQ.data?.can_create_schedule ||
+    !!permsQ.data?.can_approve_schedule ||
+    !!permsQ.data?.can_publish_schedule;
 
 
   // Department selection
@@ -220,15 +228,15 @@ function SchedulesPage() {
 
   // Default view for approvers = pending approvals list across all departments they can see.
   const [view, setView] = useState<"pending" | "editor" | "approved">(
-    search.view ?? (search.dept || search.week ? "editor" : canApprove ? "pending" : "editor"),
+    search.view ?? (search.dept || search.week ? "editor" : canApprove ? "pending" : canPublishDirect ? "approved" : "editor"),
   );
   useEffect(() => {
-    if (canApprove && view === "editor" && !selectedDept) setView("pending");
+    if (canSeeScheduleQueues && view === "editor" && !selectedDept) setView(canApprove ? "pending" : "approved");
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [canApprove]);
+  }, [canSeeScheduleQueues, canApprove]);
 
   const pendingQ = useQuery({
-    enabled: canApprove,
+    enabled: canSeeScheduleQueues,
     queryKey: ["schedules-pending"],
     queryFn: async () => {
       const { data, error } = await supabase
@@ -244,13 +252,13 @@ function SchedulesPage() {
   });
 
   const approvedQ = useQuery({
-    enabled: canApprove,
+    enabled: canSeeScheduleQueues,
     queryKey: ["schedules-approved"],
     queryFn: async () => {
       const { data, error } = await supabase
         .from("schedules")
         .select(
-          "id, department_id, week_start, week_end, status, created_by, approved_at, approved_by",
+          "id, department_id, week_start, week_end, status, created_by, approved_at, approved_by, published_at",
         )
         .eq("status", "approved")
         .order("week_start", { ascending: false });
@@ -421,7 +429,7 @@ function SchedulesPage() {
   // For employees: only show schedule if approved
   const visible =
     isEmployee
-      ? schedQ.data?.status === "approved"
+      ? schedQ.data?.status === "approved" && !!(schedQ.data as any)?.published_at
         ? schedQ.data
         : null
       : schedQ.data;
@@ -444,14 +452,29 @@ function SchedulesPage() {
         if (error) throw error;
         return (data ?? []) as { id: string; full_name: string; is_active: boolean }[];
       }
-      const { data, error } = await supabase
+      const [{ data, error }, { data: dept }] = await Promise.all([
+        supabase
         .from("profiles")
         .select("id, full_name, is_active")
         .eq("department_id", selectedDept!)
         .eq("is_active", true)
-        .order("full_name");
+          .order("full_name"),
+        supabase.from("departments").select("manager_id").eq("id", selectedDept!).maybeSingle(),
+      ]);
       if (error) throw error;
-      return data ?? [];
+      const rows = [...(data ?? [])];
+      const managerId = (dept as any)?.manager_id as string | null | undefined;
+      if (managerId && !rows.some((e: any) => e.id === managerId)) {
+        const { data: mgr } = await supabase
+          .from("profiles")
+          .select("id, full_name, is_active")
+          .eq("id", managerId)
+          .eq("is_active", true)
+          .maybeSingle();
+        if (mgr) rows.push(mgr as any);
+      }
+      rows.sort((a: any, b: any) => String(a.full_name ?? "").localeCompare(String(b.full_name ?? ""), "he"));
+      return rows;
     },
   });
 
@@ -518,6 +541,7 @@ function SchedulesPage() {
   const saveFn = useServerFn(saveScheduleShifts);
   const submitFn = useServerFn(submitSchedule);
   const approveFn = useServerFn(approveSchedule);
+  const publishFn = useServerFn(publishSchedule);
   
   const copyFn = useServerFn(copyPreviousWeek);
 
@@ -564,10 +588,13 @@ function SchedulesPage() {
       return submitFn({ data: { schedule_id: visible!.id } });
     },
     onSuccess: (r: any) => {
-      toast.success(r?.published ? "הסידור אושר ופורסם" : "נשלח לאישור");
+      toast.success(r?.approved ? "הסידור אושר וממתין לפרסום" : "נשלח לאישור");
       qc.invalidateQueries({ queryKey: ["schedule"] });
       qc.invalidateQueries({ queryKey: ["schedule-shifts", visible?.id] });
       qc.invalidateQueries({ queryKey: ["schedules-pending"] });
+      qc.invalidateQueries({ queryKey: ["schedules-approved"] });
+      qc.invalidateQueries({ queryKey: ["dashboard-schedules"] });
+      qc.invalidateQueries({ queryKey: ["dashboard-approved-list"] });
     },
     onError: (e: any) => toast.error(e?.message ?? "שגיאה"),
   });
@@ -587,13 +614,38 @@ function SchedulesPage() {
       return approveFn({ data: { schedule_id: visible!.id } });
     },
     onSuccess: () => {
-      toast.success("הסידור אושר ופורסם");
+      toast.success("הסידור אושר וממתין לפרסום");
       qc.invalidateQueries({ queryKey: ["schedule"] });
       qc.invalidateQueries({ queryKey: ["schedule-shifts", visible?.id] });
       qc.invalidateQueries({ queryKey: ["schedules-pending"] });
       qc.invalidateQueries({ queryKey: ["schedules-approved"] });
       qc.invalidateQueries({ queryKey: ["schedule-decision"] });
       qc.invalidateQueries({ queryKey: ["dashboard-schedules"] });
+      qc.invalidateQueries({ queryKey: ["dashboard-approved-list"] });
+      qc.invalidateQueries({ queryKey: ["emp-dash-schedule"] });
+    },
+    onError: (e: any) => toast.error(e?.message ?? "שגיאה"),
+  });
+
+  const publishMut = useMutation({
+    mutationFn: async () => {
+      const list: { employee_id: string; day_date: string; shift: Shift }[] = [];
+      for (const [emp, m] of Object.entries(edits)) {
+        for (const [day, shift] of Object.entries(m)) {
+          list.push({ employee_id: emp, day_date: day, shift });
+        }
+      }
+      await saveFn({ data: { schedule_id: visible!.id, shifts: list } });
+      return publishFn({ data: { schedule_id: visible!.id } });
+    },
+    onSuccess: () => {
+      toast.success("סידור העבודה פורסם");
+      qc.invalidateQueries({ queryKey: ["schedule"] });
+      qc.invalidateQueries({ queryKey: ["schedule-shifts", visible?.id] });
+      qc.invalidateQueries({ queryKey: ["schedules-approved"] });
+      qc.invalidateQueries({ queryKey: ["schedule-decision"] });
+      qc.invalidateQueries({ queryKey: ["dashboard-schedules"] });
+      qc.invalidateQueries({ queryKey: ["dashboard-approved-list"] });
       qc.invalidateQueries({ queryKey: ["emp-dash-schedule"] });
     },
     onError: (e: any) => toast.error(e?.message ?? "שגיאה"),
@@ -653,7 +705,7 @@ function SchedulesPage() {
     (((visible.status === "draft" || visible.status === "rejected") &&
       (isMainAdmin ||
         (isDeptMgr && visible.department_id === myDeptId) ||
-        (isBranchMgr && !!permsQ.data?.can_create_schedule)))
+        canCreate))
       || (visible.status === "approved" && (isMainAdmin || canPublishDirect))
       || (visible.status === "pending_approval" && (isMainAdmin || canApprove || canPublishDirect)));
 
@@ -663,6 +715,28 @@ function SchedulesPage() {
     visible.status === "pending_approval" &&
     canApprove &&
     visible.created_by !== me?.id;
+
+  const canShowPublish =
+    !!visible &&
+    visible.status === "approved" &&
+    !visible.published_at &&
+    canPublishDirect;
+
+  const dailyShiftSummary = useMemo(
+    () =>
+      days.map((day, idx) => ({
+        day,
+        label: FULL_DAY_NAMES[idx],
+        counts: activeShifts.map((s) => {
+          let count = 0;
+          for (const emp of empsQ.data ?? []) {
+            if (edits[emp.id]?.[day] === s.code) count++;
+          }
+          return { ...s, count };
+        }),
+      })),
+    [days, activeShifts, empsQ.data, edits],
+  );
 
   const deptNameById = useMemo(() => {
     const m: Record<string, string> = {};
@@ -688,16 +762,16 @@ function SchedulesPage() {
         <div className="flex-1 min-w-0">
           <h1 className="text-2xl sm:text-3xl font-bold">סידורי עבודה</h1>
           <p className="text-sm text-muted-foreground mt-1">
-            {view === "pending" && canApprove
+            {view === "pending" && canSeeScheduleQueues
               ? "ממתינים לאישור — כל המחלקות"
-              : view === "approved" && canApprove
+              : view === "approved" && canSeeScheduleQueues
               ? "סידורים מאושרים — כל המחלקות"
               : `${formatHeDate(weekStart)} – ${formatHeDate(weekEnd)}`}
           </p>
         </div>
       </header>
 
-      {canApprove && (
+      {canSeeScheduleQueues && (
         <div className="flex gap-2">
           <Button
             size="sm"
@@ -733,7 +807,7 @@ function SchedulesPage() {
         </div>
       )}
 
-      {canApprove && view === "pending" ? (
+      {canSeeScheduleQueues && view === "pending" ? (
         <Card className="card-elevated p-0 overflow-hidden">
           {pendingQ.isLoading ? (
             <div className="flex justify-center py-12">
@@ -803,7 +877,7 @@ function SchedulesPage() {
             </table>
           )}
         </Card>
-      ) : canApprove && view === "approved" ? (
+      ) : canSeeScheduleQueues && view === "approved" ? (
         <Card className="card-elevated p-0 overflow-hidden">
           {approvedQ.isLoading ? (
             <div className="flex justify-center py-12">
@@ -1021,9 +1095,11 @@ function SchedulesPage() {
                   <p className="font-semibold text-sm">
                     {visible.status === "rejected"
                       ? "הסידור נדחה — נדרשים תיקונים"
-                      : decisionPersonQ.data?.editedBeforeApproval
-                        ? "הסידור נערך ואושר"
-                        : "הסידור אושר ופורסם"}
+                      : !visible.published_at
+                        ? "הסידור אושר וממתין לפרסום"
+                        : decisionPersonQ.data?.editedBeforeApproval
+                          ? "הסידור נערך ואושר ופורסם"
+                          : "הסידור אושר ופורסם"}
                   </p>
                   <div className="text-xs text-muted-foreground mt-1 space-y-0.5">
                     <p>
@@ -1061,44 +1137,48 @@ function SchedulesPage() {
             </Card>
           )}
 
-          {/* Draft summary for managers, shown only before publication */}
-          {editable && visible.status !== "approved" && (
+          {/* Draft / pre-publication summary for authorized managers only */}
+          {canViewPrePublishSummary && visible.status !== "rejected" && (visible.status !== "approved" || !visible.published_at) && (
             <Card className="card-elevated p-4">
               <div className="flex items-center justify-between gap-3 flex-wrap mb-3">
                 <div>
                   <h3 className="font-semibold flex items-center gap-2">
                     <CalendarDays className="size-4" />
-                    סיכום סידור — {visible.status === "pending_approval" ? "ממתין לאישור" : "טיוטה"}
+                    סיכום סידור — {visible.status === "approved" ? "מאושר וממתין לפרסום" : visible.status === "pending_approval" ? "ממתין לאישור" : "טיוטה"}
                   </h3>
                   <p className="text-xs text-muted-foreground mt-0.5">
-                    {visible.status === "pending_approval"
-                      ? "בדוק את הסיכום לפני האישור. עובדים ואחראים לא רואים את הסידור עד לפרסום."
-                      : "הסידור שמור כטיוטה ומוסתר מעובדים ואחראי מחלקות. לחץ \"שלח לאישור\" או \"אשר ופרסם\" בסיום."}
+                    {visible.status === "approved"
+                      ? "בדוק את סיכום העובדים לפי יום ומשמרת לפני הפרסום. הסידור עדיין מוסתר מעובדים ואחראי מחלקות."
+                      : visible.status === "pending_approval"
+                        ? "בדוק את הסיכום לפני האישור. עובדים ואחראי מחלקות לא רואים את הסידור עד לפרסום."
+                        : "הסידור שמור כטיוטה ומוסתר מעובדים ואחראי מחלקות. לחץ \"שלח לאישור\" או \"אשר סידור\" בסיום."}
                   </p>
                 </div>
               </div>
-              <div className="flex flex-wrap gap-2">
-                {activeShifts.map((s) => {
-                  let count = 0;
-                  for (const emp of empsQ.data ?? []) {
-                    for (const day of days) {
-                      if (edits[emp.id]?.[day] === s.code) count++;
-                    }
-                  }
-                  return (
-                    <span
-                      key={s.code}
-                      className="px-3 py-1.5 rounded-md text-sm font-medium border"
-                      style={shiftStyle(s.code)}
-                    >
-                      <span
-                        className="inline-block size-2 rounded-full me-2 align-middle"
-                        style={{ backgroundColor: s.color }}
-                      />
-                      {s.name}: <strong>{count}</strong> שיבוצים
-                    </span>
-                  );
-                })}
+              <div className="space-y-3">
+                {dailyShiftSummary.map((day) => (
+                  <div key={day.day} className="rounded-lg border bg-background/60 p-3">
+                    <div className="flex items-center justify-between gap-2 mb-2">
+                      <p className="font-semibold text-sm">יום {day.label}</p>
+                      <p className="text-xs text-muted-foreground">{formatHeDate(day.day)}</p>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      {day.counts.map((s) => (
+                        <span
+                          key={`${day.day}-${s.code}`}
+                          className="px-3 py-1.5 rounded-md text-sm font-medium border"
+                          style={shiftStyle(s.code)}
+                        >
+                          <span
+                            className="inline-block size-2 rounded-full me-2 align-middle"
+                            style={{ backgroundColor: s.color }}
+                          />
+                          {s.name}: <strong>{s.count}</strong> עובדים
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                ))}
               </div>
             </Card>
           )}
@@ -1124,7 +1204,7 @@ function SchedulesPage() {
                   variant="default"
                 >
                   {submitMut.isPending ? <Loader2 className="size-4 animate-spin" /> : <Send className="size-4" />}
-                  {canPublishDirect ? "אשר ופרסם" : "שלח לאישור"}
+                  {canPublishDirect ? "אשר סידור" : "שלח לאישור"}
                 </Button>
 
                 <Button
@@ -1145,7 +1225,18 @@ function SchedulesPage() {
                 size="sm"
               >
                 <CheckCircle2 className="size-4" />
-                אשר ופרסם
+                אשר סידור
+              </Button>
+            )}
+            {canShowPublish && (
+              <Button
+                onClick={() => publishMut.mutate()}
+                disabled={publishMut.isPending || saveMut.isPending}
+                size="sm"
+                variant="default"
+              >
+                {publishMut.isPending ? <Loader2 className="size-4 animate-spin" /> : <Send className="size-4" />}
+                פרסם סידור עבודה
               </Button>
             )}
             {canDelete && (
