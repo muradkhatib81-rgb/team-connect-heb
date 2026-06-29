@@ -2204,7 +2204,7 @@ function BreakShortcutCard({ userId }: { userId: string }) {
               </div>
               {r.approval_decided_at && (
                 <div className="text-muted-foreground">
-                  📅 <span className="text-foreground font-medium">{fmtDateTime(r.approval_decided_at)}</span>
+                  📅 <span className="text-foreground font-medium">{formatHeDateTime(r.approval_decided_at)}</span>
                 </div>
               )}
             </div>
