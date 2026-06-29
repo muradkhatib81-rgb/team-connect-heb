@@ -705,7 +705,7 @@ function SchedulesPage() {
     (((visible.status === "draft" || visible.status === "rejected") &&
       (isMainAdmin ||
         (isDeptMgr && visible.department_id === myDeptId) ||
-        (isBranchMgr && !!permsQ.data?.can_create_schedule)))
+        canCreate))
       || (visible.status === "approved" && (isMainAdmin || canPublishDirect))
       || (visible.status === "pending_approval" && (isMainAdmin || canApprove || canPublishDirect)));
 
@@ -713,7 +713,7 @@ function SchedulesPage() {
   const canShowApprove =
     !!visible &&
     visible.status === "pending_approval" &&
-      canSeeScheduleQueues &&
+    canApprove &&
     visible.created_by !== me?.id;
 
   const canShowPublish =
@@ -762,9 +762,9 @@ function SchedulesPage() {
         <div className="flex-1 min-w-0">
           <h1 className="text-2xl sm:text-3xl font-bold">סידורי עבודה</h1>
           <p className="text-sm text-muted-foreground mt-1">
-            {view === "pending" && canApprove
+            {view === "pending" && canSeeScheduleQueues
               ? "ממתינים לאישור — כל המחלקות"
-              : view === "approved" && canApprove
+              : view === "approved" && canSeeScheduleQueues
               ? "סידורים מאושרים — כל המחלקות"
               : `${formatHeDate(weekStart)} – ${formatHeDate(weekEnd)}`}
           </p>
