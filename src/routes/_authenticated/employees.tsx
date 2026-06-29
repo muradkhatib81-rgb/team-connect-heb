@@ -563,6 +563,11 @@ function EmployeesPage() {
           depts={deptsQuery.data ?? []}
           currentRoles={rolesQuery.data?.[editing.id] ?? []}
           canEditRoles={canManageUsers(me.roles)}
+          canDelete={editing.id !== me.id}
+          onDelete={() => {
+            setDeleting(editing);
+            setEditing(null);
+          }}
           onClose={() => setEditing(null)}
         />
       )}
@@ -1099,14 +1104,13 @@ function EmployeeRow({
   canDelete: boolean;
   canReactivate: boolean;
 }) {
-  // Final-deletion is only allowed after a 30-day cooldown from deactivation.
-  // For active employees the button is not shown at all.
+  // Main admin override: final deletion is available immediately for any employee except self.
   const daysSinceDeact = !emp.is_active && emp.deactivated_at
     ? Math.floor((Date.now() - new Date(emp.deactivated_at).getTime()) / 86400000)
     : null;
   const daysRemaining = daysSinceDeact !== null ? Math.max(0, 30 - daysSinceDeact) : null;
-  const canFinalDelete = canDelete && !emp.is_active && daysRemaining === 0;
-  const showCountdown = canDelete && !emp.is_active && daysRemaining !== null && daysRemaining > 0;
+  const canFinalDelete = canDelete;
+  const showCountdown = false;
 
   return (
     <Card className="card-elevated p-4">
@@ -1170,7 +1174,7 @@ function EmployeeRow({
           {canFinalDelete && (
             <Button variant="ghost" size="sm" className="gap-1.5 text-destructive hover:text-destructive hover:bg-destructive/10" onClick={onDelete} aria-label="מחיקה סופית">
               <Trash2 className="size-4" />
-              <span className="hidden sm:inline">🗑️ מחיקה סופית</span>
+              <span>מחיקה מלאה</span>
             </Button>
           )}
         </div>
@@ -1188,11 +1192,12 @@ function DeleteEmployeeDialog({ employee, onClose }: { employee: ProfileRow; onC
       await deleteFn({ data: { user_id: employee.id } });
     },
     onSuccess: () => {
-      toast.success("העובד הועבר לארכיון והוסר מהמערכת הפעילה");
+      toast.success("העובד נמחק לצמיתות והוסר מהמערכת");
       qc.invalidateQueries({ queryKey: ["employees"] });
       qc.invalidateQueries({ queryKey: ["all-roles"] });
       qc.invalidateQueries({ queryKey: ["departments"] });
       qc.invalidateQueries({ queryKey: ["dashboard", "stats"] });
+      qc.invalidateQueries({ queryKey: ["dashboard", "employees-total", "active"] });
       onClose();
     },
     onError: (e: any) => toast.error(e?.message ?? "שגיאה במחיקת העובד"),
@@ -1202,17 +1207,12 @@ function DeleteEmployeeDialog({ employee, onClose }: { employee: ProfileRow; onC
     <AlertDialog open onOpenChange={(o) => !o && !mutation.isPending && onClose()}>
       <AlertDialogContent>
         <AlertDialogHeader>
-          <AlertDialogTitle>🗑️ מחיקה סופית — {employee.full_name || "עובד"}</AlertDialogTitle>
+          <AlertDialogTitle>מחיקה מלאה — {employee.full_name || "עובד"}</AlertDialogTitle>
           <AlertDialogDescription asChild>
             <div className="space-y-2 text-right">
               <p>
-                ⚠️ פעולה זו תעביר את העובד <strong>לארכיון</strong> ותסיר אותו מהמערכת הפעילה.
+                האם אתה בטוח שברצונך למחוק את העובד לצמיתות? פעולה זו אינה ניתנת לביטול.
               </p>
-              <p>
-                הנתונים יישמרו לצורכי Audit בלבד ולא יוצגו במסכים הרגילים.
-                לאחר מכן <strong>לא ניתן יהיה לשחזר</strong> את העובד דרך המערכת.
-              </p>
-              <p>האם להמשיך?</p>
             </div>
           </AlertDialogDescription>
         </AlertDialogHeader>
@@ -1226,7 +1226,7 @@ function DeleteEmployeeDialog({ employee, onClose }: { employee: ProfileRow; onC
             }}
             className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
           >
-            {mutation.isPending ? <Loader2 className="size-4 animate-spin" /> : "🗑️ העבר לארכיון"}
+            {mutation.isPending ? <Loader2 className="size-4 animate-spin" /> : "מחק עובד"}
           </AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>
@@ -1314,12 +1314,16 @@ function EditEmployeeDialog({
   depts,
   currentRoles,
   canEditRoles,
+  canDelete,
+  onDelete,
   onClose,
 }: {
   employee: ProfileRow;
   depts: DeptOption[];
   currentRoles: AppRole[];
   canEditRoles: boolean;
+  canDelete: boolean;
+  onDelete: () => void;
   onClose: () => void;
 }) {
   const qc = useQueryClient();
@@ -1486,11 +1490,25 @@ function EditEmployeeDialog({
             />
           </div>
 
-          <DialogFooter className="gap-2 sm:gap-2">
-            <Button type="button" variant="outline" onClick={onClose}>ביטול</Button>
-            <Button type="submit" disabled={mutation.isPending}>
-              {mutation.isPending ? <Loader2 className="size-4 animate-spin" /> : "שמירה"}
-            </Button>
+          <DialogFooter className="gap-2 sm:gap-2 sm:justify-between">
+            {canDelete ? (
+              <Button
+                type="button"
+                variant="destructive"
+                className="gap-1.5"
+                onClick={onDelete}
+                disabled={mutation.isPending}
+              >
+                <Trash2 className="size-4" />
+                מחק עובד
+              </Button>
+            ) : <span />}
+            <div className="flex gap-2">
+              <Button type="button" variant="outline" onClick={onClose}>ביטול</Button>
+              <Button type="submit" disabled={mutation.isPending}>
+                {mutation.isPending ? <Loader2 className="size-4 animate-spin" /> : "שמירה"}
+              </Button>
+            </div>
           </DialogFooter>
         </form>
       </DialogContent>
