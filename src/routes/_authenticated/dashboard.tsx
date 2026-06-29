@@ -19,14 +19,16 @@ import {
   DEPARTMENT_LABELS,
   highestRole,
   isAdmin,
+  canManageUsers,
   type AppRole,
 } from "@/lib/constants";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Users, UserCheck, UserX, Building2, Loader2, Plane, ListTodo, Clock, CheckCircle2, AlertTriangle, CalendarDays, Sun, Moon, User, Coffee, RefreshCw, Send } from "lucide-react";
+import { Users, UserCheck, UserX, Building2, Loader2, Plane, ListTodo, Clock, CheckCircle2, AlertTriangle, CalendarDays, Sun, Moon, User, Coffee, RefreshCw, Send, UserPlus } from "lucide-react";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { EmployeeOfMonthSection } from "@/components/employee-of-month-section";
 import { formatHeDateTime } from "@/lib/date-format";
+import { CreateEmployeeDialog } from "./employees";
 
 export const Route = createFileRoute("/_authenticated/dashboard")({
   component: DashboardPage,
@@ -200,7 +202,7 @@ function DashboardPage() {
           <OnBreakSection profile={profile} />
 
           {admin ? (
-            <AdminDashboard stats={statsQuery.data} loading={statsQuery.isLoading} onSelectDept={setDeptDialogId} />
+            <AdminDashboard stats={statsQuery.data} loading={statsQuery.isLoading} onSelectDept={setDeptDialogId} canCreateEmployee={profile ? canManageUsers(profile.roles) : false} />
           ) : (
             <DeptManagerDashboard data={deptManagerQuery.data} loading={deptManagerQuery.isLoading} />
           )}
@@ -386,12 +388,15 @@ function AdminDashboard({
   stats,
   loading,
   onSelectDept,
+  canCreateEmployee,
 }: {
   stats?: { total: number; active: number; inactive: number; onLeave: number; onBreak: number; byDept: Record<string, number>; departments: DeptRow[] };
   loading: boolean;
   onSelectDept?: (id: string) => void;
+  canCreateEmployee: boolean;
 }) {
   const navigate = useNavigate();
+  const [createForDept, setCreateForDept] = useState<DeptRow | null>(null);
   if (loading || !stats) {
     return (
       <div className="flex justify-center py-12">
@@ -430,21 +435,63 @@ function AdminDashboard({
         ) : (
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
             {stats.departments.map((d) => (
-              <button
+              <Card
                 key={d.id}
-                type="button"
+                className="card-elevated p-4 cursor-pointer hover:bg-accent/30 transition-colors text-right"
                 onClick={() => onSelectDept?.(d.id)}
-                className="text-right"
+                role="button"
+                tabIndex={0}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    onSelectDept?.(d.id);
+                  }
+                }}
               >
-                <Card className="card-elevated p-4 cursor-pointer hover:bg-accent/30 transition-colors">
-                  <p className="text-xs text-muted-foreground truncate">{d.name}</p>
-                  <p className="text-2xl font-bold mt-1">{stats.byDept[d.id] ?? 0}</p>
-                </Card>
-              </button>
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <p className="text-xs text-muted-foreground truncate">{d.name}</p>
+                    <p className="text-2xl font-bold mt-1">{stats.byDept[d.id] ?? 0}</p>
+                  </div>
+                  {canCreateEmployee && (
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      className="h-8 px-2 gap-1 shrink-0"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setCreateForDept(d);
+                      }}
+                      title="הוסף עובד למחלקה"
+                    >
+                      <UserPlus className="size-4" />
+                      <span className="text-xs">הוסף</span>
+                    </Button>
+                  )}
+                </div>
+              </Card>
             ))}
           </div>
         )}
       </section>
+
+      {createForDept && (
+        <CreateEmployeeDialog
+          depts={stats.departments.map((x) => ({ id: x.id, name: x.name, code: "" }))}
+          defaultDepartmentId={createForDept.id}
+          lockDepartment
+          onClose={() => setCreateForDept(null)}
+          onViewExisting={() => {
+            setCreateForDept(null);
+            navigate({ to: "/employees", search: { filter: "all", dept: createForDept.id } as any });
+          }}
+          onEditExisting={() => {
+            setCreateForDept(null);
+            navigate({ to: "/employees", search: { filter: "all", dept: createForDept.id } as any });
+          }}
+        />
+      )}
     </>
   );
 }

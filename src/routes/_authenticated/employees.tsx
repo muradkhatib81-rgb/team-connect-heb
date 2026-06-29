@@ -654,20 +654,24 @@ function AvatarPicker({
   );
 }
 
-function CreateEmployeeDialog({
+export function CreateEmployeeDialog({
   depts,
   onClose,
   onEditExisting,
   onViewExisting,
+  defaultDepartmentId,
+  lockDepartment,
 }: {
   depts: DeptOption[];
   onClose: () => void;
   onEditExisting?: (id: string) => void;
   onViewExisting?: (idNumber: string) => void;
+  defaultDepartmentId?: string;
+  lockDepartment?: boolean;
 }) {
   const qc = useQueryClient();
   const createFn = useServerFn(createEmployee);
-  const defaultDept = depts[0]?.id ?? "";
+  const defaultDept = defaultDepartmentId ?? depts[0]?.id ?? "";
   const [form, setForm] = useState({
     full_name: "",
     id_number: "",
@@ -858,7 +862,11 @@ function CreateEmployeeDialog({
               />
             </Field>
             <Field label="מחלקה">
-              <Select value={form.department_id} onValueChange={(v) => setForm({ ...form, department_id: v })}>
+              <Select
+                value={form.department_id}
+                onValueChange={(v) => setForm({ ...form, department_id: v })}
+                disabled={!!lockDepartment}
+              >
                 <SelectTrigger><SelectValue placeholder="בחר מחלקה" /></SelectTrigger>
                 <SelectContent>
                   {depts.map((d) => (
