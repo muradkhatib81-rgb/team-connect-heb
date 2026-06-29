@@ -1751,7 +1751,7 @@ function MyActiveBreakCard({ userId }: { userId: string }) {
       const { data, error } = await supabase
         .from("break_requests")
         .select(
-          "id, user_id, status, break_setting_id, approved_at_time, approval_decided_at, started_at, ends_at, completed_at, duration_minutes",
+          "id, user_id, status, break_setting_id, approved_at_time, approval_decided_at, started_at, ends_at, completed_at, duration_minutes, approved_by",
         )
         .eq("user_id", userId)
         .in("status", ["approved", "active"])
@@ -1766,12 +1766,22 @@ function MyActiveBreakCard({ userId }: { userId: string }) {
         .select("name")
         .eq("id", row.break_setting_id)
         .maybeSingle();
+      let approver: { full_name: string; role_label: string | null; job_title: string | null } | null = null;
+      if (row.approved_by) {
+        const { data: ap } = await (supabase as any).rpc("get_profiles_basic_info", {
+          user_ids: [row.approved_by],
+        });
+        const rec = Array.isArray(ap) ? ap[0] : null;
+        if (rec) approver = { full_name: rec.full_name, role_label: rec.role_label, job_title: rec.job_title };
+      }
       return {
         ...row,
         setting_name: (setting as any)?.name ?? "הפסקה",
+        approver,
       };
     },
   });
+
 
 
   useEffect(() => {
@@ -1901,6 +1911,24 @@ function MyActiveBreakCard({ userId }: { userId: string }) {
               </div>
             </div>
 
+            {(r as any).approver && (
+              <div className="rounded-md border border-border/60 bg-background/50 p-2.5 text-xs space-y-0.5">
+                <div className="font-medium text-foreground">✅ אושרה ע״י</div>
+                <div className="text-muted-foreground">
+                  👤 <span className="text-foreground font-medium">{(r as any).approver.full_name}</span>
+                  {(r as any).approver.role_label && <span> · 💼 {(r as any).approver.role_label}</span>}
+                  {(r as any).approver.job_title && <span> ({(r as any).approver.job_title})</span>}
+                </div>
+                {r.approval_decided_at && (
+                  <div className="text-muted-foreground">
+                    📅 <span className="text-foreground font-medium">{formatHeDateTime(r.approval_decided_at)}</span>
+                  </div>
+                )}
+              </div>
+            )}
+
+
+
             <div className="grid sm:grid-cols-2 gap-x-4 gap-y-1 text-xs text-muted-foreground">
               {startsAtIso && (
                 <div>▶️ התחלה: <span className="text-foreground font-medium">{fmtHM(startsAtIso)}</span></div>
@@ -1966,7 +1994,19 @@ function MyActiveBreakCard({ userId }: { userId: string }) {
                     : "אין"
               }
             />
+            {(r as any).approver && (
+              <>
+                <DetailRow k="👤 שם המאשר" v={(r as any).approver.full_name} />
+                {(r as any).approver.role_label && (
+                  <DetailRow k="💼 תפקיד המאשר" v={(r as any).approver.role_label} />
+                )}
+                {r.approval_decided_at && (
+                  <DetailRow k="📅 תאריך ושעת אישור" v={formatHeDateTime(r.approval_decided_at)} />
+                )}
+              </>
+            )}
           </div>
+
 
           {isActive && (
             <div className="pt-2">
@@ -2008,7 +2048,7 @@ function BreakShortcutCard({ userId }: { userId: string }) {
       const { data, error } = await supabase
         .from("break_requests")
         .select(
-          "id, status, break_setting_id, requested_at, approved_at_time, approval_decided_at, started_at, ends_at, duration_minutes",
+          "id, status, break_setting_id, requested_at, approved_at_time, approval_decided_at, started_at, ends_at, duration_minutes, approved_by",
         )
         .eq("user_id", userId)
         .in("status", ["pending", "approved", "active"])
@@ -2023,22 +2063,18 @@ function BreakShortcutCard({ userId }: { userId: string }) {
         .select("name")
         .eq("id", row.break_setting_id)
         .maybeSingle();
-      return { ...row, setting_name: (setting as any)?.name ?? "הפסקה" };
+      let approver: { full_name: string; role_label: string | null; job_title: string | null } | null = null;
+      if (row.approved_by) {
+        const { data: ap } = await (supabase as any).rpc("get_profiles_basic_info", {
+          user_ids: [row.approved_by],
+        });
+        const rec = Array.isArray(ap) ? ap[0] : null;
+        if (rec) approver = { full_name: rec.full_name, role_label: rec.role_label, job_title: rec.job_title };
+      }
+      return { ...row, setting_name: (setting as any)?.name ?? "הפסקה", approver };
     },
   });
 
-  const permQ = useQuery({
-    enabled: !!userId,
-    queryKey: ["my-can-end-break", userId],
-    queryFn: async () => {
-      const { data } = await supabase
-        .from("user_task_permissions")
-        .select("can_manage_breaks")
-        .eq("user_id", userId)
-        .maybeSingle();
-      return !!(data as any)?.can_manage_breaks;
-    },
-  });
 
   useEffect(() => {
     const ch = supabase
@@ -2155,7 +2191,7 @@ function BreakShortcutCard({ userId }: { userId: string }) {
     ? `+${fmtHMS(overrunMs)}`
     : endsAtMs ? fmtHMS(Math.max(0, remainingMs)) : "--:--";
 
-  const canEnd = isActive && !!permQ.data;
+  const canEnd = isActive;
 
   return (
     <Card
@@ -2198,20 +2234,37 @@ function BreakShortcutCard({ userId }: { userId: string }) {
             )}
           </div>
 
+          {(r as any).approver && (
+            <div className="rounded-md border border-border/60 bg-background/50 p-2.5 text-xs space-y-0.5">
+              <div className="font-medium text-foreground">✅ אושרה ע״י</div>
+              <div className="text-muted-foreground">
+                👤 <span className="text-foreground font-medium">{(r as any).approver.full_name}</span>
+                {(r as any).approver.role_label && <span> · 💼 {(r as any).approver.role_label}</span>}
+                {(r as any).approver.job_title && <span> ({(r as any).approver.job_title})</span>}
+              </div>
+              {r.approval_decided_at && (
+                <div className="text-muted-foreground">
+                  📅 <span className="text-foreground font-medium">{formatHeDateTime(r.approval_decided_at)}</span>
+                </div>
+              )}
+            </div>
+          )}
+
           {canEnd && (
             <div className="pt-1" onClick={(e) => e.stopPropagation()}>
               <Button
                 size="sm"
-                className="gap-2"
+                className="gap-2 w-full sm:w-auto"
                 variant={overrun ? "destructive" : "default"}
                 onClick={() => endMut.mutate(r.id)}
                 disabled={endMut.isPending}
               >
                 {endMut.isPending ? <Loader2 className="size-4 animate-spin" /> : <CheckCircle2 className="size-4" />}
-                ✅ סיום הפסקה
+                ✅ חזרתי מהפסקה
               </Button>
             </div>
           )}
+
         </div>
       </div>
     </Card>
