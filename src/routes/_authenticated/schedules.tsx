@@ -754,9 +754,22 @@ function SchedulesPage() {
               </thead>
               <tbody>
                 {pendingQ.data.map((p) => (
-                  <tr key={p.id} className="border-t hover:bg-muted/30">
+                  <tr
+                    key={p.id}
+                    className="border-t hover:bg-muted/30 cursor-pointer"
+                    onClick={() => openScheduleFromPending(p)}
+                  >
                     <td className="p-3 font-medium">
-                      {deptNameById[p.department_id] ?? "—"}
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          openScheduleFromPending(p);
+                        }}
+                        className="text-primary hover:underline font-semibold"
+                      >
+                        {deptNameById[p.department_id] ?? "—"}
+                      </button>
                     </td>
                     <td className="p-3">
                       {formatHeDate(p.week_start)} – {formatHeDate(p.week_end)}
@@ -812,9 +825,30 @@ function SchedulesPage() {
               </thead>
               <tbody>
                 {approvedQ.data.map((a) => (
-                  <tr key={a.id} className="border-t hover:bg-muted/30">
+                  <tr
+                    key={a.id}
+                    className="border-t hover:bg-muted/30 cursor-pointer"
+                    onClick={() =>
+                      openScheduleFromPending({
+                        department_id: a.department_id,
+                        week_start: a.week_start,
+                      })
+                    }
+                  >
                     <td className="p-3 font-medium">
-                      {deptNameById[a.department_id] ?? "—"}
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          openScheduleFromPending({
+                            department_id: a.department_id,
+                            week_start: a.week_start,
+                          });
+                        }}
+                        className="text-primary hover:underline font-semibold"
+                      >
+                        {deptNameById[a.department_id] ?? "—"}
+                      </button>
                     </td>
                     <td className="p-3">
                       {formatHeDate(a.week_start)} – {formatHeDate(a.week_end)}
