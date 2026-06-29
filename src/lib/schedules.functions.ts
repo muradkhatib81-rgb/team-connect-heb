@@ -20,11 +20,38 @@ async function getCaps(supabase: any, userId: string) {
     isMainAdmin,
     isBranchMgr,
     isDeptMgr,
-    canCreate: isMainAdmin || isDeptMgr || (isBranchMgr && !!p.can_create_schedule),
-    canApprove: isMainAdmin || (isBranchMgr && !!p.can_approve_schedule),
-    canPublishDirect: isMainAdmin || (isBranchMgr && !!p.can_publish_schedule),
+    canCreate: isMainAdmin || !!p.can_create_schedule,
+    canApprove: isMainAdmin || !!p.can_approve_schedule,
+    canPublishDirect: isMainAdmin || !!p.can_publish_schedule,
     departmentId: profile?.department_id ?? null,
   };
+}
+
+async function getDepartmentScheduleEmployees(supabase: any, departmentId: string) {
+  const [{ data: emps }, { data: dept }] = await Promise.all([
+    supabase
+      .from("profiles")
+      .select("id, full_name, is_active")
+      .eq("department_id", departmentId)
+      .eq("is_active", true),
+    supabase
+      .from("departments")
+      .select("manager_id")
+      .eq("id", departmentId)
+      .maybeSingle(),
+  ]);
+
+  const rows = [...(emps ?? [])];
+  if (dept?.manager_id && !rows.some((e: any) => e.id === dept.manager_id)) {
+    const { data: mgr } = await supabase
+      .from("profiles")
+      .select("id, full_name, is_active")
+      .eq("id", dept.manager_id)
+      .eq("is_active", true)
+      .maybeSingle();
+    if (mgr) rows.push(mgr);
+  }
+  return rows;
 }
 
 
@@ -242,16 +269,12 @@ export const submitSchedule = createServerFn({ method: "POST" })
     if (!["draft", "rejected"].includes(sched.status)) throw new Error("לא ניתן לשלוח שוב");
 
     // Validate
-    const [{ data: shifts }, { data: deptEmployees }] = await Promise.all([
+    const [{ data: shifts }, deptEmployees] = await Promise.all([
       context.supabase
         .from("schedule_shifts")
         .select("employee_id, day_date, shift")
         .eq("schedule_id", data.schedule_id),
-      context.supabase
-        .from("profiles")
-        .select("id, full_name, is_active")
-        .eq("department_id", sched.department_id)
-        .eq("is_active", true),
+      getDepartmentScheduleEmployees(context.supabase, sched.department_id),
     ]);
     const errors: string[] = [];
     const days: string[] = Array.from({ length: 7 }, (_, i) => {
@@ -316,7 +339,7 @@ export const submitSchedule = createServerFn({ method: "POST" })
           submitted_at: nowIso,
           approved_by: context.userId,
           approved_at: nowIso,
-          published_at: nowIso,
+          published_at: null,
           rejection_note: null,
           rejected_at: null,
           rejected_by: null,
@@ -324,38 +347,11 @@ export const submitSchedule = createServerFn({ method: "POST" })
         .eq("id", data.schedule_id);
       if (error) throw new Error(error.message);
 
-      // Snapshot current shifts as the published baseline (clears any prior "modified" marks).
-      {
-        const { data: cur } = await context.supabase
-          .from("schedule_shifts")
-          .select("id, shift")
-          .eq("schedule_id", data.schedule_id);
-        for (const row of cur ?? []) {
-          await context.supabase
-            .from("schedule_shifts")
-            .update({ published_shift: row.shift })
-            .eq("id", row.id);
-        }
-      }
-
       await context.supabase
         .from("schedule_audit_log")
-        .insert({ schedule_id: data.schedule_id, actor_id: context.userId, action: "published" });
+        .insert({ schedule_id: data.schedule_id, actor_id: context.userId, action: "approved" });
 
-      const { data: emps } = await context.supabase
-        .from("profiles")
-        .select("id")
-        .eq("department_id", sched.department_id);
-      if (emps?.length) {
-        await context.supabase.from("schedule_notifications").insert(
-          emps.map((e: any) => ({
-            schedule_id: data.schedule_id,
-            user_id: e.id,
-            message: "סידור העבודה החדש פורסם.",
-          })),
-        );
-      }
-      return { ok: true, published: true };
+      return { ok: true, approved: true, published: false };
     }
 
     const { error } = await context.supabase
@@ -389,7 +385,7 @@ export const submitSchedule = createServerFn({ method: "POST" })
     await context.supabase
       .from("schedule_audit_log")
       .insert({ schedule_id: data.schedule_id, actor_id: context.userId, action: "submitted" });
-    return { ok: true, published: false };
+    return { ok: true, approved: false, published: false };
   });
 
 
@@ -417,14 +413,49 @@ export const approveSchedule = createServerFn({ method: "POST" })
         status: "approved",
         approved_by: context.userId,
         approved_at: now,
+        published_at: null,
+      })
+      .eq("id", data.schedule_id);
+    if (error) throw new Error(error.message);
+
+    await context.supabase
+      .from("schedule_audit_log")
+      .insert({
+        schedule_id: data.schedule_id,
+        actor_id: context.userId,
+        action: "approved",
+      });
+
+    return { ok: true };
+  });
+
+// ---------- PUBLISH ----------
+export const publishSchedule = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) => z.object({ schedule_id: z.string().uuid() }).parse(d))
+  .handler(async ({ data, context }) => {
+    const caps = await getCaps(context.supabase, context.userId);
+    if (!caps.canPublishDirect) throw new Error("אין הרשאה לפרסם סידור");
+    const { data: sched } = await context.supabase
+      .from("schedules")
+      .select("*")
+      .eq("id", data.schedule_id)
+      .single();
+    if (!sched) throw new Error("לא נמצא");
+    if (sched.status !== "approved") throw new Error("ניתן לפרסם רק סידור מאושר");
+
+    const now = new Date().toISOString();
+    const { error } = await context.supabase
+      .from("schedules")
+      .update({
+        status: "approved",
         published_at: now,
       })
       .eq("id", data.schedule_id);
     if (error) throw new Error(error.message);
 
-    // Refresh published_shift snapshot to the final approved version, so the
-    // published view shows exactly what the approver published (no leftover
-    // "modified after publish" markers from pre-approval edits).
+    // Refresh published_shift snapshot to the final published version, so the
+    // published view shows exactly what was published (no leftover modified marks).
     {
       const { data: cur } = await context.supabase
         .from("schedule_shifts")
@@ -443,7 +474,7 @@ export const approveSchedule = createServerFn({ method: "POST" })
       .insert({
         schedule_id: data.schedule_id,
         actor_id: context.userId,
-        action: "approved",
+        action: "published",
       });
 
     // Notify department employees + department manager (creator/approver too).
@@ -462,7 +493,7 @@ export const approveSchedule = createServerFn({ method: "POST" })
     if (dept?.manager_id) recipientIds.add(dept.manager_id);
     if (sched.created_by) recipientIds.add(sched.created_by);
     if (recipientIds.size) {
-      const message = "סידור העבודה השבועי עודכן ופורסם. נא לעיין בסידור המעודכן.";
+      const message = "סידור העבודה השבועי פורסם. נא לעיין בסידור המעודכן.";
       await context.supabase.from("schedule_notifications").insert(
         [...recipientIds].map((uid) => ({
           schedule_id: data.schedule_id,
