@@ -1031,7 +1031,7 @@ function SchedulesStatsSection({ profile }: { profile: any }) {
 
   const statsQ = useQuery({
     enabled: !!profile,
-    queryKey: ["dashboard-schedules", profile.id, weekStart],
+    queryKey: ["dashboard-schedules", profile.id, weekStart, canApprove],
     queryFn: async () => {
       const [{ data: scheds }, { data: deptRows }] = await Promise.all([
         supabase.from("schedules").select("id, status, department_id, week_start, week_end, published_at, updated_at"),
