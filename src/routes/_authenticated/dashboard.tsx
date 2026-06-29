@@ -202,7 +202,7 @@ function DashboardPage() {
           <OnBreakSection profile={profile} />
 
           {admin ? (
-            <AdminDashboard stats={statsQuery.data} loading={statsQuery.isLoading} onSelectDept={setDeptDialogId} />
+            <AdminDashboard stats={statsQuery.data} loading={statsQuery.isLoading} onSelectDept={setDeptDialogId} canCreateEmployee={profile ? canManageUsers(profile.roles) : false} />
           ) : (
             <DeptManagerDashboard data={deptManagerQuery.data} loading={deptManagerQuery.isLoading} />
           )}
