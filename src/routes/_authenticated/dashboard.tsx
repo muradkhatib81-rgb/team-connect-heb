@@ -1902,23 +1902,17 @@ function MyActiveBreakCard({ userId }: { userId: string }) {
             </div>
 
             <div className="grid sm:grid-cols-2 gap-x-4 gap-y-1 text-xs text-muted-foreground">
-              <div>👤 אושר על ידי: <span className="text-foreground font-medium">{r.approver_name}</span></div>
-              {r.approver_role && (
-                <div>💼 תפקיד: <span className="text-foreground">{r.approver_role}{r.approver_job ? ` · ${r.approver_job}` : ""}</span></div>
-              )}
-              {r.approval_decided_at && (
-                <div>📅 אישור: <span className="text-foreground">{formatHeDateTime(r.approval_decided_at)}</span></div>
-              )}
               {startsAtIso && (
-                <div>▶️ התחלה: <span className="text-foreground">{fmtHM(startsAtIso)}</span></div>
+                <div>▶️ התחלה: <span className="text-foreground font-medium">{fmtHM(startsAtIso)}</span></div>
               )}
               {endsAtMs && (
-                <div>🏁 סיום מתוכנן: <span className="text-foreground">{fmtHM(new Date(endsAtMs).toISOString())}</span></div>
+                <div>🏁 סיום מתוכנן: <span className="text-foreground font-medium">{fmtHM(new Date(endsAtMs).toISOString())}</span></div>
               )}
               {endsAtMs && (
                 <div>🕒 חזרה משוערת: <span className="text-foreground">{fmtHM(new Date(endsAtMs).toISOString())}</span></div>
               )}
             </div>
+
 
             {isActive && (
               <div className="pt-1" onClick={(e) => e.stopPropagation()}>
