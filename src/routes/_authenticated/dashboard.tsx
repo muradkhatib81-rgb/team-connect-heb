@@ -1751,7 +1751,7 @@ function MyActiveBreakCard({ userId }: { userId: string }) {
       const { data, error } = await supabase
         .from("break_requests")
         .select(
-          "id, user_id, status, break_setting_id, approved_by, approved_at_time, approval_decided_at, started_at, ends_at, completed_at, duration_minutes",
+          "id, user_id, status, break_setting_id, approved_at_time, approval_decided_at, started_at, ends_at, completed_at, duration_minutes",
         )
         .eq("user_id", userId)
         .in("status", ["approved", "active"])
@@ -1761,26 +1761,18 @@ function MyActiveBreakCard({ userId }: { userId: string }) {
       if (error) throw error;
       if (!data) return null;
       const row = data as any;
-      const [{ data: setting }, approverMeta] = await Promise.all([
-        supabase
-          .from("break_settings")
-          .select("name")
-          .eq("id", row.break_setting_id)
-          .maybeSingle(),
-        row.approved_by
-          ? supabase.rpc("get_profiles_basic_info", { user_ids: [row.approved_by] })
-          : Promise.resolve({ data: [] as any[] }),
-      ]);
-      const ap = (approverMeta.data ?? [])[0] as any;
+      const { data: setting } = await supabase
+        .from("break_settings")
+        .select("name")
+        .eq("id", row.break_setting_id)
+        .maybeSingle();
       return {
         ...row,
         setting_name: (setting as any)?.name ?? "הפסקה",
-        approver_name: ap?.full_name ?? "—",
-        approver_role: ap?.role_label ?? null,
-        approver_job: ap?.job_title ?? null,
       };
     },
   });
+
 
   useEffect(() => {
     const ch = supabase
