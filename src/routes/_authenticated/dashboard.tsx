@@ -190,7 +190,11 @@ function DashboardPage() {
 
       {admin || isDeptManager ? (
         <>
-          <MyActiveBreakCard userId={profile.id} />
+          {isDeptManager && !admin ? (
+            <BreakShortcutCard userId={profile.id} />
+          ) : (
+            <MyActiveBreakCard userId={profile.id} />
+          )}
           <TasksStatsSection stats={tasksStatsQuery.data} loading={tasksStatsQuery.isLoading} />
           <SchedulesStatsSection profile={profile} />
           <OnBreakSection profile={profile} />
