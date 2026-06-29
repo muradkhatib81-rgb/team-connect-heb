@@ -1966,7 +1966,8 @@ function MyActiveBreakCard({ userId }: { userId: string }) {
                     : "אין"
               }
             />
-            <DetailRow k="👤 שם המאשר" v={r.approver_name} />
+          </div>
+
             <DetailRow
               k="💼 תפקיד המאשר"
               v={r.approver_role ? `${r.approver_role}${r.approver_job ? " · " + r.approver_job : ""}` : "—"}
