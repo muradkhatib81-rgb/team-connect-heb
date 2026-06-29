@@ -1911,6 +1911,24 @@ function MyActiveBreakCard({ userId }: { userId: string }) {
               </div>
             </div>
 
+            {(r as any).approver && (
+              <div className="rounded-md border border-border/60 bg-background/50 p-2.5 text-xs space-y-0.5">
+                <div className="font-medium text-foreground">✅ אושרה ע״י</div>
+                <div className="text-muted-foreground">
+                  👤 <span className="text-foreground font-medium">{(r as any).approver.full_name}</span>
+                  {(r as any).approver.role_label && <span> · 💼 {(r as any).approver.role_label}</span>}
+                  {(r as any).approver.job_title && <span> ({(r as any).approver.job_title})</span>}
+                </div>
+                {r.approval_decided_at && (
+                  <div className="text-muted-foreground">
+                    📅 <span className="text-foreground font-medium">{formatHeDateTime(r.approval_decided_at)}</span>
+                  </div>
+                )}
+              </div>
+            )}
+
+
+
             <div className="grid sm:grid-cols-2 gap-x-4 gap-y-1 text-xs text-muted-foreground">
               {startsAtIso && (
                 <div>▶️ התחלה: <span className="text-foreground font-medium">{fmtHM(startsAtIso)}</span></div>
