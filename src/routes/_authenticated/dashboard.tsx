@@ -2707,8 +2707,16 @@ function OnBreakSection({ profile }: { profile: any }) {
                               {STATUS_LABEL[r.status] ?? r.status}
                             </Badge>
                           );
+                          const rowTone = isOnTime
+                            ? "bg-green-50 dark:bg-green-950/30 border-r-4 border-r-green-600"
+                            : isLate
+                              ? "bg-red-50 dark:bg-red-950/30 border-r-4 border-r-red-600"
+                              : isActiveRow
+                                ? "bg-amber-50 dark:bg-amber-950/20 border-r-4 border-r-amber-500"
+                                : "";
                           return (
-                            <tr key={r.id} className="border-t align-top">
+                            <tr key={r.id} className={"border-t align-top " + rowTone}>
+
                               <td className="p-2 font-medium whitespace-nowrap">{r.name}</td>
                               <td className="p-2 whitespace-nowrap text-muted-foreground">
                                 {r.roleLabel ?? "—"}
