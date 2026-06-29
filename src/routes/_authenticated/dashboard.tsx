@@ -1968,15 +1968,6 @@ function MyActiveBreakCard({ userId }: { userId: string }) {
             />
           </div>
 
-            <DetailRow
-              k="💼 תפקיד המאשר"
-              v={r.approver_role ? `${r.approver_role}${r.approver_job ? " · " + r.approver_job : ""}` : "—"}
-            />
-            <DetailRow
-              k="📅 תאריך ושעת אישור"
-              v={r.approval_decided_at ? formatHeDateTime(r.approval_decided_at) : "—"}
-            />
-          </div>
           {isActive && (
             <div className="pt-2">
               <Button
