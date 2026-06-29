@@ -145,8 +145,8 @@ const deleteSchema = z.object({
 
 /**
  * Final, irreversible removal of an employee.
- * Enforces the 30-day inactive cooldown via the `archive_employee` RPC,
- * which snapshots the row into `employee_archive` and removes the live profile.
+ * The `archive_employee` RPC snapshots the row into `employee_archive`
+ * and removes the live profile; only main admin can execute it.
  * The auth user is removed here with the service-role key.
  */
 export const deleteEmployee = createServerFn({ method: "POST" })
