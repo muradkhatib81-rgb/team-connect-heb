@@ -1751,7 +1751,7 @@ function MyActiveBreakCard({ userId }: { userId: string }) {
       const { data, error } = await supabase
         .from("break_requests")
         .select(
-          "id, user_id, status, break_setting_id, approved_by, approved_at_time, approval_decided_at, started_at, ends_at, completed_at, duration_minutes",
+          "id, user_id, status, break_setting_id, approved_at_time, approval_decided_at, started_at, ends_at, completed_at, duration_minutes",
         )
         .eq("user_id", userId)
         .in("status", ["approved", "active"])
@@ -1761,26 +1761,18 @@ function MyActiveBreakCard({ userId }: { userId: string }) {
       if (error) throw error;
       if (!data) return null;
       const row = data as any;
-      const [{ data: setting }, approverMeta] = await Promise.all([
-        supabase
-          .from("break_settings")
-          .select("name")
-          .eq("id", row.break_setting_id)
-          .maybeSingle(),
-        row.approved_by
-          ? supabase.rpc("get_profiles_basic_info", { user_ids: [row.approved_by] })
-          : Promise.resolve({ data: [] as any[] }),
-      ]);
-      const ap = (approverMeta.data ?? [])[0] as any;
+      const { data: setting } = await supabase
+        .from("break_settings")
+        .select("name")
+        .eq("id", row.break_setting_id)
+        .maybeSingle();
       return {
         ...row,
         setting_name: (setting as any)?.name ?? "הפסקה",
-        approver_name: ap?.full_name ?? "—",
-        approver_role: ap?.role_label ?? null,
-        approver_job: ap?.job_title ?? null,
       };
     },
   });
+
 
   useEffect(() => {
     const ch = supabase
@@ -1910,23 +1902,17 @@ function MyActiveBreakCard({ userId }: { userId: string }) {
             </div>
 
             <div className="grid sm:grid-cols-2 gap-x-4 gap-y-1 text-xs text-muted-foreground">
-              <div>👤 אושר על ידי: <span className="text-foreground font-medium">{r.approver_name}</span></div>
-              {r.approver_role && (
-                <div>💼 תפקיד: <span className="text-foreground">{r.approver_role}{r.approver_job ? ` · ${r.approver_job}` : ""}</span></div>
-              )}
-              {r.approval_decided_at && (
-                <div>📅 אישור: <span className="text-foreground">{formatHeDateTime(r.approval_decided_at)}</span></div>
-              )}
               {startsAtIso && (
-                <div>▶️ התחלה: <span className="text-foreground">{fmtHM(startsAtIso)}</span></div>
+                <div>▶️ התחלה: <span className="text-foreground font-medium">{fmtHM(startsAtIso)}</span></div>
               )}
               {endsAtMs && (
-                <div>🏁 סיום מתוכנן: <span className="text-foreground">{fmtHM(new Date(endsAtMs).toISOString())}</span></div>
+                <div>🏁 סיום מתוכנן: <span className="text-foreground font-medium">{fmtHM(new Date(endsAtMs).toISOString())}</span></div>
               )}
               {endsAtMs && (
                 <div>🕒 חזרה משוערת: <span className="text-foreground">{fmtHM(new Date(endsAtMs).toISOString())}</span></div>
               )}
             </div>
+
 
             {isActive && (
               <div className="pt-1" onClick={(e) => e.stopPropagation()}>
@@ -1980,16 +1966,8 @@ function MyActiveBreakCard({ userId }: { userId: string }) {
                     : "אין"
               }
             />
-            <DetailRow k="👤 שם המאשר" v={r.approver_name} />
-            <DetailRow
-              k="💼 תפקיד המאשר"
-              v={r.approver_role ? `${r.approver_role}${r.approver_job ? " · " + r.approver_job : ""}` : "—"}
-            />
-            <DetailRow
-              k="📅 תאריך ושעת אישור"
-              v={r.approval_decided_at ? formatHeDateTime(r.approval_decided_at) : "—"}
-            />
           </div>
+
           {isActive && (
             <div className="pt-2">
               <Button
