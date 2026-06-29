@@ -1223,9 +1223,10 @@ function SchedulesPage() {
                 onClick={() => approveMut.mutate()}
                 disabled={approveMut.isPending || saveMut.isPending}
                 size="sm"
+                variant="default"
               >
-                <CheckCircle2 className="size-4" />
-                אשר סידור
+                {approveMut.isPending ? <Loader2 className="size-4 animate-spin" /> : canPublishDirect ? <Send className="size-4" /> : <CheckCircle2 className="size-4" />}
+                {canPublishDirect ? "פרסם סידור עבודה" : "אשר סידור"}
               </Button>
             )}
             {canShowPublish && (
