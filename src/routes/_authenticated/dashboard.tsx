@@ -19,14 +19,16 @@ import {
   DEPARTMENT_LABELS,
   highestRole,
   isAdmin,
+  canManageUsers,
   type AppRole,
 } from "@/lib/constants";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Users, UserCheck, UserX, Building2, Loader2, Plane, ListTodo, Clock, CheckCircle2, AlertTriangle, CalendarDays, Sun, Moon, User, Coffee, RefreshCw, Send } from "lucide-react";
+import { Users, UserCheck, UserX, Building2, Loader2, Plane, ListTodo, Clock, CheckCircle2, AlertTriangle, CalendarDays, Sun, Moon, User, Coffee, RefreshCw, Send, UserPlus } from "lucide-react";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { EmployeeOfMonthSection } from "@/components/employee-of-month-section";
 import { formatHeDateTime } from "@/lib/date-format";
+import { CreateEmployeeDialog } from "./employees";
 
 export const Route = createFileRoute("/_authenticated/dashboard")({
   component: DashboardPage,
