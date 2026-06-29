@@ -181,11 +181,11 @@ function SchedulesPage() {
       );
     },
   });
-  const canApprove = isMainAdmin || (isBranchMgr && !!permsQ.data?.can_approve_schedule);
-  const canPublishDirect =
-    isMainAdmin || (isBranchMgr && !!permsQ.data?.can_publish_schedule);
+  const canApprove = isMainAdmin || !!permsQ.data?.can_approve_schedule;
+  const canPublishDirect = isMainAdmin || !!permsQ.data?.can_publish_schedule;
+  const canSeeScheduleQueues = canApprove || canPublishDirect;
   const canCreate =
-    isMainAdmin || isDeptMgr || (isBranchMgr && !!permsQ.data?.can_create_schedule);
+    isMainAdmin || isDeptMgr || !!permsQ.data?.can_create_schedule;
   const canViewPrePublishSummary =
     isMainAdmin ||
     isBranchMgr ||
@@ -228,15 +228,15 @@ function SchedulesPage() {
 
   // Default view for approvers = pending approvals list across all departments they can see.
   const [view, setView] = useState<"pending" | "editor" | "approved">(
-    search.view ?? (search.dept || search.week ? "editor" : canApprove ? "pending" : "editor"),
+    search.view ?? (search.dept || search.week ? "editor" : canApprove ? "pending" : canPublishDirect ? "approved" : "editor"),
   );
   useEffect(() => {
-    if (canApprove && view === "editor" && !selectedDept) setView("pending");
+    if (canSeeScheduleQueues && view === "editor" && !selectedDept) setView(canApprove ? "pending" : "approved");
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [canApprove]);
+  }, [canSeeScheduleQueues, canApprove]);
 
   const pendingQ = useQuery({
-    enabled: canApprove,
+    enabled: canSeeScheduleQueues,
     queryKey: ["schedules-pending"],
     queryFn: async () => {
       const { data, error } = await supabase
