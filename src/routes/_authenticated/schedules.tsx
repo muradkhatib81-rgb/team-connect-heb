@@ -135,6 +135,17 @@ function SchedulesPage() {
   const { data: me, isLoading: meLoading } = useAuth();
   const qc = useQueryClient();
   const search = Route.useSearch();
+  const shiftsQ = useShiftDefinitions();
+  const activeShifts = shiftsQ.list.filter((s) => s.is_active);
+  const shiftLabel = (code: string | null | undefined, fallback = "—") =>
+    code ? (shiftsQ.map.get(code)?.name ?? code) : fallback;
+  const shiftColor = (code: string | null | undefined) =>
+    code ? shiftsQ.map.get(code)?.color : undefined;
+  const shiftStyle = (code: string | null | undefined): React.CSSProperties => {
+    const c = shiftColor(code);
+    if (!c) return {};
+    return { backgroundColor: `${c}22`, color: c, borderColor: `${c}66` };
+  };
 
   const isMainAdmin = !!me?.roles.includes("main_admin");
   const isBranchMgr =
@@ -1111,11 +1122,12 @@ function SchedulesPage() {
                             <div className="relative inline-block">
                               {cur ? (
                                 <span
-                                  className={`inline-block px-2 py-1 rounded-md text-xs font-medium ${SHIFT_CLASS[cur]} ${
-                                    isModified ? "ring-2 ring-orange-500 border border-orange-500" : ""
+                                  className={`inline-block px-2 py-1 rounded-md text-xs font-medium border ${
+                                    isModified ? "ring-2 ring-orange-500 border-orange-500" : ""
                                   }`}
+                                  style={shiftStyle(cur)}
                                 >
-                                  {SHIFT_LABEL[cur]}
+                                  {shiftLabel(cur)}
                                 </span>
                               ) : (
                                 <span className="text-muted-foreground text-xs">—</span>
@@ -1138,16 +1150,23 @@ function SchedulesPage() {
                               onValueChange={(v) => setShift(emp.id, day, v as Shift)}
                             >
                               <SelectTrigger
-                                className={`h-9 ${cur ? SHIFT_CLASS[cur] : ""} ${
+                                className={`h-9 ${
                                   isModified ? "ring-2 ring-orange-500 border-orange-500" : ""
                                 }`}
+                                style={cur ? shiftStyle(cur) : undefined}
                               >
                                 <SelectValue placeholder="—" />
                               </SelectTrigger>
                               <SelectContent>
-                                <SelectItem value="morning">בוקר</SelectItem>
-                                <SelectItem value="evening">ערב</SelectItem>
-                                <SelectItem value="off">חופש</SelectItem>
+                                {activeShifts.map((s) => (
+                                  <SelectItem key={s.code} value={s.code}>
+                                    <span
+                                      className="inline-block size-2 rounded-full me-2 align-middle"
+                                      style={{ backgroundColor: s.color }}
+                                    />
+                                    {s.name}
+                                  </SelectItem>
+                                ))}
                               </SelectContent>
                             </Select>
                             {isModified && (
