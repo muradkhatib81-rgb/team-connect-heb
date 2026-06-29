@@ -2151,7 +2151,7 @@ function BreakShortcutCard({ userId }: { userId: string }) {
     ? `+${fmtHMS(overrunMs)}`
     : endsAtMs ? fmtHMS(Math.max(0, remainingMs)) : "--:--";
 
-  const canEnd = isActive && !!permQ.data;
+  const canEnd = isActive;
 
   return (
     <Card
@@ -2194,20 +2194,37 @@ function BreakShortcutCard({ userId }: { userId: string }) {
             )}
           </div>
 
+          {(r as any).approver && (
+            <div className="rounded-md border border-border/60 bg-background/50 p-2.5 text-xs space-y-0.5">
+              <div className="font-medium text-foreground">✅ אושרה ע״י</div>
+              <div className="text-muted-foreground">
+                👤 <span className="text-foreground font-medium">{(r as any).approver.full_name}</span>
+                {(r as any).approver.role_label && <span> · 💼 {(r as any).approver.role_label}</span>}
+                {(r as any).approver.job_title && <span> ({(r as any).approver.job_title})</span>}
+              </div>
+              {r.approval_decided_at && (
+                <div className="text-muted-foreground">
+                  📅 <span className="text-foreground font-medium">{fmtDateTime(r.approval_decided_at)}</span>
+                </div>
+              )}
+            </div>
+          )}
+
           {canEnd && (
             <div className="pt-1" onClick={(e) => e.stopPropagation()}>
               <Button
                 size="sm"
-                className="gap-2"
+                className="gap-2 w-full sm:w-auto"
                 variant={overrun ? "destructive" : "default"}
                 onClick={() => endMut.mutate(r.id)}
                 disabled={endMut.isPending}
               >
                 {endMut.isPending ? <Loader2 className="size-4 animate-spin" /> : <CheckCircle2 className="size-4" />}
-                ✅ סיום הפסקה
+                ✅ חזרתי מהפסקה
               </Button>
             </div>
           )}
+
         </div>
       </div>
     </Card>
