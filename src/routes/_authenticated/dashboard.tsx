@@ -1056,6 +1056,13 @@ function SchedulesStatsSection({ profile }: { profile: any }) {
       const pending = currentWeekScoped.filter((s) => s.status === "pending_approval").length;
       const approved = currentWeekScoped.filter((s) => s.status === "approved").length;
 
+      // ALL pending schedules (across every week) for the approval alert.
+      const pendingAllList = (canApprove
+        ? all.filter((s) => s.status === "pending_approval")
+        : []
+      ).sort((a, b) => (a.week_start < b.week_start ? -1 : 1));
+      const pendingAll = pendingAllList.length;
+      const pendingFirst = pendingAllList[0] ?? null;
 
       // Departments without a submitted schedule for the current week
       // (i.e., no schedule, or status is draft/rejected — not yet sent for approval).
@@ -1109,6 +1116,8 @@ function SchedulesStatsSection({ profile }: { profile: any }) {
       }
       return {
         pending,
+        pendingAll,
+        pendingFirst,
         approved,
         weekCounts,
         hasAnyApproved: ids.length > 0,
@@ -1116,6 +1125,7 @@ function SchedulesStatsSection({ profile }: { profile: any }) {
         notSubmittedCount: notSubmittedDepts.length,
         notSubmittedDepts,
       };
+
 
     },
   });
