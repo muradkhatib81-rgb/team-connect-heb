@@ -1150,10 +1150,17 @@ function SchedulesStatsSection({ profile }: { profile: any }) {
     const ch = supabase
       .channel("dash-schedules-rt")
       .on("postgres_changes", { event: "*", schema: "public", table: "schedules" }, () =>
-        qc.invalidateQueries({ queryKey: ["dashboard-schedules"] }),
+        {
+          qc.invalidateQueries({ queryKey: ["dashboard-schedules"] });
+          qc.invalidateQueries({ queryKey: ["dashboard-approved-list"] });
+          qc.invalidateQueries({ queryKey: ["emp-dash-schedule"] });
+        },
       )
       .on("postgres_changes", { event: "*", schema: "public", table: "schedule_shifts" }, () =>
-        qc.invalidateQueries({ queryKey: ["dashboard-schedules"] }),
+        {
+          qc.invalidateQueries({ queryKey: ["dashboard-schedules"] });
+          qc.invalidateQueries({ queryKey: ["emp-dash-schedule"] });
+        },
       )
       .on("postgres_changes", { event: "*", schema: "public", table: "departments" }, () =>
         qc.invalidateQueries({ queryKey: ["dashboard-schedules"] }),
@@ -1208,7 +1215,7 @@ function SchedulesStatsSection({ profile }: { profile: any }) {
         </Link>
       </div>
 
-      {(isMainAdmin || canApprove || isDeptMgr) && (
+      {(canManagePrePublishSchedules || isDeptMgr) && (
         <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
           <StatCard
             label="ממתינים לאישור"
