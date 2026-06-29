@@ -2008,7 +2008,7 @@ function BreakShortcutCard({ userId }: { userId: string }) {
       const { data, error } = await supabase
         .from("break_requests")
         .select(
-          "id, status, break_setting_id, requested_at, approved_at_time, approval_decided_at, started_at, ends_at, duration_minutes",
+          "id, status, break_setting_id, requested_at, approved_at_time, approval_decided_at, started_at, ends_at, duration_minutes, approved_by",
         )
         .eq("user_id", userId)
         .in("status", ["pending", "approved", "active"])
@@ -2023,22 +2023,18 @@ function BreakShortcutCard({ userId }: { userId: string }) {
         .select("name")
         .eq("id", row.break_setting_id)
         .maybeSingle();
-      return { ...row, setting_name: (setting as any)?.name ?? "הפסקה" };
+      let approver: { full_name: string; role_label: string | null; job_title: string | null } | null = null;
+      if (row.approved_by) {
+        const { data: ap } = await (supabase as any).rpc("get_profiles_basic_info", {
+          user_ids: [row.approved_by],
+        });
+        const rec = Array.isArray(ap) ? ap[0] : null;
+        if (rec) approver = { full_name: rec.full_name, role_label: rec.role_label, job_title: rec.job_title };
+      }
+      return { ...row, setting_name: (setting as any)?.name ?? "הפסקה", approver };
     },
   });
 
-  const permQ = useQuery({
-    enabled: !!userId,
-    queryKey: ["my-can-end-break", userId],
-    queryFn: async () => {
-      const { data } = await supabase
-        .from("user_task_permissions")
-        .select("can_manage_breaks")
-        .eq("user_id", userId)
-        .maybeSingle();
-      return !!(data as any)?.can_manage_breaks;
-    },
-  });
 
   useEffect(() => {
     const ch = supabase
