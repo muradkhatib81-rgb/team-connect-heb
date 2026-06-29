@@ -452,7 +452,7 @@ function AdminDashboard({
 function EmployeeDashboard({ profile }: { profile: any }) {
   return (
     <div className="space-y-6">
-      <MyActiveBreakCard userId={profile.id} />
+      <BreakShortcutCard userId={profile.id} />
       <EmployeeScheduleCard profile={profile} />
       <EmployeeNotificationsCard userId={profile.id} />
       <EmployeeNewMessagesCard userId={profile.id} />
