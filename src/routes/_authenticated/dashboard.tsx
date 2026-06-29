@@ -1412,7 +1412,7 @@ function ApprovedSchedulesDialog({
                   className="w-full text-right py-3 px-2 hover:bg-accent/30 rounded-md"
                 >
                   <div className="flex flex-wrap items-baseline justify-between gap-2">
-                    <p className="font-semibold">{r.department_name}</p>
+                    <p className="font-semibold text-primary hover:underline">{r.department_name}</p>
                     <p className="text-xs text-muted-foreground">
                       {new Intl.DateTimeFormat("he-IL", {
                         timeZone: "Asia/Jerusalem",
