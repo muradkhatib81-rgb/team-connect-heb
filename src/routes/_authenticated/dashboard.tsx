@@ -1031,7 +1031,7 @@ function SchedulesStatsSection({ profile }: { profile: any }) {
 
   const statsQ = useQuery({
     enabled: !!profile,
-    queryKey: ["dashboard-schedules", profile.id, weekStart],
+    queryKey: ["dashboard-schedules", profile.id, weekStart, canApprove],
     queryFn: async () => {
       const [{ data: scheds }, { data: deptRows }] = await Promise.all([
         supabase.from("schedules").select("id, status, department_id, week_start, week_end, published_at, updated_at"),
@@ -1056,6 +1056,13 @@ function SchedulesStatsSection({ profile }: { profile: any }) {
       const pending = currentWeekScoped.filter((s) => s.status === "pending_approval").length;
       const approved = currentWeekScoped.filter((s) => s.status === "approved").length;
 
+      // ALL pending schedules (across every week) for the approval alert.
+      const pendingAllList = (canApprove
+        ? all.filter((s) => s.status === "pending_approval")
+        : []
+      ).sort((a, b) => (a.week_start < b.week_start ? -1 : 1));
+      const pendingAll = pendingAllList.length;
+      const pendingFirst = pendingAllList[0] ?? null;
 
       // Departments without a submitted schedule for the current week
       // (i.e., no schedule, or status is draft/rejected — not yet sent for approval).
@@ -1109,6 +1116,8 @@ function SchedulesStatsSection({ profile }: { profile: any }) {
       }
       return {
         pending,
+        pendingAll,
+        pendingFirst,
         approved,
         weekCounts,
         hasAnyApproved: ids.length > 0,
@@ -1116,6 +1125,7 @@ function SchedulesStatsSection({ profile }: { profile: any }) {
         notSubmittedCount: notSubmittedDepts.length,
         notSubmittedDepts,
       };
+
 
     },
   });
@@ -1141,7 +1151,22 @@ function SchedulesStatsSection({ profile }: { profile: any }) {
   if (statsQ.isLoading || !statsQ.data) return null;
   const s = statsQ.data;
   const goSchedules = () => navigate({ to: "/schedules" });
-  const goPending = () => navigate({ to: "/schedules", search: { view: "pending" } as any });
+  const goPending = () => {
+    // Approver shortcut: if exactly one pending schedule exists, open it directly
+    // in the editor/approval view. Otherwise show the full pending list.
+    if (canApprove && s.pendingAll === 1 && s.pendingFirst) {
+      navigate({
+        to: "/schedules",
+        search: {
+          view: "editor",
+          dept: s.pendingFirst.department_id,
+          week: s.pendingFirst.week_start,
+        } as any,
+      });
+      return;
+    }
+    navigate({ to: "/schedules", search: { view: "pending" } as any });
+  };
 
   const DAY_NAMES = ["שבת", "ראשון", "שני", "שלישי", "רביעי", "חמישי", "שישי"];
   const heDate = (iso: string) => {
@@ -1169,7 +1194,15 @@ function SchedulesStatsSection({ profile }: { profile: any }) {
 
       {(isMainAdmin || canApprove || isDeptMgr) && (
         <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
-          <StatCard label="ממתינים לאישור" value={s.pending} icon={Clock} tone="warning" onClick={goPending} />
+          <StatCard
+            label="ממתינים לאישור"
+            value={canApprove ? s.pendingAll : s.pending}
+            icon={Clock}
+            tone={canApprove && s.pendingAll > 0 ? "danger" : "warning"}
+            badge={canApprove ? s.pendingAll : undefined}
+            pulse={canApprove && s.pendingAll > 0}
+            onClick={goPending}
+          />
           <StatCard label="מאושרים" value={s.approved} icon={CheckCircle2} tone="success" onClick={() => setApprovedOpen(true)} />
           {isMainAdmin && (
             <StatCard
