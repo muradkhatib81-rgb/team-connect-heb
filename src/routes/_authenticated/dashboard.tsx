@@ -1194,7 +1194,15 @@ function SchedulesStatsSection({ profile }: { profile: any }) {
 
       {(isMainAdmin || canApprove || isDeptMgr) && (
         <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
-          <StatCard label="ממתינים לאישור" value={s.pending} icon={Clock} tone="warning" onClick={goPending} />
+          <StatCard
+            label="ממתינים לאישור"
+            value={canApprove ? s.pendingAll : s.pending}
+            icon={Clock}
+            tone={canApprove && s.pendingAll > 0 ? "danger" : "warning"}
+            badge={canApprove ? s.pendingAll : undefined}
+            pulse={canApprove && s.pendingAll > 0}
+            onClick={goPending}
+          />
           <StatCard label="מאושרים" value={s.approved} icon={CheckCircle2} tone="success" onClick={() => setApprovedOpen(true)} />
           {isMainAdmin && (
             <StatCard
