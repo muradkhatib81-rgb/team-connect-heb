@@ -862,7 +862,11 @@ export function CreateEmployeeDialog({
               />
             </Field>
             <Field label="מחלקה">
-              <Select value={form.department_id} onValueChange={(v) => setForm({ ...form, department_id: v })}>
+              <Select
+                value={form.department_id}
+                onValueChange={(v) => setForm({ ...form, department_id: v })}
+                disabled={!!lockDepartment}
+              >
                 <SelectTrigger><SelectValue placeholder="בחר מחלקה" /></SelectTrigger>
                 <SelectContent>
                   {depts.map((d) => (
