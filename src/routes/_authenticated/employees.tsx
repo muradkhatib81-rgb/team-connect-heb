@@ -1105,12 +1105,7 @@ function EmployeeRow({
   canReactivate: boolean;
 }) {
   // Main admin override: final deletion is available immediately for any employee except self.
-  const daysSinceDeact = !emp.is_active && emp.deactivated_at
-    ? Math.floor((Date.now() - new Date(emp.deactivated_at).getTime()) / 86400000)
-    : null;
-  const daysRemaining = daysSinceDeact !== null ? Math.max(0, 30 - daysSinceDeact) : null;
   const canFinalDelete = canDelete;
-  const showCountdown = false;
 
   return (
     <Card className="card-elevated p-4">
@@ -1127,11 +1122,6 @@ function EmployeeRow({
             <p className="font-semibold truncate">{emp.full_name || "ללא שם"}</p>
             {!emp.is_active && <Badge variant="destructive" className="rounded-full text-xs">לא פעיל</Badge>}
             {emp.on_leave && <Badge variant="secondary" className="rounded-full text-xs">בחופש</Badge>}
-            {showCountdown && (
-              <Badge variant="outline" className="rounded-full text-xs">
-                🗓️ מחיקה סופית בעוד {daysRemaining} ימים
-              </Badge>
-            )}
           </div>
           <p className="text-xs text-muted-foreground mt-0.5 truncate">
             {deptName ?? "ללא מחלקה"}
