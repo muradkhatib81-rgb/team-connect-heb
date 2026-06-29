@@ -588,7 +588,7 @@ function SchedulesPage() {
       return submitFn({ data: { schedule_id: visible!.id } });
     },
     onSuccess: (r: any) => {
-      toast.success(r?.approved ? "הסידור אושר וממתין לפרסום" : "נשלח לאישור");
+      toast.success(r?.published ? "סידור העבודה פורסם" : r?.approved ? "הסידור אושר וממתין לפרסום" : "נשלח לאישור");
       qc.invalidateQueries({ queryKey: ["schedule"] });
       qc.invalidateQueries({ queryKey: ["schedule-shifts", visible?.id] });
       qc.invalidateQueries({ queryKey: ["schedules-pending"] });
@@ -613,8 +613,8 @@ function SchedulesPage() {
       await saveFn({ data: { schedule_id: visible!.id, shifts: list } });
       return approveFn({ data: { schedule_id: visible!.id } });
     },
-    onSuccess: () => {
-      toast.success("הסידור אושר וממתין לפרסום");
+    onSuccess: (r: any) => {
+      toast.success(r?.published ? "סידור העבודה פורסם" : "הסידור אושר וממתין לפרסום");
       qc.invalidateQueries({ queryKey: ["schedule"] });
       qc.invalidateQueries({ queryKey: ["schedule-shifts", visible?.id] });
       qc.invalidateQueries({ queryKey: ["schedules-pending"] });
@@ -1151,7 +1151,7 @@ function SchedulesPage() {
                       ? "בדוק את סיכום העובדים לפי יום ומשמרת לפני הפרסום. הסידור עדיין מוסתר מעובדים ואחראי מחלקות."
                       : visible.status === "pending_approval"
                         ? "בדוק את הסיכום לפני האישור. עובדים ואחראי מחלקות לא רואים את הסידור עד לפרסום."
-                        : "הסידור שמור כטיוטה ומוסתר מעובדים ואחראי מחלקות. לחץ \"שלח לאישור\" או \"אשר סידור\" בסיום."}
+                        : canPublishDirect ? "הסידור שמור כטיוטה ומוסתר מעובדים ואחראי מחלקות. לחץ \"פרסם סידור עבודה\" כדי לאשר ולפרסם אותו בלחיצה אחת." : "הסידור שמור כטיוטה ומוסתר מעובדים ואחראי מחלקות. לחץ \"שלח לאישור\" בסיום."}
                   </p>
                 </div>
               </div>
@@ -1204,7 +1204,7 @@ function SchedulesPage() {
                   variant="default"
                 >
                   {submitMut.isPending ? <Loader2 className="size-4 animate-spin" /> : <Send className="size-4" />}
-                  {canPublishDirect ? "אשר סידור" : "שלח לאישור"}
+                  {canPublishDirect ? "פרסם סידור עבודה" : "שלח לאישור"}
                 </Button>
 
                 <Button
@@ -1223,9 +1223,10 @@ function SchedulesPage() {
                 onClick={() => approveMut.mutate()}
                 disabled={approveMut.isPending || saveMut.isPending}
                 size="sm"
+                variant="default"
               >
-                <CheckCircle2 className="size-4" />
-                אשר סידור
+                {approveMut.isPending ? <Loader2 className="size-4 animate-spin" /> : canPublishDirect ? <Send className="size-4" /> : <CheckCircle2 className="size-4" />}
+                {canPublishDirect ? "פרסם סידור עבודה" : "אשר סידור"}
               </Button>
             )}
             {canShowPublish && (
