@@ -252,7 +252,7 @@ function SchedulesPage() {
   });
 
   const approvedQ = useQuery({
-    enabled: canApprove,
+    enabled: canSeeScheduleQueues,
     queryKey: ["schedules-approved"],
     queryFn: async () => {
       const { data, error } = await supabase
@@ -713,7 +713,7 @@ function SchedulesPage() {
   const canShowApprove =
     !!visible &&
     visible.status === "pending_approval" &&
-    canApprove &&
+      canSeeScheduleQueues &&
     visible.created_by !== me?.id;
 
   const canShowPublish =
@@ -771,7 +771,7 @@ function SchedulesPage() {
         </div>
       </header>
 
-      {canApprove && (
+      {canSeeScheduleQueues && (
         <div className="flex gap-2">
           <Button
             size="sm"
@@ -807,7 +807,7 @@ function SchedulesPage() {
         </div>
       )}
 
-      {canApprove && view === "pending" ? (
+      {canSeeScheduleQueues && view === "pending" ? (
         <Card className="card-elevated p-0 overflow-hidden">
           {pendingQ.isLoading ? (
             <div className="flex justify-center py-12">
@@ -877,7 +877,7 @@ function SchedulesPage() {
             </table>
           )}
         </Card>
-      ) : canApprove && view === "approved" ? (
+      ) : canSeeScheduleQueues && view === "approved" ? (
         <Card className="card-elevated p-0 overflow-hidden">
           {approvedQ.isLoading ? (
             <div className="flex justify-center py-12">
