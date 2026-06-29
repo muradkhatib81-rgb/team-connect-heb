@@ -592,6 +592,9 @@ function SchedulesPage() {
       qc.invalidateQueries({ queryKey: ["schedule-shifts", visible?.id] });
       qc.invalidateQueries({ queryKey: ["schedules-pending"] });
       qc.invalidateQueries({ queryKey: ["schedules-approved"] });
+      qc.invalidateQueries({ queryKey: ["schedule-decision"] });
+      qc.invalidateQueries({ queryKey: ["dashboard-schedules"] });
+      qc.invalidateQueries({ queryKey: ["emp-dash-schedule"] });
     },
     onError: (e: any) => toast.error(e?.message ?? "שגיאה"),
   });

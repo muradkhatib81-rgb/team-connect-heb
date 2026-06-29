@@ -1067,12 +1067,17 @@ function SchedulesStatsSection({ profile }: { profile: any }) {
       // Departments without a submitted schedule for the current week
       // (i.e., no schedule, or status is draft/rejected — not yet sent for approval).
       const allDepts = (deptRows ?? []) as { id: string; name: string }[];
+      // Consider a department as "submitted" if it has any pending_approval/approved
+      // schedule whose date range OVERLAPS the current week — not strict equality on
+      // week_start (a schedule may legitimately start on a different Saturday and
+      // still cover the current week).
       const submittedDeptIds = new Set(
         all
           .filter(
             (s) =>
-              s.week_start === weekStart &&
-              (s.status === "pending_approval" || s.status === "approved"),
+              (s.status === "pending_approval" || s.status === "approved") &&
+              s.week_start <= weekEnd &&
+              weekStart <= s.week_end,
           )
           .map((s) => s.department_id),
       );
