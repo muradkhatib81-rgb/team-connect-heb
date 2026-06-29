@@ -938,28 +938,42 @@ function StatCard({
   icon: Icon,
   tone,
   onClick,
+  badge,
+  pulse,
 }: {
   label: string;
   value: number;
   icon: typeof Users;
-  tone: "primary" | "success" | "muted" | "warning";
+  tone: "primary" | "success" | "muted" | "warning" | "danger";
   onClick?: () => void;
+  badge?: number;
+  pulse?: boolean;
 }) {
   const toneClass = {
     primary: "bg-primary/10 text-primary",
     success: "bg-success/10 text-success",
     muted: "bg-muted text-muted-foreground",
     warning: "bg-orange-500/10 text-orange-600",
+    danger: "bg-destructive/20 text-destructive",
   }[tone];
+  const cardClass =
+    tone === "danger"
+      ? "card-elevated p-5 cursor-pointer transition-colors bg-destructive/10 border-2 border-destructive ring-2 ring-destructive/40 hover:bg-destructive/15"
+      : "card-elevated p-5 cursor-pointer hover:bg-accent/30 transition-colors";
   const inner = (
-    <Card className="card-elevated p-5 cursor-pointer hover:bg-accent/30 transition-colors">
+    <Card className={cardClass + (pulse ? " animate-pulse" : "")}>
       <div className="flex items-center justify-between">
         <div>
-          <p className="text-sm text-muted-foreground">{label}</p>
-          <p className="text-3xl font-bold mt-2">{value}</p>
+          <p className={"text-sm " + (tone === "danger" ? "text-destructive font-semibold" : "text-muted-foreground")}>{label}</p>
+          <p className={"text-3xl font-bold mt-2 " + (tone === "danger" ? "text-destructive" : "")}>{value}</p>
         </div>
-        <div className={`size-11 rounded-xl flex items-center justify-center ${toneClass}`}>
+        <div className={`relative size-11 rounded-xl flex items-center justify-center ${toneClass}`}>
           <Icon className="size-5" />
+          {!!badge && badge > 0 && (
+            <span className="absolute -top-1.5 -right-1.5 min-w-[20px] h-5 px-1.5 rounded-full bg-destructive text-destructive-foreground text-[11px] font-bold flex items-center justify-center shadow">
+              {badge > 99 ? "99+" : badge}
+            </span>
+          )}
         </div>
       </div>
     </Card>
@@ -2493,8 +2507,10 @@ function OnBreakSection({ profile }: { profile: any }) {
           label="בקשות הפסקה ממתינות לאישור"
           value={pendingCountQ.data ?? 0}
           icon={Clock}
-          tone="warning"
+          tone={(pendingCountQ.data ?? 0) > 0 ? "danger" : "warning"}
           onClick={() => navigate({ to: "/breaks-admin" })}
+          badge={pendingCountQ.data ?? 0}
+          pulse={(pendingCountQ.data ?? 0) > 0}
         />
         <StatCard
           label="עובדים בהפסקה כעת"
