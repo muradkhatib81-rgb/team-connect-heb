@@ -803,6 +803,40 @@ function SchedulesPage() {
         </div>
       </header>
 
+      {/* Combined cross-department summary of unpublished schedules (managers only) */}
+      {canViewPrePublishSummary && (weekSummaryQ.data?.total_assignments ?? 0) > 0 && (
+        <Card className="card-elevated p-4 border-primary/30">
+          <div className="flex items-center justify-between gap-3 flex-wrap mb-3">
+            <div>
+              <h3 className="font-semibold flex items-center gap-2">
+                <CalendarDays className="size-4 text-primary" />
+                סיכום כולל — סידורים שטרם פורסמו ({combinedDeptCount} מחלקות)
+              </h3>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                סיכום מצטבר מכל המחלקות עם טיוטות / ממתינות לאישור / מאושרות שטרם פורסמו לשבוע {formatHeDate(weekStart)} – {formatHeDate(weekEnd)}. כולל אחראי מחלקות. מתעדכן בזמן אמת.
+              </p>
+            </div>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {combinedShiftTotals.map((s) => (
+              <span
+                key={`combined-${s.code}`}
+                className="px-3 py-1.5 rounded-md text-sm font-medium border"
+                style={shiftStyle(s.code)}
+              >
+                <span
+                  className="inline-block size-2 rounded-full me-2 align-middle"
+                  style={{ backgroundColor: s.color }}
+                />
+                {s.name}: <strong>{s.count}</strong> עובדים
+              </span>
+            ))}
+          </div>
+        </Card>
+      )}
+
+
+
       {canSeeScheduleQueues && (
         <div className="flex gap-2">
           <Button
