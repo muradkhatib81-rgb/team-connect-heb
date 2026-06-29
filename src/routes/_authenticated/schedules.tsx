@@ -57,6 +57,7 @@ import {
   deleteSchedule,
 } from "@/lib/schedules.functions";
 import { formatHeDate, formatHeDateTime } from "@/lib/date-format";
+import { useShiftDefinitions } from "@/lib/use-shift-definitions";
 
 type SchedulesSearch = { dept?: string; week?: string; view?: "pending" | "editor" | "approved" };
 export const Route = createFileRoute("/_authenticated/schedules")({
@@ -68,18 +69,8 @@ export const Route = createFileRoute("/_authenticated/schedules")({
   }),
 });
 
-type Shift = "morning" | "evening" | "off";
-const SHIFT_LABEL: Record<Shift | "none", string> = {
-  morning: "בוקר",
-  evening: "ערב",
-  off: "חופש",
-  none: "—",
-};
-const SHIFT_CLASS: Record<Shift, string> = {
-  morning: "bg-amber-100 text-amber-900 dark:bg-amber-950 dark:text-amber-100",
-  evening: "bg-indigo-100 text-indigo-900 dark:bg-indigo-950 dark:text-indigo-100",
-  off: "bg-muted text-muted-foreground",
-};
+// Shift codes are dynamic — labels and colors come from public.shift_definitions.
+type Shift = string;
 const STATUS_LABEL = {
   draft: "טיוטה",
   pending_approval: "ממתין לאישור",
