@@ -331,6 +331,9 @@ export const submitSchedule = createServerFn({ method: "POST" })
     const nowIso = new Date().toISOString();
 
     if (caps.canPublishDirect) {
+      // Simplified flow: a publisher hitting "publish" on a draft auto-approves
+      // AND auto-publishes the schedule in a single step — no separate approve
+      // button after save.
       const { error } = await context.supabase
         .from("schedules")
         .update({
@@ -339,7 +342,7 @@ export const submitSchedule = createServerFn({ method: "POST" })
           submitted_at: nowIso,
           approved_by: context.userId,
           approved_at: nowIso,
-          published_at: null,
+          published_at: nowIso,
           rejection_note: null,
           rejected_at: null,
           rejected_by: null,
@@ -351,7 +354,47 @@ export const submitSchedule = createServerFn({ method: "POST" })
         .from("schedule_audit_log")
         .insert({ schedule_id: data.schedule_id, actor_id: context.userId, action: "approved" });
 
-      return { ok: true, approved: true, published: false };
+      // Snapshot final shifts as the published version.
+      const { data: cur } = await context.supabase
+        .from("schedule_shifts")
+        .select("id, shift")
+        .eq("schedule_id", data.schedule_id);
+      for (const row of cur ?? []) {
+        await context.supabase
+          .from("schedule_shifts")
+          .update({ published_shift: row.shift })
+          .eq("id", row.id);
+      }
+      await context.supabase
+        .from("schedule_audit_log")
+        .insert({ schedule_id: data.schedule_id, actor_id: context.userId, action: "published" });
+
+      // Notify department employees + department manager + creator.
+      const [{ data: emps }, { data: dept }] = await Promise.all([
+        context.supabase
+          .from("profiles")
+          .select("id")
+          .eq("department_id", sched.department_id),
+        context.supabase
+          .from("departments")
+          .select("manager_id")
+          .eq("id", sched.department_id)
+          .maybeSingle(),
+      ]);
+      const recipientIds = new Set<string>((emps ?? []).map((e: any) => e.id));
+      if (dept?.manager_id) recipientIds.add(dept.manager_id);
+      if (sched.created_by) recipientIds.add(sched.created_by);
+      if (recipientIds.size) {
+        await context.supabase.from("schedule_notifications").insert(
+          [...recipientIds].map((uid) => ({
+            schedule_id: data.schedule_id,
+            user_id: uid,
+            message: "סידור העבודה השבועי פורסם. נא לעיין בסידור המעודכן.",
+          })),
+        );
+      }
+
+      return { ok: true, approved: true, published: true };
     }
 
     const { error } = await context.supabase
