@@ -1151,7 +1151,22 @@ function SchedulesStatsSection({ profile }: { profile: any }) {
   if (statsQ.isLoading || !statsQ.data) return null;
   const s = statsQ.data;
   const goSchedules = () => navigate({ to: "/schedules" });
-  const goPending = () => navigate({ to: "/schedules", search: { view: "pending" } as any });
+  const goPending = () => {
+    // Approver shortcut: if exactly one pending schedule exists, open it directly
+    // in the editor/approval view. Otherwise show the full pending list.
+    if (canApprove && s.pendingAll === 1 && s.pendingFirst) {
+      navigate({
+        to: "/schedules",
+        search: {
+          view: "editor",
+          dept: s.pendingFirst.department_id,
+          week: s.pendingFirst.week_start,
+        } as any,
+      });
+      return;
+    }
+    navigate({ to: "/schedules", search: { view: "pending" } as any });
+  };
 
   const DAY_NAMES = ["שבת", "ראשון", "שני", "שלישי", "רביעי", "חמישי", "שישי"];
   const heDate = (iso: string) => {
