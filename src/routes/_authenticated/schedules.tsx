@@ -739,6 +739,37 @@ function SchedulesPage() {
     [days, activeShifts, empsQ.data, edits],
   );
 
+  // Combined cross-department summary for all unpublished schedules in this week.
+  const getWeekSummaryFn = useServerFn(getUnpublishedWeekSummary);
+  const weekSummaryQ = useQuery({
+    enabled: canViewPrePublishSummary,
+    queryKey: ["unpublished-week-summary", weekStart],
+    queryFn: () => getWeekSummaryFn({ data: { week_start: weekStart } }),
+  });
+  // Real-time refresh when any schedule / shift changes for the week.
+  useEffect(() => {
+    if (!canViewPrePublishSummary) return;
+    const ch = supabase
+      .channel(`week-summary-${weekStart}`)
+      .on("postgres_changes", { event: "*", schema: "public", table: "schedules" }, () => {
+        qc.invalidateQueries({ queryKey: ["unpublished-week-summary", weekStart] });
+      })
+      .on("postgres_changes", { event: "*", schema: "public", table: "schedule_shifts" }, () => {
+        qc.invalidateQueries({ queryKey: ["unpublished-week-summary", weekStart] });
+      })
+      .subscribe();
+    return () => {
+      supabase.removeChannel(ch);
+    };
+  }, [canViewPrePublishSummary, weekStart, qc]);
+
+  const combinedShiftTotals = useMemo(() => {
+    const totals = { ...(weekSummaryQ.data?.totals ?? {}) } as Record<string, number>;
+    return activeShifts.map((s) => ({ ...s, count: totals[s.code] ?? 0 }));
+  }, [weekSummaryQ.data, activeShifts]);
+  const combinedDeptCount = weekSummaryQ.data?.departments?.length ?? 0;
+
+
   const deptNameById = useMemo(() => {
     const m: Record<string, string> = {};
     for (const d of deptsQ.data ?? []) m[d.id] = d.name;
