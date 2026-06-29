@@ -1994,7 +1994,19 @@ function MyActiveBreakCard({ userId }: { userId: string }) {
                     : "אין"
               }
             />
+            {(r as any).approver && (
+              <>
+                <DetailRow k="👤 שם המאשר" v={(r as any).approver.full_name} />
+                {(r as any).approver.role_label && (
+                  <DetailRow k="💼 תפקיד המאשר" v={(r as any).approver.role_label} />
+                )}
+                {r.approval_decided_at && (
+                  <DetailRow k="📅 תאריך ושעת אישור" v={formatHeDateTime(r.approval_decided_at)} />
+                )}
+              </>
+            )}
           </div>
+
 
           {isActive && (
             <div className="pt-2">
