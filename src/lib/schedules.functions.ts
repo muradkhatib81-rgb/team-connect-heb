@@ -130,6 +130,19 @@ export const saveScheduleShifts = createServerFn({ method: "POST" })
       throw new Error("לא ניתן לערוך סידור בסטטוס זה");
     }
 
+    // Validate shift codes against active shift_definitions
+    if (data.shifts.length) {
+      const { data: defs } = await context.supabase
+        .from("shift_definitions")
+        .select("code, is_active");
+      const validCodes = new Set((defs ?? []).filter((d: any) => d.is_active).map((d: any) => d.code));
+      for (const s of data.shifts) {
+        if (!validCodes.has(s.shift)) {
+          throw new Error(`קוד משמרת לא תקין או לא פעיל: ${s.shift}`);
+        }
+      }
+    }
+
     // Snapshot existing shifts for change detection + preserve published_shift snapshot
     const { data: existingShifts } = await context.supabase
       .from("schedule_shifts")
