@@ -13,6 +13,7 @@ import { Route as AuthRouteImport } from './routes/auth'
 import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/route'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AuthenticatedTasksRouteImport } from './routes/_authenticated/tasks'
+import { Route as AuthenticatedShiftSettingsRouteImport } from './routes/_authenticated/shift-settings'
 import { Route as AuthenticatedSchedulesRouteImport } from './routes/_authenticated/schedules'
 import { Route as AuthenticatedProfileRouteImport } from './routes/_authenticated/profile'
 import { Route as AuthenticatedPermissionsRouteImport } from './routes/_authenticated/permissions'
@@ -47,6 +48,12 @@ const AuthenticatedTasksRoute = AuthenticatedTasksRouteImport.update({
   path: '/tasks',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
+const AuthenticatedShiftSettingsRoute =
+  AuthenticatedShiftSettingsRouteImport.update({
+    id: '/shift-settings',
+    path: '/shift-settings',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
 const AuthenticatedSchedulesRoute = AuthenticatedSchedulesRouteImport.update({
   id: '/schedules',
   path: '/schedules',
@@ -143,6 +150,7 @@ export interface FileRoutesByFullPath {
   '/permissions': typeof AuthenticatedPermissionsRoute
   '/profile': typeof AuthenticatedProfileRoute
   '/schedules': typeof AuthenticatedSchedulesRoute
+  '/shift-settings': typeof AuthenticatedShiftSettingsRoute
   '/tasks': typeof AuthenticatedTasksRoute
   '/api/public/hooks/generate-recurring-tasks': typeof ApiPublicHooksGenerateRecurringTasksRoute
 }
@@ -162,6 +170,7 @@ export interface FileRoutesByTo {
   '/permissions': typeof AuthenticatedPermissionsRoute
   '/profile': typeof AuthenticatedProfileRoute
   '/schedules': typeof AuthenticatedSchedulesRoute
+  '/shift-settings': typeof AuthenticatedShiftSettingsRoute
   '/tasks': typeof AuthenticatedTasksRoute
   '/api/public/hooks/generate-recurring-tasks': typeof ApiPublicHooksGenerateRecurringTasksRoute
 }
@@ -183,6 +192,7 @@ export interface FileRoutesById {
   '/_authenticated/permissions': typeof AuthenticatedPermissionsRoute
   '/_authenticated/profile': typeof AuthenticatedProfileRoute
   '/_authenticated/schedules': typeof AuthenticatedSchedulesRoute
+  '/_authenticated/shift-settings': typeof AuthenticatedShiftSettingsRoute
   '/_authenticated/tasks': typeof AuthenticatedTasksRoute
   '/api/public/hooks/generate-recurring-tasks': typeof ApiPublicHooksGenerateRecurringTasksRoute
 }
@@ -204,6 +214,7 @@ export interface FileRouteTypes {
     | '/permissions'
     | '/profile'
     | '/schedules'
+    | '/shift-settings'
     | '/tasks'
     | '/api/public/hooks/generate-recurring-tasks'
   fileRoutesByTo: FileRoutesByTo
@@ -223,6 +234,7 @@ export interface FileRouteTypes {
     | '/permissions'
     | '/profile'
     | '/schedules'
+    | '/shift-settings'
     | '/tasks'
     | '/api/public/hooks/generate-recurring-tasks'
   id:
@@ -243,6 +255,7 @@ export interface FileRouteTypes {
     | '/_authenticated/permissions'
     | '/_authenticated/profile'
     | '/_authenticated/schedules'
+    | '/_authenticated/shift-settings'
     | '/_authenticated/tasks'
     | '/api/public/hooks/generate-recurring-tasks'
   fileRoutesById: FileRoutesById
@@ -282,6 +295,13 @@ declare module '@tanstack/react-router' {
       path: '/tasks'
       fullPath: '/tasks'
       preLoaderRoute: typeof AuthenticatedTasksRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/shift-settings': {
+      id: '/_authenticated/shift-settings'
+      path: '/shift-settings'
+      fullPath: '/shift-settings'
+      preLoaderRoute: typeof AuthenticatedShiftSettingsRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
     '/_authenticated/schedules': {
@@ -399,6 +419,7 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedPermissionsRoute: typeof AuthenticatedPermissionsRoute
   AuthenticatedProfileRoute: typeof AuthenticatedProfileRoute
   AuthenticatedSchedulesRoute: typeof AuthenticatedSchedulesRoute
+  AuthenticatedShiftSettingsRoute: typeof AuthenticatedShiftSettingsRoute
   AuthenticatedTasksRoute: typeof AuthenticatedTasksRoute
 }
 
@@ -416,6 +437,7 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedPermissionsRoute: AuthenticatedPermissionsRoute,
   AuthenticatedProfileRoute: AuthenticatedProfileRoute,
   AuthenticatedSchedulesRoute: AuthenticatedSchedulesRoute,
+  AuthenticatedShiftSettingsRoute: AuthenticatedShiftSettingsRoute,
   AuthenticatedTasksRoute: AuthenticatedTasksRoute,
 }
 

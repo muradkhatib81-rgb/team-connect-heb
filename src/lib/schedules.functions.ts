@@ -2,7 +2,8 @@ import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { z } from "zod";
 
-const SHIFT = ["morning", "evening", "off"] as const;
+// Shift codes are dynamic — validated against public.shift_definitions at runtime.
+const shiftCode = z.string().min(1).max(64);
 
 async function getCaps(supabase: any, userId: string) {
   const [{ data: roles }, { data: perm }, { data: profile }] = await Promise.all([
@@ -99,7 +100,7 @@ const saveShiftsSchema = z.object({
     z.object({
       employee_id: z.string().uuid(),
       day_date: z.string(),
-      shift: z.enum(SHIFT),
+      shift: shiftCode,
     }),
   ),
 });
