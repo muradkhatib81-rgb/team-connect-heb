@@ -613,8 +613,8 @@ function SchedulesPage() {
       await saveFn({ data: { schedule_id: visible!.id, shifts: list } });
       return approveFn({ data: { schedule_id: visible!.id } });
     },
-    onSuccess: () => {
-      toast.success("הסידור אושר וממתין לפרסום");
+    onSuccess: (r: any) => {
+      toast.success(r?.published ? "סידור העבודה פורסם" : "הסידור אושר וממתין לפרסום");
       qc.invalidateQueries({ queryKey: ["schedule"] });
       qc.invalidateQueries({ queryKey: ["schedule-shifts", visible?.id] });
       qc.invalidateQueries({ queryKey: ["schedules-pending"] });
