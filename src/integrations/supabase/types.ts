@@ -816,7 +816,7 @@ export type Database = {
           id: string
           published_shift: string | null
           schedule_id: string
-          shift: Database["public"]["Enums"]["shift_type"]
+          shift: string
           updated_at: string
         }
         Insert: {
@@ -826,7 +826,7 @@ export type Database = {
           id?: string
           published_shift?: string | null
           schedule_id: string
-          shift: Database["public"]["Enums"]["shift_type"]
+          shift: string
           updated_at?: string
         }
         Update: {
@@ -836,7 +836,7 @@ export type Database = {
           id?: string
           published_shift?: string | null
           schedule_id?: string
-          shift?: Database["public"]["Enums"]["shift_type"]
+          shift?: string
           updated_at?: string
         }
         Relationships: [
@@ -933,6 +933,51 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      shift_definitions: {
+        Row: {
+          code: string
+          color: string
+          created_at: string
+          created_by: string | null
+          end_time: string | null
+          id: string
+          is_active: boolean
+          is_system: boolean
+          name: string
+          sort_order: number
+          start_time: string | null
+          updated_at: string
+        }
+        Insert: {
+          code: string
+          color?: string
+          created_at?: string
+          created_by?: string | null
+          end_time?: string | null
+          id?: string
+          is_active?: boolean
+          is_system?: boolean
+          name: string
+          sort_order?: number
+          start_time?: string | null
+          updated_at?: string
+        }
+        Update: {
+          code?: string
+          color?: string
+          created_at?: string
+          created_by?: string | null
+          end_time?: string | null
+          id?: string
+          is_active?: boolean
+          is_system?: boolean
+          name?: string
+          sort_order?: number
+          start_time?: string | null
+          updated_at?: string
+        }
+        Relationships: []
       }
       task_activity_log: {
         Row: {

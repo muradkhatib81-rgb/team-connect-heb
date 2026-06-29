@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/use-auth";
@@ -57,6 +57,7 @@ import {
   deleteSchedule,
 } from "@/lib/schedules.functions";
 import { formatHeDate, formatHeDateTime } from "@/lib/date-format";
+import { useShiftDefinitions } from "@/lib/use-shift-definitions";
 
 type SchedulesSearch = { dept?: string; week?: string; view?: "pending" | "editor" | "approved" };
 export const Route = createFileRoute("/_authenticated/schedules")({
@@ -68,18 +69,8 @@ export const Route = createFileRoute("/_authenticated/schedules")({
   }),
 });
 
-type Shift = "morning" | "evening" | "off";
-const SHIFT_LABEL: Record<Shift | "none", string> = {
-  morning: "בוקר",
-  evening: "ערב",
-  off: "חופש",
-  none: "—",
-};
-const SHIFT_CLASS: Record<Shift, string> = {
-  morning: "bg-amber-100 text-amber-900 dark:bg-amber-950 dark:text-amber-100",
-  evening: "bg-indigo-100 text-indigo-900 dark:bg-indigo-950 dark:text-indigo-100",
-  off: "bg-muted text-muted-foreground",
-};
+// Shift codes are dynamic — labels and colors come from public.shift_definitions.
+type Shift = string;
 const STATUS_LABEL = {
   draft: "טיוטה",
   pending_approval: "ממתין לאישור",
@@ -144,6 +135,17 @@ function SchedulesPage() {
   const { data: me, isLoading: meLoading } = useAuth();
   const qc = useQueryClient();
   const search = Route.useSearch();
+  const shiftDefsQ = useShiftDefinitions();
+  const activeShifts = shiftDefsQ.list.filter((s) => s.is_active);
+  const shiftLabel = (code: string | null | undefined, fallback = "—") =>
+    code ? (shiftDefsQ.map.get(code)?.name ?? code) : fallback;
+  const shiftColor = (code: string | null | undefined) =>
+    code ? shiftDefsQ.map.get(code)?.color : undefined;
+  const shiftStyle = (code: string | null | undefined): React.CSSProperties => {
+    const c = shiftColor(code);
+    if (!c) return {};
+    return { backgroundColor: `${c}22`, color: c, borderColor: `${c}66` };
+  };
 
   const isMainAdmin = !!me?.roles.includes("main_admin");
   const isBranchMgr =
@@ -1022,6 +1024,48 @@ function SchedulesPage() {
             </Card>
           )}
 
+          {/* Draft summary for managers, shown only before publication */}
+          {editable && visible.status !== "approved" && (
+            <Card className="card-elevated p-4">
+              <div className="flex items-center justify-between gap-3 flex-wrap mb-3">
+                <div>
+                  <h3 className="font-semibold flex items-center gap-2">
+                    <CalendarDays className="size-4" />
+                    סיכום סידור — {visible.status === "pending_approval" ? "ממתין לאישור" : "טיוטה"}
+                  </h3>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    {visible.status === "pending_approval"
+                      ? "בדוק את הסיכום לפני האישור. עובדים ואחראים לא רואים את הסידור עד לפרסום."
+                      : "הסידור שמור כטיוטה ומוסתר מעובדים ואחראי מחלקות. לחץ \"שלח לאישור\" או \"אשר ופרסם\" בסיום."}
+                  </p>
+                </div>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {activeShifts.map((s) => {
+                  let count = 0;
+                  for (const emp of empsQ.data ?? []) {
+                    for (const day of days) {
+                      if (edits[emp.id]?.[day] === s.code) count++;
+                    }
+                  }
+                  return (
+                    <span
+                      key={s.code}
+                      className="px-3 py-1.5 rounded-md text-sm font-medium border"
+                      style={shiftStyle(s.code)}
+                    >
+                      <span
+                        className="inline-block size-2 rounded-full me-2 align-middle"
+                        style={{ backgroundColor: s.color }}
+                      />
+                      {s.name}: <strong>{count}</strong> שיבוצים
+                    </span>
+                  );
+                })}
+              </div>
+            </Card>
+          )}
+
           {/* Actions bar */}
           <div className="flex flex-wrap gap-2">
             {editable && (visible.status === "approved" || visible.status === "pending_approval") && (
@@ -1120,11 +1164,12 @@ function SchedulesPage() {
                             <div className="relative inline-block">
                               {cur ? (
                                 <span
-                                  className={`inline-block px-2 py-1 rounded-md text-xs font-medium ${SHIFT_CLASS[cur]} ${
-                                    isModified ? "ring-2 ring-orange-500 border border-orange-500" : ""
+                                  className={`inline-block px-2 py-1 rounded-md text-xs font-medium border ${
+                                    isModified ? "ring-2 ring-orange-500 border-orange-500" : ""
                                   }`}
+                                  style={shiftStyle(cur)}
                                 >
-                                  {SHIFT_LABEL[cur]}
+                                  {shiftLabel(cur)}
                                 </span>
                               ) : (
                                 <span className="text-muted-foreground text-xs">—</span>
@@ -1147,16 +1192,23 @@ function SchedulesPage() {
                               onValueChange={(v) => setShift(emp.id, day, v as Shift)}
                             >
                               <SelectTrigger
-                                className={`h-9 ${cur ? SHIFT_CLASS[cur] : ""} ${
+                                className={`h-9 ${
                                   isModified ? "ring-2 ring-orange-500 border-orange-500" : ""
                                 }`}
+                                style={cur ? shiftStyle(cur) : undefined}
                               >
                                 <SelectValue placeholder="—" />
                               </SelectTrigger>
                               <SelectContent>
-                                <SelectItem value="morning">בוקר</SelectItem>
-                                <SelectItem value="evening">ערב</SelectItem>
-                                <SelectItem value="off">חופש</SelectItem>
+                                {activeShifts.map((s) => (
+                                  <SelectItem key={s.code} value={s.code}>
+                                    <span
+                                      className="inline-block size-2 rounded-full me-2 align-middle"
+                                      style={{ backgroundColor: s.color }}
+                                    />
+                                    {s.name}
+                                  </SelectItem>
+                                ))}
                               </SelectContent>
                             </Select>
                             {isModified && (

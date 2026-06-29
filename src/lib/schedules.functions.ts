@@ -2,7 +2,8 @@ import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { z } from "zod";
 
-const SHIFT = ["morning", "evening", "off"] as const;
+// Shift codes are dynamic — validated against public.shift_definitions at runtime.
+const shiftCode = z.string().min(1).max(64);
 
 async function getCaps(supabase: any, userId: string) {
   const [{ data: roles }, { data: perm }, { data: profile }] = await Promise.all([
@@ -99,7 +100,7 @@ const saveShiftsSchema = z.object({
     z.object({
       employee_id: z.string().uuid(),
       day_date: z.string(),
-      shift: z.enum(SHIFT),
+      shift: shiftCode,
     }),
   ),
 });
@@ -127,6 +128,19 @@ export const saveScheduleShifts = createServerFn({ method: "POST" })
       }
     } else if (!["draft", "rejected"].includes(sched.status)) {
       throw new Error("לא ניתן לערוך סידור בסטטוס זה");
+    }
+
+    // Validate shift codes against active shift_definitions
+    if (data.shifts.length) {
+      const { data: defs } = await context.supabase
+        .from("shift_definitions")
+        .select("code, is_active");
+      const validCodes = new Set((defs ?? []).filter((d: any) => d.is_active).map((d: any) => d.code));
+      for (const s of data.shifts) {
+        if (!validCodes.has(s.shift)) {
+          throw new Error(`קוד משמרת לא תקין או לא פעיל: ${s.shift}`);
+        }
+      }
     }
 
     // Snapshot existing shifts for change detection + preserve published_shift snapshot
