@@ -1024,6 +1024,48 @@ function SchedulesPage() {
             </Card>
           )}
 
+          {/* Draft summary for managers, shown only before publication */}
+          {editable && visible.status !== "approved" && (
+            <Card className="card-elevated p-4">
+              <div className="flex items-center justify-between gap-3 flex-wrap mb-3">
+                <div>
+                  <h3 className="font-semibold flex items-center gap-2">
+                    <CalendarDays className="size-4" />
+                    סיכום סידור — {visible.status === "pending_approval" ? "ממתין לאישור" : "טיוטה"}
+                  </h3>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    {visible.status === "pending_approval"
+                      ? "בדוק את הסיכום לפני האישור. עובדים ואחראים לא רואים את הסידור עד לפרסום."
+                      : "הסידור שמור כטיוטה ומוסתר מעובדים ואחראי מחלקות. לחץ \"שלח לאישור\" או \"אשר ופרסם\" בסיום."}
+                  </p>
+                </div>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {activeShifts.map((s) => {
+                  let count = 0;
+                  for (const emp of empsQ.data ?? []) {
+                    for (const day of days) {
+                      if (edits[emp.id]?.[day] === s.code) count++;
+                    }
+                  }
+                  return (
+                    <span
+                      key={s.code}
+                      className="px-3 py-1.5 rounded-md text-sm font-medium border"
+                      style={shiftStyle(s.code)}
+                    >
+                      <span
+                        className="inline-block size-2 rounded-full me-2 align-middle"
+                        style={{ backgroundColor: s.color }}
+                      />
+                      {s.name}: <strong>{count}</strong> שיבוצים
+                    </span>
+                  );
+                })}
+              </div>
+            </Card>
+          )}
+
           {/* Actions bar */}
           <div className="flex flex-wrap gap-2">
             {editable && (visible.status === "approved" || visible.status === "pending_approval") && (
