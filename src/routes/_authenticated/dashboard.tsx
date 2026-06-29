@@ -2014,6 +2014,228 @@ function DetailRow({ k, v }: { k: string; v: string }) {
   );
 }
 
+function BreakShortcutCard({ userId }: { userId: string }) {
+  const qc = useQueryClient();
+  const navigate = useNavigate();
+  const [, setTick] = useState(0);
+
+  const breakQ = useQuery({
+    enabled: !!userId,
+    queryKey: ["my-break-shortcut", userId],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("break_requests")
+        .select(
+          "id, status, break_setting_id, requested_at, approved_at_time, approval_decided_at, started_at, ends_at, duration_minutes",
+        )
+        .eq("user_id", userId)
+        .in("status", ["pending", "approved", "active"])
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (error) throw error;
+      if (!data) return null;
+      const row = data as any;
+      const { data: setting } = await supabase
+        .from("break_settings")
+        .select("name")
+        .eq("id", row.break_setting_id)
+        .maybeSingle();
+      return { ...row, setting_name: (setting as any)?.name ?? "הפסקה" };
+    },
+  });
+
+  const permQ = useQuery({
+    enabled: !!userId,
+    queryKey: ["my-can-end-break", userId],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("user_task_permissions")
+        .select("can_manage_breaks")
+        .eq("user_id", userId)
+        .maybeSingle();
+      return !!(data as any)?.can_manage_breaks;
+    },
+  });
+
+  useEffect(() => {
+    const ch = supabase
+      .channel(`my-break-shortcut-rt-${userId}`)
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "break_requests", filter: `user_id=eq.${userId}` },
+        () => qc.invalidateQueries({ queryKey: ["my-break-shortcut", userId] }),
+      )
+      .subscribe();
+    const id = setInterval(() => setTick((t) => t + 1), 1000);
+    return () => {
+      supabase.removeChannel(ch);
+      clearInterval(id);
+    };
+  }, [qc, userId]);
+
+  const endMut = useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await (supabase as any).rpc("end_my_break", { _id: id });
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      toast.success("סומן: חזרת מההפסקה");
+      qc.invalidateQueries({ queryKey: ["my-break-shortcut", userId] });
+      qc.invalidateQueries({ queryKey: ["my-active-break", userId] });
+      qc.invalidateQueries({ queryKey: ["dashboard-on-break"] });
+      qc.invalidateQueries({ queryKey: ["dashboard-daily-breaks"] });
+    },
+    onError: (e: any) => toast.error(e?.message ?? "שגיאה"),
+  });
+
+  const goRequest = () => navigate({ to: "/breaks" });
+  const r = breakQ.data;
+
+  if (!r) {
+    return (
+      <Card
+        role="button"
+        tabIndex={0}
+        onClick={goRequest}
+        onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") goRequest(); }}
+        className="card-elevated p-5 border-2 border-primary/30 bg-primary/5 cursor-pointer transition-colors hover:bg-primary/10"
+      >
+        <div className="flex items-center gap-3">
+          <div className="size-11 rounded-xl bg-primary/15 text-primary flex items-center justify-center shrink-0">
+            <Coffee className="size-6" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <h3 className="font-semibold text-base">הפסקה</h3>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              בקש/י הפסקה במהירות, ללא מעבר לתפריט.
+            </p>
+          </div>
+          <Button size="sm" className="gap-2 shrink-0" onClick={(e) => { e.stopPropagation(); goRequest(); }}>
+            <Send className="size-4" />
+            בקשת הפסקה
+          </Button>
+        </div>
+      </Card>
+    );
+  }
+
+  if (r.status === "pending") {
+    return (
+      <Card
+        role="button"
+        tabIndex={0}
+        onClick={goRequest}
+        onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") goRequest(); }}
+        className="card-elevated p-5 border-2 border-amber-500 bg-amber-50 dark:bg-amber-950/30 cursor-pointer transition-colors hover:brightness-[0.98]"
+      >
+        <div className="flex items-start gap-3">
+          <div className="size-11 rounded-xl bg-amber-500/15 text-amber-600 flex items-center justify-center shrink-0">
+            <Clock className="size-6" />
+          </div>
+          <div className="flex-1 min-w-0 space-y-1">
+            <div className="flex flex-wrap items-center gap-2">
+              <h3 className="font-semibold">הפסקה</h3>
+              <Badge variant="secondary">🟡 ממתינה לאישור</Badge>
+            </div>
+            <p className="text-sm text-muted-foreground">
+              ☕ {r.setting_name} · {r.duration_minutes} דק׳ · שעה מבוקשת{" "}
+              {r.requested_at ? fmtHM(r.requested_at) : "—"}
+            </p>
+            <p className="text-xs text-muted-foreground">
+              לא ניתן לשלוח בקשה נוספת עד לקבלת החלטה.
+            </p>
+          </div>
+        </div>
+      </Card>
+    );
+  }
+
+  const now = Date.now();
+  const isActive = r.status === "active";
+  const startsAtIso: string | null = r.started_at ?? r.approved_at_time ?? null;
+  const endsAtMs = r.ends_at
+    ? new Date(r.ends_at).getTime()
+    : startsAtIso
+      ? new Date(startsAtIso).getTime() + (r.duration_minutes ?? 0) * 60000
+      : null;
+  const remainingMs = endsAtMs ? endsAtMs - now : 0;
+  const overrunMs = endsAtMs && now > endsAtMs ? now - endsAtMs : 0;
+  const overrun = isActive && overrunMs > 0;
+
+  const tone = overrun
+    ? { card: "border-red-500 bg-red-50 dark:bg-red-950/30", icon: "bg-red-500/10 text-red-600", timer: "text-red-600", label: "🔴 חריגה" }
+    : isActive
+      ? { card: "border-green-500 bg-green-50 dark:bg-green-950/30", icon: "bg-green-500/10 text-green-600", timer: "text-green-600", label: "🟢 בהפסקה" }
+      : { card: "border-amber-500 bg-amber-50 dark:bg-amber-950/30", icon: "bg-amber-500/10 text-amber-600", timer: "text-amber-600", label: "🟡 אושרה · ממתינה להתחלה" };
+
+  const bigTimer = overrun
+    ? `+${fmtHMS(overrunMs)}`
+    : endsAtMs ? fmtHMS(Math.max(0, remainingMs)) : "--:--";
+
+  const canEnd = isActive && !!permQ.data;
+
+  return (
+    <Card
+      role="button"
+      tabIndex={0}
+      onClick={goRequest}
+      onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") goRequest(); }}
+      className={"card-elevated p-5 border-2 cursor-pointer transition-colors hover:brightness-[0.98] " + tone.card}
+    >
+      <div className="flex items-start gap-3">
+        <div className={"size-11 rounded-xl flex items-center justify-center shrink-0 " + tone.icon}>
+          <Coffee className="size-6" />
+        </div>
+        <div className="flex-1 min-w-0 space-y-3">
+          <div className="flex flex-wrap items-center gap-2">
+            <h3 className="font-semibold">הפסקה</h3>
+            <Badge variant={overrun ? "destructive" : isActive ? "default" : "secondary"}>
+              {tone.label}
+            </Badge>
+            <span className="text-sm text-muted-foreground">
+              ☕ {r.setting_name} · {r.duration_minutes} דק׳
+            </span>
+          </div>
+
+          <div className="flex flex-col items-center justify-center py-1 select-none">
+            <div className={"font-mono font-bold tabular-nums text-4xl sm:text-5xl tracking-wider " + tone.timer}>
+              {bigTimer}
+            </div>
+            <div className="mt-1 text-xs text-muted-foreground">
+              {overrun ? "זמן חריגה — נא לחזור לעבודה" : isActive ? "זמן נותר להפסקה" : "הפסקה מאושרת — תתחיל בקרוב"}
+            </div>
+          </div>
+
+          <div className="grid sm:grid-cols-2 gap-x-4 gap-y-1 text-xs text-muted-foreground">
+            {startsAtIso && (
+              <div>▶️ התחלה: <span className="text-foreground font-medium">{fmtHM(startsAtIso)}</span></div>
+            )}
+            {endsAtMs && (
+              <div>🏁 סיום מתוכנן: <span className="text-foreground font-medium">{fmtHM(new Date(endsAtMs).toISOString())}</span></div>
+            )}
+          </div>
+
+          {canEnd && (
+            <div className="pt-1" onClick={(e) => e.stopPropagation()}>
+              <Button
+                size="sm"
+                className="gap-2"
+                variant={overrun ? "destructive" : "default"}
+                onClick={() => endMut.mutate(r.id)}
+                disabled={endMut.isPending}
+              >
+                {endMut.isPending ? <Loader2 className="size-4 animate-spin" /> : <CheckCircle2 className="size-4" />}
+                ✅ סיום הפסקה
+              </Button>
+            </div>
+          )}
+        </div>
+      </div>
+    </Card>
+  );
+}
+
 
 function OnBreakSection({ profile }: { profile: any }) {
   const qc = useQueryClient();
