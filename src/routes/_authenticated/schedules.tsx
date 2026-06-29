@@ -588,7 +588,7 @@ function SchedulesPage() {
       return submitFn({ data: { schedule_id: visible!.id } });
     },
     onSuccess: (r: any) => {
-      toast.success(r?.approved ? "הסידור אושר וממתין לפרסום" : "נשלח לאישור");
+      toast.success(r?.published ? "סידור העבודה פורסם" : r?.approved ? "הסידור אושר וממתין לפרסום" : "נשלח לאישור");
       qc.invalidateQueries({ queryKey: ["schedule"] });
       qc.invalidateQueries({ queryKey: ["schedule-shifts", visible?.id] });
       qc.invalidateQueries({ queryKey: ["schedules-pending"] });
