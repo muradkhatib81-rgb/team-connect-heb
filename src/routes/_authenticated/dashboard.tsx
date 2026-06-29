@@ -501,6 +501,7 @@ function EmployeeScheduleCard({ profile }: { profile: any }) {
         .lte("week_start", weekEnd)
         .gte("week_end", weekStart)
         .eq("status", "approved")
+        .not("published_at", "is", null)
         .order("published_at", { ascending: false })
         .limit(1)
         .maybeSingle();
@@ -1002,13 +1003,19 @@ function SchedulesStatsSection({ profile }: { profile: any }) {
     queryFn: async () => {
       const { data } = await supabase
         .from("user_task_permissions")
-        .select("can_create_schedule, can_approve_schedule")
+        .select("can_create_schedule, can_approve_schedule, can_publish_schedule")
         .eq("user_id", profile.id)
         .maybeSingle();
-      return data ?? { can_create_schedule: false, can_approve_schedule: false };
+      return data ?? { can_create_schedule: false, can_approve_schedule: false, can_publish_schedule: false };
     },
   });
-  const canApprove = isMainAdmin || (isBranchMgr && !!permsQ.data?.can_approve_schedule);
+  const canApprove = isMainAdmin || !!permsQ.data?.can_approve_schedule;
+  const canManagePrePublishSchedules =
+    isMainAdmin ||
+    isBranchMgr ||
+    !!permsQ.data?.can_create_schedule ||
+    !!permsQ.data?.can_approve_schedule ||
+    !!permsQ.data?.can_publish_schedule;
 
   // Compute current week (Saturday-based) in Asia/Jerusalem-agnostic UTC slicing,
   // matching getWeekStart logic in schedules.tsx.
@@ -1027,11 +1034,11 @@ function SchedulesStatsSection({ profile }: { profile: any }) {
   }, []);
   const weekEnd = weekDays[6];
 
-  const scopeFilter = isMainAdmin || canApprove ? null : profile.department_id ?? null;
+  const scopeFilter = canManagePrePublishSchedules ? null : profile.department_id ?? null;
 
   const statsQ = useQuery({
     enabled: !!profile,
-    queryKey: ["dashboard-schedules", profile.id, weekStart, canApprove],
+    queryKey: ["dashboard-schedules", profile.id, weekStart, canApprove, canManagePrePublishSchedules],
     queryFn: async () => {
       const [{ data: scheds }, { data: deptRows }] = await Promise.all([
         supabase.from("schedules").select("id, status, department_id, week_start, week_end, published_at, updated_at"),
@@ -1046,11 +1053,11 @@ function SchedulesStatsSection({ profile }: { profile: any }) {
         published_at: string | null;
         updated_at: string | null;
       }[];
-      const scoped = isMainAdmin || canApprove
+      const scoped = canManagePrePublishSchedules
         ? all
         : isDeptMgr
-        ? all.filter((s) => s.department_id === profile.department_id)
-        : all.filter((s) => s.department_id === profile.department_id && s.status === "approved");
+        ? all.filter((s) => s.department_id === profile.department_id && s.status === "approved" && !!s.published_at)
+        : all.filter((s) => s.department_id === profile.department_id && s.status === "approved" && !!s.published_at);
       const currentWeekScoped = scoped.filter((s) => s.week_start <= weekEnd && weekStart <= s.week_end);
 
       const pending = currentWeekScoped.filter((s) => s.status === "pending_approval").length;
@@ -1085,7 +1092,11 @@ function SchedulesStatsSection({ profile }: { profile: any }) {
 
       // Weekly approved schedules covering the current week (overlap)
       const weekScheds = scoped.filter(
-        (s) => s.status === "approved" && s.week_start <= weekEnd && weekStart <= s.week_end,
+        (s) =>
+          s.status === "approved" &&
+          (canManagePrePublishSchedules || !!s.published_at) &&
+          s.week_start <= weekEnd &&
+          weekStart <= s.week_end,
       );
       const ids = weekScheds.map((s) => s.id);
       const weekCounts: Record<string, { morning: number; evening: number; off: number }> = {};
