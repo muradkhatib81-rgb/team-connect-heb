@@ -754,9 +754,22 @@ function SchedulesPage() {
               </thead>
               <tbody>
                 {pendingQ.data.map((p) => (
-                  <tr key={p.id} className="border-t hover:bg-muted/30">
+                  <tr
+                    key={p.id}
+                    className="border-t hover:bg-muted/30 cursor-pointer"
+                    onClick={() => openScheduleFromPending(p)}
+                  >
                     <td className="p-3 font-medium">
-                      {deptNameById[p.department_id] ?? "—"}
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          openScheduleFromPending(p);
+                        }}
+                        className="text-primary hover:underline font-semibold"
+                      >
+                        {deptNameById[p.department_id] ?? "—"}
+                      </button>
                     </td>
                     <td className="p-3">
                       {formatHeDate(p.week_start)} – {formatHeDate(p.week_end)}
