@@ -1,0 +1,2 @@
+UPDATE public.schedules SET published_at = COALESCE(approved_at, now()) WHERE status = 'approved' AND published_at IS NULL;
+UPDATE public.schedule_shifts ss SET published_shift = ss.shift FROM public.schedules s WHERE ss.schedule_id = s.id AND s.status = 'approved' AND ss.published_shift IS NULL;

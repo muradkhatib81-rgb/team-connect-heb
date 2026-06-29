@@ -407,13 +407,20 @@ export const approveSchedule = createServerFn({ method: "POST" })
     if (sched.status !== "pending_approval") throw new Error("הסידור אינו ממתין לאישור");
 
     const now = new Date().toISOString();
+    // Auto-publish on approval when the approver also has publish permission
+    // (main admin / branch manager / explicit publish perm). This restores the
+    // pre-update behavior in which approving a schedule made it immediately
+    // visible on the dashboard of department employees and the department
+    // manager. Approvers without publish permission still need a separate
+    // publish step performed by a publisher.
+    const autoPublish = !!caps.canPublishDirect;
     const { error } = await context.supabase
       .from("schedules")
       .update({
         status: "approved",
         approved_by: context.userId,
         approved_at: now,
-        published_at: null,
+        published_at: autoPublish ? now : null,
       })
       .eq("id", data.schedule_id);
     if (error) throw new Error(error.message);
@@ -426,7 +433,54 @@ export const approveSchedule = createServerFn({ method: "POST" })
         action: "approved",
       });
 
-    return { ok: true };
+    if (autoPublish) {
+      // Refresh published_shift snapshot to the final approved version.
+      const { data: cur } = await context.supabase
+        .from("schedule_shifts")
+        .select("id, shift")
+        .eq("schedule_id", data.schedule_id);
+      for (const row of cur ?? []) {
+        await context.supabase
+          .from("schedule_shifts")
+          .update({ published_shift: row.shift })
+          .eq("id", row.id);
+      }
+      await context.supabase
+        .from("schedule_audit_log")
+        .insert({
+          schedule_id: data.schedule_id,
+          actor_id: context.userId,
+          action: "published",
+        });
+
+      // Notify department employees + department manager.
+      const [{ data: emps }, { data: dept }] = await Promise.all([
+        context.supabase
+          .from("profiles")
+          .select("id")
+          .eq("department_id", sched.department_id),
+        context.supabase
+          .from("departments")
+          .select("manager_id")
+          .eq("id", sched.department_id)
+          .maybeSingle(),
+      ]);
+      const recipientIds = new Set<string>((emps ?? []).map((e: any) => e.id));
+      if (dept?.manager_id) recipientIds.add(dept.manager_id);
+      if (sched.created_by) recipientIds.add(sched.created_by);
+      if (recipientIds.size) {
+        const message = "סידור העבודה השבועי פורסם. נא לעיין בסידור המעודכן.";
+        await context.supabase.from("schedule_notifications").insert(
+          [...recipientIds].map((uid) => ({
+            schedule_id: data.schedule_id,
+            user_id: uid,
+            message,
+          })),
+        );
+      }
+    }
+
+    return { ok: true, published: autoPublish };
   });
 
 // ---------- PUBLISH ----------
