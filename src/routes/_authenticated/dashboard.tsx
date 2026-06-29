@@ -2507,8 +2507,10 @@ function OnBreakSection({ profile }: { profile: any }) {
           label="בקשות הפסקה ממתינות לאישור"
           value={pendingCountQ.data ?? 0}
           icon={Clock}
-          tone="warning"
+          tone={(pendingCountQ.data ?? 0) > 0 ? "danger" : "warning"}
           onClick={() => navigate({ to: "/breaks-admin" })}
+          badge={pendingCountQ.data ?? 0}
+          pulse={(pendingCountQ.data ?? 0) > 0}
         />
         <StatCard
           label="עובדים בהפסקה כעת"
