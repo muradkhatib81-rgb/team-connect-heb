@@ -56,6 +56,7 @@ import {
   
   copyPreviousWeek,
   deleteSchedule,
+  getUnpublishedWeekSummary,
 } from "@/lib/schedules.functions";
 import { formatHeDate, formatHeDateTime } from "@/lib/date-format";
 import { useShiftDefinitions } from "@/lib/use-shift-definitions";
@@ -738,6 +739,37 @@ function SchedulesPage() {
     [days, activeShifts, empsQ.data, edits],
   );
 
+  // Combined cross-department summary for all unpublished schedules in this week.
+  const getWeekSummaryFn = useServerFn(getUnpublishedWeekSummary);
+  const weekSummaryQ = useQuery({
+    enabled: canViewPrePublishSummary,
+    queryKey: ["unpublished-week-summary", weekStart],
+    queryFn: () => getWeekSummaryFn({ data: { week_start: weekStart } }),
+  });
+  // Real-time refresh when any schedule / shift changes for the week.
+  useEffect(() => {
+    if (!canViewPrePublishSummary) return;
+    const ch = supabase
+      .channel(`week-summary-${weekStart}`)
+      .on("postgres_changes", { event: "*", schema: "public", table: "schedules" }, () => {
+        qc.invalidateQueries({ queryKey: ["unpublished-week-summary", weekStart] });
+      })
+      .on("postgres_changes", { event: "*", schema: "public", table: "schedule_shifts" }, () => {
+        qc.invalidateQueries({ queryKey: ["unpublished-week-summary", weekStart] });
+      })
+      .subscribe();
+    return () => {
+      supabase.removeChannel(ch);
+    };
+  }, [canViewPrePublishSummary, weekStart, qc]);
+
+  const combinedShiftTotals = useMemo(() => {
+    const totals = { ...(weekSummaryQ.data?.totals ?? {}) } as Record<string, number>;
+    return activeShifts.map((s) => ({ ...s, count: totals[s.code] ?? 0 }));
+  }, [weekSummaryQ.data, activeShifts]);
+  const combinedDeptCount = weekSummaryQ.data?.departments?.length ?? 0;
+
+
   const deptNameById = useMemo(() => {
     const m: Record<string, string> = {};
     for (const d of deptsQ.data ?? []) m[d.id] = d.name;
@@ -770,6 +802,40 @@ function SchedulesPage() {
           </p>
         </div>
       </header>
+
+      {/* Combined cross-department summary of unpublished schedules (managers only) */}
+      {canViewPrePublishSummary && (weekSummaryQ.data?.total_assignments ?? 0) > 0 && (
+        <Card className="card-elevated p-4 border-primary/30">
+          <div className="flex items-center justify-between gap-3 flex-wrap mb-3">
+            <div>
+              <h3 className="font-semibold flex items-center gap-2">
+                <CalendarDays className="size-4 text-primary" />
+                סיכום כולל — סידורים שטרם פורסמו ({combinedDeptCount} מחלקות)
+              </h3>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                סיכום מצטבר מכל המחלקות עם טיוטות / ממתינות לאישור / מאושרות שטרם פורסמו לשבוע {formatHeDate(weekStart)} – {formatHeDate(weekEnd)}. כולל אחראי מחלקות. מתעדכן בזמן אמת.
+              </p>
+            </div>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {combinedShiftTotals.map((s) => (
+              <span
+                key={`combined-${s.code}`}
+                className="px-3 py-1.5 rounded-md text-sm font-medium border"
+                style={shiftStyle(s.code)}
+              >
+                <span
+                  className="inline-block size-2 rounded-full me-2 align-middle"
+                  style={{ backgroundColor: s.color }}
+                />
+                {s.name}: <strong>{s.count}</strong> עובדים
+              </span>
+            ))}
+          </div>
+        </Card>
+      )}
+
+
 
       {canSeeScheduleQueues && (
         <div className="flex gap-2">

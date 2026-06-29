@@ -756,3 +756,64 @@ export const deleteSchedule = createServerFn({ method: "POST" })
     if (error) throw new Error(error.message);
     return { ok: true };
   });
+
+// ---------- GET unpublished week summary (combined across all departments) ----------
+// Returns aggregated shift counts across ALL schedules for the given week_start
+// that are still unpublished (draft / pending_approval / approved-but-not-published).
+// Visible only to main_admin, branch managers, or users with schedule manage
+// permissions (create/approve/publish). Department managers can see the totals
+// across the branch as well so they can plan jointly.
+export const getUnpublishedWeekSummary = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) =>
+    z.object({ week_start: z.string() }).parse(d),
+  )
+  .handler(async ({ data, context }) => {
+    const caps = await getCaps(context.supabase, context.userId);
+    const allowed =
+      caps.isMainAdmin ||
+      caps.isBranchMgr ||
+      caps.isDeptMgr ||
+      caps.canCreate ||
+      caps.canApprove ||
+      caps.canPublishDirect;
+    if (!allowed) throw new Error("אין הרשאה לצפות בסיכום הסידורים");
+
+    const { start } = weekStartOf(data.week_start);
+
+    // All unpublished schedules for the week
+    const { data: scheds, error: sErr } = await context.supabase
+      .from("schedules")
+      .select("id, department_id, status, published_at")
+      .eq("week_start", start);
+    if (sErr) throw new Error(sErr.message);
+    const unpublished = (scheds ?? []).filter(
+      (s: any) =>
+        s.status === "draft" ||
+        s.status === "pending_approval" ||
+        (s.status === "approved" && !s.published_at),
+    );
+    if (unpublished.length === 0) {
+      return { week_start: start, totals: {} as Record<string, number>, departments: [] as { id: string; status: string }[], total_assignments: 0 };
+    }
+
+    const schedIds = unpublished.map((s: any) => s.id);
+    const { data: shiftRows, error: shErr } = await context.supabase
+      .from("schedule_shifts")
+      .select("schedule_id, employee_id, day_date, shift")
+      .in("schedule_id", schedIds);
+    if (shErr) throw new Error(shErr.message);
+
+    const totals: Record<string, number> = {};
+    for (const r of shiftRows ?? []) {
+      const code = (r as any).shift as string | null;
+      if (!code) continue;
+      totals[code] = (totals[code] ?? 0) + 1;
+    }
+    return {
+      week_start: start,
+      totals,
+      departments: unpublished.map((s: any) => ({ id: s.department_id, status: s.status })),
+      total_assignments: (shiftRows ?? []).length,
+    };
+  });
