@@ -107,8 +107,10 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
     scripts: [
       {
         // Stale-cache guard. Unregisters any leftover service worker,
-        // clears caches, and auto-reloads once if a route chunk fails to
-        // load because the cached HTML points at a stale asset hash.
+        // clears Cache Storage, and — if a dynamic chunk fails to load
+        // because the cached HTML points at a stale asset hash — reloads
+        // once with a cache-busting query so the browser must refetch
+        // index.html from the network instead of disk cache.
         children: `(function(){try{
   if ('serviceWorker' in navigator) {
     navigator.serviceWorker.getRegistrations().then(function(rs){
@@ -118,31 +120,54 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       caches.keys().then(function(ks){ ks.forEach(function(k){ try { caches.delete(k); } catch(e){} }); }).catch(function(){});
     }
   }
-  function reloadOnce(){
+  function bustReload(){
     try {
       var key='__lov_chunk_reload';
-      if (sessionStorage.getItem(key)) return;
-      sessionStorage.setItem(key, String(Date.now()));
+      var now = Date.now();
+      var last = parseInt(sessionStorage.getItem(key)||'0',10);
+      if (last && now-last < 30000) return; // already tried recently
+      sessionStorage.setItem(key, String(now));
     } catch(e){}
-    location.reload();
+    try {
+      var u = new URL(window.location.href);
+      u.searchParams.set('__v', String(Date.now()));
+      window.location.replace(u.toString());
+    } catch(e){ window.location.reload(); }
+  }
+  function isStaleChunkMsg(m){
+    return /ChunkLoadError|Loading chunk|Failed to fetch dynamically imported module|Importing a module script failed|error loading dynamically imported module/i.test(m||'');
   }
   window.addEventListener('error', function(e){
     var m = (e && (e.message||'')) + ' ' + ((e && e.error && e.error.message) || '');
-    if (/ChunkLoadError|Loading chunk|Failed to fetch dynamically imported module|Importing a module script failed/i.test(m)) reloadOnce();
-  });
+    // Also catch <script>/<link> 404s for stale hashed assets.
+    var tgt = e && e.target;
+    if (tgt && (tgt.tagName === 'SCRIPT' || tgt.tagName === 'LINK')) {
+      var src = tgt.src || tgt.href || '';
+      if (/\\/assets\\/.+\\.(js|css|mjs)(\\?|$)/.test(src)) { bustReload(); return; }
+    }
+    if (isStaleChunkMsg(m)) bustReload();
+  }, true);
   window.addEventListener('unhandledrejection', function(e){
     var r = e && e.reason; var m = (r && (r.message||String(r))) || '';
-    if (/ChunkLoadError|Loading chunk|Failed to fetch dynamically imported module|Importing a module script failed/i.test(m)) reloadOnce();
+    if (isStaleChunkMsg(m)) bustReload();
   });
   try {
     var key='__lov_chunk_reload';
     var t = parseInt(sessionStorage.getItem(key)||'0',10);
     if (t && Date.now()-t > 30000) sessionStorage.removeItem(key);
   } catch(e){}
+  // Safety net: if nothing rendered after 8s on first load, force a bust reload.
+  try {
+    setTimeout(function(){
+      var root = document.getElementById('root') || document.body;
+      if (root && root.children && root.children.length === 0) bustReload();
+    }, 8000);
+  } catch(e){}
 }catch(e){}})();`,
       },
     ],
   }),
+
   shellComponent: RootShell,
   component: RootComponent,
   notFoundComponent: NotFoundComponent,
