@@ -103,7 +103,10 @@ export const requireBranchContext = createMiddleware({ type: "function" })
     const auth = request?.headers.get("authorization") ?? "";
     const headers: Record<string, string> = {};
     if (auth) headers.Authorization = auth;
-    if (branchId) headers["X-Active-Branch"] = branchId;
+    // PostgREST exposes request headers to SQL through request.headers.
+    // Send the branch header in lowercase so public.current_active_branch()
+    // can read it reliably regardless of intermediary header casing.
+    if (branchId) headers["x-active-branch"] = branchId;
 
     const scoped = createClient<Database>(
       SUPABASE_URL,

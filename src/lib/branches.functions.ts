@@ -1,5 +1,5 @@
 import { createServerFn } from "@tanstack/react-start";
-import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { requireBranchContext } from "@/integrations/supabase/active-branch";
 import { z } from "zod";
 
 async function assertSystemAdmin(supabase: any, userId: string) {
@@ -13,7 +13,7 @@ async function assertSystemAdmin(supabase: any, userId: string) {
 }
 
 export const listBranchesWithStats = createServerFn({ method: "GET" })
-  .middleware([requireSupabaseAuth])
+  .middleware([requireBranchContext])
   .handler(async ({ context }) => {
     await assertSystemAdmin(context.supabase, context.userId);
     const supabase = context.supabase;
@@ -68,7 +68,7 @@ export const listBranchesWithStats = createServerFn({ method: "GET" })
   });
 
 export const listEmployeesForManagerPicker = createServerFn({ method: "GET" })
-  .middleware([requireSupabaseAuth])
+  .middleware([requireBranchContext])
   .handler(async ({ context }) => {
     await assertSystemAdmin(context.supabase, context.userId);
     const { data, error } = await context.supabase
@@ -90,7 +90,7 @@ const createSchema = z.object({
 });
 
 export const createBranch = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
+  .middleware([requireBranchContext])
   .inputValidator((data: unknown) => createSchema.parse(data))
   .handler(async ({ data, context }) => {
     await assertSystemAdmin(context.supabase, context.userId);
@@ -149,7 +149,7 @@ const updateSchema = z.object({
 });
 
 export const updateBranch = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
+  .middleware([requireBranchContext])
   .inputValidator((data: unknown) => updateSchema.parse(data))
   .handler(async ({ data, context }) => {
     await assertSystemAdmin(context.supabase, context.userId);
@@ -180,7 +180,7 @@ const assignSchema = z.object({
 });
 
 export const assignBranchManager = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
+  .middleware([requireBranchContext])
   .inputValidator((data: unknown) => assignSchema.parse(data))
   .handler(async ({ data, context }) => {
     await assertSystemAdmin(context.supabase, context.userId);
@@ -263,7 +263,7 @@ function normalizeBlockers(b: any): Omit<BranchBlockerResult, "ok" | "error"> {
 }
 
 export const getBranchDeleteBlockers = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
+  .middleware([requireBranchContext])
   .inputValidator((data: unknown) => deleteSchema.parse(data))
   .handler(async ({ data, context }): Promise<BranchBlockerResult> => {
     try {
@@ -338,7 +338,7 @@ function buildBlockerMessage(c: BranchBlockerCounts): string {
 }
 
 export const deleteBranch = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
+  .middleware([requireBranchContext])
   .inputValidator((data: unknown) => deleteCascadeSchema.parse(data))
   .handler(async ({ data, context }): Promise<BranchDeleteResult> => {
     const empty: BranchDeleteResult = {
