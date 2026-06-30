@@ -1915,6 +1915,7 @@ export type Database = {
         Args: { _task_id: string; _user_id: string }
         Returns: boolean
       }
+      delete_branch_cascade: { Args: { _branch_id: string }; Returns: Json }
       end_my_break: { Args: { _id: string }; Returns: undefined }
       find_archived_by_id_number: {
         Args: { _id_number: string }
