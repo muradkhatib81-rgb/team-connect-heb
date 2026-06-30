@@ -563,22 +563,39 @@ function DeleteDialog({
     staleTime: 0,
   });
 
-  const rows: { label: string; value: number }[] = [
-    { label: "עובדים", value: blockersQ.data?.employees ?? 0 },
-    { label: "מחלקות", value: blockersQ.data?.departments ?? 0 },
-    { label: "סידורי עבודה", value: blockersQ.data?.schedules ?? 0 },
-    { label: "משימות", value: blockersQ.data?.tasks ?? 0 },
+  const data = blockersQ.data;
+  const operationalRows: { label: string; value: number }[] = [
+    { label: "עובדים", value: data?.employees ?? 0 },
+    { label: "סידורי עבודה", value: data?.schedules ?? 0 },
+    { label: "דוחות", value: data?.reports ?? 0 },
+    { label: "משימות", value: data?.tasks ?? 0 },
+    { label: "הודעות", value: data?.messages ?? 0 },
+    { label: "התראות", value: data?.notifications ?? 0 },
   ];
-  const total = rows.reduce((s, r) => s + r.value, 0);
   const loading = blockersQ.isLoading;
-  const loadError = blockersQ.data?.ok === false ? blockersQ.data.error : null;
-  const canDelete = blockersQ.data?.ok === true && total === 0;
+  const loadError = data?.ok === false ? data.error : null;
+  const canDelete = data?.ok === true && (data.canDelete ?? false);
+  const onlyDepartments = data?.ok === true && (data.onlyDepartments ?? false);
+  const isEmpty = data?.ok === true && (data.isEmpty ?? false);
+  const departmentsCount = data?.departments ?? 0;
 
   const m = useMutation({
-    mutationFn: () => del({ data: { id: branch.id } }),
+    mutationFn: () =>
+      del({
+        data: {
+          id: branch.id,
+          ...(onlyDepartments ? { confirm_cascade: true as const } : {}),
+        },
+      }),
     onSuccess: (res: any) => {
       if (res?.ok && res?.deleted) {
-        toast.success(`הסניף "${branch.name}" נמחק בהצלחה`);
+        if ((res?.departmentsDeleted ?? 0) > 0) {
+          toast.success(
+            `הסניף "${branch.name}" נמחק יחד עם ${res.departmentsDeleted} מחלקות`,
+          );
+        } else {
+          toast.success(`הסניף "${branch.name}" נמחק בהצלחה`);
+        }
         onDeleted();
         return;
       }
@@ -599,6 +616,9 @@ function DeleteDialog({
     },
   });
 
+  let actionLabel = "מחק סניף";
+  if (onlyDepartments) actionLabel = "מחק סניף ומחלקות";
+
   return (
     <AlertDialog open onOpenChange={(o) => !o && onClose()}>
       <AlertDialogContent dir="rtl">
@@ -617,19 +637,31 @@ function DeleteDialog({
                 <div className="text-destructive">{loadError}</div>
               )}
 
-              {!loading && !loadError && canDelete && (
-                <div>
-                  אין נתונים מקושרים לסניף זה. הפעולה אינה ניתנת לביטול.
+              {!loading && !loadError && isEmpty && (
+                <div>הסניף ריק לחלוטין. הפעולה אינה ניתנת לביטול.</div>
+              )}
+
+              {!loading && !loadError && onlyDepartments && (
+                <div className="space-y-2">
+                  <div className="font-medium text-foreground">
+                    הסניף מכיל {departmentsCount} מחלקות ואין בו נתונים תפעוליים נוספים.
+                  </div>
+                  <div>
+                    האם ברצונך למחוק את הסניף יחד עם כל המחלקות שלו?
+                  </div>
+                  <div className="text-xs text-muted-foreground">
+                    הפעולה אינה ניתנת לביטול. המחלקות יימחקו תחילה ואז הסניף.
+                  </div>
                 </div>
               )}
 
               {!loading && !loadError && !canDelete && (
                 <div className="space-y-2">
                   <div className="font-medium text-foreground">
-                    לא ניתן למחוק את הסניף מכיוון שעדיין קיימים בו:
+                    לא ניתן למחוק את הסניף. קיימים בו נתונים תפעוליים:
                   </div>
                   <ul className="space-y-1 rounded-md border bg-muted/40 p-3 text-foreground">
-                    {rows.map((r) => (
+                    {operationalRows.map((r) => (
                       <li
                         key={r.label}
                         className="flex items-center justify-between"
@@ -644,9 +676,13 @@ function DeleteDialog({
                         </span>
                       </li>
                     ))}
+                    <li className="flex items-center justify-between border-t pt-1 text-muted-foreground">
+                      <span>• מחלקות</span>
+                      <span>{departmentsCount}</span>
+                    </li>
                   </ul>
                   <div className="text-xs text-muted-foreground">
-                    יש להעביר או למחוק את הפריטים הללו לפני מחיקת הסניף.
+                    יש להעביר או למחוק את הנתונים התפעוליים לפני מחיקת הסניף.
                   </div>
                 </div>
               )}
@@ -663,10 +699,11 @@ function DeleteDialog({
             disabled={m.isPending || loading || !canDelete}
           >
             {m.isPending && <Loader2 className="size-4 animate-spin" />}
-            מחק סניף
+            {actionLabel}
           </AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>
     </AlertDialog>
   );
 }
+
