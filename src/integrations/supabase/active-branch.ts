@@ -121,7 +121,20 @@ export const requireBranchContext = createMiddleware({ type: "function" })
       },
     );
 
-    return next({ context: { ...context, supabase: scoped, branchId } });
+    // `branchId` above is only the raw selected header. For non system-admin
+    // users the database intentionally ignores that header and resolves the
+    // caller's own profile.branch_id. Expose the *database-resolved* branch to
+    // server functions so inserts they stamp explicitly (departments, etc.) are
+    // still correct even when a Branch Manager has no switcher/header.
+    let resolvedBranchId: string | null = branchId;
+    try {
+      const { data } = await scoped.rpc("current_active_branch" as never);
+      resolvedBranchId = (data as string | null) ?? branchId;
+    } catch {
+      resolvedBranchId = branchId;
+    }
+
+    return next({ context: { ...context, supabase: scoped, branchId: resolvedBranchId } });
   });
 
 // ---- Realtime helper -------------------------------------------------
