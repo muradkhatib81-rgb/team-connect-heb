@@ -279,64 +279,66 @@ function BreaksPage() {
         </div>
       </header>
 
-      <Tabs defaultValue="request" className="space-y-4">
+      <Tabs defaultValue={canRequestBreak ? "request" : "mine"} className="space-y-4">
         <TabsList>
-          <TabsTrigger value="request">בקשת הפסקה</TabsTrigger>
+          {canRequestBreak && <TabsTrigger value="request">בקשת הפסקה</TabsTrigger>}
           <TabsTrigger value="mine">הבקשות שלי</TabsTrigger>
         </TabsList>
 
-        <TabsContent value="request">
-          <Card className="card-elevated p-5 space-y-4">
-            <div className="grid sm:grid-cols-2 gap-4">
-              <div className="space-y-1.5">
-                <Label>סוג הפסקה</Label>
-                <Select value={settingId} onValueChange={setSettingId}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="בחר/י סוג הפסקה" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {(settingsQ.data ?? []).map((s) => (
-                      <SelectItem key={s.id} value={s.id}>
-                        {s.name} · {s.duration_minutes} דק׳
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+        {canRequestBreak && (
+          <TabsContent value="request">
+            <Card className="card-elevated p-5 space-y-4">
+              <div className="grid sm:grid-cols-2 gap-4">
+                <div className="space-y-1.5">
+                  <Label>סוג הפסקה</Label>
+                  <Select value={settingId} onValueChange={setSettingId}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="בחר/י סוג הפסקה" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {(settingsQ.data ?? []).map((s) => (
+                        <SelectItem key={s.id} value={s.id}>
+                          {s.name} · {s.duration_minutes} דק׳
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="brk-time">שעה מבוקשת</Label>
+                  <Input
+                    id="brk-time"
+                    type="time"
+                    value={timeStr}
+                    onChange={(e) => setTimeStr(e.target.value)}
+                  />
+                </div>
               </div>
               <div className="space-y-1.5">
-                <Label htmlFor="brk-time">שעה מבוקשת</Label>
-                <Input
-                  id="brk-time"
-                  type="time"
-                  value={timeStr}
-                  onChange={(e) => setTimeStr(e.target.value)}
+                <Label htmlFor="brk-note">הערה (אופציונלי)</Label>
+                <Textarea
+                  id="brk-note"
+                  value={note}
+                  onChange={(e) => setNote(e.target.value)}
+                  placeholder="הערה למנהל"
+                  rows={3}
                 />
               </div>
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="brk-note">הערה (אופציונלי)</Label>
-              <Textarea
-                id="brk-note"
-                value={note}
-                onChange={(e) => setNote(e.target.value)}
-                placeholder="הערה למנהל"
-                rows={3}
-              />
-            </div>
-            <Button
-              className="gap-2"
-              onClick={() => submitMut.mutate()}
-              disabled={submitMut.isPending}
-            >
-              {submitMut.isPending ? (
-                <Loader2 className="size-4 animate-spin" />
-              ) : (
-                <Send className="size-4" />
-              )}
-              שלח בקשה
-            </Button>
-          </Card>
-        </TabsContent>
+              <Button
+                className="gap-2"
+                onClick={() => submitMut.mutate()}
+                disabled={submitMut.isPending}
+              >
+                {submitMut.isPending ? (
+                  <Loader2 className="size-4 animate-spin" />
+                ) : (
+                  <Send className="size-4" />
+                )}
+                שלח בקשה
+              </Button>
+            </Card>
+          </TabsContent>
+        )}
 
         <TabsContent value="mine">
           {myReqQ.isLoading ? (
