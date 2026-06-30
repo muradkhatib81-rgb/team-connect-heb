@@ -1,63 +1,131 @@
 import { useMemo, useState } from "react";
-import { Building2, Check, ChevronDown, Search } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { Building2, Check, ChevronDown, MapPin, Search } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import { useActiveBranch } from "@/lib/use-active-branch";
 
 /**
- * Branch selector for the System Administrator.
- * Hidden for every other role (they are locked to their own branch).
+ * Active-branch badge with switcher behaviour.
+ *
+ * - System administrators see a clickable badge that opens a searchable
+ *   dropdown of every branch (name, code, address, current indicator).
+ * - When only a single active branch exists, the badge renders in its
+ *   read-only style with no dropdown affordance.
+ * - Non-sysadmins (branch managers, employees…) always see the read-only
+ *   badge — they are locked to their assigned branch.
+ *
+ * Selecting a branch updates the active id (persisted in localStorage by
+ * the provider) and triggers a global query invalidation so every module
+ * refetches under the new branch context.
+ */
+
+function BadgeShell({
+  children,
+  asButton,
+  className,
+  ...rest
+}: {
+  children: React.ReactNode;
+  asButton?: boolean;
+  className?: string;
+} & React.ButtonHTMLAttributes<HTMLButtonElement>) {
+  const base =
+    "inline-flex items-center gap-1.5 rounded-full bg-primary/10 text-primary px-3 py-1.5 text-xs font-medium shadow-sm border border-primary/15";
+  if (asButton) {
+    return (
+      <button
+        type="button"
+        className={cn(
+          base,
+          "hover:bg-primary/15 active:scale-[0.98] transition-all cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+          className,
+        )}
+        {...rest}
+      >
+        {children}
+      </button>
+    );
+  }
+  return <div className={cn(base, className)}>{children}</div>;
+}
+
+function BadgeContent({ name }: { name: string }) {
+  return (
+    <>
+      <Building2 className="size-3.5 shrink-0" />
+      <span className="truncate max-w-[200px]">{name}</span>
+    </>
+  );
+}
+
+/**
+ * Primary branch indicator + switcher. Render once in the page chrome.
+ * The legacy `ActiveBranchBadge` (read-only) is now an alias of this
+ * component so existing layouts keep working without duplication.
  */
 export function BranchSwitcher({ className }: { className?: string }) {
-  const { canSwitch, activeBranch, branches, setActiveBranchId, activeBranchId } =
+  const { activeBranch, branches, activeBranchId, setActiveBranchId, canSwitch } =
     useActiveBranch();
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
-    if (!q) return branches;
-    return branches.filter(
+    const list = branches.filter((b) => b.is_active || b.id === activeBranchId);
+    if (!q) return list;
+    return list.filter(
       (b) =>
         b.name.toLowerCase().includes(q) ||
-        (b.code ?? "").toLowerCase().includes(q),
+        (b.code ?? "").toLowerCase().includes(q) ||
+        (b.address ?? "").toLowerCase().includes(q),
     );
-  }, [branches, query]);
+  }, [branches, query, activeBranchId]);
 
-  if (!canSwitch || !activeBranch) return null;
+  if (!activeBranch) return null;
+
+  // Read-only badge (non-sysadmin, or sysadmin with a single branch).
+  if (!canSwitch) {
+    return (
+      <BadgeShell className={className}>
+        <BadgeContent name={activeBranch.name} />
+      </BadgeShell>
+    );
+  }
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
-        <Button
-          variant="outline"
-          size="sm"
-          className={cn("gap-2 max-w-[220px]", className)}
-          aria-label="בחר סניף פעיל"
-        >
-          <Building2 className="size-4 text-primary shrink-0" />
-          <span className="truncate text-sm font-medium">{activeBranch.name}</span>
-          <ChevronDown className="size-4 opacity-60 shrink-0" />
-        </Button>
+        <BadgeShell asButton aria-label="בחר סניף פעיל" className={className}>
+          <BadgeContent name={activeBranch.name} />
+          <ChevronDown
+            className={cn(
+              "size-3.5 opacity-70 shrink-0 transition-transform duration-200",
+              open && "rotate-180",
+            )}
+          />
+        </BadgeShell>
       </PopoverTrigger>
-      <PopoverContent align="end" className="w-72 p-0">
-        <div className="p-2 border-b">
+      <PopoverContent
+        align="end"
+        sideOffset={8}
+        className="w-80 p-0 overflow-hidden data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95"
+      >
+        <div className="p-2 border-b bg-muted/40">
           <div className="relative">
-            <Search className="absolute right-2 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
+            <Search className="absolute right-2.5 top-1/2 -translate-y-1/2 size-4 text-muted-foreground pointer-events-none" />
             <Input
               autoFocus
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               placeholder="חיפוש סניף..."
-              className="pr-8 h-9"
+              className="pr-9 h-9 bg-background"
             />
           </div>
         </div>
-        <div className="max-h-72 overflow-y-auto py-1">
+        <div className="max-h-80 overflow-y-auto py-1">
           {filtered.length === 0 ? (
-            <p className="px-3 py-6 text-center text-sm text-muted-foreground">
+            <p className="px-3 py-8 text-center text-sm text-muted-foreground">
               לא נמצאו סניפים
             </p>
           ) : (
@@ -66,25 +134,49 @@ export function BranchSwitcher({ className }: { className?: string }) {
               return (
                 <button
                   key={b.id}
+                  type="button"
                   onClick={() => {
                     setActiveBranchId(b.id);
                     setOpen(false);
                     setQuery("");
                   }}
                   className={cn(
-                    "w-full flex items-center gap-2 px-3 py-2 text-sm hover:bg-accent transition-colors text-right",
-                    active && "bg-accent/60 font-medium",
-                    !b.is_active && "opacity-60",
+                    "w-full flex items-start gap-2.5 px-3 py-2.5 text-sm hover:bg-accent transition-colors text-right border-b last:border-b-0 border-border/40",
+                    active && "bg-primary/5",
                   )}
                 >
-                  <Building2 className="size-4 text-primary shrink-0" />
-                  <span className="flex-1 truncate">{b.name}</span>
-                  {!b.is_active && (
-                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground">
-                      מושבת
-                    </span>
+                  <Building2
+                    className={cn(
+                      "size-4 mt-0.5 shrink-0",
+                      active ? "text-primary" : "text-muted-foreground",
+                    )}
+                  />
+                  <div className="flex-1 min-w-0 space-y-0.5">
+                    <div className="flex items-center gap-2">
+                      <span
+                        className={cn(
+                          "truncate",
+                          active ? "font-semibold text-primary" : "font-medium",
+                        )}
+                      >
+                        {b.name}
+                      </span>
+                      {b.code && (
+                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground font-mono shrink-0">
+                          {b.code}
+                        </span>
+                      )}
+                    </div>
+                    {b.address && (
+                      <div className="flex items-center gap-1 text-[11px] text-muted-foreground">
+                        <MapPin className="size-3 shrink-0" />
+                        <span className="truncate">{b.address}</span>
+                      </div>
+                    )}
+                  </div>
+                  {active && (
+                    <Check className="size-4 text-primary shrink-0 mt-0.5" />
                   )}
-                  {active && <Check className="size-4 text-primary shrink-0" />}
                 </button>
               );
             })
@@ -95,19 +187,11 @@ export function BranchSwitcher({ className }: { className?: string }) {
   );
 }
 
-/** Compact, read-only badge shown in the page header so every page shows the active branch. */
-export function ActiveBranchBadge({ className }: { className?: string }) {
-  const { activeBranch } = useActiveBranch();
-  if (!activeBranch) return null;
-  return (
-    <div
-      className={cn(
-        "inline-flex items-center gap-1.5 rounded-full bg-primary/10 text-primary px-2.5 py-1 text-xs font-medium",
-        className,
-      )}
-    >
-      <Building2 className="size-3.5" />
-      <span className="truncate max-w-[180px]">{activeBranch.name}</span>
-    </div>
-  );
+/**
+ * Legacy alias kept so existing layouts that import `ActiveBranchBadge`
+ * keep working. Returns null because `BranchSwitcher` now renders the
+ * badge itself — avoids showing the active branch twice in the chrome.
+ */
+export function ActiveBranchBadge(_props: { className?: string }) {
+  return null;
 }
