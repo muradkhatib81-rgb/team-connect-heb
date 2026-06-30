@@ -69,6 +69,7 @@ export function canManageUsers(roles: AppRole[]): boolean {
 
 export function highestRole(roles: AppRole[]): AppRole | null {
   const priority: AppRole[] = [
+    "system_admin",
     "main_admin",
     "branch_manager",
     "assistant_manager",
@@ -77,6 +78,10 @@ export function highestRole(roles: AppRole[]): AppRole | null {
   ];
   for (const r of priority) if (roles.includes(r)) return r;
   return null;
+}
+
+export function isSystemAdmin(roles: AppRole[]): boolean {
+  return roles.includes("system_admin");
 }
 
 export const BRANCH_NAME = "רמי לוי שער בנימין";
