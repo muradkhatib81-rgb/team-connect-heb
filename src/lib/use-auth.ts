@@ -26,7 +26,7 @@ async function fetchSessionAndProfile(): Promise<AuthProfile | null> {
   const [{ data: profile }, { data: roles }, { data: contactRows }] = await Promise.all([
     supabase
       .from("profiles")
-      .select("id, full_name, department_id, job_title, is_active, departments(name)")
+      .select("id, full_name, department_id, job_title, is_active, branch_id, departments(name)")
       .eq("id", user.id)
       .maybeSingle(),
     supabase.from("user_roles").select("role").eq("user_id", user.id),
