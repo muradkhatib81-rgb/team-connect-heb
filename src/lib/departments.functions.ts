@@ -2,17 +2,18 @@ import { createServerFn } from "@tanstack/react-start";
 import { requireBranchContext } from "@/integrations/supabase/active-branch";
 import { z } from "zod";
 
-async function assertMainAdmin(supabase: any, userId: string) {
+async function assertCanManageDepartments(supabase: any, userId: string) {
   const { data, error } = await supabase
     .from("user_roles")
     .select("role")
     .eq("user_id", userId);
   if (error) throw new Error("שגיאת הרשאות");
   const roles = (data ?? []).map((r: any) => r.role);
-  if (!roles.includes("main_admin")) {
+  if (!roles.includes("main_admin") && !roles.includes("system_admin")) {
     throw new Error("רק מנהל ראשי יכול לבצע פעולה זו");
   }
 }
+
 
 const createSchema = z.object({
   name: z.string().trim().min(1).max(80),
@@ -33,7 +34,7 @@ export const createDepartment = createServerFn({ method: "POST" })
   .middleware([requireBranchContext])
   .inputValidator((data: unknown) => createSchema.parse(data))
   .handler(async ({ data, context }) => {
-    await assertMainAdmin(context.supabase, context.userId);
+    await assertCanManageDepartments(context.supabase, context.userId);
     let lastErr: any = null;
     for (let i = 0; i < 5; i++) {
       const code = generateCode(data.name);
@@ -74,7 +75,7 @@ export const updateDepartment = createServerFn({ method: "POST" })
   .middleware([requireBranchContext])
   .inputValidator((data: unknown) => updateSchema.parse(data))
   .handler(async ({ data, context }) => {
-    await assertMainAdmin(context.supabase, context.userId);
+    await assertCanManageDepartments(context.supabase, context.userId);
 
     // Manager change goes through the atomic RPC (updates dept + user_roles in one tx).
     const newManagerId: string | null = data.manager_id ?? null;
@@ -101,7 +102,7 @@ export const deleteDepartment = createServerFn({ method: "POST" })
   .middleware([requireBranchContext])
   .inputValidator((data: unknown) => deleteSchema.parse(data))
   .handler(async ({ data, context }) => {
-    await assertMainAdmin(context.supabase, context.userId);
+    await assertCanManageDepartments(context.supabase, context.userId);
     const { count, error: cErr } = await context.supabase
       .from("profiles")
       .select("id", { count: "exact", head: true })
