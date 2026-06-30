@@ -218,7 +218,7 @@ export const deleteBranch = createServerFn({ method: "POST" })
     ];
     const blockers: string[] = [];
     for (const c of checks) {
-      const { count, error } = await supabase
+      const { count, error } = await (supabase as any)
         .from(c.table)
         .select("id", { count: "exact", head: true })
         .eq("branch_id", data.id);
