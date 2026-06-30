@@ -9,7 +9,15 @@ import {
 } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import {
+  installBranchScope,
+  setActiveBranchScope,
+} from "@/integrations/supabase/branch-scope";
 import { useAuth } from "@/lib/use-auth";
+
+// Install the supabase.from(...) proxy once at module load so every
+// branch-scoped table is automatically filtered to the active branch.
+installBranchScope();
 
 /**
  * Active Branch layer.
