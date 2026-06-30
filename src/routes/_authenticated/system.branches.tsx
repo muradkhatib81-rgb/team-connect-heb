@@ -557,22 +557,24 @@ function DeleteDialog({
   const del = useServerFn(deleteBranch);
   const m = useMutation({
     mutationFn: () => del({ data: { id: branch.id } }),
-    onSuccess: () => {
-      toast.success(`הסניף "${branch.name}" נמחק בהצלחה`);
-      onDeleted();
-    },
-    onError: (e: any) => {
-      console.error("[DeleteBranch] error:", e);
-      const raw =
-        (typeof e?.message === "string" && e.message.trim()) ||
-        (typeof e?.body?.message === "string" && e.body.message.trim()) ||
-        (typeof e?.error?.message === "string" && e.error.message.trim()) ||
-        (typeof e === "string" && e.trim()) ||
-        "";
-      const message = raw || "אירעה שגיאה לא צפויה במחיקת הסניף. נסה שוב מאוחר יותר.";
+    onSuccess: (res: any) => {
+      if (res?.ok && res?.deleted) {
+        toast.success(`הסניף "${branch.name}" נמחק בהצלחה`);
+        onDeleted();
+        return;
+      }
+      const message =
+        (typeof res?.message === "string" && res.message.trim()) ||
+        "לא ניתן למחוק את הסניף כעת. נסה שוב מאוחר יותר.";
       const [first, ...rest] = message.split("\n");
       toast.error(first, {
         description: rest.length ? rest.join("\n") : undefined,
+        duration: 8000,
+      });
+    },
+    onError: (e: any) => {
+      console.error("[DeleteBranch] unexpected error:", e);
+      toast.error("אירעה שגיאה לא צפויה במחיקת הסניף. נסה שוב מאוחר יותר.", {
         duration: 8000,
       });
     },

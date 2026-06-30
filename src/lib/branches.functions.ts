@@ -203,62 +203,137 @@ export const assignBranchManager = createServerFn({ method: "POST" })
 
 const deleteSchema = z.object({ id: z.string().uuid() });
 
+export type BranchDeleteResult =
+  | {
+      ok: true;
+      canDelete: true;
+      deleted: true;
+      employees: number;
+      departments: number;
+      schedules: number;
+      tasks: number;
+    }
+  | {
+      ok: false;
+      canDelete: false;
+      deleted: false;
+      employees: number;
+      departments: number;
+      schedules: number;
+      tasks: number;
+      message: string;
+    }
+  | {
+      ok: false;
+      canDelete: false;
+      deleted: false;
+      employees: 0;
+      departments: 0;
+      schedules: 0;
+      tasks: 0;
+      message: string;
+      unexpected: true;
+    };
+
+function friendlyDeleteFailure(message: string): BranchDeleteResult {
+  return {
+    ok: false,
+    canDelete: false,
+    deleted: false,
+    employees: 0,
+    departments: 0,
+    schedules: 0,
+    tasks: 0,
+    message,
+    unexpected: true,
+  };
+}
+
 export const deleteBranch = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((data: unknown) => deleteSchema.parse(data))
-  .handler(async ({ data, context }) => {
-    await assertSystemAdmin(context.supabase, context.userId);
+  .handler(async ({ data, context }): Promise<BranchDeleteResult> => {
+    try {
+      await assertSystemAdmin(context.supabase, context.userId);
+    } catch (err: any) {
+      console.error("[deleteBranch] auth check failed:", err);
+      return friendlyDeleteFailure(
+        "אין לך הרשאה למחוק סניפים. נדרשת הרשאת מנהל מערכת ראשי.",
+      );
+    }
     const supabase = context.supabase;
 
-    const checks: { table: string; label: string }[] = [
-      { table: "profiles", label: "עובדים" },
-      { table: "departments", label: "מחלקות" },
-      { table: "schedules", label: "סידורי עבודה" },
-      { table: "tasks", label: "משימות" },
-    ];
-    const blockers: string[] = [];
-    for (const c of checks) {
-      try {
-        const { count, error } = await (supabase as any)
-          .from(c.table)
-          .select("id", { count: "exact", head: true })
-          .eq("branch_id", data.id);
-        if (error) {
-          console.error(`[deleteBranch] count check failed for ${c.table}:`, error);
-          throw new Error(
-            `שגיאה בבדיקת ${c.label}: ${error.message || "שגיאת מסד נתונים"}`,
-          );
-        }
-        if ((count ?? 0) > 0) blockers.push(`• ${c.label}: ${count}`);
-      } catch (err: any) {
-        if (err?.message?.startsWith("שגיאה בבדיקת")) throw err;
-        console.error(`[deleteBranch] unexpected error checking ${c.table}:`, err);
-        throw new Error(
-          `אירעה שגיאה בעת בדיקת ${c.label}. נסה שוב מאוחר יותר.`,
+    let counts = { employees: 0, departments: 0, schedules: 0, tasks: 0 };
+    try {
+      const { data: blockers, error } = await (supabase as any).rpc(
+        "get_branch_delete_blockers",
+        { _branch_id: data.id },
+      );
+      if (error) {
+        console.error("[deleteBranch] blocker rpc error:", error);
+        return friendlyDeleteFailure(
+          "אירעה שגיאה בבדיקת הנתונים המקושרים לסניף. נסה שוב מאוחר יותר.",
         );
       }
-    }
-    if (blockers.length) {
-      throw new Error(
-        `לא ניתן למחוק את הסניף מכיוון שעדיין קיימים בו:\n${blockers.join("\n")}`,
+      counts = {
+        employees: Number(blockers?.employees ?? 0),
+        departments: Number(blockers?.departments ?? 0),
+        schedules: Number(blockers?.schedules ?? 0),
+        tasks: Number(blockers?.tasks ?? 0),
+      };
+    } catch (err: any) {
+      console.error("[deleteBranch] blocker rpc threw:", err);
+      return friendlyDeleteFailure(
+        "אירעה שגיאה בבדיקת הנתונים המקושרים לסניף. נסה שוב מאוחר יותר.",
       );
     }
 
-    const { error } = await supabase.from("branches").delete().eq("id", data.id);
-    if (error) {
-      console.error("[deleteBranch] delete failed:", error);
-      const code = (error as any).code;
-      if (code === "23503") {
-        throw new Error(
-          "לא ניתן למחוק את הסניף מכיוון שקיימים נתונים מקושרים אליו במערכת.",
-        );
+    const total =
+      counts.employees + counts.departments + counts.schedules + counts.tasks;
+    if (total > 0) {
+      const lines: string[] = [];
+      if (counts.employees) lines.push(`• עובדים: ${counts.employees}`);
+      if (counts.departments) lines.push(`• מחלקות: ${counts.departments}`);
+      if (counts.schedules) lines.push(`• סידורי עבודה: ${counts.schedules}`);
+      if (counts.tasks) lines.push(`• משימות: ${counts.tasks}`);
+      return {
+        ok: false,
+        canDelete: false,
+        deleted: false,
+        ...counts,
+        message: `לא ניתן למחוק את הסניף מכיוון שעדיין קיימים בו:\n${lines.join("\n")}`,
+      };
+    }
+
+    try {
+      const { error } = await supabase
+        .from("branches")
+        .delete()
+        .eq("id", data.id);
+      if (error) {
+        console.error("[deleteBranch] delete failed:", error);
+        const code = (error as any).code;
+        let msg =
+          "אירעה שגיאה במחיקת הסניף. נסה שוב מאוחר יותר.";
+        if (code === "23503") {
+          msg =
+            "לא ניתן למחוק את הסניף מכיוון שקיימים נתונים מקושרים אליו במערכת.";
+        } else if (code === "42501") {
+          msg = "אין לך הרשאה למחוק את הסניף.";
+        }
+        return friendlyDeleteFailure(msg);
       }
-      if (code === "42501") {
-        throw new Error("אין לך הרשאה למחוק את הסניף.");
-      }
-      throw new Error(
-        `אירעה שגיאה במחיקת הסניף: ${error.message || "שגיאה לא ידועה"}`,
+    } catch (err: any) {
+      console.error("[deleteBranch] delete threw:", err);
+      return friendlyDeleteFailure(
+        "אירעה שגיאה במחיקת הסניף. נסה שוב מאוחר יותר.",
       );
     }
-    return { ok: true };
+
+    return {
+      ok: true,
+      canDelete: true,
+      deleted: true,
+      ...counts,
+    };
   });
