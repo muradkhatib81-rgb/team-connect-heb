@@ -47,6 +47,7 @@ async function fetchSessionAndProfile(): Promise<AuthProfile | null> {
     is_active: p.is_active ?? true,
     must_change_password: contact.must_change_password ?? false,
     roles: (roles ?? []).map((r) => r.role as AppRole),
+    branch_id: p.branch_id ?? null,
   };
 }
 
