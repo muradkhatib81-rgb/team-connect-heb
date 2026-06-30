@@ -79,7 +79,7 @@ export function ActiveBranchProvider({ children }: { children: ReactNode }) {
       if (isSysAdmin) {
         const { data, error } = await supabase
           .from("branches")
-          .select("id, name, code, is_active")
+          .select("id, name, code, address, is_active")
           .order("name", { ascending: true });
         if (error) throw error;
         return (data ?? []) as BranchOption[];
@@ -88,7 +88,7 @@ export function ActiveBranchProvider({ children }: { children: ReactNode }) {
       if (!ownId) return [];
       const { data, error } = await supabase
         .from("branches")
-        .select("id, name, code, is_active")
+        .select("id, name, code, address, is_active")
         .eq("id", ownId)
         .maybeSingle();
       if (error) throw error;
