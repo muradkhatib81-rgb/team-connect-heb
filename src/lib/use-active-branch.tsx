@@ -9,7 +9,15 @@ import {
 } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import {
+  installBranchScope,
+  setActiveBranchScope,
+} from "@/integrations/supabase/branch-scope";
 import { useAuth } from "@/lib/use-auth";
+
+// Install the supabase.from(...) proxy once at module load so every
+// branch-scoped table is automatically filtered to the active branch.
+installBranchScope();
 
 /**
  * Active Branch layer.
@@ -122,13 +130,22 @@ export function ActiveBranchProvider({ children }: { children: ReactNode }) {
     }
   }, [profile, isSysAdmin, ownBranchId, branches, activeBranchId]);
 
+  // Keep the supabase scope in lockstep with the React state. Doing this
+  // synchronously during render means the very next supabase.from(...)
+  // call (including the ones triggered by invalidateQueries below) is
+  // already scoped to the new branch.
+  if (activeBranchId) setActiveBranchScope(activeBranchId);
+
   const setActiveBranchId = useCallback(
     (id: string) => {
       if (!isSysAdmin) return; // locked
       if (id === activeBranchId) return;
       writeStored(id);
+      setActiveBranchScope(id);
       setActiveBranchIdState(id);
-      // Force every data-bearing page to refetch under the new branch.
+      // Cancel inflight requests bound to the old branch and force every
+      // data-bearing query to refetch under the new branch.
+      qc.cancelQueries();
       qc.invalidateQueries();
     },
     [isSysAdmin, activeBranchId, qc],
@@ -152,7 +169,15 @@ export function ActiveBranchProvider({ children }: { children: ReactNode }) {
   );
 
   return (
-    <ActiveBranchContext.Provider value={value}>{children}</ActiveBranchContext.Provider>
+    <ActiveBranchContext.Provider value={value}>
+      {/* Keying on activeBranchId forces a full subtree remount when the
+          admin switches branches: every route component unmounts, local
+          state is cleared, and queries refetch from scratch under the
+          new scope. Prevents any stale-branch data from lingering. */}
+      <div key={activeBranchId ?? "no-branch"} className="contents">
+        {children}
+      </div>
+    </ActiveBranchContext.Provider>
   );
 }
 
