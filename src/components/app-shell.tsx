@@ -38,6 +38,8 @@ import {
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { NotificationsBell } from "@/components/notifications-bell";
+import { ActiveBranchProvider } from "@/lib/use-active-branch";
+import { BranchSwitcher, ActiveBranchBadge } from "@/components/branch-switcher";
 
 interface NavItem {
   to: string;
