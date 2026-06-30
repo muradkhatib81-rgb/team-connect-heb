@@ -434,6 +434,13 @@ export type Database = {
             foreignKeyName: "employee_archive_archived_by_fkey"
             columns: ["archived_by"]
             isOneToOne: false
+            referencedRelation: "department_coworkers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "employee_archive_archived_by_fkey"
+            columns: ["archived_by"]
+            isOneToOne: false
             referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
@@ -478,7 +485,21 @@ export type Database = {
             foreignKeyName: "employee_of_month_created_by_fkey"
             columns: ["created_by"]
             isOneToOne: false
+            referencedRelation: "department_coworkers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "employee_of_month_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
             referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "employee_of_month_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "department_coworkers"
             referencedColumns: ["id"]
           },
           {
@@ -489,6 +510,33 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      job_titles: {
+        Row: {
+          created_at: string
+          excluded_from_headcount: boolean
+          id: string
+          name: string
+          sort_order: number
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          excluded_from_headcount?: boolean
+          id?: string
+          name: string
+          sort_order?: number
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          excluded_from_headcount?: boolean
+          id?: string
+          name?: string
+          sort_order?: number
+          updated_at?: string
+        }
+        Relationships: []
       }
       message_attachments: {
         Row: {
@@ -670,7 +718,21 @@ export type Database = {
             foreignKeyName: "profile_status_log_actor_id_fkey"
             columns: ["actor_id"]
             isOneToOne: false
+            referencedRelation: "department_coworkers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "profile_status_log_actor_id_fkey"
+            columns: ["actor_id"]
+            isOneToOne: false
             referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "profile_status_log_profile_id_fkey"
+            columns: ["profile_id"]
+            isOneToOne: false
+            referencedRelation: "department_coworkers"
             referencedColumns: ["id"]
           },
           {
@@ -688,6 +750,7 @@ export type Database = {
           created_at: string
           deactivated_at: string | null
           department_id: string
+          excluded_from_headcount: boolean
           full_name: string
           id: string
           id_number: string | null
@@ -703,6 +766,7 @@ export type Database = {
           created_at?: string
           deactivated_at?: string | null
           department_id: string
+          excluded_from_headcount?: boolean
           full_name?: string
           id: string
           id_number?: string | null
@@ -718,6 +782,7 @@ export type Database = {
           created_at?: string
           deactivated_at?: string | null
           department_id?: string
+          excluded_from_headcount?: boolean
           full_name?: string
           id?: string
           id_number?: string | null
@@ -844,6 +909,13 @@ export type Database = {
             foreignKeyName: "schedule_shifts_employee_id_fkey"
             columns: ["employee_id"]
             isOneToOne: false
+            referencedRelation: "department_coworkers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "schedule_shifts_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: false
             referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
@@ -923,6 +995,13 @@ export type Database = {
             columns: ["department_id"]
             isOneToOne: false
             referencedRelation: "departments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "schedules_updated_by_fkey"
+            columns: ["updated_by"]
+            isOneToOne: false
+            referencedRelation: "department_coworkers"
             referencedColumns: ["id"]
           },
           {
@@ -1507,13 +1586,42 @@ export type Database = {
         Row: {
           avatar_url: string | null
           department_id: string | null
+          excluded_from_headcount: boolean | null
           full_name: string | null
           id: string | null
           is_active: boolean | null
           job_title: string | null
           on_leave: boolean | null
         }
-        Relationships: []
+        Insert: {
+          avatar_url?: string | null
+          department_id?: string | null
+          excluded_from_headcount?: boolean | null
+          full_name?: string | null
+          id?: string | null
+          is_active?: boolean | null
+          job_title?: string | null
+          on_leave?: boolean | null
+        }
+        Update: {
+          avatar_url?: string | null
+          department_id?: string | null
+          excluded_from_headcount?: boolean | null
+          full_name?: string | null
+          id?: string | null
+          is_active?: boolean | null
+          job_title?: string | null
+          on_leave?: boolean | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "profiles_department_id_fkey"
+            columns: ["department_id"]
+            isOneToOne: false
+            referencedRelation: "departments"
+            referencedColumns: ["id"]
+          },
+        ]
       }
     }
     Functions: {
