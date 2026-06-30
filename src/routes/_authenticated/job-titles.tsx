@@ -223,17 +223,6 @@ function EditDialog({ title, onClose }: { title?: JobTitleRow; onClose: () => vo
             </div>
             <Switch checked={excluded} onCheckedChange={setExcluded} />
           </div>
-          <div className="flex items-start justify-between rounded-lg border border-border p-3 gap-3">
-            <div>
-              <p className="text-sm font-medium">רשאי לבקש הפסקה</p>
-              <p className="text-xs text-muted-foreground mt-0.5">
-                כאשר מופעל, עובדים בתפקיד זה יוכלו לשלוח בקשות הפסקה כרגיל. כאשר מבוטל, כפתור
-                "בקשת הפסקה" יוסתר עבורם והם לא יוכלו להגיש בקשה בשום דרך. ניתן לעריכה רק על ידי
-                מנהל ראשי.
-              </p>
-            </div>
-            <Switch checked={canRequestBreak} onCheckedChange={setCanRequestBreak} />
-          </div>
           <DialogFooter className="gap-2">
             <Button type="button" variant="outline" onClick={onClose}>ביטול</Button>
             <Button type="submit" disabled={mut.isPending}>
