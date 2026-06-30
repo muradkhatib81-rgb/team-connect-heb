@@ -117,11 +117,16 @@ export function AppShell({ children }: { children: ReactNode }) {
   // Global realtime: ensure that identity / permissions / cross-cutting
   // tables propagate to every open screen without a refresh. Each authenticated
   // page mounts AppShell, so a single subscription here covers the whole app.
+  // Re-key realtime when the active branch changes so the subscription
+  // tears down and rebuilds against the newly scoped RLS view. Without
+  // this, a sysadmin who switches branches would keep receiving INSERT
+  // events for the previous branch through the open WebSocket.
+  const { activeBranchId } = useActiveBranch();
   useEffect(() => {
     if (!profile?.id) return;
     const uid = profile.id;
     const ch = supabase
-      .channel(`global-realtime-${uid}`)
+      .channel(`global-realtime-${uid}-${activeBranchId ?? "all"}`)
       // Identity & permissions — refresh auth profile and permission caches
       // so role/department/permission changes apply instantly across all tabs.
       .on(
