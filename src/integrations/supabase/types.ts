@@ -1948,6 +1948,10 @@ export type Database = {
           user_id: string
         }[]
       }
+      get_branch_delete_blockers: {
+        Args: { _branch_id: string }
+        Returns: Json
+      }
       get_communication_sender: {
         Args: { _user_id: string }
         Returns: {
