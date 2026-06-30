@@ -34,7 +34,7 @@ export const createDepartment = createServerFn({ method: "POST" })
   .middleware([requireBranchContext])
   .inputValidator((data: unknown) => createSchema.parse(data))
   .handler(async ({ data, context }) => {
-    await assertMainAdmin(context.supabase, context.userId);
+    await assertCanManageDepartments(context.supabase, context.userId);
     let lastErr: any = null;
     for (let i = 0; i < 5; i++) {
       const code = generateCode(data.name);
@@ -75,7 +75,7 @@ export const updateDepartment = createServerFn({ method: "POST" })
   .middleware([requireBranchContext])
   .inputValidator((data: unknown) => updateSchema.parse(data))
   .handler(async ({ data, context }) => {
-    await assertMainAdmin(context.supabase, context.userId);
+    await assertCanManageDepartments(context.supabase, context.userId);
 
     // Manager change goes through the atomic RPC (updates dept + user_roles in one tx).
     const newManagerId: string | null = data.manager_id ?? null;
@@ -102,7 +102,7 @@ export const deleteDepartment = createServerFn({ method: "POST" })
   .middleware([requireBranchContext])
   .inputValidator((data: unknown) => deleteSchema.parse(data))
   .handler(async ({ data, context }) => {
-    await assertMainAdmin(context.supabase, context.userId);
+    await assertCanManageDepartments(context.supabase, context.userId);
     const { count, error: cErr } = await context.supabase
       .from("profiles")
       .select("id", { count: "exact", head: true })
