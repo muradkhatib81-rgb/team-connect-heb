@@ -302,7 +302,7 @@ export function AppShell({ children }: { children: ReactNode }) {
     return () => {
       supabase.removeChannel(ch);
     };
-  }, [profile?.id, qc]);
+  }, [profile?.id, qc, activeBranchId]);
 
 
 
