@@ -2117,6 +2117,7 @@ export type Database = {
         | "assistant_manager"
         | "department_manager"
         | "employee"
+        | "system_admin"
       comm_audit_action:
         | "created"
         | "edited"
@@ -2281,6 +2282,7 @@ export const Constants = {
         "assistant_manager",
         "department_manager",
         "employee",
+        "system_admin",
       ],
       comm_audit_action: [
         "created",
