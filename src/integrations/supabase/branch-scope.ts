@@ -97,6 +97,19 @@ function wrapBuilder(builder: unknown, branchId: string): unknown {
   });
 }
 
+let originalFrom: ((table: string) => unknown) | null = null;
+
+/**
+ * Bypass the branch-scope proxy for a single query. Use when fetching a
+ * row by primary key that may legitimately live in a different branch
+ * (e.g. the signed-in user's own profile while a sysadmin is viewing
+ * another branch).
+ */
+export function unscopedFrom(table: string): unknown {
+  if (originalFrom) return originalFrom(table);
+  return (supabase as unknown as { from: (t: string) => unknown }).from(table);
+}
+
 /**
  * Idempotently install the proxy. Safe to import many times; only the
  * first call rewrites `supabase.from`.
@@ -107,9 +120,9 @@ export function installBranchScope() {
   const client = supabase as unknown as {
     from: (table: string) => unknown;
   };
-  const original = client.from.bind(supabase);
+  originalFrom = client.from.bind(supabase);
   client.from = (table: string) => {
-    const builder = original(table);
+    const builder = originalFrom!(table);
     if (!activeBranchId || !BRANCH_SCOPED_TABLES.has(table)) return builder;
     return wrapBuilder(builder, activeBranchId);
   };
