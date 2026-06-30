@@ -556,6 +556,24 @@ function DeleteDialog({
   onDeleted: () => void;
 }) {
   const del = useServerFn(deleteBranch);
+  const fetchBlockers = useServerFn(getBranchDeleteBlockers);
+  const blockersQ = useQuery({
+    queryKey: ["branch-delete-blockers", branch.id],
+    queryFn: () => fetchBlockers({ data: { id: branch.id } }),
+    staleTime: 0,
+  });
+
+  const rows: { label: string; value: number }[] = [
+    { label: "עובדים", value: blockersQ.data?.employees ?? 0 },
+    { label: "מחלקות", value: blockersQ.data?.departments ?? 0 },
+    { label: "סידורי עבודה", value: blockersQ.data?.schedules ?? 0 },
+    { label: "משימות", value: blockersQ.data?.tasks ?? 0 },
+  ];
+  const total = rows.reduce((s, r) => s + r.value, 0);
+  const loading = blockersQ.isLoading;
+  const loadError = blockersQ.data?.ok === false ? blockersQ.data.error : null;
+  const canDelete = blockersQ.data?.ok === true && total === 0;
+
   const m = useMutation({
     mutationFn: () => del({ data: { id: branch.id } }),
     onSuccess: (res: any) => {
@@ -580,21 +598,69 @@ function DeleteDialog({
       });
     },
   });
+
   return (
     <AlertDialog open onOpenChange={(o) => !o && onClose()}>
       <AlertDialogContent dir="rtl">
         <AlertDialogHeader>
           <AlertDialogTitle>מחיקת סניף "{branch.name}"</AlertDialogTitle>
-          <AlertDialogDescription>
-            ניתן למחוק סניף רק כאשר אין בו עובדים, מחלקות, סידורים ומשימות.
-            הפעולה אינה ניתנת לביטול.
+          <AlertDialogDescription asChild>
+            <div className="space-y-3">
+              {loading && (
+                <div className="flex items-center gap-2 text-muted-foreground">
+                  <Loader2 className="size-4 animate-spin" />
+                  בודק נתונים מקושרים…
+                </div>
+              )}
+
+              {!loading && loadError && (
+                <div className="text-destructive">{loadError}</div>
+              )}
+
+              {!loading && !loadError && canDelete && (
+                <div>
+                  אין נתונים מקושרים לסניף זה. הפעולה אינה ניתנת לביטול.
+                </div>
+              )}
+
+              {!loading && !loadError && !canDelete && (
+                <div className="space-y-2">
+                  <div className="font-medium text-foreground">
+                    לא ניתן למחוק את הסניף מכיוון שעדיין קיימים בו:
+                  </div>
+                  <ul className="space-y-1 rounded-md border bg-muted/40 p-3 text-foreground">
+                    {rows.map((r) => (
+                      <li
+                        key={r.label}
+                        className="flex items-center justify-between"
+                      >
+                        <span>• {r.label}</span>
+                        <span
+                          className={
+                            r.value > 0 ? "font-semibold text-destructive" : ""
+                          }
+                        >
+                          {r.value}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                  <div className="text-xs text-muted-foreground">
+                    יש להעביר או למחוק את הפריטים הללו לפני מחיקת הסניף.
+                  </div>
+                </div>
+              )}
+            </div>
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
           <AlertDialogCancel>ביטול</AlertDialogCancel>
           <AlertDialogAction
-            onClick={(e) => { e.preventDefault(); m.mutate(); }}
-            disabled={m.isPending}
+            onClick={(e) => {
+              e.preventDefault();
+              m.mutate();
+            }}
+            disabled={m.isPending || loading || !canDelete}
           >
             {m.isPending && <Loader2 className="size-4 animate-spin" />}
             מחק סניף
