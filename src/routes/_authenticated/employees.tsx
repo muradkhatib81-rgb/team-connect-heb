@@ -898,6 +898,19 @@ export function CreateEmployeeDialog({
                 </SelectContent>
               </Select>
             </Field>
+            <Field label="תפקיד">
+              <Select value={form.job_title || "__none__"} onValueChange={(v) => setForm({ ...form, job_title: v === "__none__" ? "" : v })}>
+                <SelectTrigger><SelectValue placeholder="ללא תפקיד" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__none__">ללא תפקיד</SelectItem>
+                  {(jobTitlesQ.data ?? []).map((t) => (
+                    <SelectItem key={t.id} value={t.name}>
+                      {t.name}{t.excluded_from_headcount ? " (לא נכלל במצבת)" : ""}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </Field>
             <Field label="סיסמה ראשונית">
               <Input
                 type="password"
