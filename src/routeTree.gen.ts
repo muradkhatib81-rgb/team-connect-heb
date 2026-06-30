@@ -30,6 +30,7 @@ import { Route as AuthenticatedBreaksAdminRouteImport } from './routes/_authenti
 import { Route as AuthenticatedBreaksRouteImport } from './routes/_authenticated/breaks'
 import { Route as AuthenticatedBreakSettingsRouteImport } from './routes/_authenticated/break-settings'
 import { Route as AuthenticatedSystemBranchesRouteImport } from './routes/_authenticated/system.branches'
+import { Route as AuthenticatedSystemBranchManagersRouteImport } from './routes/_authenticated/system.branch-managers'
 import { Route as ApiPublicHooksGenerateRecurringTasksRouteImport } from './routes/api/public/hooks/generate-recurring-tasks'
 
 const AuthRoute = AuthRouteImport.update({
@@ -146,6 +147,12 @@ const AuthenticatedSystemBranchesRoute =
     path: '/branches',
     getParentRoute: () => AuthenticatedSystemRoute,
   } as any)
+const AuthenticatedSystemBranchManagersRoute =
+  AuthenticatedSystemBranchManagersRouteImport.update({
+    id: '/branch-managers',
+    path: '/branch-managers',
+    getParentRoute: () => AuthenticatedSystemRoute,
+  } as any)
 const ApiPublicHooksGenerateRecurringTasksRoute =
   ApiPublicHooksGenerateRecurringTasksRouteImport.update({
     id: '/api/public/hooks/generate-recurring-tasks',
@@ -173,6 +180,7 @@ export interface FileRoutesByFullPath {
   '/shift-settings': typeof AuthenticatedShiftSettingsRoute
   '/system': typeof AuthenticatedSystemRouteWithChildren
   '/tasks': typeof AuthenticatedTasksRoute
+  '/system/branch-managers': typeof AuthenticatedSystemBranchManagersRoute
   '/system/branches': typeof AuthenticatedSystemBranchesRoute
   '/api/public/hooks/generate-recurring-tasks': typeof ApiPublicHooksGenerateRecurringTasksRoute
 }
@@ -196,6 +204,7 @@ export interface FileRoutesByTo {
   '/shift-settings': typeof AuthenticatedShiftSettingsRoute
   '/system': typeof AuthenticatedSystemRouteWithChildren
   '/tasks': typeof AuthenticatedTasksRoute
+  '/system/branch-managers': typeof AuthenticatedSystemBranchManagersRoute
   '/system/branches': typeof AuthenticatedSystemBranchesRoute
   '/api/public/hooks/generate-recurring-tasks': typeof ApiPublicHooksGenerateRecurringTasksRoute
 }
@@ -221,6 +230,7 @@ export interface FileRoutesById {
   '/_authenticated/shift-settings': typeof AuthenticatedShiftSettingsRoute
   '/_authenticated/system': typeof AuthenticatedSystemRouteWithChildren
   '/_authenticated/tasks': typeof AuthenticatedTasksRoute
+  '/_authenticated/system/branch-managers': typeof AuthenticatedSystemBranchManagersRoute
   '/_authenticated/system/branches': typeof AuthenticatedSystemBranchesRoute
   '/api/public/hooks/generate-recurring-tasks': typeof ApiPublicHooksGenerateRecurringTasksRoute
 }
@@ -246,6 +256,7 @@ export interface FileRouteTypes {
     | '/shift-settings'
     | '/system'
     | '/tasks'
+    | '/system/branch-managers'
     | '/system/branches'
     | '/api/public/hooks/generate-recurring-tasks'
   fileRoutesByTo: FileRoutesByTo
@@ -269,6 +280,7 @@ export interface FileRouteTypes {
     | '/shift-settings'
     | '/system'
     | '/tasks'
+    | '/system/branch-managers'
     | '/system/branches'
     | '/api/public/hooks/generate-recurring-tasks'
   id:
@@ -293,6 +305,7 @@ export interface FileRouteTypes {
     | '/_authenticated/shift-settings'
     | '/_authenticated/system'
     | '/_authenticated/tasks'
+    | '/_authenticated/system/branch-managers'
     | '/_authenticated/system/branches'
     | '/api/public/hooks/generate-recurring-tasks'
   fileRoutesById: FileRoutesById
@@ -453,6 +466,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedSystemBranchesRouteImport
       parentRoute: typeof AuthenticatedSystemRoute
     }
+    '/_authenticated/system/branch-managers': {
+      id: '/_authenticated/system/branch-managers'
+      path: '/branch-managers'
+      fullPath: '/system/branch-managers'
+      preLoaderRoute: typeof AuthenticatedSystemBranchManagersRouteImport
+      parentRoute: typeof AuthenticatedSystemRoute
+    }
     '/api/public/hooks/generate-recurring-tasks': {
       id: '/api/public/hooks/generate-recurring-tasks'
       path: '/api/public/hooks/generate-recurring-tasks'
@@ -464,10 +484,13 @@ declare module '@tanstack/react-router' {
 }
 
 interface AuthenticatedSystemRouteChildren {
+  AuthenticatedSystemBranchManagersRoute: typeof AuthenticatedSystemBranchManagersRoute
   AuthenticatedSystemBranchesRoute: typeof AuthenticatedSystemBranchesRoute
 }
 
 const AuthenticatedSystemRouteChildren: AuthenticatedSystemRouteChildren = {
+  AuthenticatedSystemBranchManagersRoute:
+    AuthenticatedSystemBranchManagersRoute,
   AuthenticatedSystemBranchesRoute: AuthenticatedSystemBranchesRoute,
 }
 
