@@ -1,0 +1,1 @@
+ALTER VIEW public.department_coworkers SET (security_invoker = true);
