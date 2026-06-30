@@ -179,6 +179,7 @@ export type Database = {
           created_at: string
           id: string
           is_active: boolean
+          manager_id: string | null
           name: string
           phone: string | null
           updated_at: string
@@ -189,6 +190,7 @@ export type Database = {
           created_at?: string
           id?: string
           is_active?: boolean
+          manager_id?: string | null
           name: string
           phone?: string | null
           updated_at?: string
@@ -199,11 +201,27 @@ export type Database = {
           created_at?: string
           id?: string
           is_active?: boolean
+          manager_id?: string | null
           name?: string
           phone?: string | null
           updated_at?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "branches_manager_id_fkey"
+            columns: ["manager_id"]
+            isOneToOne: false
+            referencedRelation: "department_coworkers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "branches_manager_id_fkey"
+            columns: ["manager_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       break_requests: {
         Row: {
