@@ -18,7 +18,7 @@ export function useJobTitles() {
         .order("sort_order", { ascending: true })
         .order("name", { ascending: true });
       if (error) throw error;
-      return (data ?? []) as JobTitleRow[];
+      return ((data ?? []) as unknown) as JobTitleRow[];
     },
   });
 }

@@ -17,6 +17,7 @@ import { Route as AuthenticatedShiftSettingsRouteImport } from './routes/_authen
 import { Route as AuthenticatedSchedulesRouteImport } from './routes/_authenticated/schedules'
 import { Route as AuthenticatedProfileRouteImport } from './routes/_authenticated/profile'
 import { Route as AuthenticatedPermissionsRouteImport } from './routes/_authenticated/permissions'
+import { Route as AuthenticatedJobTitlesRouteImport } from './routes/_authenticated/job-titles'
 import { Route as AuthenticatedEmployeesRouteImport } from './routes/_authenticated/employees'
 import { Route as AuthenticatedEmployeeOfMonthRouteImport } from './routes/_authenticated/employee-of-month'
 import { Route as AuthenticatedDepartmentsRouteImport } from './routes/_authenticated/departments'
@@ -70,6 +71,11 @@ const AuthenticatedPermissionsRoute =
     path: '/permissions',
     getParentRoute: () => AuthenticatedRouteRoute,
   } as any)
+const AuthenticatedJobTitlesRoute = AuthenticatedJobTitlesRouteImport.update({
+  id: '/job-titles',
+  path: '/job-titles',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
 const AuthenticatedEmployeesRoute = AuthenticatedEmployeesRouteImport.update({
   id: '/employees',
   path: '/employees',
@@ -147,6 +153,7 @@ export interface FileRoutesByFullPath {
   '/departments': typeof AuthenticatedDepartmentsRoute
   '/employee-of-month': typeof AuthenticatedEmployeeOfMonthRoute
   '/employees': typeof AuthenticatedEmployeesRoute
+  '/job-titles': typeof AuthenticatedJobTitlesRoute
   '/permissions': typeof AuthenticatedPermissionsRoute
   '/profile': typeof AuthenticatedProfileRoute
   '/schedules': typeof AuthenticatedSchedulesRoute
@@ -167,6 +174,7 @@ export interface FileRoutesByTo {
   '/departments': typeof AuthenticatedDepartmentsRoute
   '/employee-of-month': typeof AuthenticatedEmployeeOfMonthRoute
   '/employees': typeof AuthenticatedEmployeesRoute
+  '/job-titles': typeof AuthenticatedJobTitlesRoute
   '/permissions': typeof AuthenticatedPermissionsRoute
   '/profile': typeof AuthenticatedProfileRoute
   '/schedules': typeof AuthenticatedSchedulesRoute
@@ -189,6 +197,7 @@ export interface FileRoutesById {
   '/_authenticated/departments': typeof AuthenticatedDepartmentsRoute
   '/_authenticated/employee-of-month': typeof AuthenticatedEmployeeOfMonthRoute
   '/_authenticated/employees': typeof AuthenticatedEmployeesRoute
+  '/_authenticated/job-titles': typeof AuthenticatedJobTitlesRoute
   '/_authenticated/permissions': typeof AuthenticatedPermissionsRoute
   '/_authenticated/profile': typeof AuthenticatedProfileRoute
   '/_authenticated/schedules': typeof AuthenticatedSchedulesRoute
@@ -211,6 +220,7 @@ export interface FileRouteTypes {
     | '/departments'
     | '/employee-of-month'
     | '/employees'
+    | '/job-titles'
     | '/permissions'
     | '/profile'
     | '/schedules'
@@ -231,6 +241,7 @@ export interface FileRouteTypes {
     | '/departments'
     | '/employee-of-month'
     | '/employees'
+    | '/job-titles'
     | '/permissions'
     | '/profile'
     | '/schedules'
@@ -252,6 +263,7 @@ export interface FileRouteTypes {
     | '/_authenticated/departments'
     | '/_authenticated/employee-of-month'
     | '/_authenticated/employees'
+    | '/_authenticated/job-titles'
     | '/_authenticated/permissions'
     | '/_authenticated/profile'
     | '/_authenticated/schedules'
@@ -323,6 +335,13 @@ declare module '@tanstack/react-router' {
       path: '/permissions'
       fullPath: '/permissions'
       preLoaderRoute: typeof AuthenticatedPermissionsRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/job-titles': {
+      id: '/_authenticated/job-titles'
+      path: '/job-titles'
+      fullPath: '/job-titles'
+      preLoaderRoute: typeof AuthenticatedJobTitlesRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
     '/_authenticated/employees': {
@@ -416,6 +435,7 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedDepartmentsRoute: typeof AuthenticatedDepartmentsRoute
   AuthenticatedEmployeeOfMonthRoute: typeof AuthenticatedEmployeeOfMonthRoute
   AuthenticatedEmployeesRoute: typeof AuthenticatedEmployeesRoute
+  AuthenticatedJobTitlesRoute: typeof AuthenticatedJobTitlesRoute
   AuthenticatedPermissionsRoute: typeof AuthenticatedPermissionsRoute
   AuthenticatedProfileRoute: typeof AuthenticatedProfileRoute
   AuthenticatedSchedulesRoute: typeof AuthenticatedSchedulesRoute
@@ -434,6 +454,7 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedDepartmentsRoute: AuthenticatedDepartmentsRoute,
   AuthenticatedEmployeeOfMonthRoute: AuthenticatedEmployeeOfMonthRoute,
   AuthenticatedEmployeesRoute: AuthenticatedEmployeesRoute,
+  AuthenticatedJobTitlesRoute: AuthenticatedJobTitlesRoute,
   AuthenticatedPermissionsRoute: AuthenticatedPermissionsRoute,
   AuthenticatedProfileRoute: AuthenticatedProfileRoute,
   AuthenticatedSchedulesRoute: AuthenticatedSchedulesRoute,
