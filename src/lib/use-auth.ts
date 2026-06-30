@@ -23,9 +23,13 @@ async function fetchSessionAndProfile(): Promise<AuthProfile | null> {
   const user = userData.user;
   if (!user) return null;
 
+  // The signed-in user's own profile must always be fetched without the
+  // active-branch filter — a system administrator viewing another branch
+  // would otherwise get `null` here and appear signed out.
+  const { unscopedFrom } = await import("@/integrations/supabase/branch-scope");
+  const profilesFrom = unscopedFrom("profiles") as ReturnType<typeof supabase.from<"profiles">>;
   const [{ data: profile }, { data: roles }, { data: contactRows }] = await Promise.all([
-    supabase
-      .from("profiles")
+    profilesFrom
       .select("id, full_name, department_id, job_title, is_active, branch_id, departments(name)")
       .eq("id", user.id)
       .maybeSingle(),
