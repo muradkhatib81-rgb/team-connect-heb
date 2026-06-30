@@ -513,6 +513,7 @@ export type Database = {
       }
       job_titles: {
         Row: {
+          can_request_break: boolean
           created_at: string
           excluded_from_headcount: boolean
           id: string
@@ -521,6 +522,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          can_request_break?: boolean
           created_at?: string
           excluded_from_headcount?: boolean
           id?: string
@@ -529,6 +531,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          can_request_break?: boolean
           created_at?: string
           excluded_from_headcount?: boolean
           id?: string
@@ -1633,6 +1636,7 @@ export type Database = {
         Args: { _approver_id: string; _task_id: string }
         Returns: boolean
       }
+      can_user_request_break: { Args: { _user_id: string }; Returns: boolean }
       can_view_announcement: {
         Args: { _ann_id: string; _user_id: string }
         Returns: boolean

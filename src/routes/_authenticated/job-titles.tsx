@@ -108,6 +108,8 @@ function JobTitlesPage() {
                     {t.excluded_from_headcount
                       ? "לא נכלל בסטטיסטיקות כוח האדם"
                       : "נכלל בסטטיסטיקות כוח האדם"}
+                    {" · "}
+                    {t.can_request_break ? "רשאי לבקש הפסקה" : "לא רשאי לבקש הפסקה"}
                   </div>
                 </div>
                 <Button variant="outline" size="sm" onClick={() => setEditing(t)} className="gap-1.5">
@@ -156,10 +158,15 @@ function EditDialog({ title, onClose }: { title?: JobTitleRow; onClose: () => vo
   const qc = useQueryClient();
   const [name, setName] = useState(title?.name ?? "");
   const [excluded, setExcluded] = useState(title?.excluded_from_headcount ?? false);
+  const [canRequestBreak, setCanRequestBreak] = useState(title?.can_request_break ?? true);
 
   const mut = useMutation({
     mutationFn: async () => {
-      const payload = { name: name.trim(), excluded_from_headcount: excluded };
+      const payload = {
+        name: name.trim(),
+        excluded_from_headcount: excluded,
+        can_request_break: canRequestBreak,
+      };
       if (!payload.name) throw new Error("יש להזין שם תפקיד");
       if (title) {
         const { error } = await supabase
@@ -219,6 +226,17 @@ function EditDialog({ title, onClose }: { title?: JobTitleRow; onClose: () => vo
               </p>
             </div>
             <Switch checked={excluded} onCheckedChange={setExcluded} />
+          </div>
+          <div className="flex items-start justify-between rounded-lg border border-border p-3 gap-3">
+            <div>
+              <p className="text-sm font-medium">רשאי לבקש הפסקה</p>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                כאשר מופעל, עובדים בתפקיד זה יוכלו לשלוח בקשות הפסקה כרגיל. כאשר מבוטל, כפתור
+                "בקשת הפסקה" יוסתר עבורם והם לא יוכלו להגיש בקשה בשום דרך. ניתן לעריכה רק על ידי
+                מנהל ראשי.
+              </p>
+            </div>
+            <Switch checked={canRequestBreak} onCheckedChange={setCanRequestBreak} />
           </div>
           <DialogFooter className="gap-2">
             <Button type="button" variant="outline" onClick={onClose}>ביטול</Button>
