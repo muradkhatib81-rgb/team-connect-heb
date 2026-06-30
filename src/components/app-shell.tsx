@@ -313,6 +313,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   // עובד רגיל = אין הרשאות ניהול ואינו אחראי מחלקה
   const isPlainEmployee = !admin && !isDeptManager;
   const isMainAdmin = isMainAdminEarly;
+  const isSysAdmin = profile.roles.includes("system_admin");
   const isBranchOrAssistant =
     profile.roles.includes("branch_manager") || profile.roles.includes("assistant_manager");
 
@@ -323,7 +324,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   const canManageEom = isMainAdmin || !!breakPermQ.data?.eom;
 
 
-  const nav: { to: string; label: string; icon: typeof LayoutDashboard; visible: boolean; badge?: number }[] = [
+  const nav: { to: string; label: string; icon: typeof LayoutDashboard; visible: boolean; badge?: number; section?: string }[] = [
     { to: "/dashboard", label: "לוח בקרה", icon: LayoutDashboard, visible: true },
     { to: "/tasks", label: "משימות", icon: ListTodo, visible: true },
     { to: "/schedules", label: "סידורי עבודה", icon: CalendarDays, visible: true },
@@ -339,6 +340,12 @@ export function AppShell({ children }: { children: ReactNode }) {
     { to: "/job-titles", label: "תפקידים", icon: Briefcase, visible: isMainAdmin },
     { to: "/company-settings", label: "הגדרות חברה", icon: Building, visible: isMainAdmin },
     { to: "/profile", label: "הפרופיל שלי", icon: UserCircle, visible: isPlainEmployee },
+
+    // ===== System Administrator section (visible only to the singleton system_admin) =====
+    { to: "/system/branches", label: "סניפים", icon: Building2, visible: isSysAdmin, section: "ניהול מערכת" },
+    { to: "/system/branch-managers", label: "מנהלי סניפים", icon: UserCog, visible: isSysAdmin, section: "ניהול מערכת" },
+    { to: "/system/permissions", label: "הרשאות", icon: ShieldCheck, visible: isSysAdmin, section: "ניהול מערכת" },
+    { to: "/system/settings", label: "הגדרות מערכת", icon: Settings, visible: isSysAdmin, section: "ניהול מערכת" },
   ].filter((n) => n.visible);
 
 
