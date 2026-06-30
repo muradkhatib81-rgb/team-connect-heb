@@ -41,7 +41,7 @@ export const createDepartment = createServerFn({ method: "POST" })
       // Insert with no manager first; the RPC handles manager+role atomically.
       const { data: inserted, error } = await context.supabase
         .from("departments")
-        .insert({ name: data.name, code, manager_id: null })
+        .insert({ name: data.name, code, manager_id: null, branch_id: context.branchId })
         .select("id")
         .single();
       if (!error) {
