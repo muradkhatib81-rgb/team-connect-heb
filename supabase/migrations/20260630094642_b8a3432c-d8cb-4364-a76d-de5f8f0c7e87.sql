@@ -1,0 +1,1 @@
+ALTER TABLE public.job_titles ALTER COLUMN can_request_break SET DEFAULT false;
