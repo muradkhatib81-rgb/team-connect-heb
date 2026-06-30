@@ -139,6 +139,25 @@ function BreaksPage() {
   const isBreaksManager =
     isMainAdmin || isBranchOrAssistant || !!permQ.data;
 
+  // Can this user request a break? Based on job title's can_request_break flag.
+  const canRequestQ = useQuery({
+    enabled: !!me?.id,
+    queryKey: ["can-request-break", me?.id, me?.job_title ?? null],
+    queryFn: async () => {
+      const jt = (me?.job_title ?? "").trim();
+      if (!jt) return true;
+      const { data, error } = await supabase
+        .from("job_titles" as any)
+        .select("can_request_break")
+        .ilike("name", jt)
+        .maybeSingle();
+      if (error) return true;
+      if (!data) return true;
+      return !!(data as any).can_request_break;
+    },
+  });
+  const canRequestBreak = canRequestQ.data !== false;
+
   // Managers are also employees: they may request their own break here.
   // The dedicated /breaks-admin screen remains for approval/management.
 
