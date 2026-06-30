@@ -1341,6 +1341,7 @@ function EditEmployeeDialog({
   onClose: () => void;
 }) {
   const qc = useQueryClient();
+  const jobTitlesQ = useJobTitles();
   const [form, setForm] = useState({
     full_name: employee.full_name,
     id_number: employee.id_number ?? "",
@@ -1350,6 +1351,7 @@ function EditEmployeeDialog({
     on_leave: employee.on_leave,
     role: (currentRoles[0] ?? "employee") as AppRole,
     avatar_url: employee.avatar_url,
+    job_title: employee.job_title ?? "",
   });
   const [avatarFile, setAvatarFile] = useState<File | null>(null);
   const [removeAvatar, setRemoveAvatar] = useState(false);
@@ -1375,6 +1377,7 @@ function EditEmployeeDialog({
           phone: form.phone || null,
           is_active: form.is_active,
           on_leave: form.on_leave,
+          job_title: form.job_title || null,
           avatar_url,
         })
         .eq("id", employee.id);
@@ -1460,6 +1463,19 @@ function EditEmployeeDialog({
                 <SelectContent>
                   {depts.map((d) => (
                     <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </Field>
+            <Field label="תפקיד">
+              <Select value={form.job_title || "__none__"} onValueChange={(v) => setForm({ ...form, job_title: v === "__none__" ? "" : v })}>
+                <SelectTrigger><SelectValue placeholder="ללא תפקיד" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__none__">ללא תפקיד</SelectItem>
+                  {(jobTitlesQ.data ?? []).map((t) => (
+                    <SelectItem key={t.id} value={t.name}>
+                      {t.name}{t.excluded_from_headcount ? " (לא נכלל במצבת)" : ""}
+                    </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
