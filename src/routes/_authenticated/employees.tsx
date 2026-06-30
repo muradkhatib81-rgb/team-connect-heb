@@ -173,7 +173,7 @@ function EmployeesPage() {
 
   const isDeptManager = me ? me.roles.includes("department_manager") : false;
   const allowed = allowedAdmin || isDeptManager;
-  const isMainAdmin = me ? canManageUsers(me.roles) : false;
+  const canManageEmployees = me ? canManageUsers(me.roles) : false;
 
   // Reactivation flow — flip is_active back to true and write an audit entry via RPC.
   const setActiveFn = useServerFn(setEmployeeActive);
@@ -421,7 +421,7 @@ function EmployeesPage() {
           )}
           <p className="text-sm text-muted-foreground mt-1">{headerSubtitle}</p>
         </div>
-        {isMainAdmin && (
+        {canManageEmployees && (
           <Button className="gap-2" onClick={() => setCreating(true)}>
             <UserPlus className="size-4" />
             הוספת עובד
@@ -548,25 +548,25 @@ function EmployeesPage() {
               onDelete={() => setDeleting(emp)}
               onReactivate={() => reactivateMutation.mutate(emp.id)}
               reactivating={reactivateMutation.isPending && reactivateMutation.variables === emp.id}
-              canEdit={isMainAdmin}
-              canResetPassword={isMainAdmin}
-              canDelete={isMainAdmin && emp.id !== me?.id}
-              canReactivate={isMainAdmin}
+              canEdit={canManageEmployees}
+              canResetPassword={canManageEmployees}
+              canDelete={canManageEmployees && emp.id !== me?.id}
+              canReactivate={canManageEmployees}
             />
           ))}
 
         </div>
       )}
 
-      {resetting && isMainAdmin && (
+      {resetting && canManageEmployees && (
         <ResetPasswordDialog employee={resetting} onClose={() => setResetting(null)} />
       )}
 
-      {deleting && isMainAdmin && (
+      {deleting && canManageEmployees && (
         <DeleteEmployeeDialog employee={deleting} onClose={() => setDeleting(null)} />
       )}
 
-      {editing && me && isMainAdmin && (
+      {editing && me && canManageEmployees && (
         <EditEmployeeDialog
           employee={editing}
           depts={deptsQuery.data ?? []}
@@ -582,7 +582,7 @@ function EmployeesPage() {
         />
       )}
 
-      {creating && isMainAdmin && (
+      {creating && canManageEmployees && (
         <CreateEmployeeDialog
           depts={deptsQuery.data ?? []}
           onClose={() => setCreating(false)}
