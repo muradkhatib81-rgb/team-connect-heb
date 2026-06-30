@@ -206,6 +206,11 @@ function BreaksPage() {
         { event: "*", schema: "public", table: "break_settings" },
         () => qc.invalidateQueries({ queryKey: ["break-settings-active"] }),
       )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "job_titles" },
+        () => qc.invalidateQueries({ queryKey: ["can-request-break"] }),
+      )
       .subscribe();
     return () => {
       supabase.removeChannel(ch);
