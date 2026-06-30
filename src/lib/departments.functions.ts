@@ -3,14 +3,19 @@ import { requireBranchContext } from "@/integrations/supabase/active-branch";
 import { z } from "zod";
 
 async function assertCanManageDepartments(supabase: any, userId: string) {
-  const { data, error } = await supabase
-    .from("user_roles")
-    .select("role")
-    .eq("user_id", userId);
+  const [{ data: rolesRows, error }, { data: perm }] = await Promise.all([
+    supabase.from("user_roles").select("role").eq("user_id", userId),
+    supabase.from("user_task_permissions").select("can_manage_departments").eq("user_id", userId).maybeSingle(),
+  ]);
   if (error) throw new Error("שגיאת הרשאות");
-  const roles = (data ?? []).map((r: any) => r.role);
-  if (!roles.includes("main_admin") && !roles.includes("system_admin")) {
-    throw new Error("רק מנהל ראשי יכול לבצע פעולה זו");
+  const roles = (rolesRows ?? []).map((r: any) => r.role);
+  if (
+    !roles.includes("main_admin") &&
+    !roles.includes("system_admin") &&
+    !roles.includes("branch_manager") &&
+    !(roles.includes("assistant_manager") && !!(perm as any)?.can_manage_departments)
+  ) {
+    throw new Error("אין הרשאה לניהול מחלקות");
   }
 }
 

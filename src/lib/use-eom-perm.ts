@@ -7,9 +7,11 @@ export function useCanManageEom() {
   const { data: profile } = useAuth();
   const uid = profile?.id;
   const isMainAdmin = !!profile?.roles.includes("main_admin");
+  const isBranchManager = !!profile?.roles.includes("branch_manager");
+  const hasRoleAccess = isMainAdmin || isBranchManager;
 
   const q = useQuery({
-    enabled: !!uid && !isMainAdmin,
+    enabled: !!uid && !hasRoleAccess,
     queryKey: ["eom-perm", uid],
     queryFn: async () => {
       const { data } = await supabase
@@ -21,5 +23,5 @@ export function useCanManageEom() {
     },
   });
 
-  return isMainAdmin ? true : !!q.data;
+  return hasRoleAccess ? true : !!q.data;
 }

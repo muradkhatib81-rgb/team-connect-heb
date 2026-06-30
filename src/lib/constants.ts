@@ -64,7 +64,7 @@ export function isAdmin(roles: AppRole[]): boolean {
 }
 
 export function canManageUsers(roles: AppRole[]): boolean {
-  return roles.includes("main_admin");
+  return roles.includes("main_admin") || roles.includes("branch_manager");
 }
 
 export function highestRole(roles: AppRole[]): AppRole | null {

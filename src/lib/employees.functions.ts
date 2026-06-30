@@ -27,15 +27,46 @@ const createEmployeeSchema = z.object({
   avatar_url: z.string().trim().max(500).optional().nullable(),
 });
 
-async function assertMainAdmin(supabase: any, userId: string) {
-  const { data, error } = await supabase
-    .from("user_roles")
-    .select("role")
-    .eq("user_id", userId);
+async function getEmployeeManagerCaps(supabase: any, userId: string) {
+  const [{ data: rolesRows, error }, { data: perm }] = await Promise.all([
+    supabase.from("user_roles").select("role").eq("user_id", userId),
+    supabase
+      .from("user_task_permissions")
+      .select("can_add_employee, can_edit_employee, can_delete_employee, can_reset_employee_password")
+      .eq("user_id", userId)
+      .maybeSingle(),
+  ]);
   if (error) throw new Error("שגיאת הרשאות");
-  const roles = (data ?? []).map((r: any) => r.role);
-  if (!roles.includes("main_admin")) {
-    throw new Error("רק מנהל ראשי יכול לבצע פעולה זו");
+  const roles = (rolesRows ?? []).map((r: any) => r.role as string);
+  const isMainAdmin = roles.includes("main_admin");
+  const isBranchManager = roles.includes("branch_manager");
+  const isAssistantManager = roles.includes("assistant_manager");
+  const p: any = perm ?? {};
+  return {
+    roles,
+    isMainAdmin,
+    isBranchManager,
+    canAdd: isMainAdmin || isBranchManager || (isAssistantManager && !!p.can_add_employee),
+    canEdit: isMainAdmin || isBranchManager || (isAssistantManager && !!p.can_edit_employee),
+    canDelete: isMainAdmin || isBranchManager || (isAssistantManager && !!p.can_delete_employee),
+    canResetPassword: isMainAdmin || isBranchManager || (isAssistantManager && !!p.can_reset_employee_password),
+  };
+}
+
+function assertAssignableRole(role: (typeof APP_ROLES)[number], caps: Awaited<ReturnType<typeof getEmployeeManagerCaps>>) {
+  if (caps.isMainAdmin) return;
+  if (role === "main_admin" || role === "branch_manager") {
+    throw new Error("מנהל סניף אינו יכול להעניק תפקיד מנהל ראשי או מנהל סניף");
+  }
+}
+
+async function assertTargetIsNotProtectedManager(supabase: any, targetUserId: string, caps: Awaited<ReturnType<typeof getEmployeeManagerCaps>>) {
+  if (caps.isMainAdmin) return;
+  const { data, error } = await supabase.from("user_roles").select("role").eq("user_id", targetUserId);
+  if (error) throw new Error(error.message);
+  const roles = (data ?? []).map((r: any) => r.role as string);
+  if (roles.includes("main_admin") || roles.includes("branch_manager") || roles.includes("system_admin")) {
+    throw new Error("רק מנהל ראשי יכול לערוך מנהל ראשי או מנהל סניף");
   }
 }
 
@@ -57,7 +88,9 @@ export const createEmployee = createServerFn({ method: "POST" })
   .middleware([requireBranchContext])
   .inputValidator((data: unknown) => createEmployeeSchemaExt.parse(data))
   .handler(async ({ data, context }) => {
-    await assertMainAdmin(context.supabase, context.userId);
+    const caps = await getEmployeeManagerCaps(context.supabase, context.userId);
+    if (!caps.canAdd) throw new Error("אין הרשאה להוספת עובד");
+    assertAssignableRole(data.role, caps);
 
     const { data: dept, error: dErr } = await context.supabase
       .from("departments")
@@ -140,11 +173,15 @@ export const createEmployee = createServerFn({ method: "POST" })
         })
         .eq("id", newUserId);
 
+      await supabaseAdmin.from("user_roles").delete().eq("user_id", newUserId);
+      await supabaseAdmin.from("user_roles").insert({ user_id: newUserId, role: data.role });
+
       if (data.role === "department_manager") {
         await supabaseAdmin
           .from("departments")
           .update({ manager_id: newUserId })
-          .eq("id", data.department_id);
+          .eq("id", data.department_id)
+          .eq("branch_id", (dept as any).branch_id);
       }
     }
 
@@ -166,15 +203,17 @@ export const deleteEmployee = createServerFn({ method: "POST" })
   .middleware([requireBranchContext])
   .inputValidator((data: unknown) => deleteSchema.parse(data))
   .handler(async ({ data, context }) => {
-    await assertMainAdmin(context.supabase, context.userId);
+    const caps = await getEmployeeManagerCaps(context.supabase, context.userId);
+    if (!caps.canDelete) throw new Error("אין הרשאה למחיקת עובד");
     if (data.user_id === context.userId) {
       throw new Error("לא ניתן למחוק את החשבון של עצמך");
     }
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
 
     await assertProfileVisibleInActiveBranch(context.supabase, data.user_id);
+    await assertTargetIsNotProtectedManager(context.supabase, data.user_id, caps);
 
-    // Archive snapshot + cleanup (RPC enforces the 30-day window and admin check)
+    // Archive snapshot + cleanup (RPC enforces branch and role authorization)
     const { error: arcErr } = await context.supabase.rpc("archive_employee", {
       _user_id: data.user_id,
       _reason: data.reason ?? undefined,
@@ -210,8 +249,10 @@ export const resetEmployeePassword = createServerFn({ method: "POST" })
   .middleware([requireBranchContext])
   .inputValidator((data: unknown) => resetSchema.parse(data))
   .handler(async ({ data, context }) => {
-    await assertMainAdmin(context.supabase, context.userId);
+    const caps = await getEmployeeManagerCaps(context.supabase, context.userId);
+    if (!caps.canResetPassword) throw new Error("אין הרשאה לאיפוס סיסמה");
     await assertProfileVisibleInActiveBranch(context.supabase, data.user_id);
+    await assertTargetIsNotProtectedManager(context.supabase, data.user_id, caps);
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const { error } = await supabaseAdmin.auth.admin.updateUserById(data.user_id, {
       password: data.password,
@@ -255,8 +296,10 @@ export const setEmployeeActive = createServerFn({ method: "POST" })
   .middleware([requireBranchContext])
   .inputValidator((data: unknown) => setActiveSchema.parse(data))
   .handler(async ({ data, context }) => {
-    await assertMainAdmin(context.supabase, context.userId);
+    const caps = await getEmployeeManagerCaps(context.supabase, context.userId);
+    if (!caps.canEdit && !caps.canDelete) throw new Error("אין הרשאה לעדכון סטטוס עובד");
     await assertProfileVisibleInActiveBranch(context.supabase, data.user_id);
+    await assertTargetIsNotProtectedManager(context.supabase, data.user_id, caps);
     if (data.user_id === context.userId && !data.is_active) {
       throw new Error("לא ניתן להשבית את החשבון של עצמך");
     }

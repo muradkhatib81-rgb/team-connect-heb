@@ -94,6 +94,14 @@ const FILTER_LABELS: Record<FilterMode, string> = {
   workers: "👤 עובדים",
 };
 
+function assignableRoleOptionsFor(roles: AppRole[] | undefined): AppRole[] {
+  if (roles?.includes("main_admin")) return ROLE_OPTIONS;
+  if (roles?.includes("branch_manager")) {
+    return ROLE_OPTIONS.filter((r) => r !== "main_admin" && r !== "branch_manager");
+  }
+  return ["employee"];
+}
+
 
 
 async function uploadAvatar(file: File, userId: string): Promise<string> {
@@ -165,7 +173,7 @@ function EmployeesPage() {
 
   const isDeptManager = me ? me.roles.includes("department_manager") : false;
   const allowed = allowedAdmin || isDeptManager;
-  const isMainAdmin = me ? canManageUsers(me.roles) : false;
+  const canManageEmployees = me ? canManageUsers(me.roles) : false;
 
   // Reactivation flow — flip is_active back to true and write an audit entry via RPC.
   const setActiveFn = useServerFn(setEmployeeActive);
@@ -413,7 +421,7 @@ function EmployeesPage() {
           )}
           <p className="text-sm text-muted-foreground mt-1">{headerSubtitle}</p>
         </div>
-        {isMainAdmin && (
+        {canManageEmployees && (
           <Button className="gap-2" onClick={() => setCreating(true)}>
             <UserPlus className="size-4" />
             הוספת עובד
@@ -540,31 +548,32 @@ function EmployeesPage() {
               onDelete={() => setDeleting(emp)}
               onReactivate={() => reactivateMutation.mutate(emp.id)}
               reactivating={reactivateMutation.isPending && reactivateMutation.variables === emp.id}
-              canEdit={isMainAdmin}
-              canResetPassword={isMainAdmin}
-              canDelete={isMainAdmin && emp.id !== me?.id}
-              canReactivate={isMainAdmin}
+              canEdit={canManageEmployees}
+              canResetPassword={canManageEmployees}
+              canDelete={canManageEmployees && emp.id !== me?.id}
+              canReactivate={canManageEmployees}
             />
           ))}
 
         </div>
       )}
 
-      {resetting && isMainAdmin && (
+      {resetting && canManageEmployees && (
         <ResetPasswordDialog employee={resetting} onClose={() => setResetting(null)} />
       )}
 
-      {deleting && isMainAdmin && (
+      {deleting && canManageEmployees && (
         <DeleteEmployeeDialog employee={deleting} onClose={() => setDeleting(null)} />
       )}
 
-      {editing && me && isMainAdmin && (
+      {editing && me && canManageEmployees && (
         <EditEmployeeDialog
           employee={editing}
           depts={deptsQuery.data ?? []}
           currentRoles={rolesQuery.data?.[editing.id] ?? []}
           canEditRoles={canManageUsers(me.roles)}
           canDelete={editing.id !== me.id}
+          currentUserRoles={me.roles}
           onDelete={() => {
             setDeleting(editing);
             setEditing(null);
@@ -573,7 +582,7 @@ function EmployeesPage() {
         />
       )}
 
-      {creating && isMainAdmin && (
+      {creating && canManageEmployees && (
         <CreateEmployeeDialog
           depts={deptsQuery.data ?? []}
           onClose={() => setCreating(false)}
@@ -589,6 +598,7 @@ function EmployeesPage() {
             setSearchTerm(idNumber);
             setFilter("all");
           }}
+          currentUserRoles={me?.roles}
         />
       )}
     </div>
@@ -662,6 +672,7 @@ export function CreateEmployeeDialog({
   onViewExisting,
   defaultDepartmentId,
   lockDepartment,
+  currentUserRoles,
 }: {
   depts: DeptOption[];
   onClose: () => void;
@@ -669,10 +680,12 @@ export function CreateEmployeeDialog({
   onViewExisting?: (idNumber: string) => void;
   defaultDepartmentId?: string;
   lockDepartment?: boolean;
+  currentUserRoles?: AppRole[];
 }) {
   const qc = useQueryClient();
   const createFn = useServerFn(createEmployee);
   const jobTitlesQ = useJobTitles();
+  const roleOptions = assignableRoleOptionsFor(currentUserRoles);
   const defaultDept = defaultDepartmentId ?? depts[0]?.id ?? "";
   const [form, setForm] = useState({
     full_name: "",
@@ -680,7 +693,7 @@ export function CreateEmployeeDialog({
     department_id: defaultDept,
     phone: "",
     password: "",
-    role: "employee" as AppRole,
+    role: (roleOptions.includes("employee") ? "employee" : roleOptions[0] ?? "employee") as AppRole,
     job_title: "",
   });
   const [avatarFile, setAvatarFile] = useState<File | null>(null);
@@ -892,7 +905,7 @@ export function CreateEmployeeDialog({
               <Select value={form.role} onValueChange={(v) => setForm({ ...form, role: v as AppRole })}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  {ROLE_OPTIONS.map((r) => (
+                  {roleOptions.map((r) => (
                     <SelectItem key={r} value={r}>{ROLE_LABELS[r]}</SelectItem>
                   ))}
                 </SelectContent>
@@ -1331,6 +1344,7 @@ function EditEmployeeDialog({
   canDelete,
   onDelete,
   onClose,
+  currentUserRoles,
 }: {
   employee: ProfileRow;
   depts: DeptOption[];
@@ -1339,9 +1353,11 @@ function EditEmployeeDialog({
   canDelete: boolean;
   onDelete: () => void;
   onClose: () => void;
+  currentUserRoles?: AppRole[];
 }) {
   const qc = useQueryClient();
   const jobTitlesQ = useJobTitles();
+  const roleOptions = assignableRoleOptionsFor(currentUserRoles);
   const [form, setForm] = useState({
     full_name: employee.full_name,
     id_number: employee.id_number ?? "",
@@ -1485,7 +1501,7 @@ function EditEmployeeDialog({
                 <Select value={form.role} onValueChange={(v) => setForm({ ...form, role: v as AppRole })}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    {ROLE_OPTIONS.map((r) => (
+                    {roleOptions.map((r) => (
                       <SelectItem key={r} value={r}>{ROLE_LABELS[r]}</SelectItem>
                     ))}
                   </SelectContent>

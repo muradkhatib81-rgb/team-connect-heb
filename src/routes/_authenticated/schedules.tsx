@@ -153,6 +153,7 @@ function SchedulesPage() {
   const isMainAdmin = !!me?.roles.includes("main_admin");
   const isBranchMgr =
     !!me?.roles.includes("branch_manager") || !!me?.roles.includes("assistant_manager");
+  const isBranchManager = !!me?.roles.includes("branch_manager");
   const isDeptMgr = !!me?.roles.includes("department_manager");
   const isEmployee = !isMainAdmin && !isBranchMgr && !isDeptMgr;
 
@@ -182,11 +183,11 @@ function SchedulesPage() {
       );
     },
   });
-  const canApprove = isMainAdmin || !!permsQ.data?.can_approve_schedule;
-  const canPublishDirect = isMainAdmin || !!permsQ.data?.can_publish_schedule;
+  const canApprove = isMainAdmin || isBranchManager || !!permsQ.data?.can_approve_schedule;
+  const canPublishDirect = isMainAdmin || isBranchManager || !!permsQ.data?.can_publish_schedule;
   const canSeeScheduleQueues = canApprove || canPublishDirect;
   const canCreate =
-    isMainAdmin || isDeptMgr || !!permsQ.data?.can_create_schedule;
+    isMainAdmin || isBranchManager || isDeptMgr || !!permsQ.data?.can_create_schedule;
   const canViewPrePublishSummary =
     isMainAdmin ||
     isBranchMgr ||

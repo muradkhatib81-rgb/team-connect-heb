@@ -14,15 +14,17 @@ async function getCaps(supabase: any, userId: string) {
   const set = new Set((roles ?? []).map((r: any) => r.role));
   const p: any = perm ?? {};
   const isMainAdmin = set.has("main_admin");
-  const isBranchMgr = set.has("branch_manager") || set.has("assistant_manager");
+  const isBranchManager = set.has("branch_manager");
+  const isAssistantManager = set.has("assistant_manager");
+  const isBranchMgr = isBranchManager || isAssistantManager;
   const isDeptMgr = set.has("department_manager");
   return {
     isMainAdmin,
     isBranchMgr,
     isDeptMgr,
-    canCreate: isMainAdmin || isDeptMgr || !!p.can_create_schedule,
-    canApprove: isMainAdmin || !!p.can_approve_schedule,
-    canPublishDirect: isMainAdmin || !!p.can_publish_schedule,
+    canCreate: isMainAdmin || isBranchManager || isDeptMgr || !!p.can_create_schedule,
+    canApprove: isMainAdmin || isBranchManager || !!p.can_approve_schedule,
+    canPublishDirect: isMainAdmin || isBranchManager || !!p.can_publish_schedule,
     departmentId: profile?.department_id ?? null,
   };
 }

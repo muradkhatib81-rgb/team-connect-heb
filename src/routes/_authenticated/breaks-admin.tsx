@@ -36,8 +36,7 @@ function BreaksAdminPage() {
   const { data: me } = useAuth();
   const qc = useQueryClient();
   const isMainAdmin = !!me?.roles.includes("main_admin");
-  const isBranchOrAssistant =
-    !!me?.roles.includes("branch_manager") || !!me?.roles.includes("assistant_manager");
+  const isBranchManager = !!me?.roles.includes("branch_manager");
 
   const permQ = useQuery({
     enabled: !!me?.id && !isMainAdmin,
@@ -53,7 +52,7 @@ function BreaksAdminPage() {
   });
 
   const isBreaksManager =
-    isMainAdmin || isBranchOrAssistant || !!permQ.data;
+    isMainAdmin || isBranchManager || !!permQ.data;
 
   // Hard redirect: non-managers must go to the employee request screen.
   useEffect(() => {
@@ -179,7 +178,7 @@ function BreaksAdminPage() {
             אישור בקשות{pendingCount > 0 ? ` (${pendingCount})` : ""}
           </TabsTrigger>
           <TabsTrigger value="settings">הגדרות הפסקות</TabsTrigger>
-          {isMainAdmin && (
+          {(isMainAdmin || isBranchManager) && (
             <TabsTrigger value="permissions">הרשאות בקשת הפסקה</TabsTrigger>
           )}
         </TabsList>
@@ -201,7 +200,7 @@ function BreaksAdminPage() {
           </Card>
         </TabsContent>
 
-        {isMainAdmin && (
+        {(isMainAdmin || isBranchManager) && (
           <TabsContent value="permissions">
             <BreakRequestPermissionsCard />
           </TabsContent>
