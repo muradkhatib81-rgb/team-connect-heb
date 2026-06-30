@@ -219,6 +219,13 @@ function PermissionsPage() {
   const isMainAdmin = !!me?.roles.includes("main_admin");
   const isBranchManager = !!me?.roles.includes("branch_manager");
   const allowed = me ? canManageUsers(me.roles) : false;
+  const roleOptions = isMainAdmin
+    ? ROLE_OPTIONS
+    : ROLE_OPTIONS.filter((r) => r !== "main_admin" && r !== "branch_manager");
+  const canEditRowRole = (row: Row) =>
+    row.id !== me?.id &&
+    !roleMutation.isPending &&
+    (isMainAdmin || (isBranchManager && row.role !== "main_admin" && row.role !== "branch_manager"));
 
   const query = useQuery({
     enabled: allowed,
@@ -305,12 +312,12 @@ function PermissionsPage() {
                 <div className="w-40 shrink-0">
                   <Select
                     value={row.role}
-                    disabled={!isMainAdmin || row.id === me?.id || roleMutation.isPending}
+                    disabled={!canEditRowRole(row)}
                     onValueChange={(v) => roleMutation.mutate({ userId: row.id, role: v as AppRole })}
                   >
                     <SelectTrigger><SelectValue /></SelectTrigger>
                     <SelectContent>
-                      {ROLE_OPTIONS.map((r) => (
+                      {roleOptions.map((r) => (
                         <SelectItem key={r} value={r}>{ROLE_LABELS[r]}</SelectItem>
                       ))}
                     </SelectContent>
