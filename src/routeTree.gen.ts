@@ -29,6 +29,7 @@ import { Route as AuthenticatedChangePasswordRouteImport } from './routes/_authe
 import { Route as AuthenticatedBreaksAdminRouteImport } from './routes/_authenticated/breaks-admin'
 import { Route as AuthenticatedBreaksRouteImport } from './routes/_authenticated/breaks'
 import { Route as AuthenticatedBreakSettingsRouteImport } from './routes/_authenticated/break-settings'
+import { Route as AuthenticatedSystemSettingsRouteImport } from './routes/_authenticated/system.settings'
 import { Route as AuthenticatedSystemPermissionsRouteImport } from './routes/_authenticated/system.permissions'
 import { Route as AuthenticatedSystemBranchesRouteImport } from './routes/_authenticated/system.branches'
 import { Route as AuthenticatedSystemBranchManagersRouteImport } from './routes/_authenticated/system.branch-managers'
@@ -142,6 +143,12 @@ const AuthenticatedBreakSettingsRoute =
     path: '/break-settings',
     getParentRoute: () => AuthenticatedRouteRoute,
   } as any)
+const AuthenticatedSystemSettingsRoute =
+  AuthenticatedSystemSettingsRouteImport.update({
+    id: '/settings',
+    path: '/settings',
+    getParentRoute: () => AuthenticatedSystemRoute,
+  } as any)
 const AuthenticatedSystemPermissionsRoute =
   AuthenticatedSystemPermissionsRouteImport.update({
     id: '/permissions',
@@ -190,6 +197,7 @@ export interface FileRoutesByFullPath {
   '/system/branch-managers': typeof AuthenticatedSystemBranchManagersRoute
   '/system/branches': typeof AuthenticatedSystemBranchesRoute
   '/system/permissions': typeof AuthenticatedSystemPermissionsRoute
+  '/system/settings': typeof AuthenticatedSystemSettingsRoute
   '/api/public/hooks/generate-recurring-tasks': typeof ApiPublicHooksGenerateRecurringTasksRoute
 }
 export interface FileRoutesByTo {
@@ -215,6 +223,7 @@ export interface FileRoutesByTo {
   '/system/branch-managers': typeof AuthenticatedSystemBranchManagersRoute
   '/system/branches': typeof AuthenticatedSystemBranchesRoute
   '/system/permissions': typeof AuthenticatedSystemPermissionsRoute
+  '/system/settings': typeof AuthenticatedSystemSettingsRoute
   '/api/public/hooks/generate-recurring-tasks': typeof ApiPublicHooksGenerateRecurringTasksRoute
 }
 export interface FileRoutesById {
@@ -242,6 +251,7 @@ export interface FileRoutesById {
   '/_authenticated/system/branch-managers': typeof AuthenticatedSystemBranchManagersRoute
   '/_authenticated/system/branches': typeof AuthenticatedSystemBranchesRoute
   '/_authenticated/system/permissions': typeof AuthenticatedSystemPermissionsRoute
+  '/_authenticated/system/settings': typeof AuthenticatedSystemSettingsRoute
   '/api/public/hooks/generate-recurring-tasks': typeof ApiPublicHooksGenerateRecurringTasksRoute
 }
 export interface FileRouteTypes {
@@ -269,6 +279,7 @@ export interface FileRouteTypes {
     | '/system/branch-managers'
     | '/system/branches'
     | '/system/permissions'
+    | '/system/settings'
     | '/api/public/hooks/generate-recurring-tasks'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -294,6 +305,7 @@ export interface FileRouteTypes {
     | '/system/branch-managers'
     | '/system/branches'
     | '/system/permissions'
+    | '/system/settings'
     | '/api/public/hooks/generate-recurring-tasks'
   id:
     | '__root__'
@@ -320,6 +332,7 @@ export interface FileRouteTypes {
     | '/_authenticated/system/branch-managers'
     | '/_authenticated/system/branches'
     | '/_authenticated/system/permissions'
+    | '/_authenticated/system/settings'
     | '/api/public/hooks/generate-recurring-tasks'
   fileRoutesById: FileRoutesById
 }
@@ -472,6 +485,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedBreakSettingsRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/_authenticated/system/settings': {
+      id: '/_authenticated/system/settings'
+      path: '/settings'
+      fullPath: '/system/settings'
+      preLoaderRoute: typeof AuthenticatedSystemSettingsRouteImport
+      parentRoute: typeof AuthenticatedSystemRoute
+    }
     '/_authenticated/system/permissions': {
       id: '/_authenticated/system/permissions'
       path: '/permissions'
@@ -507,6 +527,7 @@ interface AuthenticatedSystemRouteChildren {
   AuthenticatedSystemBranchManagersRoute: typeof AuthenticatedSystemBranchManagersRoute
   AuthenticatedSystemBranchesRoute: typeof AuthenticatedSystemBranchesRoute
   AuthenticatedSystemPermissionsRoute: typeof AuthenticatedSystemPermissionsRoute
+  AuthenticatedSystemSettingsRoute: typeof AuthenticatedSystemSettingsRoute
 }
 
 const AuthenticatedSystemRouteChildren: AuthenticatedSystemRouteChildren = {
@@ -514,6 +535,7 @@ const AuthenticatedSystemRouteChildren: AuthenticatedSystemRouteChildren = {
     AuthenticatedSystemBranchManagersRoute,
   AuthenticatedSystemBranchesRoute: AuthenticatedSystemBranchesRoute,
   AuthenticatedSystemPermissionsRoute: AuthenticatedSystemPermissionsRoute,
+  AuthenticatedSystemSettingsRoute: AuthenticatedSystemSettingsRoute,
 }
 
 const AuthenticatedSystemRouteWithChildren =
