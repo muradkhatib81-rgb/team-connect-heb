@@ -15,6 +15,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { useAuth } from "@/lib/use-auth";
+import { useJobTitles } from "@/lib/use-job-titles";
 import {
   ROLE_LABELS,
   ROLE_OPTIONS,
@@ -671,6 +672,7 @@ export function CreateEmployeeDialog({
 }) {
   const qc = useQueryClient();
   const createFn = useServerFn(createEmployee);
+  const jobTitlesQ = useJobTitles();
   const defaultDept = defaultDepartmentId ?? depts[0]?.id ?? "";
   const [form, setForm] = useState({
     full_name: "",
@@ -679,6 +681,7 @@ export function CreateEmployeeDialog({
     phone: "",
     password: "",
     role: "employee" as AppRole,
+    job_title: "",
   });
   const [avatarFile, setAvatarFile] = useState<File | null>(null);
   // When the server reports the id_number already belongs to an existing employee
@@ -715,7 +718,7 @@ export function CreateEmployeeDialog({
     if (form.password.length < 6) throw new Error("סיסמה ראשונית של 6 תווים לפחות");
     if (!form.full_name.trim()) throw new Error("יש למלא שם עובד");
     const res = await createFn({
-      data: { ...form, job_title: "", avatar_url: null, force_archived: forceArchived },
+      data: { ...form, job_title: form.job_title || "", avatar_url: null, force_archived: forceArchived },
     });
     if (avatarFile && res?.id) {
       try {
@@ -891,6 +894,19 @@ export function CreateEmployeeDialog({
                 <SelectContent>
                   {ROLE_OPTIONS.map((r) => (
                     <SelectItem key={r} value={r}>{ROLE_LABELS[r]}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </Field>
+            <Field label="תפקיד">
+              <Select value={form.job_title || "__none__"} onValueChange={(v) => setForm({ ...form, job_title: v === "__none__" ? "" : v })}>
+                <SelectTrigger><SelectValue placeholder="ללא תפקיד" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__none__">ללא תפקיד</SelectItem>
+                  {(jobTitlesQ.data ?? []).map((t) => (
+                    <SelectItem key={t.id} value={t.name}>
+                      {t.name}{t.excluded_from_headcount ? " (לא נכלל במצבת)" : ""}
+                    </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
@@ -1325,6 +1341,7 @@ function EditEmployeeDialog({
   onClose: () => void;
 }) {
   const qc = useQueryClient();
+  const jobTitlesQ = useJobTitles();
   const [form, setForm] = useState({
     full_name: employee.full_name,
     id_number: employee.id_number ?? "",
@@ -1334,6 +1351,7 @@ function EditEmployeeDialog({
     on_leave: employee.on_leave,
     role: (currentRoles[0] ?? "employee") as AppRole,
     avatar_url: employee.avatar_url,
+    job_title: employee.job_title ?? "",
   });
   const [avatarFile, setAvatarFile] = useState<File | null>(null);
   const [removeAvatar, setRemoveAvatar] = useState(false);
@@ -1359,6 +1377,7 @@ function EditEmployeeDialog({
           phone: form.phone || null,
           is_active: form.is_active,
           on_leave: form.on_leave,
+          job_title: form.job_title || null,
           avatar_url,
         })
         .eq("id", employee.id);
@@ -1444,6 +1463,19 @@ function EditEmployeeDialog({
                 <SelectContent>
                   {depts.map((d) => (
                     <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </Field>
+            <Field label="תפקיד">
+              <Select value={form.job_title || "__none__"} onValueChange={(v) => setForm({ ...form, job_title: v === "__none__" ? "" : v })}>
+                <SelectTrigger><SelectValue placeholder="ללא תפקיד" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__none__">ללא תפקיד</SelectItem>
+                  {(jobTitlesQ.data ?? []).map((t) => (
+                    <SelectItem key={t.id} value={t.name}>
+                      {t.name}{t.excluded_from_headcount ? " (לא נכלל במצבת)" : ""}
+                    </SelectItem>
                   ))}
                 </SelectContent>
               </Select>

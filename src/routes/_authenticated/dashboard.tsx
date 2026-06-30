@@ -55,21 +55,29 @@ function DashboardPage() {
         { data: depts, error: dErr },
         { data: breaks, error: bErr },
       ] = await Promise.all([
-        supabase.from("profiles").select("id, is_active, on_leave, department_id"),
+        supabase.from("profiles").select("id, is_active, on_leave, department_id, excluded_from_headcount"),
         supabase.from("departments").select("id, name, is_active").order("name"),
         supabase.from("break_requests").select("user_id").eq("status", "active"),
       ]);
       if (pErr) throw pErr;
       if (dErr) throw dErr;
       if (bErr) throw bErr;
-      const total = profs!.length;
-      const onLeave = profs!.filter((d: any) => d.on_leave).length;
-      const active = profs!.filter((d: any) => d.is_active && !d.on_leave).length;
-      const inactive = profs!.filter((d: any) => !d.is_active).length;
-      const onBreak = new Set((breaks ?? []).map((b: any) => b.user_id as string)).size;
+      // Employees flagged as "excluded from headcount" remain in the system but
+      // are not counted in any headcount statistic (totals, by-department, etc.).
+      const counted = profs!.filter((d: any) => !d.excluded_from_headcount);
+      const total = counted.length;
+      const onLeave = counted.filter((d: any) => d.on_leave).length;
+      const active = counted.filter((d: any) => d.is_active && !d.on_leave).length;
+      const inactive = counted.filter((d: any) => !d.is_active).length;
+      const excludedIds = new Set(profs!.filter((d: any) => d.excluded_from_headcount).map((d: any) => d.id));
+      const onBreak = new Set(
+        (breaks ?? [])
+          .map((b: any) => b.user_id as string)
+          .filter((id) => !excludedIds.has(id)),
+      ).size;
       const byDept: Record<string, number> = {};
       (depts as DeptRow[]).forEach((d) => (byDept[d.id] = 0));
-      profs!.forEach((p: any) => {
+      counted.forEach((p: any) => {
         if (p.department_id && byDept[p.department_id] !== undefined) {
           byDept[p.department_id] += 1;
         }

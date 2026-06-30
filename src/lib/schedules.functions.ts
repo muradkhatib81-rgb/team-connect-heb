@@ -804,16 +804,33 @@ export const getUnpublishedWeekSummary = createServerFn({ method: "POST" })
       .in("schedule_id", schedIds);
     if (shErr) throw new Error(shErr.message);
 
+    // Exclude shifts of employees flagged as not counted in headcount stats.
+    const empIds = Array.from(
+      new Set((shiftRows ?? []).map((r: any) => r.employee_id).filter(Boolean)),
+    );
+    let excludedSet = new Set<string>();
+    if (empIds.length > 0) {
+      const { data: excluded } = await context.supabase
+        .from("profiles")
+        .select("id")
+        .in("id", empIds)
+        .eq("excluded_from_headcount", true);
+      excludedSet = new Set((excluded ?? []).map((p: any) => p.id));
+    }
+
     const totals: Record<string, number> = {};
+    let counted = 0;
     for (const r of shiftRows ?? []) {
       const code = (r as any).shift as string | null;
       if (!code) continue;
+      if (excludedSet.has((r as any).employee_id)) continue;
       totals[code] = (totals[code] ?? 0) + 1;
+      counted++;
     }
     return {
       week_start: start,
       totals,
       departments: unpublished.map((s: any) => ({ id: s.department_id, status: s.status })),
-      total_assignments: (shiftRows ?? []).length,
+      total_assignments: counted,
     };
   });

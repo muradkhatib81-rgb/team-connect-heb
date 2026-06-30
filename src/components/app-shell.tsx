@@ -17,6 +17,7 @@ import {
   Building,
   Megaphone,
   Trophy,
+  Briefcase,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
@@ -166,6 +167,15 @@ export function AppShell({ children }: { children: ReactNode }) {
         () => {
           qc.invalidateQueries({ queryKey: ["auth", "me"] });
           qc.invalidateQueries({ queryKey: ["departments"] });
+        },
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "job_titles" },
+        () => {
+          qc.invalidateQueries({ queryKey: ["job-titles"] });
+          qc.invalidateQueries({ queryKey: ["employees"] });
+          qc.invalidateQueries({ queryKey: ["dashboard", "stats"] });
         },
       )
       // Tasks sub-tables that are not yet covered by their pages.
@@ -323,6 +333,7 @@ export function AppShell({ children }: { children: ReactNode }) {
     { to: "/departments", label: "מחלקות", icon: Building2, visible: admin },
     { to: "/permissions", label: "הרשאות", icon: ShieldCheck, visible: canManageUsers(profile.roles) },
     { to: "/shift-settings", label: "הגדרות משמרות", icon: CalendarDays, visible: admin },
+    { to: "/job-titles", label: "תפקידים", icon: Briefcase, visible: isMainAdmin },
     { to: "/company-settings", label: "הגדרות חברה", icon: Building, visible: isMainAdmin },
     { to: "/profile", label: "הפרופיל שלי", icon: UserCircle, visible: isPlainEmployee },
   ].filter((n) => n.visible);
