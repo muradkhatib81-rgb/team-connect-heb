@@ -203,6 +203,82 @@ export const assignBranchManager = createServerFn({ method: "POST" })
 
 const deleteSchema = z.object({ id: z.string().uuid() });
 
+export type BranchBlockerCounts = {
+  employees: number;
+  departments: number;
+  schedules: number;
+  tasks: number;
+};
+
+export const getBranchDeleteBlockers = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((data: unknown) => deleteSchema.parse(data))
+  .handler(async ({ data, context }): Promise<{
+    ok: boolean;
+    canDelete: boolean;
+    employees: number;
+    departments: number;
+    schedules: number;
+    tasks: number;
+    error?: string;
+  }> => {
+    try {
+      await assertSystemAdmin(context.supabase, context.userId);
+    } catch {
+      return {
+        ok: false,
+        canDelete: false,
+        employees: 0,
+        departments: 0,
+        schedules: 0,
+        tasks: 0,
+        error: "אין לך הרשאה לבצע פעולה זו.",
+      };
+    }
+    try {
+      const { data: b, error } = await (context.supabase as any).rpc(
+        "get_branch_delete_blockers",
+        { _branch_id: data.id },
+      );
+      if (error) {
+        console.error("[getBranchDeleteBlockers] rpc error:", error);
+        return {
+          ok: false,
+          canDelete: false,
+          employees: 0,
+          departments: 0,
+          schedules: 0,
+          tasks: 0,
+          error: "אירעה שגיאה בבדיקת הנתונים המקושרים לסניף.",
+        };
+      }
+      const counts = {
+        employees: Number(b?.employees ?? 0),
+        departments: Number(b?.departments ?? 0),
+        schedules: Number(b?.schedules ?? 0),
+        tasks: Number(b?.tasks ?? 0),
+      };
+      return {
+        ok: true,
+        canDelete:
+          counts.employees + counts.departments + counts.schedules + counts.tasks === 0,
+        ...counts,
+      };
+    } catch (err) {
+      console.error("[getBranchDeleteBlockers] threw:", err);
+      return {
+        ok: false,
+        canDelete: false,
+        employees: 0,
+        departments: 0,
+        schedules: 0,
+        tasks: 0,
+        error: "אירעה שגיאה בבדיקת הנתונים המקושרים לסניף.",
+      };
+    }
+  });
+
+
 export type BranchDeleteResult =
   | {
       ok: true;
