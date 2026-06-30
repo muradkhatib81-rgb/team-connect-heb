@@ -52,11 +52,10 @@ export function BreakSettingsPage() {
   const qc = useQueryClient();
   const { data: me } = useAuth();
   const isMainAdmin = !!me?.roles.includes("main_admin");
-  const isBranchOrAssistant =
-    !!me?.roles.includes("branch_manager") || !!me?.roles.includes("assistant_manager");
+  const isBranchManager = !!me?.roles.includes("branch_manager");
 
   const permQ = useQuery({
-    enabled: !!me?.id && !isMainAdmin && !isBranchOrAssistant,
+    enabled: !!me?.id && !isMainAdmin && !isBranchManager,
     queryKey: ["my-break-manage-perm", me?.id],
     queryFn: async () => {
       const { data } = await supabase
@@ -68,7 +67,7 @@ export function BreakSettingsPage() {
     },
   });
 
-  const canManage = isMainAdmin || isBranchOrAssistant || !!permQ.data;
+  const canManage = isMainAdmin || isBranchManager || !!permQ.data;
 
 
   const listQ = useQuery({

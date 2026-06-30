@@ -135,14 +135,13 @@ export function AppShell({ children }: { children: ReactNode }) {
   const isPlainEmployee = !admin && !isDeptManager;
   const isMainAdmin = isMainAdminEarly;
   const isSysAdmin = profile.roles.includes("system_admin");
-  const isBranchOrAssistant =
-    profile.roles.includes("branch_manager") || profile.roles.includes("assistant_manager");
+  const isBranchManager = profile.roles.includes("branch_manager");
 
-  // Managers of breaks: main admin, branch/assistant manager, or any user with the explicit perm.
-  const isBreaksManager = isMainAdmin || isBranchOrAssistant || !!breakPermQ.data?.breaks;
+  // Managers of breaks: main admin, branch manager, or any user with the explicit permission.
+  const isBreaksManager = isMainAdmin || isBranchManager || !!breakPermQ.data?.breaks;
   // Every user (including managers) can request their own break — managers are also employees.
   const canRequestBreak = true;
-  const canManageEom = isMainAdmin || !!breakPermQ.data?.eom;
+  const canManageEom = isMainAdmin || isBranchManager || !!breakPermQ.data?.eom;
 
 
   const nav: { to: string; label: string; icon: typeof LayoutDashboard; visible: boolean; badge?: number; section?: string }[] = [

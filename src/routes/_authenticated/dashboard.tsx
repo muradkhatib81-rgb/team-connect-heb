@@ -210,7 +210,7 @@ function DashboardPage() {
           <OnBreakSection profile={profile} />
 
           {admin ? (
-            <AdminDashboard stats={statsQuery.data} loading={statsQuery.isLoading} onSelectDept={setDeptDialogId} canCreateEmployee={profile ? canManageUsers(profile.roles) : false} />
+            <AdminDashboard stats={statsQuery.data} loading={statsQuery.isLoading} onSelectDept={setDeptDialogId} canCreateEmployee={profile ? canManageUsers(profile.roles) : false} currentUserRoles={profile.roles} />
           ) : (
             <DeptManagerDashboard data={deptManagerQuery.data} loading={deptManagerQuery.isLoading} />
           )}
@@ -397,11 +397,13 @@ function AdminDashboard({
   loading,
   onSelectDept,
   canCreateEmployee,
+  currentUserRoles,
 }: {
   stats?: { total: number; active: number; inactive: number; onLeave: number; onBreak: number; byDept: Record<string, number>; departments: DeptRow[] };
   loading: boolean;
   onSelectDept?: (id: string) => void;
   canCreateEmployee: boolean;
+  currentUserRoles?: AppRole[];
 }) {
   const navigate = useNavigate();
   const [createForDept, setCreateForDept] = useState<DeptRow | null>(null);
@@ -498,6 +500,7 @@ function AdminDashboard({
             setCreateForDept(null);
             navigate({ to: "/employees", search: { filter: "all", dept: createForDept.id } as any });
           }}
+          currentUserRoles={currentUserRoles}
         />
       )}
     </>

@@ -217,6 +217,7 @@ function PermissionsPage() {
   const qc = useQueryClient();
   const { data: me } = useAuth();
   const isMainAdmin = !!me?.roles.includes("main_admin");
+  const isBranchManager = !!me?.roles.includes("branch_manager");
   const allowed = me ? canManageUsers(me.roles) : false;
 
   const query = useQuery({
@@ -269,8 +270,10 @@ function PermissionsPage() {
     );
   }
 
-  const managers = (query.data ?? []).filter(
-    (r) => r.role === "branch_manager" || r.role === "assistant_manager",
+  const managers = (query.data ?? []).filter((r) =>
+    isMainAdmin
+      ? r.role === "branch_manager" || r.role === "assistant_manager"
+      : r.role === "assistant_manager",
   );
 
   return (
@@ -290,7 +293,7 @@ function PermissionsPage() {
           <div className="flex justify-center py-12"><Loader2 className="size-6 animate-spin text-primary" /></div>
         ) : (
           <div className="grid gap-3">
-            {query.data?.map((row) => (
+            {query.data?.filter((row) => isMainAdmin || (row.role !== "main_admin" && row.role !== "branch_manager")).map((row) => (
               <Card key={row.id} className="card-elevated p-4 flex items-center gap-4">
                 <div className="size-10 rounded-full bg-accent text-accent-foreground flex items-center justify-center font-semibold shrink-0">
                   {row.full_name?.charAt(0) || "?"}
@@ -302,7 +305,7 @@ function PermissionsPage() {
                 <div className="w-40 shrink-0">
                   <Select
                     value={row.role}
-                    disabled={row.id === me?.id || roleMutation.isPending}
+                    disabled={!isMainAdmin || row.id === me?.id || roleMutation.isPending}
                     onValueChange={(v) => roleMutation.mutate({ userId: row.id, role: v as AppRole })}
                   >
                     <SelectTrigger><SelectValue /></SelectTrigger>
@@ -312,16 +315,18 @@ function PermissionsPage() {
                       ))}
                     </SelectContent>
                   </Select>
-                  {row.id === me?.id && (
+                  {row.id === me?.id ? (
                     <p className="text-[10px] text-muted-foreground mt-1 text-center">אינך יכול לערוך את עצמך</p>
-                  )}
+                  ) : !isMainAdmin ? (
+                    <p className="text-[10px] text-muted-foreground mt-1 text-center">מנהל סניף מנהל כאן הרשאות מפורטות בלבד</p>
+                  ) : null}
                 </div>
               </Card>
             ))}
           </div>
         )}
 
-        {isMainAdmin && (
+        {(isMainAdmin || isBranchManager) && (
           <section className="space-y-3">
             <div className="flex items-center gap-3 mt-8">
               <div className="size-10 rounded-xl bg-primary/10 text-primary flex items-center justify-center">
@@ -330,14 +335,14 @@ function PermissionsPage() {
               <div className="flex-1">
                 <h2 className="text-xl font-bold">הרשאות מפורטות למנהלים</h2>
                 <p className="text-sm text-muted-foreground mt-1">
-                  הענקה/הסרה של הרשאות פעולה למנהל סניף וסגן מנהל. השינוי נשמר ונכנס לתוקף מיד.
+                  הענקה/הסרה של הרשאות פעולה לסגני מנהל בסניף. השינוי נשמר ונכנס לתוקף מיד.
                 </p>
               </div>
               {managers.length >= 2 && <CopyPermsButton managers={managers} />}
             </div>
             {managers.length === 0 ? (
               <Card className="card-elevated p-6 text-sm text-muted-foreground text-center">
-                אין מנהלי סניף או סגני מנהל להגדרה.
+                אין סגני מנהל להגדרה.
               </Card>
             ) : (
               <div className="grid gap-3">

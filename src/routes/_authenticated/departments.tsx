@@ -62,7 +62,7 @@ interface ManagerOption {
 function DepartmentsPage() {
   const navigate = useNavigate();
   const { data: me, isLoading: meLoading } = useAuth();
-  const isMainAdmin = me ? canManageUsers(me.roles) : false;
+  const canManageDepartments = me ? canManageUsers(me.roles) : false;
   const qcRT = useQueryClient();
 
   const [creating, setCreating] = useState(false);
@@ -120,7 +120,7 @@ function DepartmentsPage() {
   });
 
   const managersQuery = useQuery({
-    enabled: !!me && isMainAdmin,
+    enabled: !!me && canManageDepartments,
     queryKey: ["managers-pool"],
     queryFn: async () => {
       const { data, error } = await supabase
@@ -154,7 +154,7 @@ function DepartmentsPage() {
             ניהול מחלקות, אחראים וכמות עובדים
           </p>
         </div>
-        {isMainAdmin && (
+        {canManageDepartments && (
           <Button className="gap-2" onClick={() => setCreating(true)}>
             <Plus className="size-4" />
             הוספת מחלקה
@@ -195,7 +195,7 @@ function DepartmentsPage() {
                   {!d.is_active && (
                     <Badge variant="destructive" className="rounded-full">לא פעילה</Badge>
                   )}
-                  {isMainAdmin && (
+                  {canManageDepartments && (
                     <div className="flex gap-1 mr-auto">
                       <Button
                         variant="ghost"
@@ -228,33 +228,33 @@ function DepartmentsPage() {
         </div>
       )}
 
-      {creating && isMainAdmin && (
+      {creating && canManageDepartments && (
         <CreateDialog managers={managersQuery.data ?? []} onClose={() => setCreating(false)} />
       )}
-      {editing && isMainAdmin && (
+      {editing && canManageDepartments && (
         <EditDialog
           dept={editing}
           onClose={() => setEditing(null)}
         />
       )}
 
-      {deleting && isMainAdmin && (
+      {deleting && canManageDepartments && (
         <DeleteDialog dept={deleting} onClose={() => setDeleting(null)} />
       )}
 
       <DeptEmployeesDialog
         deptId={deptDialogId}
         onClose={() => setDeptDialogId(null)}
-        onSelectEmployee={isMainAdmin ? setEmpDialogId : undefined}
+        onSelectEmployee={canManageDepartments ? setEmpDialogId : undefined}
       />
       <EmpProfileDialog
         employeeId={empDialogId}
         onClose={() => setEmpDialogId(null)}
       />
 
-      {!isMainAdmin && (
+      {!canManageDepartments && (
         <p className="text-xs text-muted-foreground text-center">
-          רק מנהל ראשי יכול ליצור, לערוך או למחוק מחלקות.
+רק מנהל מורשה יכול ליצור, לערוך או למחוק מחלקות בסניף שלו.
         </p>
       )}
     </div>

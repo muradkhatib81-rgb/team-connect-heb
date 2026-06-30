@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/use-auth";
@@ -63,6 +63,20 @@ function ShiftSettingsPage() {
   const qc = useQueryClient();
   const { data: me } = useAuth();
   const isMainAdmin = !!me?.roles.includes("main_admin");
+  const isBranchManager = !!me?.roles.includes("branch_manager");
+
+  const permQ = useQuery({
+    enabled: !!me?.id && !isMainAdmin && !isBranchManager,
+    queryKey: ["my-shift-manage-perm", me?.id],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("user_task_permissions")
+        .select("can_manage_schedule, can_create_schedule, can_edit_schedule")
+        .eq("user_id", me!.id)
+        .maybeSingle();
+      return !!(data as any)?.can_manage_schedule || !!(data as any)?.can_create_schedule || !!(data as any)?.can_edit_schedule;
+    },
+  });
 
   const listQ = useShiftDefinitions();
   const rows = listQ.all;
@@ -174,10 +188,7 @@ function ShiftSettingsPage() {
 
   if (!me) return null;
   // Quick canManage check (RLS will enforce server-side anyway)
-  const canManage =
-    isMainAdmin ||
-    !!me.roles.includes("branch_manager") ||
-    !!me.roles.includes("assistant_manager");
+  const canManage = isMainAdmin || isBranchManager || !!permQ.data;
 
   if (!canManage) {
     return (
