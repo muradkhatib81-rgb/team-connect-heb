@@ -29,6 +29,7 @@ import { Route as AuthenticatedChangePasswordRouteImport } from './routes/_authe
 import { Route as AuthenticatedBreaksAdminRouteImport } from './routes/_authenticated/breaks-admin'
 import { Route as AuthenticatedBreaksRouteImport } from './routes/_authenticated/breaks'
 import { Route as AuthenticatedBreakSettingsRouteImport } from './routes/_authenticated/break-settings'
+import { Route as AuthenticatedSystemBranchesRouteImport } from './routes/_authenticated/system.branches'
 import { Route as ApiPublicHooksGenerateRecurringTasksRouteImport } from './routes/api/public/hooks/generate-recurring-tasks'
 
 const AuthRoute = AuthRouteImport.update({
@@ -139,6 +140,12 @@ const AuthenticatedBreakSettingsRoute =
     path: '/break-settings',
     getParentRoute: () => AuthenticatedRouteRoute,
   } as any)
+const AuthenticatedSystemBranchesRoute =
+  AuthenticatedSystemBranchesRouteImport.update({
+    id: '/branches',
+    path: '/branches',
+    getParentRoute: () => AuthenticatedSystemRoute,
+  } as any)
 const ApiPublicHooksGenerateRecurringTasksRoute =
   ApiPublicHooksGenerateRecurringTasksRouteImport.update({
     id: '/api/public/hooks/generate-recurring-tasks',
@@ -164,8 +171,9 @@ export interface FileRoutesByFullPath {
   '/profile': typeof AuthenticatedProfileRoute
   '/schedules': typeof AuthenticatedSchedulesRoute
   '/shift-settings': typeof AuthenticatedShiftSettingsRoute
-  '/system': typeof AuthenticatedSystemRoute
+  '/system': typeof AuthenticatedSystemRouteWithChildren
   '/tasks': typeof AuthenticatedTasksRoute
+  '/system/branches': typeof AuthenticatedSystemBranchesRoute
   '/api/public/hooks/generate-recurring-tasks': typeof ApiPublicHooksGenerateRecurringTasksRoute
 }
 export interface FileRoutesByTo {
@@ -186,8 +194,9 @@ export interface FileRoutesByTo {
   '/profile': typeof AuthenticatedProfileRoute
   '/schedules': typeof AuthenticatedSchedulesRoute
   '/shift-settings': typeof AuthenticatedShiftSettingsRoute
-  '/system': typeof AuthenticatedSystemRoute
+  '/system': typeof AuthenticatedSystemRouteWithChildren
   '/tasks': typeof AuthenticatedTasksRoute
+  '/system/branches': typeof AuthenticatedSystemBranchesRoute
   '/api/public/hooks/generate-recurring-tasks': typeof ApiPublicHooksGenerateRecurringTasksRoute
 }
 export interface FileRoutesById {
@@ -210,8 +219,9 @@ export interface FileRoutesById {
   '/_authenticated/profile': typeof AuthenticatedProfileRoute
   '/_authenticated/schedules': typeof AuthenticatedSchedulesRoute
   '/_authenticated/shift-settings': typeof AuthenticatedShiftSettingsRoute
-  '/_authenticated/system': typeof AuthenticatedSystemRoute
+  '/_authenticated/system': typeof AuthenticatedSystemRouteWithChildren
   '/_authenticated/tasks': typeof AuthenticatedTasksRoute
+  '/_authenticated/system/branches': typeof AuthenticatedSystemBranchesRoute
   '/api/public/hooks/generate-recurring-tasks': typeof ApiPublicHooksGenerateRecurringTasksRoute
 }
 export interface FileRouteTypes {
@@ -236,6 +246,7 @@ export interface FileRouteTypes {
     | '/shift-settings'
     | '/system'
     | '/tasks'
+    | '/system/branches'
     | '/api/public/hooks/generate-recurring-tasks'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -258,6 +269,7 @@ export interface FileRouteTypes {
     | '/shift-settings'
     | '/system'
     | '/tasks'
+    | '/system/branches'
     | '/api/public/hooks/generate-recurring-tasks'
   id:
     | '__root__'
@@ -281,6 +293,7 @@ export interface FileRouteTypes {
     | '/_authenticated/shift-settings'
     | '/_authenticated/system'
     | '/_authenticated/tasks'
+    | '/_authenticated/system/branches'
     | '/api/public/hooks/generate-recurring-tasks'
   fileRoutesById: FileRoutesById
 }
@@ -433,6 +446,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedBreakSettingsRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/_authenticated/system/branches': {
+      id: '/_authenticated/system/branches'
+      path: '/branches'
+      fullPath: '/system/branches'
+      preLoaderRoute: typeof AuthenticatedSystemBranchesRouteImport
+      parentRoute: typeof AuthenticatedSystemRoute
+    }
     '/api/public/hooks/generate-recurring-tasks': {
       id: '/api/public/hooks/generate-recurring-tasks'
       path: '/api/public/hooks/generate-recurring-tasks'
@@ -442,6 +462,17 @@ declare module '@tanstack/react-router' {
     }
   }
 }
+
+interface AuthenticatedSystemRouteChildren {
+  AuthenticatedSystemBranchesRoute: typeof AuthenticatedSystemBranchesRoute
+}
+
+const AuthenticatedSystemRouteChildren: AuthenticatedSystemRouteChildren = {
+  AuthenticatedSystemBranchesRoute: AuthenticatedSystemBranchesRoute,
+}
+
+const AuthenticatedSystemRouteWithChildren =
+  AuthenticatedSystemRoute._addFileChildren(AuthenticatedSystemRouteChildren)
 
 interface AuthenticatedRouteRouteChildren {
   AuthenticatedBreakSettingsRoute: typeof AuthenticatedBreakSettingsRoute
@@ -459,7 +490,7 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedProfileRoute: typeof AuthenticatedProfileRoute
   AuthenticatedSchedulesRoute: typeof AuthenticatedSchedulesRoute
   AuthenticatedShiftSettingsRoute: typeof AuthenticatedShiftSettingsRoute
-  AuthenticatedSystemRoute: typeof AuthenticatedSystemRoute
+  AuthenticatedSystemRoute: typeof AuthenticatedSystemRouteWithChildren
   AuthenticatedTasksRoute: typeof AuthenticatedTasksRoute
 }
 
@@ -479,7 +510,7 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedProfileRoute: AuthenticatedProfileRoute,
   AuthenticatedSchedulesRoute: AuthenticatedSchedulesRoute,
   AuthenticatedShiftSettingsRoute: AuthenticatedShiftSettingsRoute,
-  AuthenticatedSystemRoute: AuthenticatedSystemRoute,
+  AuthenticatedSystemRoute: AuthenticatedSystemRouteWithChildren,
   AuthenticatedTasksRoute: AuthenticatedTasksRoute,
 }
 
