@@ -32,6 +32,7 @@ export type BranchOption = {
   id: string;
   name: string;
   code: string;
+  address: string | null;
   is_active: boolean;
 };
 
