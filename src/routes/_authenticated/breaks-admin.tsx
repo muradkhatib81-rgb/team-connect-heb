@@ -178,7 +178,7 @@ function BreaksAdminPage() {
             אישור בקשות{pendingCount > 0 ? ` (${pendingCount})` : ""}
           </TabsTrigger>
           <TabsTrigger value="settings">הגדרות הפסקות</TabsTrigger>
-          {isMainAdmin && (
+          {(isMainAdmin || isBranchManager) && (
             <TabsTrigger value="permissions">הרשאות בקשת הפסקה</TabsTrigger>
           )}
         </TabsList>
@@ -200,7 +200,7 @@ function BreaksAdminPage() {
           </Card>
         </TabsContent>
 
-        {isMainAdmin && (
+        {(isMainAdmin || isBranchManager) && (
           <TabsContent value="permissions">
             <BreakRequestPermissionsCard />
           </TabsContent>
