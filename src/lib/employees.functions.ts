@@ -39,6 +39,16 @@ async function assertMainAdmin(supabase: any, userId: string) {
   }
 }
 
+async function assertProfileVisibleInActiveBranch(supabase: any, userId: string) {
+  const { data, error } = await supabase
+    .from("profiles")
+    .select("id")
+    .eq("id", userId)
+    .maybeSingle();
+  if (error) throw new Error(error.message);
+  if (!data) throw new Error("עובד לא נמצא בסניף הפעיל");
+}
+
 const createEmployeeSchemaExt = createEmployeeSchema.extend({
   force_archived: z.boolean().optional().default(false),
 });
@@ -51,7 +61,7 @@ export const createEmployee = createServerFn({ method: "POST" })
 
     const { data: dept, error: dErr } = await context.supabase
       .from("departments")
-      .select("id")
+      .select("id, branch_id")
       .eq("id", data.department_id)
       .maybeSingle();
     if (dErr) throw new Error(dErr.message);
@@ -64,6 +74,7 @@ export const createEmployee = createServerFn({ method: "POST" })
       .from("profiles")
       .select("id, full_name, is_active, job_title, department_id, on_leave, departments(name)")
       .eq("id_number", data.id_number)
+      .eq("branch_id", (dept as any).branch_id)
       .maybeSingle();
     if (exErr) throw new Error(exErr.message);
     if (existing) {
@@ -85,6 +96,7 @@ export const createEmployee = createServerFn({ method: "POST" })
         .from("employee_archive")
         .select("id, full_name, job_title, department_id, department_name, phone, archived_at, deactivated_at, snapshot")
         .eq("id_number", data.id_number)
+        .eq("branch_id", (dept as any).branch_id)
         .order("archived_at", { ascending: false })
         .limit(1)
         .maybeSingle();
@@ -123,6 +135,7 @@ export const createEmployee = createServerFn({ method: "POST" })
         .from("profiles")
         .update({
           department_id: data.department_id,
+          branch_id: (dept as any).branch_id,
           avatar_url: data.avatar_url ?? null,
         })
         .eq("id", newUserId);
@@ -158,6 +171,8 @@ export const deleteEmployee = createServerFn({ method: "POST" })
       throw new Error("לא ניתן למחוק את החשבון של עצמך");
     }
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+
+    await assertProfileVisibleInActiveBranch(context.supabase, data.user_id);
 
     // Archive snapshot + cleanup (RPC enforces the 30-day window and admin check)
     const { error: arcErr } = await context.supabase.rpc("archive_employee", {
@@ -196,6 +211,7 @@ export const resetEmployeePassword = createServerFn({ method: "POST" })
   .inputValidator((data: unknown) => resetSchema.parse(data))
   .handler(async ({ data, context }) => {
     await assertMainAdmin(context.supabase, context.userId);
+    await assertProfileVisibleInActiveBranch(context.supabase, data.user_id);
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const { error } = await supabaseAdmin.auth.admin.updateUserById(data.user_id, {
       password: data.password,
@@ -240,6 +256,7 @@ export const setEmployeeActive = createServerFn({ method: "POST" })
   .inputValidator((data: unknown) => setActiveSchema.parse(data))
   .handler(async ({ data, context }) => {
     await assertMainAdmin(context.supabase, context.userId);
+    await assertProfileVisibleInActiveBranch(context.supabase, data.user_id);
     if (data.user_id === context.userId && !data.is_active) {
       throw new Error("לא ניתן להשבית את החשבון של עצמך");
     }
