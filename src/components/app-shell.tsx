@@ -443,45 +443,56 @@ export function AppShell({ children }: { children: ReactNode }) {
   );
 
   return (
-    <div className="min-h-screen bg-background">
-      {/* Desktop sidebar (RTL: stick to right) */}
-      <aside className="hidden lg:block fixed inset-y-0 right-0 w-64 border-l border-sidebar-border">
-        {SidebarContent}
-      </aside>
+    <ActiveBranchProvider>
+      <div className="min-h-screen bg-background">
+        {/* Desktop sidebar (RTL: stick to right) */}
+        <aside className="hidden lg:block fixed inset-y-0 right-0 w-64 border-l border-sidebar-border">
+          {SidebarContent}
+        </aside>
 
-      {/* Mobile top bar */}
-      <header className="lg:hidden sticky top-0 z-30 flex items-center justify-between gap-3 border-b border-border bg-background/95 backdrop-blur px-4 h-14">
-        <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
-          <SheetTrigger asChild>
-            <Button variant="ghost" size="icon" aria-label="תפריט">
-              <Menu className="size-5" />
-            </Button>
-          </SheetTrigger>
-          <SheetContent side="right" className="p-0 w-72">
-            {SidebarContent}
-          </SheetContent>
-        </Sheet>
-        <div className="flex items-center gap-2 min-w-0">
-          {company?.logo_url ? (
-            <img src={company.logo_url} alt={company.company_name} className="size-6 rounded object-contain shrink-0" />
-          ) : (
-            <Store className="size-5 text-primary shrink-0" />
-          )}
-          <span className="font-semibold text-sm truncate">{APP_NAME}</span>
-        </div>
-        <NotificationsBell />
-      </header>
+        {/* Mobile top bar */}
+        <header className="lg:hidden sticky top-0 z-30 flex items-center justify-between gap-2 border-b border-border bg-background/95 backdrop-blur px-3 h-14">
+          <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
+            <SheetTrigger asChild>
+              <Button variant="ghost" size="icon" aria-label="תפריט">
+                <Menu className="size-5" />
+              </Button>
+            </SheetTrigger>
+            <SheetContent side="right" className="p-0 w-72">
+              {SidebarContent}
+            </SheetContent>
+          </Sheet>
+          <div className="flex items-center gap-2 min-w-0 flex-1">
+            {company?.logo_url ? (
+              <img src={company.logo_url} alt={company.company_name} className="size-6 rounded object-contain shrink-0" />
+            ) : (
+              <Store className="size-5 text-primary shrink-0" />
+            )}
+            <span className="font-semibold text-sm truncate">{APP_NAME}</span>
+          </div>
+          <div className="flex items-center gap-1 shrink-0">
+            <BranchSwitcher />
+            <NotificationsBell />
+          </div>
+        </header>
 
-      {/* Floating notifications bell — desktop only (mobile uses the one in the header) */}
-      <div className="hidden lg:block fixed top-4 left-4 z-40">
-        <div className="bg-background/95 backdrop-blur border rounded-full shadow-soft">
-          <NotificationsBell />
+        {/* Floating header — desktop only */}
+        <div className="hidden lg:flex fixed top-4 left-4 z-40 items-center gap-2">
+          <BranchSwitcher className="bg-background/95 backdrop-blur shadow-soft" />
+          <div className="bg-background/95 backdrop-blur border rounded-full shadow-soft">
+            <NotificationsBell />
+          </div>
         </div>
+
+        <main className="lg:mr-64">
+          <div className="mx-auto max-w-6xl px-4 sm:px-6 py-6 lg:py-10">
+            <div className="mb-4 flex justify-end">
+              <ActiveBranchBadge />
+            </div>
+            {children}
+          </div>
+        </main>
       </div>
-
-      <main className="lg:mr-64">
-        <div className="mx-auto max-w-6xl px-4 sm:px-6 py-6 lg:py-10">{children}</div>
-      </main>
-    </div>
+    </ActiveBranchProvider>
   );
 }
