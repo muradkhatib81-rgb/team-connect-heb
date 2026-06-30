@@ -104,6 +104,44 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
         href: "https://fonts.googleapis.com/css2?family=Heebo:wght@400;500;600;700;800&display=swap",
       },
     ],
+    scripts: [
+      {
+        // Stale-cache guard. Unregisters any leftover service worker,
+        // clears caches, and auto-reloads once if a route chunk fails to
+        // load because the cached HTML points at a stale asset hash.
+        children: `(function(){try{
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.getRegistrations().then(function(rs){
+      rs.forEach(function(r){ try { r.unregister(); } catch(e){} });
+    }).catch(function(){});
+    if (window.caches && caches.keys) {
+      caches.keys().then(function(ks){ ks.forEach(function(k){ try { caches.delete(k); } catch(e){} }); }).catch(function(){});
+    }
+  }
+  function reloadOnce(){
+    try {
+      var key='__lov_chunk_reload';
+      if (sessionStorage.getItem(key)) return;
+      sessionStorage.setItem(key, String(Date.now()));
+    } catch(e){}
+    location.reload();
+  }
+  window.addEventListener('error', function(e){
+    var m = (e && (e.message||'')) + ' ' + ((e && e.error && e.error.message) || '');
+    if (/ChunkLoadError|Loading chunk|Failed to fetch dynamically imported module|Importing a module script failed/i.test(m)) reloadOnce();
+  });
+  window.addEventListener('unhandledrejection', function(e){
+    var r = e && e.reason; var m = (r && (r.message||String(r))) || '';
+    if (/ChunkLoadError|Loading chunk|Failed to fetch dynamically imported module|Importing a module script failed/i.test(m)) reloadOnce();
+  });
+  try {
+    var key='__lov_chunk_reload';
+    var t = parseInt(sessionStorage.getItem(key)||'0',10);
+    if (t && Date.now()-t > 30000) sessionStorage.removeItem(key);
+  } catch(e){}
+}catch(e){}})();`,
+      },
+    ],
   }),
   shellComponent: RootShell,
   component: RootComponent,
