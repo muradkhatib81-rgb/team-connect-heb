@@ -2,17 +2,18 @@ import { createServerFn } from "@tanstack/react-start";
 import { requireBranchContext } from "@/integrations/supabase/active-branch";
 import { z } from "zod";
 
-async function assertMainAdmin(supabase: any, userId: string) {
+async function assertCanManageDepartments(supabase: any, userId: string) {
   const { data, error } = await supabase
     .from("user_roles")
     .select("role")
     .eq("user_id", userId);
   if (error) throw new Error("שגיאת הרשאות");
   const roles = (data ?? []).map((r: any) => r.role);
-  if (!roles.includes("main_admin")) {
+  if (!roles.includes("main_admin") && !roles.includes("system_admin")) {
     throw new Error("רק מנהל ראשי יכול לבצע פעולה זו");
   }
 }
+
 
 const createSchema = z.object({
   name: z.string().trim().min(1).max(80),
