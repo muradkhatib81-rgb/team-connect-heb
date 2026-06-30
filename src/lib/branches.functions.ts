@@ -202,36 +202,79 @@ export const assignBranchManager = createServerFn({ method: "POST" })
   });
 
 const deleteSchema = z.object({ id: z.string().uuid() });
+const deleteCascadeSchema = z.object({
+  id: z.string().uuid(),
+  confirm_cascade: z.literal(true).optional(),
+});
 
 export type BranchBlockerCounts = {
   employees: number;
   departments: number;
   schedules: number;
   tasks: number;
+  messages: number;
+  notifications: number;
+  reports: number;
 };
+
+export type BranchBlockerResult = {
+  ok: boolean;
+  canDelete: boolean;
+  onlyDepartments: boolean;
+  isEmpty: boolean;
+  employees: number;
+  departments: number;
+  schedules: number;
+  tasks: number;
+  messages: number;
+  notifications: number;
+  reports: number;
+  error?: string;
+};
+
+const ZERO_COUNTS = {
+  employees: 0,
+  departments: 0,
+  schedules: 0,
+  tasks: 0,
+  messages: 0,
+  notifications: 0,
+  reports: 0,
+};
+
+function normalizeBlockers(b: any): Omit<BranchBlockerResult, "ok" | "error"> {
+  const c = {
+    employees: Number(b?.employees ?? 0),
+    departments: Number(b?.departments ?? 0),
+    schedules: Number(b?.schedules ?? 0),
+    tasks: Number(b?.tasks ?? 0),
+    messages: Number(b?.messages ?? 0),
+    notifications: Number(b?.notifications ?? 0),
+    reports: Number(b?.reports ?? 0),
+  };
+  const operational =
+    c.employees + c.schedules + c.tasks + c.messages + c.notifications + c.reports;
+  return {
+    ...c,
+    canDelete: operational === 0,
+    onlyDepartments: operational === 0 && c.departments > 0,
+    isEmpty: operational === 0 && c.departments === 0,
+  };
+}
 
 export const getBranchDeleteBlockers = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((data: unknown) => deleteSchema.parse(data))
-  .handler(async ({ data, context }): Promise<{
-    ok: boolean;
-    canDelete: boolean;
-    employees: number;
-    departments: number;
-    schedules: number;
-    tasks: number;
-    error?: string;
-  }> => {
+  .handler(async ({ data, context }): Promise<BranchBlockerResult> => {
     try {
       await assertSystemAdmin(context.supabase, context.userId);
     } catch {
       return {
         ok: false,
+        ...ZERO_COUNTS,
         canDelete: false,
-        employees: 0,
-        departments: 0,
-        schedules: 0,
-        tasks: 0,
+        onlyDepartments: false,
+        isEmpty: false,
         error: "אין לך הרשאה לבצע פעולה זו.",
       };
     }
@@ -244,172 +287,162 @@ export const getBranchDeleteBlockers = createServerFn({ method: "POST" })
         console.error("[getBranchDeleteBlockers] rpc error:", error);
         return {
           ok: false,
+          ...ZERO_COUNTS,
           canDelete: false,
-          employees: 0,
-          departments: 0,
-          schedules: 0,
-          tasks: 0,
+          onlyDepartments: false,
+          isEmpty: false,
           error: "אירעה שגיאה בבדיקת הנתונים המקושרים לסניף.",
         };
       }
-      const counts = {
-        employees: Number(b?.employees ?? 0),
-        departments: Number(b?.departments ?? 0),
-        schedules: Number(b?.schedules ?? 0),
-        tasks: Number(b?.tasks ?? 0),
-      };
-      return {
-        ok: true,
-        canDelete:
-          counts.employees + counts.departments + counts.schedules + counts.tasks === 0,
-        ...counts,
-      };
+      return { ok: true, ...normalizeBlockers(b) };
     } catch (err) {
       console.error("[getBranchDeleteBlockers] threw:", err);
       return {
         ok: false,
+        ...ZERO_COUNTS,
         canDelete: false,
-        employees: 0,
-        departments: 0,
-        schedules: 0,
-        tasks: 0,
+        onlyDepartments: false,
+        isEmpty: false,
         error: "אירעה שגיאה בבדיקת הנתונים המקושרים לסניף.",
       };
     }
   });
 
+export type BranchDeleteResult = {
+  ok: boolean;
+  deleted: boolean;
+  canDelete: boolean;
+  onlyDepartments: boolean;
+  isEmpty: boolean;
+  departmentsDeleted: number;
+  employees: number;
+  departments: number;
+  schedules: number;
+  tasks: number;
+  messages: number;
+  notifications: number;
+  reports: number;
+  message?: string;
+};
 
-export type BranchDeleteResult =
-  | {
-      ok: true;
-      canDelete: true;
-      deleted: true;
-      employees: number;
-      departments: number;
-      schedules: number;
-      tasks: number;
-    }
-  | {
-      ok: false;
-      canDelete: false;
-      deleted: false;
-      employees: number;
-      departments: number;
-      schedules: number;
-      tasks: number;
-      message: string;
-    }
-  | {
-      ok: false;
-      canDelete: false;
-      deleted: false;
-      employees: 0;
-      departments: 0;
-      schedules: 0;
-      tasks: 0;
-      message: string;
-      unexpected: true;
-    };
-
-function friendlyDeleteFailure(message: string): BranchDeleteResult {
-  return {
-    ok: false,
-    canDelete: false,
-    deleted: false,
-    employees: 0,
-    departments: 0,
-    schedules: 0,
-    tasks: 0,
-    message,
-    unexpected: true,
-  };
+function buildBlockerMessage(c: BranchBlockerCounts): string {
+  const lines = [
+    `• עובדים: ${c.employees}`,
+    `• סידורי עבודה: ${c.schedules}`,
+    `• דוחות: ${c.reports}`,
+    `• משימות: ${c.tasks}`,
+    `• הודעות: ${c.messages}`,
+    `• התראות: ${c.notifications}`,
+  ];
+  return `לא ניתן למחוק את הסניף. קיימים נתונים תפעוליים:\n${lines.join("\n")}`;
 }
 
 export const deleteBranch = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((data: unknown) => deleteSchema.parse(data))
+  .inputValidator((data: unknown) => deleteCascadeSchema.parse(data))
   .handler(async ({ data, context }): Promise<BranchDeleteResult> => {
+    const empty: BranchDeleteResult = {
+      ok: false,
+      deleted: false,
+      canDelete: false,
+      onlyDepartments: false,
+      isEmpty: false,
+      departmentsDeleted: 0,
+      ...ZERO_COUNTS,
+    };
     try {
       await assertSystemAdmin(context.supabase, context.userId);
     } catch (err: any) {
       console.error("[deleteBranch] auth check failed:", err);
-      return friendlyDeleteFailure(
-        "אין לך הרשאה למחוק סניפים. נדרשת הרשאת מנהל מערכת ראשי.",
-      );
+      return { ...empty, message: "אין לך הרשאה למחוק סניפים." };
     }
     const supabase = context.supabase;
 
-    let counts = { employees: 0, departments: 0, schedules: 0, tasks: 0 };
+    let blockers: Omit<BranchBlockerResult, "ok" | "error">;
     try {
-      const { data: blockers, error } = await (supabase as any).rpc(
+      const { data: b, error } = await (supabase as any).rpc(
         "get_branch_delete_blockers",
         { _branch_id: data.id },
       );
       if (error) {
         console.error("[deleteBranch] blocker rpc error:", error);
-        return friendlyDeleteFailure(
-          "אירעה שגיאה בבדיקת הנתונים המקושרים לסניף. נסה שוב מאוחר יותר.",
-        );
+        return {
+          ...empty,
+          message: "אירעה שגיאה בבדיקת הנתונים המקושרים לסניף.",
+        };
       }
-      counts = {
-        employees: Number(blockers?.employees ?? 0),
-        departments: Number(blockers?.departments ?? 0),
-        schedules: Number(blockers?.schedules ?? 0),
-        tasks: Number(blockers?.tasks ?? 0),
-      };
-    } catch (err: any) {
+      blockers = normalizeBlockers(b);
+    } catch (err) {
       console.error("[deleteBranch] blocker rpc threw:", err);
-      return friendlyDeleteFailure(
-        "אירעה שגיאה בבדיקת הנתונים המקושרים לסניף. נסה שוב מאוחר יותר.",
-      );
+      return {
+        ...empty,
+        message: "אירעה שגיאה בבדיקת הנתונים המקושרים לסניף.",
+      };
     }
 
-    const total =
-      counts.employees + counts.departments + counts.schedules + counts.tasks;
-    if (total > 0) {
-      const lines: string[] = [];
-      if (counts.employees) lines.push(`• עובדים: ${counts.employees}`);
-      if (counts.departments) lines.push(`• מחלקות: ${counts.departments}`);
-      if (counts.schedules) lines.push(`• סידורי עבודה: ${counts.schedules}`);
-      if (counts.tasks) lines.push(`• משימות: ${counts.tasks}`);
+    // Block if any operational data remains
+    if (!blockers.canDelete) {
       return {
         ok: false,
-        canDelete: false,
         deleted: false,
-        ...counts,
-        message: `לא ניתן למחוק את הסניף מכיוון שעדיין קיימים בו:\n${lines.join("\n")}`,
+        departmentsDeleted: 0,
+        ...blockers,
+        message: buildBlockerMessage(blockers),
       };
     }
 
-    try {
-      const { error } = await supabase
-        .from("branches")
-        .delete()
-        .eq("id", data.id);
-      if (error) {
-        console.error("[deleteBranch] delete failed:", error);
-        const code = (error as any).code;
-        let msg =
-          "אירעה שגיאה במחיקת הסניף. נסה שוב מאוחר יותר.";
-        if (code === "23503") {
-          msg =
-            "לא ניתן למחוק את הסניף מכיוון שקיימים נתונים מקושרים אליו במערכת.";
-        } else if (code === "42501") {
-          msg = "אין לך הרשאה למחוק את הסניף.";
-        }
-        return friendlyDeleteFailure(msg);
-      }
-    } catch (err: any) {
-      console.error("[deleteBranch] delete threw:", err);
-      return friendlyDeleteFailure(
-        "אירעה שגיאה במחיקת הסניף. נסה שוב מאוחר יותר.",
-      );
+    // Branch has departments → require explicit cascade confirmation
+    if (blockers.onlyDepartments && !data.confirm_cascade) {
+      return {
+        ok: true,
+        deleted: false,
+        departmentsDeleted: 0,
+        ...blockers,
+        message: `הסניף מכיל ${blockers.departments} מחלקות. נדרש אישור למחיקת הסניף יחד עם המחלקות.`,
+      };
     }
 
-    return {
-      ok: true,
-      canDelete: true,
-      deleted: true,
-      ...counts,
-    };
+    // Cascade (or simple) delete via SECURITY DEFINER RPC
+    try {
+      const { data: res, error } = await (supabase as any).rpc(
+        "delete_branch_cascade",
+        { _branch_id: data.id },
+      );
+      if (error) {
+        console.error("[deleteBranch] cascade rpc error:", error);
+        return {
+          ...empty,
+          ...blockers,
+          message: "אירעה שגיאה במחיקת הסניף. נסה שוב מאוחר יותר.",
+        };
+      }
+      if (!res?.deleted) {
+        const b2 = normalizeBlockers(res?.blockers);
+        return {
+          ok: false,
+          deleted: false,
+          departmentsDeleted: 0,
+          ...b2,
+          message: buildBlockerMessage(b2),
+        };
+      }
+      return {
+        ok: true,
+        deleted: true,
+        canDelete: true,
+        onlyDepartments: blockers.onlyDepartments,
+        isEmpty: blockers.isEmpty,
+        departmentsDeleted: Number(res?.departments_deleted ?? blockers.departments),
+        ...ZERO_COUNTS,
+        departments: blockers.departments,
+      };
+    } catch (err) {
+      console.error("[deleteBranch] cascade rpc threw:", err);
+      return {
+        ...empty,
+        ...blockers,
+        message: "אירעה שגיאה במחיקת הסניף. נסה שוב מאוחר יותר.",
+      };
+    }
   });
+
