@@ -1,5 +1,5 @@
 import { createServerFn } from "@tanstack/react-start";
-import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { requireBranchContext } from "@/integrations/supabase/active-branch";
 import { z } from "zod";
 
 async function assertMainAdmin(supabase: any, userId: string) {
@@ -30,7 +30,7 @@ function generateCode(name: string): string {
 }
 
 export const createDepartment = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
+  .middleware([requireBranchContext])
   .inputValidator((data: unknown) => createSchema.parse(data))
   .handler(async ({ data, context }) => {
     await assertMainAdmin(context.supabase, context.userId);
@@ -71,7 +71,7 @@ const updateSchema = z.object({
 });
 
 export const updateDepartment = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
+  .middleware([requireBranchContext])
   .inputValidator((data: unknown) => updateSchema.parse(data))
   .handler(async ({ data, context }) => {
     await assertMainAdmin(context.supabase, context.userId);
@@ -98,7 +98,7 @@ export const updateDepartment = createServerFn({ method: "POST" })
 const deleteSchema = z.object({ id: z.string().uuid() });
 
 export const deleteDepartment = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
+  .middleware([requireBranchContext])
   .inputValidator((data: unknown) => deleteSchema.parse(data))
   .handler(async ({ data, context }) => {
     await assertMainAdmin(context.supabase, context.userId);
