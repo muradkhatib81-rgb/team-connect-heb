@@ -15,6 +15,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { useAuth } from "@/lib/use-auth";
+import { useJobTitles } from "@/lib/use-job-titles";
 import {
   ROLE_LABELS,
   ROLE_OPTIONS,
@@ -671,6 +672,7 @@ export function CreateEmployeeDialog({
 }) {
   const qc = useQueryClient();
   const createFn = useServerFn(createEmployee);
+  const jobTitlesQ = useJobTitles();
   const defaultDept = defaultDepartmentId ?? depts[0]?.id ?? "";
   const [form, setForm] = useState({
     full_name: "",
@@ -679,6 +681,7 @@ export function CreateEmployeeDialog({
     phone: "",
     password: "",
     role: "employee" as AppRole,
+    job_title: "",
   });
   const [avatarFile, setAvatarFile] = useState<File | null>(null);
   // When the server reports the id_number already belongs to an existing employee
@@ -715,7 +718,7 @@ export function CreateEmployeeDialog({
     if (form.password.length < 6) throw new Error("סיסמה ראשונית של 6 תווים לפחות");
     if (!form.full_name.trim()) throw new Error("יש למלא שם עובד");
     const res = await createFn({
-      data: { ...form, job_title: "", avatar_url: null, force_archived: forceArchived },
+      data: { ...form, job_title: form.job_title || "", avatar_url: null, force_archived: forceArchived },
     });
     if (avatarFile && res?.id) {
       try {
