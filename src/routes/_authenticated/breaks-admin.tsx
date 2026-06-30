@@ -8,6 +8,7 @@ import { Card } from "@/components/ui/card";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { ApproveList } from "./breaks";
 import { BreakSettingsPage } from "./break-settings";
+import { BreakRequestPermissionsCard } from "@/components/break-request-permissions-card";
 
 export const Route = createFileRoute("/_authenticated/breaks-admin")({
   component: BreaksAdminPage,
@@ -178,6 +179,9 @@ function BreaksAdminPage() {
             אישור בקשות{pendingCount > 0 ? ` (${pendingCount})` : ""}
           </TabsTrigger>
           <TabsTrigger value="settings">הגדרות הפסקות</TabsTrigger>
+          {isMainAdmin && (
+            <TabsTrigger value="permissions">הרשאות בקשת הפסקה</TabsTrigger>
+          )}
         </TabsList>
 
         <TabsContent value="approve">
@@ -196,6 +200,12 @@ function BreaksAdminPage() {
             <BreakSettingsPage />
           </Card>
         </TabsContent>
+
+        {isMainAdmin && (
+          <TabsContent value="permissions">
+            <BreakRequestPermissionsCard />
+          </TabsContent>
+        )}
       </Tabs>
     </div>
   );
