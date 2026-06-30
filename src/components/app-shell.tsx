@@ -263,7 +263,9 @@ export function AppShell({ children }: { children: ReactNode }) {
 
   return (
     <ActiveBranchProvider>
+      <RealtimeBridge uid={profile.id} />
       <div className="min-h-screen bg-background">
+
         {/* Desktop sidebar (RTL: stick to right) */}
         <aside className="hidden lg:block fixed inset-y-0 right-0 w-64 border-l border-sidebar-border">
           {SidebarContent}
