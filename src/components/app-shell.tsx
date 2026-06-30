@@ -169,6 +169,15 @@ export function AppShell({ children }: { children: ReactNode }) {
           qc.invalidateQueries({ queryKey: ["departments"] });
         },
       )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "job_titles" },
+        () => {
+          qc.invalidateQueries({ queryKey: ["job-titles"] });
+          qc.invalidateQueries({ queryKey: ["employees"] });
+          qc.invalidateQueries({ queryKey: ["dashboard", "stats"] });
+        },
+      )
       // Tasks sub-tables that are not yet covered by their pages.
       .on(
         "postgres_changes",
