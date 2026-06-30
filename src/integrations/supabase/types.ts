@@ -2074,6 +2074,7 @@ export type Database = {
         Args: { _msg_id: string; _user_id: string }
         Returns: boolean
       }
+      is_system_admin: { Args: { _user_id: string }; Returns: boolean }
       list_profiles_contact: {
         Args: never
         Returns: {
@@ -2117,6 +2118,7 @@ export type Database = {
         | "assistant_manager"
         | "department_manager"
         | "employee"
+        | "system_admin"
       comm_audit_action:
         | "created"
         | "edited"
@@ -2281,6 +2283,7 @@ export const Constants = {
         "assistant_manager",
         "department_manager",
         "employee",
+        "system_admin",
       ],
       comm_audit_action: [
         "created",
