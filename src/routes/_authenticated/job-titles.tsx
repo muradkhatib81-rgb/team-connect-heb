@@ -108,8 +108,6 @@ function JobTitlesPage() {
                     {t.excluded_from_headcount
                       ? "לא נכלל בסטטיסטיקות כוח האדם"
                       : "נכלל בסטטיסטיקות כוח האדם"}
-                    {" · "}
-                    {t.can_request_break ? "רשאי לבקש הפסקה" : "לא רשאי לבקש הפסקה"}
                   </div>
                 </div>
                 <Button variant="outline" size="sm" onClick={() => setEditing(t)} className="gap-1.5">
@@ -158,14 +156,12 @@ function EditDialog({ title, onClose }: { title?: JobTitleRow; onClose: () => vo
   const qc = useQueryClient();
   const [name, setName] = useState(title?.name ?? "");
   const [excluded, setExcluded] = useState(title?.excluded_from_headcount ?? false);
-  const [canRequestBreak, setCanRequestBreak] = useState(title?.can_request_break ?? true);
 
   const mut = useMutation({
     mutationFn: async () => {
       const payload = {
         name: name.trim(),
         excluded_from_headcount: excluded,
-        can_request_break: canRequestBreak,
       };
       if (!payload.name) throw new Error("יש להזין שם תפקיד");
       if (title) {
