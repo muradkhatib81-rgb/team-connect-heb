@@ -108,6 +108,8 @@ function JobTitlesPage() {
                     {t.excluded_from_headcount
                       ? "לא נכלל בסטטיסטיקות כוח האדם"
                       : "נכלל בסטטיסטיקות כוח האדם"}
+                    {" · "}
+                    {t.can_request_break ? "רשאי לבקש הפסקה" : "לא רשאי לבקש הפסקה"}
                   </div>
                 </div>
                 <Button variant="outline" size="sm" onClick={() => setEditing(t)} className="gap-1.5">
