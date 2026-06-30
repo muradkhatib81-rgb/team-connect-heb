@@ -218,18 +218,47 @@ export const deleteBranch = createServerFn({ method: "POST" })
     ];
     const blockers: string[] = [];
     for (const c of checks) {
-      const { count, error } = await (supabase as any)
-        .from(c.table)
-        .select("id", { count: "exact", head: true })
-        .eq("branch_id", data.id);
-      if (error) throw new Error(error.message);
-      if ((count ?? 0) > 0) blockers.push(`${c.label} (${count})`);
+      try {
+        const { count, error } = await (supabase as any)
+          .from(c.table)
+          .select("id", { count: "exact", head: true })
+          .eq("branch_id", data.id);
+        if (error) {
+          console.error(`[deleteBranch] count check failed for ${c.table}:`, error);
+          throw new Error(
+            `שגיאה בבדיקת ${c.label}: ${error.message || "שגיאת מסד נתונים"}`,
+          );
+        }
+        if ((count ?? 0) > 0) blockers.push(`• ${c.label}: ${count}`);
+      } catch (err: any) {
+        if (err?.message?.startsWith("שגיאה בבדיקת")) throw err;
+        console.error(`[deleteBranch] unexpected error checking ${c.table}:`, err);
+        throw new Error(
+          `אירעה שגיאה בעת בדיקת ${c.label}. נסה שוב מאוחר יותר.`,
+        );
+      }
     }
     if (blockers.length) {
-      throw new Error(`לא ניתן למחוק את הסניף. קיימים: ${blockers.join(", ")}`);
+      throw new Error(
+        `לא ניתן למחוק את הסניף מכיוון שעדיין קיימים בו:\n${blockers.join("\n")}`,
+      );
     }
 
     const { error } = await supabase.from("branches").delete().eq("id", data.id);
-    if (error) throw new Error(error.message);
+    if (error) {
+      console.error("[deleteBranch] delete failed:", error);
+      const code = (error as any).code;
+      if (code === "23503") {
+        throw new Error(
+          "לא ניתן למחוק את הסניף מכיוון שקיימים נתונים מקושרים אליו במערכת.",
+        );
+      }
+      if (code === "42501") {
+        throw new Error("אין לך הרשאה למחוק את הסניף.");
+      }
+      throw new Error(
+        `אירעה שגיאה במחיקת הסניף: ${error.message || "שגיאה לא ידועה"}`,
+      );
+    }
     return { ok: true };
   });

@@ -558,10 +558,24 @@ function DeleteDialog({
   const m = useMutation({
     mutationFn: () => del({ data: { id: branch.id } }),
     onSuccess: () => {
-      toast.success("הסניף נמחק");
+      toast.success(`הסניף "${branch.name}" נמחק בהצלחה`);
       onDeleted();
     },
-    onError: (e: any) => toast.error(e?.message ?? "לא ניתן למחוק"),
+    onError: (e: any) => {
+      console.error("[DeleteBranch] error:", e);
+      const raw =
+        (typeof e?.message === "string" && e.message.trim()) ||
+        (typeof e?.body?.message === "string" && e.body.message.trim()) ||
+        (typeof e?.error?.message === "string" && e.error.message.trim()) ||
+        (typeof e === "string" && e.trim()) ||
+        "";
+      const message = raw || "אירעה שגיאה לא צפויה במחיקת הסניף. נסה שוב מאוחר יותר.";
+      const [first, ...rest] = message.split("\n");
+      toast.error(first, {
+        description: rest.length ? rest.join("\n") : undefined,
+        duration: 8000,
+      });
+    },
   });
   return (
     <AlertDialog open onOpenChange={(o) => !o && onClose()}>
