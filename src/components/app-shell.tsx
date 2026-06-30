@@ -376,28 +376,37 @@ export function AppShell({ children }: { children: ReactNode }) {
       </div>
 
       <nav className="flex-1 min-h-0 overflow-y-auto p-3 space-y-1">
-        {nav.map((item) => {
+        {nav.map((item, idx) => {
           const active = pathname === item.to || pathname.startsWith(item.to + "/");
+          const prev = idx > 0 ? nav[idx - 1] : null;
+          const showSectionHeader = !!item.section && (!prev || prev.section !== item.section);
           return (
-            <Link
-              key={item.to}
-              to={item.to}
-              onClick={() => setMobileOpen(false)}
-              className={cn(
-                "flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors",
-                active
-                  ? "bg-sidebar-accent text-sidebar-accent-foreground"
-                  : "text-sidebar-foreground hover:bg-sidebar-accent/60",
+            <div key={item.to}>
+              {showSectionHeader && (
+                <div className="mt-4 mb-1 px-3 flex items-center gap-2 text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
+                  <Crown className="size-3" />
+                  <span>{item.section}</span>
+                </div>
               )}
-            >
-              <item.icon className="size-4 shrink-0" />
-              <span className="flex-1">{item.label}</span>
-              {!!item.badge && item.badge > 0 && (
-                <span className="min-w-[20px] h-5 px-1.5 rounded-full bg-destructive text-destructive-foreground text-[11px] font-bold flex items-center justify-center">
-                  {item.badge > 99 ? "99+" : item.badge}
-                </span>
-              )}
-            </Link>
+              <Link
+                to={item.to}
+                onClick={() => setMobileOpen(false)}
+                className={cn(
+                  "flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors",
+                  active
+                    ? "bg-sidebar-accent text-sidebar-accent-foreground"
+                    : "text-sidebar-foreground hover:bg-sidebar-accent/60",
+                )}
+              >
+                <item.icon className="size-4 shrink-0" />
+                <span className="flex-1">{item.label}</span>
+                {!!item.badge && item.badge > 0 && (
+                  <span className="min-w-[20px] h-5 px-1.5 rounded-full bg-destructive text-destructive-foreground text-[11px] font-bold flex items-center justify-center">
+                    {item.badge > 99 ? "99+" : item.badge}
+                  </span>
+                )}
+              </Link>
+            </div>
           );
         })}
       </nav>
