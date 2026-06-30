@@ -15,6 +15,7 @@ export interface AuthProfile {
   is_active: boolean;
   must_change_password: boolean;
   roles: AppRole[];
+  branch_id: string | null;
 }
 
 async function fetchSessionAndProfile(): Promise<AuthProfile | null> {
