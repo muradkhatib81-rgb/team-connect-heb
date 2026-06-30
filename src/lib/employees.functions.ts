@@ -1,5 +1,5 @@
 import { createServerFn } from "@tanstack/react-start";
-import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { requireBranchContext } from "@/integrations/supabase/active-branch";
 import { z } from "zod";
 
 const EMPLOYEE_EMAIL_DOMAIN = "employees.ramilevy.local";
@@ -44,7 +44,7 @@ const createEmployeeSchemaExt = createEmployeeSchema.extend({
 });
 
 export const createEmployee = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
+  .middleware([requireBranchContext])
   .inputValidator((data: unknown) => createEmployeeSchemaExt.parse(data))
   .handler(async ({ data, context }) => {
     await assertMainAdmin(context.supabase, context.userId);
@@ -150,7 +150,7 @@ const deleteSchema = z.object({
  * The auth user is removed here with the service-role key.
  */
 export const deleteEmployee = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
+  .middleware([requireBranchContext])
   .inputValidator((data: unknown) => deleteSchema.parse(data))
   .handler(async ({ data, context }) => {
     await assertMainAdmin(context.supabase, context.userId);
@@ -192,7 +192,7 @@ const resetSchema = z.object({
 });
 
 export const resetEmployeePassword = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
+  .middleware([requireBranchContext])
   .inputValidator((data: unknown) => resetSchema.parse(data))
   .handler(async ({ data, context }) => {
     await assertMainAdmin(context.supabase, context.userId);
@@ -213,7 +213,7 @@ const changeOwnPasswordSchema = z.object({
 });
 
 export const changeOwnPassword = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
+  .middleware([requireBranchContext])
   .inputValidator((data: unknown) => changeOwnPasswordSchema.parse(data))
   .handler(async ({ data, context }) => {
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
@@ -236,7 +236,7 @@ const setActiveSchema = z.object({
 });
 
 export const setEmployeeActive = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
+  .middleware([requireBranchContext])
   .inputValidator((data: unknown) => setActiveSchema.parse(data))
   .handler(async ({ data, context }) => {
     await assertMainAdmin(context.supabase, context.userId);

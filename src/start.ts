@@ -2,6 +2,7 @@ import { createStart, createMiddleware } from "@tanstack/react-start";
 
 import { renderErrorPage } from "./lib/error-page";
 import { attachSupabaseAuth } from "@/integrations/supabase/auth-attacher";
+import { attachActiveBranch } from "@/integrations/supabase/active-branch";
 
 const errorMiddleware = createMiddleware().server(async ({ next }) => {
   try {
@@ -19,6 +20,8 @@ const errorMiddleware = createMiddleware().server(async ({ next }) => {
 });
 
 export const startInstance = createStart(() => ({
-  functionMiddleware: [attachSupabaseAuth],
+  // Order: auth attaches Authorization first, then active-branch appends
+  // X-Active-Branch. TanStack merges headers across function middlewares.
+  functionMiddleware: [attachSupabaseAuth, attachActiveBranch],
   requestMiddleware: [errorMiddleware],
 }));

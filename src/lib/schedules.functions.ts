@@ -1,5 +1,5 @@
 import { createServerFn } from "@tanstack/react-start";
-import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { requireBranchContext } from "@/integrations/supabase/active-branch";
 import { z } from "zod";
 
 // Shift codes are dynamic — validated against public.shift_definitions at runtime.
@@ -75,7 +75,7 @@ const upsertSchema = z.object({
 });
 
 export const createOrGetSchedule = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
+  .middleware([requireBranchContext])
   .inputValidator((d: unknown) => upsertSchema.parse(d))
   .handler(async ({ data, context }) => {
     const caps = await getCaps(context.supabase, context.userId);
@@ -133,7 +133,7 @@ const saveShiftsSchema = z.object({
 });
 
 export const saveScheduleShifts = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
+  .middleware([requireBranchContext])
   .inputValidator((d: unknown) => saveShiftsSchema.parse(d))
   .handler(async ({ data, context }) => {
     const { data: sched, error: se } = await context.supabase
@@ -257,7 +257,7 @@ export const saveScheduleShifts = createServerFn({ method: "POST" })
 
 // ---------- SUBMIT for approval ----------
 export const submitSchedule = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
+  .middleware([requireBranchContext])
   .inputValidator((d: unknown) => z.object({ schedule_id: z.string().uuid() }).parse(d))
   .handler(async ({ data, context }) => {
     const { data: sched } = await context.supabase
@@ -434,7 +434,7 @@ export const submitSchedule = createServerFn({ method: "POST" })
 
 // ---------- APPROVE ----------
 export const approveSchedule = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
+  .middleware([requireBranchContext])
   .inputValidator((d: unknown) => z.object({ schedule_id: z.string().uuid() }).parse(d))
   .handler(async ({ data, context }) => {
     const caps = await getCaps(context.supabase, context.userId);
@@ -528,7 +528,7 @@ export const approveSchedule = createServerFn({ method: "POST" })
 
 // ---------- PUBLISH ----------
 export const publishSchedule = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
+  .middleware([requireBranchContext])
   .inputValidator((d: unknown) => z.object({ schedule_id: z.string().uuid() }).parse(d))
   .handler(async ({ data, context }) => {
     const caps = await getCaps(context.supabase, context.userId);
@@ -604,7 +604,7 @@ export const publishSchedule = createServerFn({ method: "POST" })
 
 // ---------- REJECT ----------
 export const rejectSchedule = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
+  .middleware([requireBranchContext])
   .inputValidator((d: unknown) =>
     z.object({ schedule_id: z.string().uuid(), note: z.string().trim().min(1, "נדרשת הערה") }).parse(d),
   )
@@ -675,7 +675,7 @@ export const rejectSchedule = createServerFn({ method: "POST" })
 
 // ---------- COPY from previous week ----------
 export const copyPreviousWeek = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
+  .middleware([requireBranchContext])
   .inputValidator((d: unknown) => z.object({ schedule_id: z.string().uuid() }).parse(d))
   .handler(async ({ data, context }) => {
     const { data: sched } = await context.supabase
@@ -725,7 +725,7 @@ export const copyPreviousWeek = createServerFn({ method: "POST" })
 
 // ---------- DELETE ----------
 export const deleteSchedule = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
+  .middleware([requireBranchContext])
   .inputValidator((d: unknown) => z.object({ schedule_id: z.string().uuid() }).parse(d))
   .handler(async ({ data, context }) => {
     const caps = await getCaps(context.supabase, context.userId);
@@ -764,7 +764,7 @@ export const deleteSchedule = createServerFn({ method: "POST" })
 // permissions (create/approve/publish). Department managers can see the totals
 // across the branch as well so they can plan jointly.
 export const getUnpublishedWeekSummary = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
+  .middleware([requireBranchContext])
   .inputValidator((d: unknown) =>
     z.object({ week_start: z.string() }).parse(d),
   )

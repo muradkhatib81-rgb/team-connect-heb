@@ -38,7 +38,7 @@ import {
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { NotificationsBell } from "@/components/notifications-bell";
-import { ActiveBranchProvider } from "@/lib/use-active-branch";
+import { ActiveBranchProvider, useActiveBranch } from "@/lib/use-active-branch";
 import { BranchSwitcher, ActiveBranchBadge } from "@/components/branch-switcher";
 
 interface NavItem {
@@ -114,190 +114,9 @@ export function AppShell({ children }: { children: ReactNode }) {
     // Plain employees may now access /dashboard directly (clean employee view).
   }, [profile?.must_change_password, profile, pathname, navigate]);
 
-  // Global realtime: ensure that identity / permissions / cross-cutting
-  // tables propagate to every open screen without a refresh. Each authenticated
-  // page mounts AppShell, so a single subscription here covers the whole app.
-  useEffect(() => {
-    if (!profile?.id) return;
-    const uid = profile.id;
-    const ch = supabase
-      .channel(`global-realtime-${uid}`)
-      // Identity & permissions — refresh auth profile and permission caches
-      // so role/department/permission changes apply instantly across all tabs.
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "user_roles" },
-        (payload: any) => {
-          qc.invalidateQueries({ queryKey: ["all-roles"] });
-          qc.invalidateQueries({ queryKey: ["permissions-list"] });
-          const affected = payload?.new?.user_id ?? payload?.old?.user_id;
-          if (!affected || affected === uid) {
-            qc.invalidateQueries({ queryKey: ["auth", "me"] });
-            qc.invalidateQueries({ queryKey: ["task-perm"] });
-            qc.invalidateQueries({ queryKey: ["shell-can-manage-breaks"] });
-          }
-          qc.invalidateQueries({ queryKey: ["user-perms"] });
-        },
-      )
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "user_task_permissions" },
-        (payload: any) => {
-          qc.invalidateQueries({ queryKey: ["permissions-list"] });
-          qc.invalidateQueries({ queryKey: ["user-perms"] });
-          qc.invalidateQueries({ queryKey: ["task-perm"] });
-          const affected = payload?.new?.user_id ?? payload?.old?.user_id;
-          if (!affected || affected === uid) {
-            qc.invalidateQueries({ queryKey: ["auth", "me"] });
-            qc.invalidateQueries({ queryKey: ["shell-can-manage-breaks", uid] });
-          }
-        },
-      )
-      // Profiles — affect navigation badges, department membership, lists.
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "profiles" },
-        (payload: any) => {
-          const affected = payload?.new?.id ?? payload?.old?.id;
-          if (!affected || affected === uid) {
-            qc.invalidateQueries({ queryKey: ["auth", "me"] });
-          }
-          qc.invalidateQueries({ queryKey: ["employees"] });
-          qc.invalidateQueries({ queryKey: ["departments"] });
-        },
-      )
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "departments" },
-        () => {
-          qc.invalidateQueries({ queryKey: ["auth", "me"] });
-          qc.invalidateQueries({ queryKey: ["departments"] });
-        },
-      )
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "job_titles" },
-        () => {
-          qc.invalidateQueries({ queryKey: ["job-titles"] });
-          qc.invalidateQueries({ queryKey: ["employees"] });
-          qc.invalidateQueries({ queryKey: ["dashboard", "stats"] });
-        },
-      )
-      // Tasks sub-tables that are not yet covered by their pages.
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "task_assignees" },
-        () => qc.invalidateQueries({ queryKey: ["tasks"] }),
-      )
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "task_departments" },
-        () => qc.invalidateQueries({ queryKey: ["tasks"] }),
-      )
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "task_comments" },
-        () => qc.invalidateQueries({ queryKey: ["task-activity"] }),
-      )
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "task_activity_log" },
-        () => qc.invalidateQueries({ queryKey: ["task-activity"] }),
-      )
-      // Schedules — extra safety net for any page that reads them.
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "schedules" },
-        () => {
-          qc.invalidateQueries({ queryKey: ["schedule"] });
-          qc.invalidateQueries({ queryKey: ["schedules-pending"] });
-          qc.invalidateQueries({ queryKey: ["schedules-approved"] });
-          qc.invalidateQueries({ queryKey: ["dashboard-schedules"] });
-          qc.invalidateQueries({ queryKey: ["dashboard-approved-list"] });
-          qc.invalidateQueries({ queryKey: ["emp-dash-schedule"] });
-        },
-      )
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "schedule_shifts" },
-        () => {
-          qc.invalidateQueries({ queryKey: ["schedule-shifts"] });
-          qc.invalidateQueries({ queryKey: ["emp-dash-schedule"] });
-        },
-      )
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "shift_definitions" },
-        () => {
-          qc.invalidateQueries({ queryKey: ["shift-definitions"] });
-          qc.invalidateQueries({ queryKey: ["shift-definitions-active"] });
-        },
-      )
-      // Breaks — keep counters, queues and dashboards live everywhere.
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "break_requests" },
-        () => {
-          qc.invalidateQueries({ queryKey: ["breaks"] });
-          qc.invalidateQueries({ queryKey: ["breaks-admin"] });
-          qc.invalidateQueries({ queryKey: ["dashboard-breaks"] });
-          qc.invalidateQueries({ queryKey: ["break-stats"] });
-        },
-      )
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "break_settings" },
-        () => qc.invalidateQueries({ queryKey: ["break-settings"] }),
-      )
-      // Communications — message/announcement reads & targets.
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "messages" },
-        () => {
-          qc.invalidateQueries({ queryKey: ["communications"] });
-          qc.invalidateQueries({ queryKey: ["shell-comm-unread", uid] });
-        },
-      )
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "message_recipients" },
-        () => {
-          qc.invalidateQueries({ queryKey: ["communications"] });
-          qc.invalidateQueries({ queryKey: ["shell-comm-unread", uid] });
-        },
-      )
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "announcements" },
-        () => {
-          qc.invalidateQueries({ queryKey: ["communications"] });
-          qc.invalidateQueries({ queryKey: ["shell-comm-unread", uid] });
-        },
-      )
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "announcement_reads" },
-        () => {
-          qc.invalidateQueries({ queryKey: ["communications"] });
-          qc.invalidateQueries({ queryKey: ["shell-comm-unread", uid] });
-        },
-      )
-      // Company settings, employee of month — global refreshes.
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "company_settings" },
-        () => qc.invalidateQueries({ queryKey: ["company-settings"] }),
-      )
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "employee_of_month" },
-        () => qc.invalidateQueries({ queryKey: ["employee-of-month"] }),
-      )
-      .subscribe();
-    return () => {
-      supabase.removeChannel(ch);
-    };
-  }, [profile?.id, qc]);
+  // Realtime bridge is mounted inside <ActiveBranchProvider/> below so
+  // it can read the active branch via the context. See <RealtimeBridge/>.
+
 
 
 
@@ -444,7 +263,9 @@ export function AppShell({ children }: { children: ReactNode }) {
 
   return (
     <ActiveBranchProvider>
+      <RealtimeBridge uid={profile.id} />
       <div className="min-h-screen bg-background">
+
         {/* Desktop sidebar (RTL: stick to right) */}
         <aside className="hidden lg:block fixed inset-y-0 right-0 w-64 border-l border-sidebar-border">
           {SidebarContent}
@@ -496,3 +317,113 @@ export function AppShell({ children }: { children: ReactNode }) {
     </ActiveBranchProvider>
   );
 }
+
+/**
+ * Mounted inside <ActiveBranchProvider/> so it can read the active branch
+ * via the context. Subscribes to every cross-cutting table once per
+ * (user, active branch) pair and tears the channel down + rebuilds when
+ * the sysadmin switches branches, so realtime stops emitting events
+ * scoped to the previous branch through the open WebSocket.
+ */
+function RealtimeBridge({ uid }: { uid: string }) {
+  const qc = useQueryClient();
+  const { activeBranchId } = useActiveBranch();
+  useEffect(() => {
+    const ch = supabase
+      .channel(`global-realtime-${uid}-${activeBranchId ?? "all"}`)
+      .on("postgres_changes", { event: "*", schema: "public", table: "user_roles" }, (payload: any) => {
+        qc.invalidateQueries({ queryKey: ["all-roles"] });
+        qc.invalidateQueries({ queryKey: ["permissions-list"] });
+        const affected = payload?.new?.user_id ?? payload?.old?.user_id;
+        if (!affected || affected === uid) {
+          qc.invalidateQueries({ queryKey: ["auth", "me"] });
+          qc.invalidateQueries({ queryKey: ["task-perm"] });
+          qc.invalidateQueries({ queryKey: ["shell-can-manage-breaks"] });
+        }
+        qc.invalidateQueries({ queryKey: ["user-perms"] });
+      })
+      .on("postgres_changes", { event: "*", schema: "public", table: "user_task_permissions" }, (payload: any) => {
+        qc.invalidateQueries({ queryKey: ["permissions-list"] });
+        qc.invalidateQueries({ queryKey: ["user-perms"] });
+        qc.invalidateQueries({ queryKey: ["task-perm"] });
+        const affected = payload?.new?.user_id ?? payload?.old?.user_id;
+        if (!affected || affected === uid) {
+          qc.invalidateQueries({ queryKey: ["auth", "me"] });
+          qc.invalidateQueries({ queryKey: ["shell-can-manage-breaks", uid] });
+        }
+      })
+      .on("postgres_changes", { event: "*", schema: "public", table: "profiles" }, (payload: any) => {
+        const affected = payload?.new?.id ?? payload?.old?.id;
+        if (!affected || affected === uid) qc.invalidateQueries({ queryKey: ["auth", "me"] });
+        qc.invalidateQueries({ queryKey: ["employees"] });
+        qc.invalidateQueries({ queryKey: ["departments"] });
+      })
+      .on("postgres_changes", { event: "*", schema: "public", table: "departments" }, () => {
+        qc.invalidateQueries({ queryKey: ["auth", "me"] });
+        qc.invalidateQueries({ queryKey: ["departments"] });
+      })
+      .on("postgres_changes", { event: "*", schema: "public", table: "job_titles" }, () => {
+        qc.invalidateQueries({ queryKey: ["job-titles"] });
+        qc.invalidateQueries({ queryKey: ["employees"] });
+        qc.invalidateQueries({ queryKey: ["dashboard", "stats"] });
+      })
+      .on("postgres_changes", { event: "*", schema: "public", table: "task_assignees" }, () =>
+        qc.invalidateQueries({ queryKey: ["tasks"] }))
+      .on("postgres_changes", { event: "*", schema: "public", table: "task_departments" }, () =>
+        qc.invalidateQueries({ queryKey: ["tasks"] }))
+      .on("postgres_changes", { event: "*", schema: "public", table: "task_comments" }, () =>
+        qc.invalidateQueries({ queryKey: ["task-activity"] }))
+      .on("postgres_changes", { event: "*", schema: "public", table: "task_activity_log" }, () =>
+        qc.invalidateQueries({ queryKey: ["task-activity"] }))
+      .on("postgres_changes", { event: "*", schema: "public", table: "schedules" }, () => {
+        qc.invalidateQueries({ queryKey: ["schedule"] });
+        qc.invalidateQueries({ queryKey: ["schedules-pending"] });
+        qc.invalidateQueries({ queryKey: ["schedules-approved"] });
+        qc.invalidateQueries({ queryKey: ["dashboard-schedules"] });
+        qc.invalidateQueries({ queryKey: ["dashboard-approved-list"] });
+        qc.invalidateQueries({ queryKey: ["emp-dash-schedule"] });
+      })
+      .on("postgres_changes", { event: "*", schema: "public", table: "schedule_shifts" }, () => {
+        qc.invalidateQueries({ queryKey: ["schedule-shifts"] });
+        qc.invalidateQueries({ queryKey: ["emp-dash-schedule"] });
+      })
+      .on("postgres_changes", { event: "*", schema: "public", table: "shift_definitions" }, () => {
+        qc.invalidateQueries({ queryKey: ["shift-definitions"] });
+        qc.invalidateQueries({ queryKey: ["shift-definitions-active"] });
+      })
+      .on("postgres_changes", { event: "*", schema: "public", table: "break_requests" }, () => {
+        qc.invalidateQueries({ queryKey: ["breaks"] });
+        qc.invalidateQueries({ queryKey: ["breaks-admin"] });
+        qc.invalidateQueries({ queryKey: ["dashboard-breaks"] });
+        qc.invalidateQueries({ queryKey: ["break-stats"] });
+      })
+      .on("postgres_changes", { event: "*", schema: "public", table: "break_settings" }, () =>
+        qc.invalidateQueries({ queryKey: ["break-settings"] }))
+      .on("postgres_changes", { event: "*", schema: "public", table: "messages" }, () => {
+        qc.invalidateQueries({ queryKey: ["communications"] });
+        qc.invalidateQueries({ queryKey: ["shell-comm-unread", uid] });
+      })
+      .on("postgres_changes", { event: "*", schema: "public", table: "message_recipients" }, () => {
+        qc.invalidateQueries({ queryKey: ["communications"] });
+        qc.invalidateQueries({ queryKey: ["shell-comm-unread", uid] });
+      })
+      .on("postgres_changes", { event: "*", schema: "public", table: "announcements" }, () => {
+        qc.invalidateQueries({ queryKey: ["communications"] });
+        qc.invalidateQueries({ queryKey: ["shell-comm-unread", uid] });
+      })
+      .on("postgres_changes", { event: "*", schema: "public", table: "announcement_reads" }, () => {
+        qc.invalidateQueries({ queryKey: ["communications"] });
+        qc.invalidateQueries({ queryKey: ["shell-comm-unread", uid] });
+      })
+      .on("postgres_changes", { event: "*", schema: "public", table: "company_settings" }, () =>
+        qc.invalidateQueries({ queryKey: ["company-settings"] }))
+      .on("postgres_changes", { event: "*", schema: "public", table: "employee_of_month" }, () =>
+        qc.invalidateQueries({ queryKey: ["employee-of-month"] }))
+      .subscribe();
+    return () => {
+      supabase.removeChannel(ch);
+    };
+  }, [uid, qc, activeBranchId]);
+  return null;
+}
+

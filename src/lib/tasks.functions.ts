@@ -1,5 +1,5 @@
 import { createServerFn } from "@tanstack/react-start";
-import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { requireBranchContext } from "@/integrations/supabase/active-branch";
 import { z } from "zod";
 
 const PRIORITY = ["low", "medium", "high"] as const;
@@ -86,7 +86,7 @@ async function notifyUsers(supabase: any, userIds: string[], message: string) {
 }
 
 export const createTask = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
+  .middleware([requireBranchContext])
   .inputValidator((d: unknown) => createSchema.parse(d))
   .handler(async ({ data, context }) => {
     const caps = await getCallerCaps(context.supabase, context.userId);
@@ -182,7 +182,7 @@ const updateSchema = z.object({
 });
 
 export const updateTask = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
+  .middleware([requireBranchContext])
   .inputValidator((d: unknown) => updateSchema.parse(d))
   .handler(async ({ data, context }) => {
     const { id, department_ids, assignee_ids, ...patch } = data;
@@ -233,7 +233,7 @@ export const updateTask = createServerFn({ method: "POST" })
 
 // ---------- ACTIVITY & COMMENTS ----------
 export const listTaskActivity = createServerFn({ method: "GET" })
-  .middleware([requireSupabaseAuth])
+  .middleware([requireBranchContext])
   .inputValidator((d: unknown) => z.object({ task_id: z.string().uuid() }).parse(d))
   .handler(async ({ data, context }) => {
     const { data: rows, error } = await context.supabase
@@ -258,7 +258,7 @@ export const listTaskActivity = createServerFn({ method: "GET" })
   });
 
 export const listTaskComments = createServerFn({ method: "GET" })
-  .middleware([requireSupabaseAuth])
+  .middleware([requireBranchContext])
   .inputValidator((d: unknown) => z.object({ task_id: z.string().uuid() }).parse(d))
   .handler(async ({ data, context }) => {
     const { data: rows, error } = await context.supabase
@@ -280,7 +280,7 @@ export const listTaskComments = createServerFn({ method: "GET" })
   });
 
 export const addTaskComment = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
+  .middleware([requireBranchContext])
   .inputValidator((d: unknown) =>
     z.object({ task_id: z.string().uuid(), body: z.string().trim().min(1).max(2000) }).parse(d),
   )
@@ -295,7 +295,7 @@ export const addTaskComment = createServerFn({ method: "POST" })
   });
 
 export const listTaskAssigneeIds = createServerFn({ method: "GET" })
-  .middleware([requireSupabaseAuth])
+  .middleware([requireBranchContext])
   .inputValidator((d: unknown) => z.object({ task_id: z.string().uuid() }).parse(d))
   .handler(async ({ data, context }) => {
     const { data: rows, error } = await context.supabase
@@ -307,7 +307,7 @@ export const listTaskAssigneeIds = createServerFn({ method: "GET" })
   });
 
 export const listTaskDepartmentIds = createServerFn({ method: "GET" })
-  .middleware([requireSupabaseAuth])
+  .middleware([requireBranchContext])
   .inputValidator((d: unknown) => z.object({ task_id: z.string().uuid() }).parse(d))
   .handler(async ({ data, context }) => {
     const { data: rows, error } = await context.supabase
@@ -320,7 +320,7 @@ export const listTaskDepartmentIds = createServerFn({ method: "GET" })
 
 // ---------- DELETE task ----------
 export const deleteTask = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
+  .middleware([requireBranchContext])
   .inputValidator((d: unknown) => z.object({ id: z.string().uuid() }).parse(d))
   .handler(async ({ data, context }) => {
     const caps = await getCallerCaps(context.supabase, context.userId);
@@ -346,7 +346,7 @@ const addImageSchema = z.object({
 });
 
 export const addTaskImage = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
+  .middleware([requireBranchContext])
   .inputValidator((d: unknown) => addImageSchema.parse(d))
   .handler(async ({ data, context }) => {
     const { data: row, error } = await context.supabase
@@ -363,7 +363,7 @@ export const addTaskImage = createServerFn({ method: "POST" })
   });
 
 export const deleteTaskImage = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
+  .middleware([requireBranchContext])
   .inputValidator((d: unknown) => z.object({ id: z.string().uuid() }).parse(d))
   .handler(async ({ data, context }) => {
     const { data: img } = await context.supabase
@@ -503,7 +503,7 @@ const recurrenceSchema = z.object({
 });
 
 export const createRecurrence = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
+  .middleware([requireBranchContext])
   .inputValidator((d: unknown) => recurrenceSchema.parse(d))
   .handler(async ({ data, context }) => {
     const caps = await getCallerCaps(context.supabase, context.userId);
@@ -531,7 +531,7 @@ export const createRecurrence = createServerFn({ method: "POST" })
 const updateRecSchema = recurrenceSchema.partial().extend({ id: z.string().uuid() });
 
 export const updateRecurrence = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
+  .middleware([requireBranchContext])
   .inputValidator((d: unknown) => updateRecSchema.parse(d))
   .handler(async ({ data, context }) => {
     const { id, ...patch } = data;
@@ -560,7 +560,7 @@ export const updateRecurrence = createServerFn({ method: "POST" })
   });
 
 export const deleteRecurrence = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
+  .middleware([requireBranchContext])
   .inputValidator((d: unknown) => z.object({ id: z.string().uuid() }).parse(d))
   .handler(async ({ data, context }) => {
     const { error } = await context.supabase
@@ -636,7 +636,7 @@ const grantSchema = z.object({
 });
 
 export const setTaskManagementPermission = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
+  .middleware([requireBranchContext])
   .inputValidator((d: unknown) => grantSchema.parse(d))
   .handler(async ({ data, context }) => {
     const caps = await getCallerCaps(context.supabase, context.userId);
@@ -658,7 +658,7 @@ export const setTaskManagementPermission = createServerFn({ method: "POST" })
 
 // ---------- APPROVAL WORKFLOW ----------
 export const markTaskPendingApproval = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
+  .middleware([requireBranchContext])
   .inputValidator((d: unknown) =>
     z
       .object({
@@ -685,7 +685,7 @@ async function assertCanApprove(supabase: any, userId: string, taskId: string) {
 }
 
 export const approveTask = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
+  .middleware([requireBranchContext])
   .inputValidator((d: unknown) => z.object({ id: z.string().uuid() }).parse(d))
   .handler(async ({ data, context }) => {
     await assertCanApprove(context.supabase, context.userId, data.id);
@@ -718,7 +718,7 @@ export const approveTask = createServerFn({ method: "POST" })
   });
 
 export const rejectTask = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
+  .middleware([requireBranchContext])
   .inputValidator((d: unknown) =>
     z
       .object({
@@ -805,7 +805,7 @@ const setPermsSchema = z.object({
 });
 
 export const setUserPermissions = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
+  .middleware([requireBranchContext])
   .inputValidator((d: unknown) => setPermsSchema.parse(d))
   .handler(async ({ data, context }) => {
     const caps = await getCallerCaps(context.supabase, context.userId);
@@ -828,7 +828,7 @@ export const setUserPermissions = createServerFn({ method: "POST" })
 
 // ---------- FINAL CLOSURE ----------
 export const closeTask = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
+  .middleware([requireBranchContext])
   .inputValidator((d: unknown) => z.object({ id: z.string().uuid() }).parse(d))
   .handler(async ({ data, context }) => {
     const caps = await getCallerCaps(context.supabase, context.userId);
@@ -843,7 +843,7 @@ export const closeTask = createServerFn({ method: "POST" })
 
 // ---------- RECURRENCE INSTRUCTION IMAGES ----------
 export const addRecurrenceImage = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
+  .middleware([requireBranchContext])
   .inputValidator((d: unknown) =>
     z.object({
       recurrence_id: z.string().uuid(),
@@ -865,7 +865,7 @@ export const addRecurrenceImage = createServerFn({ method: "POST" })
   });
 
 export const deleteRecurrenceImage = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
+  .middleware([requireBranchContext])
   .inputValidator((d: unknown) => z.object({ id: z.string().uuid() }).parse(d))
   .handler(async ({ data, context }) => {
     const { data: img } = await context.supabase
