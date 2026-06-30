@@ -1,4 +1,5 @@
 export type AppRole =
+  | "system_admin"
   | "main_admin"
   | "branch_manager"
   | "assistant_manager"
@@ -16,6 +17,7 @@ export type Department =
   | "general";
 
 export const ROLE_LABELS: Record<AppRole, string> = {
+  system_admin: "מנהל מערכת ראשי",
   main_admin: "מנהל ראשי",
   branch_manager: "מנהל סניף",
   assistant_manager: "סגן מנהל",
@@ -23,6 +25,8 @@ export const ROLE_LABELS: Record<AppRole, string> = {
   employee: "עובד",
 };
 
+// NOTE: system_admin is intentionally omitted from the standard role picker —
+// it is a singleton role, not assignable through the regular admin UI.
 export const ROLE_OPTIONS: AppRole[] = [
   "main_admin",
   "branch_manager",
@@ -65,6 +69,7 @@ export function canManageUsers(roles: AppRole[]): boolean {
 
 export function highestRole(roles: AppRole[]): AppRole | null {
   const priority: AppRole[] = [
+    "system_admin",
     "main_admin",
     "branch_manager",
     "assistant_manager",
@@ -73,6 +78,10 @@ export function highestRole(roles: AppRole[]): AppRole | null {
   ];
   for (const r of priority) if (roles.includes(r)) return r;
   return null;
+}
+
+export function isSystemAdmin(roles: AppRole[]): boolean {
+  return roles.includes("system_admin");
 }
 
 export const BRANCH_NAME = "רמי לוי שער בנימין";
