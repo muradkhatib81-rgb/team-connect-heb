@@ -42,7 +42,11 @@ const BRANCH_SCOPED_TABLES = new Set<string>([
   "task_activity_log",
   "task_recurrences",
   "tasks",
-  "user_task_permissions",
+  // NOTE: user_task_permissions is intentionally NOT branch-scoped here.
+  // It's keyed by user_id (one row per user). Scoping it by active branch
+  // hides a manager's own permissions after a profile reassignment and
+  // makes the Permissions card / management buttons disappear. RLS on the
+  // table already restricts visibility (own row + main_admin).
 ]);
 
 let activeBranchId: string | null = null;
