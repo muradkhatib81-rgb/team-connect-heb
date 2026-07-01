@@ -308,13 +308,14 @@ export function AppShell({ children }: { children: ReactNode }) {
           </div>
         </div>
 
-        <main className="lg:mr-64">
+        <main className="lg:mr-64 flex-1">
           <div className="mx-auto max-w-6xl px-4 sm:px-6 py-6 lg:py-10">
             <div className="mb-4 flex justify-end">
               <ActiveBranchBadge />
             </div>
             {children}
           </div>
+          <AppFooter />
         </main>
       </div>
     </ActiveBranchProvider>
