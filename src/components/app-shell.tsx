@@ -426,3 +426,13 @@ function RealtimeBridge({ uid }: { uid: string }) {
   return null;
 }
 
+// Displays the active branch name (dynamic per logged-in user / sysadmin selection).
+// Falls back to the fallback prop when no active branch is resolved yet.
+function BranchSubtitle({ fallback }: { fallback?: string | null }) {
+  const { activeBranch } = useActiveBranch();
+  const label = activeBranch?.name ?? fallback ?? "";
+  if (!label) return null;
+  return <p className="text-xs text-muted-foreground truncate">{label}</p>;
+}
+
+
