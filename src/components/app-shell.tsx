@@ -40,6 +40,7 @@ import { cn } from "@/lib/utils";
 import { NotificationsBell } from "@/components/notifications-bell";
 import { ActiveBranchProvider, useActiveBranch } from "@/lib/use-active-branch";
 import { BranchSwitcher, ActiveBranchBadge } from "@/components/branch-switcher";
+import { AppFooter } from "@/components/app-footer";
 
 interface NavItem {
   to: string;
