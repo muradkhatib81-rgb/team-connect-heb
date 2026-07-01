@@ -29,6 +29,7 @@ import { Link, useNavigate } from "@tanstack/react-router";
 import { EmployeeOfMonthSection } from "@/components/employee-of-month-section";
 import { formatHeDateTime } from "@/lib/date-format";
 import { CreateEmployeeDialog } from "./employees";
+import { ManagementOnShiftCard } from "@/components/management-on-shift-card";
 
 export const Route = createFileRoute("/_authenticated/dashboard")({
   component: DashboardPage,
