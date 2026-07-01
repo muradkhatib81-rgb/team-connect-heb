@@ -9,6 +9,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { ApproveList } from "./breaks";
 import { BreakSettingsPage } from "./break-settings";
 import { BreakRequestPermissionsCard } from "@/components/break-request-permissions-card";
+import { BreakPolicySettingsCard } from "@/components/break-policy-settings-card";
 
 export const Route = createFileRoute("/_authenticated/breaks-admin")({
   component: BreaksAdminPage,
@@ -181,6 +182,9 @@ function BreaksAdminPage() {
           {(isMainAdmin || isBranchManager) && (
             <TabsTrigger value="permissions">הרשאות בקשת הפסקה</TabsTrigger>
           )}
+          {isMainAdmin && (
+            <TabsTrigger value="system">הגדרות מערכת</TabsTrigger>
+          )}
         </TabsList>
 
         <TabsContent value="approve">
@@ -203,6 +207,12 @@ function BreaksAdminPage() {
         {(isMainAdmin || isBranchManager) && (
           <TabsContent value="permissions">
             <BreakRequestPermissionsCard />
+          </TabsContent>
+        )}
+
+        {isMainAdmin && (
+          <TabsContent value="system">
+            <BreakPolicySettingsCard />
           </TabsContent>
         )}
       </Tabs>
