@@ -18,7 +18,7 @@ export interface CompanySettings {
 
 const DEFAULTS: CompanySettings = {
   id: "",
-  company_name: BRANCH_NAME,
+  company_name: BRANCH_NAME, // intentionally empty — no hardcoded brand.
   logo_url: null,
   address: null,
   phone: null,
