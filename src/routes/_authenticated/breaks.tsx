@@ -139,21 +139,16 @@ function BreaksPage() {
   const isBreaksManager =
     isMainAdmin || isBranchOrAssistant || !!permQ.data;
 
-  // Can this user request a break? Based on job title's can_request_break flag.
+  // Can this user request a break? Combines job-title flag + system break policy.
   const canRequestQ = useQuery({
     enabled: !!me?.id,
-    queryKey: ["can-request-break", me?.id, me?.job_title ?? null],
+    queryKey: ["can-request-break", me?.id],
     queryFn: async () => {
-      const jt = (me?.job_title ?? "").trim();
-      if (!jt) return true;
-      const { data, error } = await supabase
-        .from("job_titles" as any)
-        .select("can_request_break")
-        .ilike("name", jt)
-        .maybeSingle();
+      const { data, error } = await (supabase as any).rpc("can_user_request_break", {
+        _user_id: me!.id,
+      });
       if (error) return true;
-      if (!data) return true;
-      return !!(data as any).can_request_break;
+      return data !== false;
     },
   });
   const canRequestBreak = canRequestQ.data !== false;
