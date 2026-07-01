@@ -196,6 +196,8 @@ function DashboardPage() {
         </div>
       </header>
 
+      <ManagementOnShiftCard />
+
       <EmployeeOfMonthSection />
 
 
