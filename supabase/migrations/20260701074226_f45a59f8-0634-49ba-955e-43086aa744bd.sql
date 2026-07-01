@@ -1,0 +1,1 @@
+ALTER TABLE public.schedules ALTER COLUMN branch_id DROP DEFAULT;
