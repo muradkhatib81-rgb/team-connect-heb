@@ -40,6 +40,7 @@ import { cn } from "@/lib/utils";
 import { NotificationsBell } from "@/components/notifications-bell";
 import { ActiveBranchProvider, useActiveBranch } from "@/lib/use-active-branch";
 import { BranchSwitcher, ActiveBranchBadge } from "@/components/branch-switcher";
+import { AppFooter } from "@/components/app-footer";
 
 interface NavItem {
   to: string;
@@ -263,7 +264,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   return (
     <ActiveBranchProvider>
       <RealtimeBridge uid={profile.id} />
-      <div className="min-h-screen bg-background">
+      <div className="flex flex-col min-h-screen bg-background">
 
         {/* Desktop sidebar (RTL: stick to right) */}
         <aside className="hidden lg:block fixed inset-y-0 right-0 w-64 border-l border-sidebar-border">
@@ -307,13 +308,14 @@ export function AppShell({ children }: { children: ReactNode }) {
           </div>
         </div>
 
-        <main className="lg:mr-64">
+        <main className="lg:mr-64 flex-1">
           <div className="mx-auto max-w-6xl px-4 sm:px-6 py-6 lg:py-10">
             <div className="mb-4 flex justify-end">
               <ActiveBranchBadge />
             </div>
             {children}
           </div>
+          <AppFooter />
         </main>
       </div>
     </ActiveBranchProvider>
