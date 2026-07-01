@@ -732,6 +732,52 @@ export type Database = {
           },
         ]
       }
+      management_on_shift: {
+        Row: {
+          branch_id: string
+          created_at: string
+          id: string
+          started_at: string
+          user_id: string
+        }
+        Insert: {
+          branch_id: string
+          created_at?: string
+          id?: string
+          started_at?: string
+          user_id: string
+        }
+        Update: {
+          branch_id?: string
+          created_at?: string
+          id?: string
+          started_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "management_on_shift_branch_id_fkey"
+            columns: ["branch_id"]
+            isOneToOne: false
+            referencedRelation: "branches"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "management_on_shift_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "department_coworkers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "management_on_shift_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       message_attachments: {
         Row: {
           file_name: string
