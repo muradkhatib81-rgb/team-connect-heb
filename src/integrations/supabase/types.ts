@@ -223,6 +223,50 @@ export type Database = {
           },
         ]
       }
+      break_policy: {
+        Row: {
+          approver_scope: string
+          branch_id: string | null
+          created_at: string
+          dispatcher_scope: string
+          id: string
+          request_scope: string
+          requires_approval: boolean
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          approver_scope?: string
+          branch_id?: string | null
+          created_at?: string
+          dispatcher_scope?: string
+          id?: string
+          request_scope?: string
+          requires_approval?: boolean
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          approver_scope?: string
+          branch_id?: string | null
+          created_at?: string
+          dispatcher_scope?: string
+          id?: string
+          request_scope?: string
+          requires_approval?: boolean
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "break_policy_branch_id_fkey"
+            columns: ["branch_id"]
+            isOneToOne: true
+            referencedRelation: "branches"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       break_requests: {
         Row: {
           approval_decided_at: string | null
@@ -1902,8 +1946,20 @@ export type Database = {
         Args: { _reason?: string; _user_id: string }
         Returns: string
       }
+      can_approve_break_by_policy: {
+        Args: { _user_id: string }
+        Returns: boolean
+      }
       can_approve_task: {
         Args: { _approver_id: string; _task_id: string }
+        Returns: boolean
+      }
+      can_dispatch_break_by_policy: {
+        Args: { _user_id: string }
+        Returns: boolean
+      }
+      can_request_break_by_policy: {
+        Args: { _user_id: string }
         Returns: boolean
       }
       can_user_request_break: { Args: { _user_id: string }; Returns: boolean }
@@ -1955,6 +2011,26 @@ export type Database = {
         Returns: Json
       }
       get_branches_with_stats: { Args: never; Returns: Json }
+      get_break_policy: {
+        Args: never
+        Returns: {
+          approver_scope: string
+          branch_id: string | null
+          created_at: string
+          dispatcher_scope: string
+          id: string
+          request_scope: string
+          requires_approval: boolean
+          updated_at: string
+          updated_by: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "break_policy"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       get_communication_sender: {
         Args: { _user_id: string }
         Returns: {
