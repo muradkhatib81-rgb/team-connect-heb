@@ -84,5 +84,5 @@ export function isSystemAdmin(roles: AppRole[]): boolean {
   return roles.includes("system_admin");
 }
 
-export const BRANCH_NAME = "רמי לוי שער בנימין";
+export const BRANCH_NAME = "רמי לוי";
 export const APP_NAME = "מערכת ניהול עובדים";
