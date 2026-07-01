@@ -190,7 +190,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           </div>
           <div className="min-w-0">
             <p className="font-bold text-sm truncate">{APP_NAME}</p>
-            <BranchSubtitle fallback={company?.company_name} />
+            <BranchSubtitle />
           </div>
         </div>
       </div>
@@ -284,11 +284,14 @@ export function AppShell({ children }: { children: ReactNode }) {
           </Sheet>
           <div className="flex items-center gap-2 min-w-0 flex-1">
             {company?.logo_url ? (
-              <img src={company.logo_url} alt={company.company_name} className="size-6 rounded object-contain shrink-0" />
+              <img src={company.logo_url} alt={company?.company_name ?? APP_NAME} className="size-6 rounded object-contain shrink-0" />
             ) : (
               <Store className="size-5 text-primary shrink-0" />
             )}
-            <span className="font-semibold text-sm truncate">{APP_NAME}</span>
+            <div className="min-w-0 leading-tight">
+              <span className="block font-semibold text-sm truncate">{APP_NAME}</span>
+              <BranchSubtitle />
+            </div>
           </div>
           <div className="flex items-center gap-1 shrink-0">
             <BranchSwitcher />
@@ -426,12 +429,13 @@ function RealtimeBridge({ uid }: { uid: string }) {
   return null;
 }
 
-// Displays the active branch name (dynamic per logged-in user / sysadmin selection).
-// Falls back to the fallback prop when no active branch is resolved yet.
-function BranchSubtitle({ fallback }: { fallback?: string | null }) {
+// Displays the currently active branch name (dynamic per logged-in user /
+// sysadmin selection). Never displays a hardcoded company name.
+function BranchSubtitle() {
   const { activeBranch } = useActiveBranch();
-  const label = activeBranch?.name ?? fallback ?? "";
-  if (!label) return null;
+  const name = activeBranch?.name?.trim();
+  if (!name) return null;
+  const label = name.startsWith("סניף") ? name : `סניף ${name}`;
   return <p className="text-xs text-muted-foreground truncate">{label}</p>;
 }
 
