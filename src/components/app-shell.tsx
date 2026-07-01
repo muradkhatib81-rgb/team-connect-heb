@@ -190,7 +190,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           </div>
           <div className="min-w-0">
             <p className="font-bold text-sm truncate">{APP_NAME}</p>
-            <p className="text-xs text-muted-foreground truncate">{company?.company_name}</p>
+            <BranchSubtitle fallback={company?.company_name} />
           </div>
         </div>
       </div>
