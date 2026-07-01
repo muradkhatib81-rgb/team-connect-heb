@@ -182,6 +182,9 @@ function BreaksAdminPage() {
           {(isMainAdmin || isBranchManager) && (
             <TabsTrigger value="permissions">הרשאות בקשת הפסקה</TabsTrigger>
           )}
+          {isMainAdmin && (
+            <TabsTrigger value="system">הגדרות מערכת</TabsTrigger>
+          )}
         </TabsList>
 
         <TabsContent value="approve">
@@ -204,6 +207,12 @@ function BreaksAdminPage() {
         {(isMainAdmin || isBranchManager) && (
           <TabsContent value="permissions">
             <BreakRequestPermissionsCard />
+          </TabsContent>
+        )}
+
+        {isMainAdmin && (
+          <TabsContent value="system">
+            <BreakPolicySettingsCard />
           </TabsContent>
         )}
       </Tabs>
