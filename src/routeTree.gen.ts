@@ -29,6 +29,7 @@ import { Route as AuthenticatedChangePasswordRouteImport } from './routes/_authe
 import { Route as AuthenticatedBreaksAdminRouteImport } from './routes/_authenticated/breaks-admin'
 import { Route as AuthenticatedBreaksRouteImport } from './routes/_authenticated/breaks'
 import { Route as AuthenticatedBreakSettingsRouteImport } from './routes/_authenticated/break-settings'
+import { Route as AuthenticatedPlatformRouteRouteImport } from './routes/_authenticated/platform/route'
 import { Route as AuthenticatedSystemSettingsRouteImport } from './routes/_authenticated/system.settings'
 import { Route as AuthenticatedSystemPermissionsRouteImport } from './routes/_authenticated/system.permissions'
 import { Route as AuthenticatedSystemBranchesRouteImport } from './routes/_authenticated/system.branches'
@@ -143,6 +144,12 @@ const AuthenticatedBreakSettingsRoute =
     path: '/break-settings',
     getParentRoute: () => AuthenticatedRouteRoute,
   } as any)
+const AuthenticatedPlatformRouteRoute =
+  AuthenticatedPlatformRouteRouteImport.update({
+    id: '/platform',
+    path: '/platform',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
 const AuthenticatedSystemSettingsRoute =
   AuthenticatedSystemSettingsRouteImport.update({
     id: '/settings',
@@ -177,6 +184,7 @@ const ApiPublicHooksGenerateRecurringTasksRoute =
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
+  '/platform': typeof AuthenticatedPlatformRouteRoute
   '/break-settings': typeof AuthenticatedBreakSettingsRoute
   '/breaks': typeof AuthenticatedBreaksRoute
   '/breaks-admin': typeof AuthenticatedBreaksAdminRoute
@@ -203,6 +211,7 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
+  '/platform': typeof AuthenticatedPlatformRouteRoute
   '/break-settings': typeof AuthenticatedBreakSettingsRoute
   '/breaks': typeof AuthenticatedBreaksRoute
   '/breaks-admin': typeof AuthenticatedBreaksAdminRoute
@@ -231,6 +240,7 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/_authenticated': typeof AuthenticatedRouteRouteWithChildren
   '/auth': typeof AuthRoute
+  '/_authenticated/platform': typeof AuthenticatedPlatformRouteRoute
   '/_authenticated/break-settings': typeof AuthenticatedBreakSettingsRoute
   '/_authenticated/breaks': typeof AuthenticatedBreaksRoute
   '/_authenticated/breaks-admin': typeof AuthenticatedBreaksAdminRoute
@@ -259,6 +269,7 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/auth'
+    | '/platform'
     | '/break-settings'
     | '/breaks'
     | '/breaks-admin'
@@ -285,6 +296,7 @@ export interface FileRouteTypes {
   to:
     | '/'
     | '/auth'
+    | '/platform'
     | '/break-settings'
     | '/breaks'
     | '/breaks-admin'
@@ -312,6 +324,7 @@ export interface FileRouteTypes {
     | '/'
     | '/_authenticated'
     | '/auth'
+    | '/_authenticated/platform'
     | '/_authenticated/break-settings'
     | '/_authenticated/breaks'
     | '/_authenticated/breaks-admin'
@@ -485,6 +498,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedBreakSettingsRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/_authenticated/platform': {
+      id: '/_authenticated/platform'
+      path: '/platform'
+      fullPath: '/platform'
+      preLoaderRoute: typeof AuthenticatedPlatformRouteRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
     '/_authenticated/system/settings': {
       id: '/_authenticated/system/settings'
       path: '/settings'
@@ -542,6 +562,7 @@ const AuthenticatedSystemRouteWithChildren =
   AuthenticatedSystemRoute._addFileChildren(AuthenticatedSystemRouteChildren)
 
 interface AuthenticatedRouteRouteChildren {
+  AuthenticatedPlatformRouteRoute: typeof AuthenticatedPlatformRouteRoute
   AuthenticatedBreakSettingsRoute: typeof AuthenticatedBreakSettingsRoute
   AuthenticatedBreaksRoute: typeof AuthenticatedBreaksRoute
   AuthenticatedBreaksAdminRoute: typeof AuthenticatedBreaksAdminRoute
@@ -562,6 +583,7 @@ interface AuthenticatedRouteRouteChildren {
 }
 
 const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
+  AuthenticatedPlatformRouteRoute: AuthenticatedPlatformRouteRoute,
   AuthenticatedBreakSettingsRoute: AuthenticatedBreakSettingsRoute,
   AuthenticatedBreaksRoute: AuthenticatedBreaksRoute,
   AuthenticatedBreaksAdminRoute: AuthenticatedBreaksAdminRoute,
