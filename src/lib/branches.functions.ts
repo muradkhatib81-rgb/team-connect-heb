@@ -1,5 +1,8 @@
 import { createServerFn } from "@tanstack/react-start";
+import { getRequest } from "@tanstack/react-start/server";
+import { createClient } from "@supabase/supabase-js";
 import { requireBranchContext } from "@/integrations/supabase/active-branch";
+import type { Database } from "@/integrations/supabase/types";
 import { z } from "zod";
 
 async function assertSystemAdmin(supabase: any, userId: string) {
@@ -12,11 +15,33 @@ async function assertSystemAdmin(supabase: any, userId: string) {
   if (error || !data) throw new Error("רק מנהל מערכת ראשי יכול לבצע פעולה זו");
 }
 
+/**
+ * Build a Supabase client that carries the caller's bearer token but
+ * intentionally OMITS the X-Active-Branch header. This bypasses the
+ * `branch_scope_restriction` RESTRICTIVE policies on branch-scoped tables
+ * (departments, profiles, schedules, ...) so system-admin cross-branch
+ * operations — listing counts for every branch, copying departments from
+ * a source branch different from the current active branch — return the
+ * full data set instead of being clipped to the active branch.
+ */
+function createUnscopedClient() {
+  const url = process.env.SUPABASE_URL!;
+  const key = process.env.SUPABASE_PUBLISHABLE_KEY!;
+  const auth = getRequest()?.headers.get("authorization") ?? "";
+  return createClient<Database>(url, key, {
+    global: { headers: auth ? { Authorization: auth } : {} },
+    auth: { storage: undefined, persistSession: false, autoRefreshToken: false },
+  });
+}
+
 export const listBranchesWithStats = createServerFn({ method: "GET" })
   .middleware([requireBranchContext])
   .handler(async ({ context }) => {
     await assertSystemAdmin(context.supabase, context.userId);
-    const supabase = context.supabase;
+    // Use an UNSCOPED client so per-branch counts are not clipped by the
+    // caller's active branch (RLS `branch_scope_restriction` would otherwise
+    // return 0 for every branch except the active one).
+    const supabase = createUnscopedClient();
 
     const { data: branches, error } = await supabase
       .from("branches")
@@ -94,7 +119,10 @@ export const createBranch = createServerFn({ method: "POST" })
   .inputValidator((data: unknown) => createSchema.parse(data))
   .handler(async ({ data, context }) => {
     await assertSystemAdmin(context.supabase, context.userId);
-    const supabase = context.supabase;
+    // Cross-branch admin flow: read from any source branch and insert into
+    // the newly created branch. Use an unscoped client so RLS doesn't clip
+    // reads to the caller's active branch.
+    const supabase = createUnscopedClient();
 
     const { data: existing } = await supabase
       .from("branches")
@@ -117,6 +145,8 @@ export const createBranch = createServerFn({ method: "POST" })
     if (error) throw new Error(error.message);
 
     if (data.copy_departments_from_branch_id) {
+      // Read source departments with the unscoped client (source branch may
+      // differ from the caller's active branch).
       const { data: srcDepts, error: dErr } = await supabase
         .from("departments")
         .select("name,code,is_active")
@@ -131,13 +161,29 @@ export const createBranch = createServerFn({ method: "POST" })
           branch_id: inserted.id,
           manager_id: null,
         }));
-        const { error: iErr } = await supabase.from("departments").insert(rows);
+        // Department INSERT policy requires branch_id = current_active_branch(),
+        // so send the NEW branch id as the active-branch header for this call.
+        const url = process.env.SUPABASE_URL!;
+        const key = process.env.SUPABASE_PUBLISHABLE_KEY!;
+        const auth = getRequest()?.headers.get("authorization") ?? "";
+        const targetScoped = createClient<Database>(url, key, {
+          global: {
+            headers: {
+              ...(auth ? { Authorization: auth } : {}),
+              "x-active-branch": inserted.id,
+            },
+          },
+          auth: { storage: undefined, persistSession: false, autoRefreshToken: false },
+        });
+        const { error: iErr } = await targetScoped.from("departments").insert(rows);
         if (iErr) throw new Error(iErr.message);
       }
     }
 
     return { ok: true, id: inserted.id };
   });
+
+
 
 const updateSchema = z.object({
   id: z.string().uuid(),
