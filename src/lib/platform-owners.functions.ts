@@ -353,3 +353,50 @@ export const listPlatformOwnerAuditLog = createServerFn({ method: "GET" })
     if (error) throw new Error(error.message);
     return data ?? [];
   });
+
+const updateProfileInput = z.object({
+  user_id: z.string().uuid(),
+  full_name: z.string().trim().min(2, "נדרש שם מלא"),
+  phone: z.string().trim().nullable().optional(),
+  id_number: z.string().trim().nullable().optional(),
+});
+
+/**
+ * Update a Platform Owner's platform-profile fields. Primary only.
+ * Only touches platform-identity columns (full_name, phone, id_number).
+ * Never modifies employee-domain columns (branch, department, job_title).
+ * Email changes are intentionally not supported yet (future capability).
+ */
+export const updatePlatformOwnerProfile = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((raw: unknown) => updateProfileInput.parse(raw))
+  .handler(async ({ data, context }) => {
+    await assertCallerIsPrimary(context.supabase, context.userId);
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+
+    const { data: rows } = await supabaseAdmin
+      .from("user_roles")
+      .select("role")
+      .eq("user_id", data.user_id);
+    const roles = new Set((rows ?? []).map((r: { role: string }) => r.role));
+    if (!roles.has("main_admin") && !roles.has("system_admin")) {
+      throw new Error("המשתמש אינו בעל מערכת");
+    }
+
+    const patch: Record<string, unknown> = { full_name: data.full_name };
+    if (data.phone !== undefined) patch.phone = data.phone ?? null;
+    if (data.id_number !== undefined) patch.id_number = data.id_number ?? null;
+
+    const { error } = await supabaseAdmin
+      .from("profiles")
+      .update(patch)
+      .eq("id", data.user_id);
+    if (error) throw new Error(error.message);
+
+    await supabaseAdmin.rpc("log_platform_owner_event", {
+      _event: "owner.profile_updated",
+      _target_user_id: data.user_id,
+      _payload: { fields: Object.keys(patch) },
+    });
+    return { ok: true };
+  });
