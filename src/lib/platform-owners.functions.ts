@@ -24,10 +24,13 @@ export interface PlatformOwnerRow {
   email: string | null;
   phone: string | null;
   id_number: string | null;
+  avatar_url: string | null;
   level: PlatformOwnerLevel;
   is_active: boolean;
   created_at: string | null;
+  last_sign_in_at: string | null;
 }
+
 
 async function assertCallerIsPlatformOwner(
   supabase: any,
@@ -75,16 +78,18 @@ export const listPlatformOwners = createServerFn({ method: "GET" })
 
     const { data: profiles, error: profErr } = await supabaseAdmin
       .from("profiles")
-      .select("id, full_name, id_number, phone, is_active, created_at")
+      .select("id, full_name, id_number, phone, avatar_url, is_active, created_at")
       .in("id", ids);
     if (profErr) throw new Error(profErr.message);
 
-    // Emails come from auth.users — admin only.
+    // Emails + last_sign_in_at come from auth.users — admin only.
     const emailByUser = new Map<string, string | null>();
+    const lastSignInByUser = new Map<string, string | null>();
     // getUserById is per-user; batch by iterating (owner count is small).
     for (const id of ids) {
       const { data: u } = await supabaseAdmin.auth.admin.getUserById(id);
       emailByUser.set(id, u?.user?.email ?? null);
+      lastSignInByUser.set(id, u?.user?.last_sign_in_at ?? null);
     }
 
     const profileById = new Map(
@@ -100,12 +105,15 @@ export const listPlatformOwners = createServerFn({ method: "GET" })
         email: emailByUser.get(id) ?? null,
         phone: p.phone ?? null,
         id_number: p.id_number ?? null,
+        avatar_url: p.avatar_url ?? null,
         level: isPrimary ? "primary" : "owner",
         is_active: p.is_active ?? true,
         created_at: p.created_at ?? null,
+        last_sign_in_at: lastSignInByUser.get(id) ?? null,
       };
     });
   });
+
 
 const createOwnerInput = z.object({
   full_name: z.string().min(2, "נדרש שם מלא"),
@@ -344,4 +352,52 @@ export const listPlatformOwnerAuditLog = createServerFn({ method: "GET" })
       .limit(500);
     if (error) throw new Error(error.message);
     return data ?? [];
+  });
+
+const updateProfileInput = z.object({
+  user_id: z.string().uuid(),
+  full_name: z.string().trim().min(2, "נדרש שם מלא"),
+  phone: z.string().trim().nullable().optional(),
+  id_number: z.string().trim().nullable().optional(),
+});
+
+/**
+ * Update a Platform Owner's platform-profile fields. Primary only.
+ * Only touches platform-identity columns (full_name, phone, id_number).
+ * Never modifies employee-domain columns (branch, department, job_title).
+ * Email changes are intentionally not supported yet (future capability).
+ */
+export const updatePlatformOwnerProfile = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((raw: unknown) => updateProfileInput.parse(raw))
+  .handler(async ({ data, context }) => {
+    await assertCallerIsPrimary(context.supabase, context.userId);
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+
+    const { data: rows } = await supabaseAdmin
+      .from("user_roles")
+      .select("role")
+      .eq("user_id", data.user_id);
+    const roles = new Set((rows ?? []).map((r: { role: string }) => r.role));
+    if (!roles.has("main_admin") && !roles.has("system_admin")) {
+      throw new Error("המשתמש אינו בעל מערכת");
+    }
+
+    const patch: { full_name: string; phone?: string | null; id_number?: string | null } = { full_name: data.full_name };
+    if (data.phone !== undefined) patch.phone = data.phone ?? null;
+    if (data.id_number !== undefined) patch.id_number = data.id_number ?? null;
+
+    const { error } = await supabaseAdmin
+      .from("profiles")
+      .update(patch)
+      .eq("id", data.user_id);
+
+    if (error) throw new Error(error.message);
+
+    await supabaseAdmin.rpc("log_platform_owner_event", {
+      _event: "owner.profile_updated",
+      _target_user_id: data.user_id,
+      _payload: { fields: Object.keys(patch) },
+    });
+    return { ok: true };
   });
