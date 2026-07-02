@@ -794,6 +794,10 @@ export const PERMISSION_KEYS = [
   "can_manage_company_settings",
   "can_view_activity_log",
   "can_manage_users",
+  // Employee Recognition
+  "can_manage_employee_of_month",
+  // Morning Board
+  "can_manage_morning_board",
 ] as const;
 
 const setPermsSchema = z.object({
