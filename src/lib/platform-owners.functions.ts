@@ -401,3 +401,24 @@ export const updatePlatformOwnerProfile = createServerFn({ method: "POST" })
     });
     return { ok: true };
   });
+
+/**
+ * Non-throwing Platform Owner status check for the authenticated caller.
+ * Used by the client (nav + /platform layout gate) to derive visibility
+ * from the same source-of-truth used by every mutation guard, rather than
+ * from role labels. Returns { isOwner:false, isPrimary:false } for
+ * non-owners instead of throwing.
+ */
+export const getPlatformOwnerStatus = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }): Promise<{ isOwner: boolean; isPrimary: boolean }> => {
+    const { supabase, userId } = context as { supabase: any; userId: string };
+    const { data, error } = await supabase
+      .from("user_roles")
+      .select("role")
+      .eq("user_id", userId)
+      .in("role", ["system_admin", "main_admin"]);
+    if (error) throw new Error(error.message);
+    const roles = (data ?? []).map((r: { role: string }) => r.role);
+    return { isOwner: roles.length > 0, isPrimary: roles.includes("system_admin") };
+  });
