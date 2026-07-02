@@ -165,10 +165,10 @@ export function AppShell({ children }: { children: ReactNode }) {
     { to: "/company-settings", label: "הגדרות חברה", icon: Building, visible: isMainAdmin },
     { to: "/profile", label: "הפרופיל שלי", icon: UserCircle, visible: isPlainEmployee },
 
-    // ===== Platform Management (visible to every Platform Owner: system_admin OR main_admin) =====
-    { to: "/platform", label: "דשבורד", icon: LayoutDashboard, visible: isSysAdmin || isMainAdmin, section: "ניהול פלטפורמה" },
-    { to: "/platform/owners", label: "בעלי מערכת", icon: Crown, visible: isSysAdmin || isMainAdmin, section: "ניהול פלטפורמה" },
-    { to: "/platform/audit-log", label: "יומן פעילות פלטפורמה", icon: ShieldCheck, visible: isSysAdmin || isMainAdmin, section: "ניהול פלטפורמה" },
+    // ===== Platform Management (visible only to authoritative Platform Owners) =====
+    { to: "/platform", label: "דשבורד", icon: LayoutDashboard, visible: isPlatformOwner, section: "ניהול פלטפורמה" },
+    { to: "/platform/owners", label: "בעלי מערכת", icon: Crown, visible: isPlatformOwner, section: "ניהול פלטפורמה" },
+    { to: "/platform/audit-log", label: "יומן פעילות פלטפורמה", icon: ShieldCheck, visible: isPlatformOwner, section: "ניהול פלטפורמה" },
 
     // ===== System Administrator section (visible only to the singleton system_admin) =====
     { to: "/system/branches", label: "סניפים", icon: Building2, visible: isSysAdmin, section: "ניהול מערכת" },
