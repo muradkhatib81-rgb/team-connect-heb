@@ -172,6 +172,53 @@ export type Database = {
           },
         ]
       }
+      branch_banners: {
+        Row: {
+          branch_id: string
+          created_at: string
+          created_by: string | null
+          description: string | null
+          expires_at: string | null
+          id: string
+          image_path: string
+          starts_at: string | null
+          title: string | null
+          updated_at: string
+        }
+        Insert: {
+          branch_id: string
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          expires_at?: string | null
+          id?: string
+          image_path: string
+          starts_at?: string | null
+          title?: string | null
+          updated_at?: string
+        }
+        Update: {
+          branch_id?: string
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          expires_at?: string | null
+          id?: string
+          image_path?: string
+          starts_at?: string | null
+          title?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "branch_banners_branch_id_fkey"
+            columns: ["branch_id"]
+            isOneToOne: true
+            referencedRelation: "branches"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       branches: {
         Row: {
           address: string | null
@@ -1829,6 +1876,7 @@ export type Database = {
           can_manage_company_settings: boolean
           can_manage_departments: boolean
           can_manage_employee_of_month: boolean
+          can_manage_morning_board: boolean
           can_manage_permissions: boolean
           can_manage_schedule: boolean
           can_manage_tasks: boolean
@@ -1880,6 +1928,7 @@ export type Database = {
           can_manage_company_settings?: boolean
           can_manage_departments?: boolean
           can_manage_employee_of_month?: boolean
+          can_manage_morning_board?: boolean
           can_manage_permissions?: boolean
           can_manage_schedule?: boolean
           can_manage_tasks?: boolean
@@ -1931,6 +1980,7 @@ export type Database = {
           can_manage_company_settings?: boolean
           can_manage_departments?: boolean
           can_manage_employee_of_month?: boolean
+          can_manage_morning_board?: boolean
           can_manage_permissions?: boolean
           can_manage_schedule?: boolean
           can_manage_tasks?: boolean
@@ -2204,6 +2254,10 @@ export type Database = {
         Returns: boolean
       }
       has_manage_employee_of_month_perm: {
+        Args: { _uid: string }
+        Returns: boolean
+      }
+      has_manage_morning_board_perm: {
         Args: { _uid: string }
         Returns: boolean
       }
