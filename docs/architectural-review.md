@@ -28,7 +28,7 @@ Job Titles and authorization roles are **independent concepts** and must never b
 Platform Owners (`system_admin`, `main_admin`) are **business identities, not operational positions**. They administer the platform itself and are explicitly excluded from the employee domain.
 
 - **Platform Owner / Primary Platform Owner** (or any ownership identity) **must never appear as a Job Title** in the `job_titles` table or any employee-facing picker.
-- The existing entry "מנהל ראשי" (or its legacy / new label after the Platform Owner refactor) in `job_titles` is an **architectural inconsistency** and must be removed as part of the post-review corrections.
+- The legacy entry that previously existed in `job_titles` under the deprecated label was removed as part of JT-1 (see backlog §4). Any Platform Ownership label — current or deprecated — remains forbidden from this table.
 
 ### 1.3 Branch Manager / Assistant Manager — legitimate operational positions
 
