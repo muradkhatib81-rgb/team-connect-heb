@@ -4,20 +4,20 @@ import { useAuth } from "@/lib/use-auth";
 import { usePlatformOwnerStatus } from "@/lib/platform-owners.hooks";
 
 /**
- * Whether the current user can manage (upload/replace/remove) the
- * Morning Board banner for a given branch.
+ * Whether the current user can manage (add/edit/delete/reorder) Morning
+ * Board content for a given branch.
  *
- * Authorization sources (mirrors DB RLS / has_manage_morning_board_perm):
- *  - Platform Owner (main_admin/system_admin) → any branch
- *  - Users with `can_manage_morning_board` permission → any branch
- *  - Branch manager → only their own branch
+ * Mirrors the DB rule (can_manage_morning_board_for_branch):
+ *  - Platform Owner (main_admin / system_admin) → any branch
+ *  - Users with `can_manage_morning_board` permission (grant restricted by
+ *    the Primary Platform Owner to Branch Manager / Assistant Branch
+ *    Manager in the permissions UI) → only their OWN branch
  */
 export function useCanManageMorningBoard(branchId: string | null) {
   const { data: profile } = useAuth();
   const uid = profile?.id;
   const platformStatus = usePlatformOwnerStatus();
   const isPlatformOwner = !!platformStatus.data?.isOwner;
-  const isBranchManager = !!profile?.roles.includes("branch_manager");
   const ownBranchId = (profile as any)?.branch_id ?? null;
 
   const permQ = useQuery({
@@ -35,7 +35,6 @@ export function useCanManageMorningBoard(branchId: string | null) {
 
   if (!profile) return false;
   if (isPlatformOwner) return true;
-  if (permQ.data) return true;
-  if (isBranchManager && branchId && ownBranchId && branchId === ownBranchId) return true;
+  if (permQ.data && branchId && ownBranchId && branchId === ownBranchId) return true;
   return false;
 }

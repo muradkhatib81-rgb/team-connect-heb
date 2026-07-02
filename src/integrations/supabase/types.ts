@@ -986,6 +986,65 @@ export type Database = {
           },
         ]
       }
+      morning_board_items: {
+        Row: {
+          branch_id: string
+          created_at: string
+          created_by: string | null
+          description: string | null
+          display_order: number
+          expires_at: string | null
+          file_size: number | null
+          id: string
+          item_type: string
+          mime_type: string | null
+          starts_at: string | null
+          storage_path: string | null
+          title: string | null
+          updated_at: string
+        }
+        Insert: {
+          branch_id: string
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          display_order?: number
+          expires_at?: string | null
+          file_size?: number | null
+          id?: string
+          item_type: string
+          mime_type?: string | null
+          starts_at?: string | null
+          storage_path?: string | null
+          title?: string | null
+          updated_at?: string
+        }
+        Update: {
+          branch_id?: string
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          display_order?: number
+          expires_at?: string | null
+          file_size?: number | null
+          id?: string
+          item_type?: string
+          mime_type?: string | null
+          starts_at?: string | null
+          storage_path?: string | null
+          title?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "morning_board_items_branch_id_fkey"
+            columns: ["branch_id"]
+            isOneToOne: false
+            referencedRelation: "branches"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       platform_owner_audit_log: {
         Row: {
           actor_id: string | null
@@ -2079,6 +2138,10 @@ export type Database = {
       }
       can_dispatch_break_by_policy: {
         Args: { _user_id: string }
+        Returns: boolean
+      }
+      can_manage_morning_board_for_branch: {
+        Args: { _branch_id: string; _uid: string }
         Returns: boolean
       }
       can_request_break_by_policy: {
