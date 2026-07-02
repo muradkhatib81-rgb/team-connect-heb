@@ -157,43 +157,55 @@ export function ManagementOnShiftCard() {
       </div>
 
       {q.isLoading ? (
-        <div className="flex items-center justify-center py-6 text-muted-foreground">
+        <div className="flex items-center justify-center py-8 text-muted-foreground">
           <Loader2 className="size-5 animate-spin" />
         </div>
       ) : rows.length === 0 ? (
-        <div className="text-sm text-muted-foreground text-center py-6 border border-dashed rounded-lg">
-          אין הנהלה במשמרת כרגע
+        <div className="flex flex-col items-center justify-center gap-2 py-10 border border-dashed rounded-xl bg-muted/30">
+          <div className="size-11 rounded-full bg-muted flex items-center justify-center">
+            <ShieldCheck className="size-5 text-muted-foreground" />
+          </div>
+          <p className="text-sm font-medium text-muted-foreground">
+            אין הנהלה במשמרת כרגע
+          </p>
         </div>
       ) : (
-        <ul className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <ul className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
           {rows.map((r) => (
             <li
               key={r.id}
-              className="flex items-center gap-3 p-3 rounded-lg bg-card border"
+              className="relative overflow-hidden rounded-xl border bg-card shadow-sm hover:shadow-md transition-shadow"
             >
-              <Avatar className="size-11">
-                <AvatarImage src={r.avatar_url ?? undefined} alt={r.full_name ?? ""} />
-                <AvatarFallback>{r.full_name?.charAt(0) ?? "?"}</AvatarFallback>
-              </Avatar>
-              <div className="min-w-0 flex-1">
-                <p className="font-semibold text-sm truncate">
-                  {r.full_name ?? "—"}
-                </p>
-                <div className="flex flex-wrap items-center gap-1.5 mt-0.5">
-                  {r.role && (
-                    <Badge variant="secondary" className="rounded-full text-[10px] px-2 py-0">
-                      {ROLE_LABELS[r.role] ?? r.role}
-                    </Badge>
-                  )}
-                  {r.job_title && (
-                    <span className="text-[11px] text-muted-foreground truncate">
-                      {r.job_title}
-                    </span>
-                  )}
+              <span
+                aria-hidden
+                className="absolute inset-y-0 left-0 w-1.5 bg-gradient-to-b from-red-500 to-red-600"
+              />
+              <div className="flex items-center gap-3 p-4 pl-5">
+                <div className="relative shrink-0">
+                  <Avatar className="size-12 ring-2 ring-background shadow">
+                    <AvatarImage src={r.avatar_url ?? undefined} alt={r.full_name ?? ""} />
+                    <AvatarFallback className="font-semibold">
+                      {r.full_name?.charAt(0) ?? "?"}
+                    </AvatarFallback>
+                  </Avatar>
+                  <span
+                    aria-label="במשמרת"
+                    className="absolute -bottom-0.5 -right-0.5 size-3.5 rounded-full bg-emerald-500 ring-2 ring-card"
+                  >
+                    <span className="absolute inset-0 rounded-full bg-emerald-500 animate-ping opacity-60" />
+                  </span>
                 </div>
-                <div className="flex items-center gap-1 mt-1 text-[11px] text-muted-foreground">
-                  <Clock className="size-3" />
-                  התחיל/ה משמרת בשעה {timeHM(r.started_at)}
+                <div className="min-w-0 flex-1">
+                  <p className="font-bold text-sm truncate leading-tight">
+                    {r.full_name ?? "—"}
+                  </p>
+                  <p className="text-[12px] font-medium text-red-600 dark:text-red-400 mt-0.5">
+                    {r.role ? (ROLE_LABELS[r.role] ?? r.role) : "הנהלה"}
+                  </p>
+                  <div className="flex items-center gap-1 mt-1.5 text-[11px] text-muted-foreground">
+                    <Clock className="size-3" />
+                    <span>החל/ה משמרת בשעה {timeHM(r.started_at)}</span>
+                  </div>
                 </div>
               </div>
             </li>
