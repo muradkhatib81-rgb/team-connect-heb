@@ -30,6 +30,7 @@ import { Route as AuthenticatedBreaksAdminRouteImport } from './routes/_authenti
 import { Route as AuthenticatedBreaksRouteImport } from './routes/_authenticated/breaks'
 import { Route as AuthenticatedBreakSettingsRouteImport } from './routes/_authenticated/break-settings'
 import { Route as AuthenticatedPlatformRouteRouteImport } from './routes/_authenticated/platform/route'
+import { Route as AuthenticatedPlatformIndexRouteImport } from './routes/_authenticated/platform/index'
 import { Route as AuthenticatedSystemSettingsRouteImport } from './routes/_authenticated/system.settings'
 import { Route as AuthenticatedSystemPermissionsRouteImport } from './routes/_authenticated/system.permissions'
 import { Route as AuthenticatedSystemBranchesRouteImport } from './routes/_authenticated/system.branches'
@@ -150,6 +151,12 @@ const AuthenticatedPlatformRouteRoute =
     path: '/platform',
     getParentRoute: () => AuthenticatedRouteRoute,
   } as any)
+const AuthenticatedPlatformIndexRoute =
+  AuthenticatedPlatformIndexRouteImport.update({
+    id: '/',
+    path: '/',
+    getParentRoute: () => AuthenticatedPlatformRouteRoute,
+  } as any)
 const AuthenticatedSystemSettingsRoute =
   AuthenticatedSystemSettingsRouteImport.update({
     id: '/settings',
@@ -184,7 +191,7 @@ const ApiPublicHooksGenerateRecurringTasksRoute =
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
-  '/platform': typeof AuthenticatedPlatformRouteRoute
+  '/platform': typeof AuthenticatedPlatformRouteRouteWithChildren
   '/break-settings': typeof AuthenticatedBreakSettingsRoute
   '/breaks': typeof AuthenticatedBreaksRoute
   '/breaks-admin': typeof AuthenticatedBreaksAdminRoute
@@ -206,12 +213,12 @@ export interface FileRoutesByFullPath {
   '/system/branches': typeof AuthenticatedSystemBranchesRoute
   '/system/permissions': typeof AuthenticatedSystemPermissionsRoute
   '/system/settings': typeof AuthenticatedSystemSettingsRoute
+  '/platform/': typeof AuthenticatedPlatformIndexRoute
   '/api/public/hooks/generate-recurring-tasks': typeof ApiPublicHooksGenerateRecurringTasksRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
-  '/platform': typeof AuthenticatedPlatformRouteRoute
   '/break-settings': typeof AuthenticatedBreakSettingsRoute
   '/breaks': typeof AuthenticatedBreaksRoute
   '/breaks-admin': typeof AuthenticatedBreaksAdminRoute
@@ -233,6 +240,7 @@ export interface FileRoutesByTo {
   '/system/branches': typeof AuthenticatedSystemBranchesRoute
   '/system/permissions': typeof AuthenticatedSystemPermissionsRoute
   '/system/settings': typeof AuthenticatedSystemSettingsRoute
+  '/platform': typeof AuthenticatedPlatformIndexRoute
   '/api/public/hooks/generate-recurring-tasks': typeof ApiPublicHooksGenerateRecurringTasksRoute
 }
 export interface FileRoutesById {
@@ -240,7 +248,7 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/_authenticated': typeof AuthenticatedRouteRouteWithChildren
   '/auth': typeof AuthRoute
-  '/_authenticated/platform': typeof AuthenticatedPlatformRouteRoute
+  '/_authenticated/platform': typeof AuthenticatedPlatformRouteRouteWithChildren
   '/_authenticated/break-settings': typeof AuthenticatedBreakSettingsRoute
   '/_authenticated/breaks': typeof AuthenticatedBreaksRoute
   '/_authenticated/breaks-admin': typeof AuthenticatedBreaksAdminRoute
@@ -262,6 +270,7 @@ export interface FileRoutesById {
   '/_authenticated/system/branches': typeof AuthenticatedSystemBranchesRoute
   '/_authenticated/system/permissions': typeof AuthenticatedSystemPermissionsRoute
   '/_authenticated/system/settings': typeof AuthenticatedSystemSettingsRoute
+  '/_authenticated/platform/': typeof AuthenticatedPlatformIndexRoute
   '/api/public/hooks/generate-recurring-tasks': typeof ApiPublicHooksGenerateRecurringTasksRoute
 }
 export interface FileRouteTypes {
@@ -291,12 +300,12 @@ export interface FileRouteTypes {
     | '/system/branches'
     | '/system/permissions'
     | '/system/settings'
+    | '/platform/'
     | '/api/public/hooks/generate-recurring-tasks'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
     | '/auth'
-    | '/platform'
     | '/break-settings'
     | '/breaks'
     | '/breaks-admin'
@@ -318,6 +327,7 @@ export interface FileRouteTypes {
     | '/system/branches'
     | '/system/permissions'
     | '/system/settings'
+    | '/platform'
     | '/api/public/hooks/generate-recurring-tasks'
   id:
     | '__root__'
@@ -346,6 +356,7 @@ export interface FileRouteTypes {
     | '/_authenticated/system/branches'
     | '/_authenticated/system/permissions'
     | '/_authenticated/system/settings'
+    | '/_authenticated/platform/'
     | '/api/public/hooks/generate-recurring-tasks'
   fileRoutesById: FileRoutesById
 }
@@ -505,6 +516,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedPlatformRouteRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/_authenticated/platform/': {
+      id: '/_authenticated/platform/'
+      path: '/'
+      fullPath: '/platform/'
+      preLoaderRoute: typeof AuthenticatedPlatformIndexRouteImport
+      parentRoute: typeof AuthenticatedPlatformRouteRoute
+    }
     '/_authenticated/system/settings': {
       id: '/_authenticated/system/settings'
       path: '/settings'
@@ -543,6 +561,20 @@ declare module '@tanstack/react-router' {
   }
 }
 
+interface AuthenticatedPlatformRouteRouteChildren {
+  AuthenticatedPlatformIndexRoute: typeof AuthenticatedPlatformIndexRoute
+}
+
+const AuthenticatedPlatformRouteRouteChildren: AuthenticatedPlatformRouteRouteChildren =
+  {
+    AuthenticatedPlatformIndexRoute: AuthenticatedPlatformIndexRoute,
+  }
+
+const AuthenticatedPlatformRouteRouteWithChildren =
+  AuthenticatedPlatformRouteRoute._addFileChildren(
+    AuthenticatedPlatformRouteRouteChildren,
+  )
+
 interface AuthenticatedSystemRouteChildren {
   AuthenticatedSystemBranchManagersRoute: typeof AuthenticatedSystemBranchManagersRoute
   AuthenticatedSystemBranchesRoute: typeof AuthenticatedSystemBranchesRoute
@@ -562,7 +594,7 @@ const AuthenticatedSystemRouteWithChildren =
   AuthenticatedSystemRoute._addFileChildren(AuthenticatedSystemRouteChildren)
 
 interface AuthenticatedRouteRouteChildren {
-  AuthenticatedPlatformRouteRoute: typeof AuthenticatedPlatformRouteRoute
+  AuthenticatedPlatformRouteRoute: typeof AuthenticatedPlatformRouteRouteWithChildren
   AuthenticatedBreakSettingsRoute: typeof AuthenticatedBreakSettingsRoute
   AuthenticatedBreaksRoute: typeof AuthenticatedBreaksRoute
   AuthenticatedBreaksAdminRoute: typeof AuthenticatedBreaksAdminRoute
@@ -583,7 +615,7 @@ interface AuthenticatedRouteRouteChildren {
 }
 
 const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
-  AuthenticatedPlatformRouteRoute: AuthenticatedPlatformRouteRoute,
+  AuthenticatedPlatformRouteRoute: AuthenticatedPlatformRouteRouteWithChildren,
   AuthenticatedBreakSettingsRoute: AuthenticatedBreakSettingsRoute,
   AuthenticatedBreaksRoute: AuthenticatedBreaksRoute,
   AuthenticatedBreaksAdminRoute: AuthenticatedBreaksAdminRoute,
