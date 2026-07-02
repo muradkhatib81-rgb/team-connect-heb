@@ -66,6 +66,7 @@ import {
   BarChart3,
   Cog,
   Trophy,
+  Sun,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useServerFn } from "@tanstack/react-start";
@@ -182,7 +183,14 @@ const CATEGORIES: Category[] = [
     icon: Trophy,
     perms: [
       { key: "can_manage_employee_of_month", label: "🏆 ניהול עובד החודש", description: "מאפשר לבחור עובדים מצטיינים לחודש, לעדכן סיבת בחירה, להעלות תמונות ולמחוק רשומות." },
-      { key: "can_manage_morning_board", label: "🖼️ ניהול לוח בוקר", description: "מאפשר להעלות, להחליף או להסיר את תמונת הבאנר של לוח הבוקר עבור הסניף." },
+    ],
+  },
+  {
+    id: "morning_board",
+    title: "לוח בוקר",
+    icon: Sun,
+    perms: [
+      { key: "can_manage_morning_board", label: "🖼️ ניהול לוח בוקר", description: "מאפשר לנהל את תוכן לוח הבוקר של הסניף — כולל באנר, הודעות יומיות, חדשות, קבצים וסרטונים (כשיתווספו)." },
     ],
   },
   {
