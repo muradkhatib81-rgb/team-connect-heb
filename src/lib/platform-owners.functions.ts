@@ -78,16 +78,18 @@ export const listPlatformOwners = createServerFn({ method: "GET" })
 
     const { data: profiles, error: profErr } = await supabaseAdmin
       .from("profiles")
-      .select("id, full_name, id_number, phone, is_active, created_at")
+      .select("id, full_name, id_number, phone, avatar_url, is_active, created_at")
       .in("id", ids);
     if (profErr) throw new Error(profErr.message);
 
-    // Emails come from auth.users — admin only.
+    // Emails + last_sign_in_at come from auth.users — admin only.
     const emailByUser = new Map<string, string | null>();
+    const lastSignInByUser = new Map<string, string | null>();
     // getUserById is per-user; batch by iterating (owner count is small).
     for (const id of ids) {
       const { data: u } = await supabaseAdmin.auth.admin.getUserById(id);
       emailByUser.set(id, u?.user?.email ?? null);
+      lastSignInByUser.set(id, u?.user?.last_sign_in_at ?? null);
     }
 
     const profileById = new Map(
@@ -103,12 +105,15 @@ export const listPlatformOwners = createServerFn({ method: "GET" })
         email: emailByUser.get(id) ?? null,
         phone: p.phone ?? null,
         id_number: p.id_number ?? null,
+        avatar_url: p.avatar_url ?? null,
         level: isPrimary ? "primary" : "owner",
         is_active: p.is_active ?? true,
         created_at: p.created_at ?? null,
+        last_sign_in_at: lastSignInByUser.get(id) ?? null,
       };
     });
   });
+
 
 const createOwnerInput = z.object({
   full_name: z.string().min(2, "נדרש שם מלא"),
