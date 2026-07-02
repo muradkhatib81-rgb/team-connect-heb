@@ -1038,7 +1038,7 @@ export type Database = {
           branch_id: string | null
           created_at: string
           deactivated_at: string | null
-          department_id: string
+          department_id: string | null
           excluded_from_headcount: boolean
           full_name: string
           id: string
@@ -1055,7 +1055,7 @@ export type Database = {
           branch_id?: string | null
           created_at?: string
           deactivated_at?: string | null
-          department_id: string
+          department_id?: string | null
           excluded_from_headcount?: boolean
           full_name?: string
           id: string
@@ -1072,7 +1072,7 @@ export type Database = {
           branch_id?: string | null
           created_at?: string
           deactivated_at?: string | null
-          department_id?: string
+          department_id?: string | null
           excluded_from_headcount?: boolean
           full_name?: string
           id?: string
