@@ -1,5 +1,8 @@
 import { createServerFn } from "@tanstack/react-start";
+import { getRequest } from "@tanstack/react-start/server";
+import { createClient } from "@supabase/supabase-js";
 import { requireBranchContext } from "@/integrations/supabase/active-branch";
+import type { Database } from "@/integrations/supabase/types";
 import { z } from "zod";
 
 async function assertSystemAdmin(supabase: any, userId: string) {
@@ -10,6 +13,25 @@ async function assertSystemAdmin(supabase: any, userId: string) {
     .eq("role", "system_admin")
     .maybeSingle();
   if (error || !data) throw new Error("רק מנהל מערכת ראשי יכול לבצע פעולה זו");
+}
+
+/**
+ * Build a Supabase client that carries the caller's bearer token but
+ * intentionally OMITS the X-Active-Branch header. This bypasses the
+ * `branch_scope_restriction` RESTRICTIVE policies on branch-scoped tables
+ * (departments, profiles, schedules, ...) so system-admin cross-branch
+ * operations — listing counts for every branch, copying departments from
+ * a source branch different from the current active branch — return the
+ * full data set instead of being clipped to the active branch.
+ */
+function createUnscopedClient() {
+  const url = process.env.SUPABASE_URL!;
+  const key = process.env.SUPABASE_PUBLISHABLE_KEY!;
+  const auth = getRequest()?.headers.get("authorization") ?? "";
+  return createClient<Database>(url, key, {
+    global: { headers: auth ? { Authorization: auth } : {} },
+    auth: { storage: undefined, persistSession: false, autoRefreshToken: false },
+  });
 }
 
 export const listBranchesWithStats = createServerFn({ method: "GET" })
