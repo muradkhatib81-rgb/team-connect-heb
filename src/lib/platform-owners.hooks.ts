@@ -4,8 +4,26 @@ import { useServerFn } from "@tanstack/react-start";
 import {
   listPlatformOwners,
   listPlatformOwnerAuditLog,
+  getPlatformOwnerStatus,
   type PlatformOwnerRow,
 } from "@/lib/platform-owners.functions";
+
+/** Shared query key for the caller's Platform Owner status. */
+export const PLATFORM_OWNER_STATUS_KEY = ["platform", "owner-status"] as const;
+
+/**
+ * Authoritative Platform Owner check for the current user, resolved
+ * server-side against the same source used by assertCallerIsPlatformOwner.
+ * Every /platform/* gate (nav + route) reads from this hook.
+ */
+export function usePlatformOwnerStatus() {
+  const fn = useServerFn(getPlatformOwnerStatus);
+  return useQuery<{ isOwner: boolean; isPrimary: boolean }>({
+    queryKey: [...PLATFORM_OWNER_STATUS_KEY],
+    queryFn: () => fn() as Promise<{ isOwner: boolean; isPrimary: boolean }>,
+    staleTime: 60_000,
+  });
+}
 
 /** Shared query key for the Platform Owners list. */
 export const PLATFORM_OWNERS_KEY = ["platform", "owners"] as const;
