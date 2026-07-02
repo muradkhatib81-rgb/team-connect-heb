@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Settings2, Megaphone } from "lucide-react";
+import { Settings2, Megaphone, Pin } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { supabase } from "@/integrations/supabase/client";
@@ -8,7 +8,15 @@ import { useActiveBranch } from "@/lib/use-active-branch";
 import { useCanManageMorningBoard } from "@/lib/use-morning-board-perm";
 import { ImageLightbox } from "@/components/image-lightbox";
 import { MorningBoardManager } from "@/components/morning-board-manager";
-import type { MorningBoardItem } from "@/lib/morning-board-types";
+import {
+  DEFAULT_HIGHLIGHT_STYLE,
+  FONT_SIZE_CLASS,
+  PRIORITY_BADGE_CLASS,
+  PRIORITY_LABEL,
+  RADIUS_CLASS,
+  type MorningBoardItem,
+  type MorningBoardStyle,
+} from "@/lib/morning-board-types";
 
 const BUCKET = "morning-board";
 
@@ -25,12 +33,10 @@ function isVisibleNow(row: MorningBoardItem, now = Date.now()) {
 }
 
 /**
- * Morning Board — branch-scoped content center.
+ * Morning Board — branch-scoped real-time communication center.
  *
- * Displays every visible item for the active branch, in saved order.
- * Managers see a "Manage content" button that opens the manager dialog.
- * Nothing is rendered for read-only viewers when the branch has no visible
- * items, so the dashboard layout stays unchanged.
+ * Supports images, videos, audio, plain announcements and highlighted
+ * announcements. Pinned items are always rendered first, then by display order.
  */
 export function MorningBoard() {
   const { activeBranchId, activeBranch } = useActiveBranch();
@@ -47,10 +53,11 @@ export function MorningBoard() {
         .from("morning_board_items")
         .select("*")
         .eq("branch_id", activeBranchId!)
+        .order("is_pinned", { ascending: false })
         .order("display_order", { ascending: true })
         .order("created_at", { ascending: true });
       if (error) throw error;
-      const rows = (data ?? []) as MorningBoardItem[];
+      const rows = (data ?? []) as unknown as MorningBoardItem[];
       const urls: Record<string, string | null> = {};
       await Promise.all(
         rows
@@ -83,7 +90,6 @@ export function MorningBoard() {
     };
   }, [activeBranchId, qc]);
 
-  // Refresh scheduled visibility roughly every minute.
   useEffect(() => {
     const t = window.setInterval(() => {
       qc.invalidateQueries({ queryKey: ["morning-board", activeBranchId] });
@@ -98,8 +104,6 @@ export function MorningBoard() {
 
   if (!activeBranchId) return null;
   if (q.isLoading) return null;
-
-  // Read-only viewer with no visible content: render nothing.
   if (visible.length === 0 && !canManage) return null;
 
   return (
@@ -153,6 +157,24 @@ export function MorningBoard() {
   );
 }
 
+function PinBadge() {
+  return (
+    <div className="absolute -top-2 -start-2 flex items-center gap-1 rounded-full bg-primary text-primary-foreground text-[11px] px-2 py-0.5 shadow">
+      <Pin className="size-3" />
+      נעוץ
+    </div>
+  );
+}
+
+function PriorityBadge({ priority }: { priority: MorningBoardItem["priority"] }) {
+  if (priority === "normal") return null;
+  return (
+    <span className={`text-[11px] px-2 py-0.5 rounded-full font-medium ${PRIORITY_BADGE_CLASS[priority]}`}>
+      {PRIORITY_LABEL[priority]}
+    </span>
+  );
+}
+
 function MorningBoardItemView({
   row,
   url,
@@ -162,27 +184,26 @@ function MorningBoardItemView({
   url: string | null;
   onImageClick: (url: string) => void;
 }) {
+  const wrapCls = row.is_pinned ? "relative" : "";
+
   if (row.item_type === "image" && url) {
     return (
-      <div className="rounded-xl overflow-hidden border border-border bg-muted/30">
+      <div className={`${wrapCls} rounded-xl overflow-hidden border border-border bg-muted/30`}>
+        {row.is_pinned && <PinBadge />}
         <button
           type="button"
           onClick={() => onImageClick(url)}
           className="block w-full cursor-zoom-in focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           aria-label={row.title ?? "הצג תמונה"}
         >
-          <img
-            src={url}
-            alt={row.title ?? ""}
-            className="block w-full h-auto object-contain"
-            draggable={false}
-          />
+          <img src={url} alt={row.title ?? ""} className="block w-full h-auto object-contain" draggable={false} />
         </button>
         {(row.title || row.description) && (
-          <div className="p-3 text-sm">
+          <div className="p-3 text-sm flex items-center gap-2 flex-wrap">
+            <PriorityBadge priority={row.priority} />
             {row.title && <div className="font-semibold">{row.title}</div>}
             {row.description && (
-              <div className="text-muted-foreground whitespace-pre-wrap">{row.description}</div>
+              <div className="text-muted-foreground whitespace-pre-wrap w-full">{row.description}</div>
             )}
           </div>
         )}
@@ -192,19 +213,15 @@ function MorningBoardItemView({
 
   if (row.item_type === "video" && url) {
     return (
-      <div className="rounded-xl overflow-hidden border border-border bg-black">
-        <video
-          src={url}
-          controls
-          playsInline
-          preload="metadata"
-          className="block w-full h-auto max-h-[70vh]"
-        />
+      <div className={`${wrapCls} rounded-xl overflow-hidden border border-border bg-black`}>
+        {row.is_pinned && <PinBadge />}
+        <video src={url} controls playsInline preload="metadata" className="block w-full h-auto max-h-[70vh]" />
         {(row.title || row.description) && (
-          <div className="p-3 text-sm bg-background">
+          <div className="p-3 text-sm bg-background flex items-center gap-2 flex-wrap">
+            <PriorityBadge priority={row.priority} />
             {row.title && <div className="font-semibold">{row.title}</div>}
             {row.description && (
-              <div className="text-muted-foreground whitespace-pre-wrap">{row.description}</div>
+              <div className="text-muted-foreground whitespace-pre-wrap w-full">{row.description}</div>
             )}
           </div>
         )}
@@ -212,17 +229,36 @@ function MorningBoardItemView({
     );
   }
 
+  if (row.item_type === "audio" && url) {
+    return (
+      <Card className={`${wrapCls} p-4`}>
+        {row.is_pinned && <PinBadge />}
+        <div className="flex items-center gap-2 flex-wrap mb-2">
+          <span className="text-lg">🔊</span>
+          <PriorityBadge priority={row.priority} />
+          {row.title && <div className="font-semibold">{row.title}</div>}
+        </div>
+        {row.description && (
+          <p className="text-sm text-muted-foreground whitespace-pre-wrap mb-2">{row.description}</p>
+        )}
+        <audio src={url} controls preload="metadata" className="w-full" />
+      </Card>
+    );
+  }
+
   if (row.item_type === "announcement") {
     return (
-      <Card className="p-4 border-r-4 border-r-primary">
+      <Card className={`${wrapCls} p-4 border-r-4 border-r-primary`}>
+        {row.is_pinned && <PinBadge />}
         <div className="flex items-start gap-3">
           <Megaphone className="size-5 text-primary shrink-0 mt-0.5" />
           <div className="min-w-0 flex-1">
-            {row.title && <div className="font-semibold">{row.title}</div>}
+            <div className="flex items-center gap-2 flex-wrap">
+              <PriorityBadge priority={row.priority} />
+              {row.title && <div className="font-semibold">{row.title}</div>}
+            </div>
             {row.description && (
-              <div className="text-sm text-muted-foreground whitespace-pre-wrap mt-1">
-                {row.description}
-              </div>
+              <div className="text-sm text-muted-foreground whitespace-pre-wrap mt-1">{row.description}</div>
             )}
           </div>
         </div>
@@ -230,5 +266,61 @@ function MorningBoardItemView({
     );
   }
 
+  if (row.item_type === "highlight") {
+    return <HighlightView row={row} />;
+  }
+
   return null;
+}
+
+function HighlightView({ row }: { row: MorningBoardItem }) {
+  const s: MorningBoardStyle = { ...DEFAULT_HIGHLIGHT_STYLE, ...(row.style ?? {}) };
+  const radius = RADIUS_CLASS[s.radius ?? "lg"];
+  const fontSize = FONT_SIZE_CLASS[s.fontSize ?? "lg"];
+  const weight = s.fontWeight === "bold" ? "font-bold" : "font-normal";
+  const align = s.align === "center" ? "text-center" : "text-right";
+  const glow = s.attention === "glow";
+  const pulseTitle = s.attention === "pulse-title";
+
+  const style: React.CSSProperties = {
+    borderColor: s.borderColor,
+    backgroundColor: s.backgroundColor,
+    color: s.textColor,
+    borderWidth: s.borderWidth ?? 2,
+    borderStyle: "solid",
+    boxShadow: glow ? `0 0 0 4px ${s.borderColor}33, 0 0 24px ${s.borderColor}66` : undefined,
+  };
+
+  const showIcon = (s.attention === "icon" || s.icon) && s.icon && s.icon !== "none";
+
+  return (
+    <div className={`relative ${radius} p-4 ${align}`} style={style} role="alert">
+      {row.is_pinned && <PinBadge />}
+      <div className="flex items-start gap-3 justify-start">
+        {showIcon && (
+          <span className={`text-2xl leading-none ${pulseTitle ? "" : ""}`} aria-hidden>
+            {s.icon}
+          </span>
+        )}
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-2 flex-wrap">
+            <PriorityBadge priority={row.priority} />
+            {row.title && (
+              <div
+                className={`${fontSize} ${weight} ${pulseTitle ? "animate-pulse" : ""}`}
+                style={{ color: s.titleColor }}
+              >
+                {row.title}
+              </div>
+            )}
+          </div>
+          {row.description && (
+            <div className={`${fontSize} ${weight === "font-bold" ? "font-medium" : ""} whitespace-pre-wrap mt-2 opacity-95`}>
+              {row.description}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
 }
