@@ -131,6 +131,14 @@ export const createPlatformOwner = createServerFn({ method: "POST" })
     await assertCallerIsPrimary(context.supabase, context.userId);
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
 
+    // Create the auth user tagged as a Platform Owner from the start.
+    // handle_new_user() reads role='main_admin' from user_metadata and takes
+    // the Platform Owner branch — no department_id / branch_id on the profile
+    // — and inserts the main_admin row into user_roles itself. This avoids
+    // the classic bug where tagging the new user as 'employee' during creation
+    // caused handle_new_user() to auto-assign a fallback department, which
+    // then made enforce_owner_grant_membership reject the subsequent
+    // main_admin grant with "המשתמש משויך למחלקה או לסניף".
     const { data: created, error: createErr } = await supabaseAdmin.auth.admin.createUser({
       email: data.email,
       password: data.password,
@@ -139,8 +147,7 @@ export const createPlatformOwner = createServerFn({ method: "POST" })
         full_name: data.full_name,
         id_number: data.id_number ?? undefined,
         phone: data.phone ?? undefined,
-        // Placeholder role — real role is granted below.
-        role: "employee",
+        role: "main_admin",
       },
     });
     if (createErr || !created?.user) {
@@ -148,32 +155,12 @@ export const createPlatformOwner = createServerFn({ method: "POST" })
     }
     const newUserId = created.user.id;
 
-    // handle_new_user() has already inserted a profile with role=employee.
-    // Grant main_admin (System Owner). Stage 1 guard permits this because
-    // the caller was verified as system_admin above and Postgres sees
-    // service_role (guard skips when auth.uid() is NULL).
-    const { error: roleErr } = await supabaseAdmin.from("user_roles").insert({
-      user_id: newUserId,
-      role: "main_admin",
-    });
-    if (roleErr) {
-      // Roll back the auth user so we don't leak an orphaned account.
-      await supabaseAdmin.auth.admin.deleteUser(newUserId);
-      throw new Error(roleErr.message);
-    }
-
-    // Remove the default 'employee' role — Platform Owners are not employees.
-    await supabaseAdmin
-      .from("user_roles")
-      .delete()
-      .eq("user_id", newUserId)
-      .eq("role", "employee");
-
     await supabaseAdmin.rpc("log_platform_owner_event", {
       _event: "owner.created",
       _target_user_id: newUserId,
       _payload: { email: data.email, full_name: data.full_name },
     });
+
 
     return { user_id: newUserId };
   });
