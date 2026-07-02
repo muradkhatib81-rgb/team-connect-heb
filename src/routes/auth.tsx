@@ -241,7 +241,7 @@ function AuthPage() {
                   {loading ? <Loader2 className="size-4 animate-spin" /> : "התחבר"}
                 </Button>
                 <p className="text-xs text-muted-foreground text-center pt-2">
-                  אין לך חשבון? פנה למנהל הראשי לקבלת פרטי גישה.
+                  אין לך חשבון? פנה לבעל המערכת הראשי לקבלת פרטי גישה.
                 </p>
               </form>
             )}
