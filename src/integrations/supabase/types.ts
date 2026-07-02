@@ -939,6 +939,33 @@ export type Database = {
           },
         ]
       }
+      platform_owner_audit_log: {
+        Row: {
+          actor_id: string | null
+          created_at: string
+          event: string
+          id: string
+          payload: Json
+          target_user_id: string | null
+        }
+        Insert: {
+          actor_id?: string | null
+          created_at?: string
+          event: string
+          id?: string
+          payload?: Json
+          target_user_id?: string | null
+        }
+        Update: {
+          actor_id?: string | null
+          created_at?: string
+          event?: string
+          id?: string
+          payload?: Json
+          target_user_id?: string | null
+        }
+        Relationships: []
+      }
       profile_status_log: {
         Row: {
           action: string
@@ -2233,6 +2260,7 @@ export type Database = {
         Args: { _msg_id: string; _user_id: string }
         Returns: boolean
       }
+      is_platform_owner: { Args: { _user_id: string }; Returns: boolean }
       is_system_admin: { Args: { _user_id: string }; Returns: boolean }
       list_profiles_contact: {
         Args: never
@@ -2242,6 +2270,10 @@ export type Database = {
           must_change_password: boolean
           phone: string
         }[]
+      }
+      log_platform_owner_event: {
+        Args: { _event: string; _payload?: Json; _target_user_id?: string }
+        Returns: string
       }
       notify_announcement_edited: {
         Args: { _ann_id: string; _title: string }
