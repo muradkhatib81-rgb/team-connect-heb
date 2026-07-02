@@ -38,7 +38,10 @@ export const listBranchesWithStats = createServerFn({ method: "GET" })
   .middleware([requireBranchContext])
   .handler(async ({ context }) => {
     await assertSystemAdmin(context.supabase, context.userId);
-    const supabase = context.supabase;
+    // Use an UNSCOPED client so per-branch counts are not clipped by the
+    // caller's active branch (RLS `branch_scope_restriction` would otherwise
+    // return 0 for every branch except the active one).
+    const supabase = createUnscopedClient();
 
     const { data: branches, error } = await supabase
       .from("branches")
