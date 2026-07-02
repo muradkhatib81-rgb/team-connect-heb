@@ -37,6 +37,7 @@ import { Route as AuthenticatedSystemBranchesRouteImport } from './routes/_authe
 import { Route as AuthenticatedSystemBranchManagersRouteImport } from './routes/_authenticated/system.branch-managers'
 import { Route as AuthenticatedPlatformOwnersRouteImport } from './routes/_authenticated/platform/owners'
 import { Route as ApiPublicHooksGenerateRecurringTasksRouteImport } from './routes/api/public/hooks/generate-recurring-tasks'
+import { Route as AuthenticatedPlatformOwnersUserIdRouteImport } from './routes/_authenticated/platform/owners.$userId'
 
 const AuthRoute = AuthRouteImport.update({
   id: '/auth',
@@ -194,6 +195,12 @@ const ApiPublicHooksGenerateRecurringTasksRoute =
     path: '/api/public/hooks/generate-recurring-tasks',
     getParentRoute: () => rootRouteImport,
   } as any)
+const AuthenticatedPlatformOwnersUserIdRoute =
+  AuthenticatedPlatformOwnersUserIdRouteImport.update({
+    id: '/$userId',
+    path: '/$userId',
+    getParentRoute: () => AuthenticatedPlatformOwnersRoute,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -216,12 +223,13 @@ export interface FileRoutesByFullPath {
   '/shift-settings': typeof AuthenticatedShiftSettingsRoute
   '/system': typeof AuthenticatedSystemRouteWithChildren
   '/tasks': typeof AuthenticatedTasksRoute
-  '/platform/owners': typeof AuthenticatedPlatformOwnersRoute
+  '/platform/owners': typeof AuthenticatedPlatformOwnersRouteWithChildren
   '/system/branch-managers': typeof AuthenticatedSystemBranchManagersRoute
   '/system/branches': typeof AuthenticatedSystemBranchesRoute
   '/system/permissions': typeof AuthenticatedSystemPermissionsRoute
   '/system/settings': typeof AuthenticatedSystemSettingsRoute
   '/platform/': typeof AuthenticatedPlatformIndexRoute
+  '/platform/owners/$userId': typeof AuthenticatedPlatformOwnersUserIdRoute
   '/api/public/hooks/generate-recurring-tasks': typeof ApiPublicHooksGenerateRecurringTasksRoute
 }
 export interface FileRoutesByTo {
@@ -244,12 +252,13 @@ export interface FileRoutesByTo {
   '/shift-settings': typeof AuthenticatedShiftSettingsRoute
   '/system': typeof AuthenticatedSystemRouteWithChildren
   '/tasks': typeof AuthenticatedTasksRoute
-  '/platform/owners': typeof AuthenticatedPlatformOwnersRoute
+  '/platform/owners': typeof AuthenticatedPlatformOwnersRouteWithChildren
   '/system/branch-managers': typeof AuthenticatedSystemBranchManagersRoute
   '/system/branches': typeof AuthenticatedSystemBranchesRoute
   '/system/permissions': typeof AuthenticatedSystemPermissionsRoute
   '/system/settings': typeof AuthenticatedSystemSettingsRoute
   '/platform': typeof AuthenticatedPlatformIndexRoute
+  '/platform/owners/$userId': typeof AuthenticatedPlatformOwnersUserIdRoute
   '/api/public/hooks/generate-recurring-tasks': typeof ApiPublicHooksGenerateRecurringTasksRoute
 }
 export interface FileRoutesById {
@@ -275,12 +284,13 @@ export interface FileRoutesById {
   '/_authenticated/shift-settings': typeof AuthenticatedShiftSettingsRoute
   '/_authenticated/system': typeof AuthenticatedSystemRouteWithChildren
   '/_authenticated/tasks': typeof AuthenticatedTasksRoute
-  '/_authenticated/platform/owners': typeof AuthenticatedPlatformOwnersRoute
+  '/_authenticated/platform/owners': typeof AuthenticatedPlatformOwnersRouteWithChildren
   '/_authenticated/system/branch-managers': typeof AuthenticatedSystemBranchManagersRoute
   '/_authenticated/system/branches': typeof AuthenticatedSystemBranchesRoute
   '/_authenticated/system/permissions': typeof AuthenticatedSystemPermissionsRoute
   '/_authenticated/system/settings': typeof AuthenticatedSystemSettingsRoute
   '/_authenticated/platform/': typeof AuthenticatedPlatformIndexRoute
+  '/_authenticated/platform/owners/$userId': typeof AuthenticatedPlatformOwnersUserIdRoute
   '/api/public/hooks/generate-recurring-tasks': typeof ApiPublicHooksGenerateRecurringTasksRoute
 }
 export interface FileRouteTypes {
@@ -312,6 +322,7 @@ export interface FileRouteTypes {
     | '/system/permissions'
     | '/system/settings'
     | '/platform/'
+    | '/platform/owners/$userId'
     | '/api/public/hooks/generate-recurring-tasks'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -340,6 +351,7 @@ export interface FileRouteTypes {
     | '/system/permissions'
     | '/system/settings'
     | '/platform'
+    | '/platform/owners/$userId'
     | '/api/public/hooks/generate-recurring-tasks'
   id:
     | '__root__'
@@ -370,6 +382,7 @@ export interface FileRouteTypes {
     | '/_authenticated/system/permissions'
     | '/_authenticated/system/settings'
     | '/_authenticated/platform/'
+    | '/_authenticated/platform/owners/$userId'
     | '/api/public/hooks/generate-recurring-tasks'
   fileRoutesById: FileRoutesById
 }
@@ -578,17 +591,40 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiPublicHooksGenerateRecurringTasksRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/_authenticated/platform/owners/$userId': {
+      id: '/_authenticated/platform/owners/$userId'
+      path: '/$userId'
+      fullPath: '/platform/owners/$userId'
+      preLoaderRoute: typeof AuthenticatedPlatformOwnersUserIdRouteImport
+      parentRoute: typeof AuthenticatedPlatformOwnersRoute
+    }
   }
 }
 
+interface AuthenticatedPlatformOwnersRouteChildren {
+  AuthenticatedPlatformOwnersUserIdRoute: typeof AuthenticatedPlatformOwnersUserIdRoute
+}
+
+const AuthenticatedPlatformOwnersRouteChildren: AuthenticatedPlatformOwnersRouteChildren =
+  {
+    AuthenticatedPlatformOwnersUserIdRoute:
+      AuthenticatedPlatformOwnersUserIdRoute,
+  }
+
+const AuthenticatedPlatformOwnersRouteWithChildren =
+  AuthenticatedPlatformOwnersRoute._addFileChildren(
+    AuthenticatedPlatformOwnersRouteChildren,
+  )
+
 interface AuthenticatedPlatformRouteRouteChildren {
-  AuthenticatedPlatformOwnersRoute: typeof AuthenticatedPlatformOwnersRoute
+  AuthenticatedPlatformOwnersRoute: typeof AuthenticatedPlatformOwnersRouteWithChildren
   AuthenticatedPlatformIndexRoute: typeof AuthenticatedPlatformIndexRoute
 }
 
 const AuthenticatedPlatformRouteRouteChildren: AuthenticatedPlatformRouteRouteChildren =
   {
-    AuthenticatedPlatformOwnersRoute: AuthenticatedPlatformOwnersRoute,
+    AuthenticatedPlatformOwnersRoute:
+      AuthenticatedPlatformOwnersRouteWithChildren,
     AuthenticatedPlatformIndexRoute: AuthenticatedPlatformIndexRoute,
   }
 
