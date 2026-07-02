@@ -383,7 +383,7 @@ export const updatePlatformOwnerProfile = createServerFn({ method: "POST" })
       throw new Error("המשתמש אינו בעל מערכת");
     }
 
-    const patch: Record<string, unknown> = { full_name: data.full_name };
+    const patch: { full_name: string; phone?: string | null; id_number?: string | null } = { full_name: data.full_name };
     if (data.phone !== undefined) patch.phone = data.phone ?? null;
     if (data.id_number !== undefined) patch.id_number = data.id_number ?? null;
 
@@ -391,6 +391,7 @@ export const updatePlatformOwnerProfile = createServerFn({ method: "POST" })
       .from("profiles")
       .update(patch)
       .eq("id", data.user_id);
+
     if (error) throw new Error(error.message);
 
     await supabaseAdmin.rpc("log_platform_owner_event", {
