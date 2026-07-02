@@ -12,6 +12,10 @@ import {
   Megaphone,
   Plus,
   Replace,
+  Music,
+  Siren,
+  Pin,
+  PinOff,
 } from "lucide-react";
 import {
   Dialog,
@@ -26,21 +30,29 @@ import { Textarea } from "@/components/ui/textarea";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import {
-  DropdownMenu,
-  DropdownMenuTrigger,
-  DropdownMenuContent,
-  DropdownMenuItem,
-} from "@/components/ui/dropdown-menu";
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/use-auth";
 import {
+  AUDIO_ACCEPT,
+  AUDIO_MAX_BYTES,
+  DEFAULT_HIGHLIGHT_STYLE,
   IMAGE_ACCEPT,
   IMAGE_MAX_BYTES,
   MORNING_BOARD_BUCKET as BUCKET,
+  PRIORITY_LABEL,
+  TYPE_LABEL,
   VIDEO_ACCEPT,
   VIDEO_MAX_BYTES,
   type MorningBoardItem,
   type MorningBoardItemType,
+  type MorningBoardPriority,
+  type MorningBoardStyle,
 } from "@/lib/morning-board-types";
 import { formatHeDateTime } from "@/lib/date-format";
 
@@ -69,10 +81,11 @@ export function MorningBoardManager({
         .from("morning_board_items")
         .select("*")
         .eq("branch_id", branchId)
+        .order("is_pinned", { ascending: false })
         .order("display_order", { ascending: true })
         .order("created_at", { ascending: true });
       if (error) throw error;
-      return (data ?? []) as MorningBoardItem[];
+      return (data ?? []) as unknown as MorningBoardItem[];
     },
   });
 
@@ -89,7 +102,6 @@ export function MorningBoardManager({
       const other = rows[idx + dir];
       if (!other) return;
       const a = rows[idx];
-      // Assign fresh normalized orders to avoid ties.
       await Promise.all(
         rows.map((r, i) => {
           let newOrder = i;
@@ -105,6 +117,18 @@ export function MorningBoardManager({
     },
     onSuccess: invalidate,
     onError: (e: any) => toast.error(e?.message ?? "שגיאה בסידור"),
+  });
+
+  const pinMut = useMutation({
+    mutationFn: async ({ id, pinned }: { id: string; pinned: boolean }) => {
+      const { error } = await supabase
+        .from("morning_board_items")
+        .update({ is_pinned: pinned } as any)
+        .eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: invalidate,
+    onError: (e: any) => toast.error(e?.message ?? "שגיאה בעדכון נעיצה"),
   });
 
   const deleteMut = useMutation({
@@ -142,9 +166,17 @@ export function MorningBoardManager({
             <Video className="size-4" />
             סרטון
           </Button>
+          <Button size="sm" variant="outline" onClick={() => setEditor({ mode: "add", type: "audio" })}>
+            <Music className="size-4" />
+            שמע
+          </Button>
           <Button size="sm" variant="outline" onClick={() => setEditor({ mode: "add", type: "announcement" })}>
             <Megaphone className="size-4" />
             הודעה
+          </Button>
+          <Button size="sm" variant="outline" onClick={() => setEditor({ mode: "add", type: "highlight" })}>
+            <Siren className="size-4" />
+            הודעה מודגשת
           </Button>
         </div>
 
@@ -167,10 +199,11 @@ export function MorningBoardManager({
                 onUp={() => moveMut.mutate({ id: r.id, dir: -1 })}
                 onDown={() => moveMut.mutate({ id: r.id, dir: 1 })}
                 onEdit={() => setEditor({ mode: "edit", row: r })}
+                onPin={() => pinMut.mutate({ id: r.id, pinned: !r.is_pinned })}
                 onDelete={() => {
                   if (window.confirm("למחוק את הפריט?")) deleteMut.mutate(r);
                 }}
-                busy={moveMut.isPending || deleteMut.isPending}
+                busy={moveMut.isPending || deleteMut.isPending || pinMut.isPending}
               />
             ))}
           </div>
@@ -193,12 +226,6 @@ export function MorningBoardManager({
   );
 }
 
-function typeLabel(t: MorningBoardItemType) {
-  if (t === "image") return "🖼 תמונה";
-  if (t === "video") return "🎥 סרטון";
-  return "📢 הודעה";
-}
-
 function ItemRow({
   row,
   canUp,
@@ -206,6 +233,7 @@ function ItemRow({
   onUp,
   onDown,
   onEdit,
+  onPin,
   onDelete,
   busy,
 }: {
@@ -215,6 +243,7 @@ function ItemRow({
   onUp: () => void;
   onDown: () => void;
   onEdit: () => void;
+  onPin: () => void;
   onDelete: () => void;
   busy: boolean;
 }) {
@@ -234,7 +263,11 @@ function ItemRow({
       </div>
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2 flex-wrap">
-          <Badge variant="secondary" className="rounded-full">{typeLabel(row.item_type)}</Badge>
+          <Badge variant="secondary" className="rounded-full">{TYPE_LABEL[row.item_type]}</Badge>
+          {row.is_pinned && <Badge className="rounded-full">📌 נעוץ</Badge>}
+          {row.priority !== "normal" && (
+            <Badge variant="outline" className="rounded-full">{PRIORITY_LABEL[row.priority]}</Badge>
+          )}
           {scheduled && <Badge variant="outline" className="rounded-full">מתוזמן</Badge>}
           {expired && <Badge variant="destructive" className="rounded-full">פג תוקף</Badge>}
         </div>
@@ -250,6 +283,9 @@ function ItemRow({
         )}
       </div>
       <div className="flex items-center gap-1">
+        <Button size="icon" variant="ghost" onClick={onPin} disabled={busy} aria-label={row.is_pinned ? "בטל נעיצה" : "נעוץ"}>
+          {row.is_pinned ? <PinOff className="size-4" /> : <Pin className="size-4" />}
+        </Button>
         <Button size="icon" variant="ghost" onClick={onEdit} disabled={busy} aria-label="עריכה">
           <Pencil className="size-4" />
         </Button>
@@ -271,6 +307,27 @@ function toLocalInputValue(iso: string | null): string {
 function fromLocalInputValue(v: string): string | null {
   if (!v) return null;
   return new Date(v).toISOString();
+}
+
+function acceptForType(type: MorningBoardItemType): string {
+  if (type === "image") return IMAGE_ACCEPT;
+  if (type === "video") return VIDEO_ACCEPT;
+  if (type === "audio") return AUDIO_ACCEPT;
+  return "";
+}
+
+function maxBytesForType(type: MorningBoardItemType): number {
+  if (type === "image") return IMAGE_MAX_BYTES;
+  if (type === "video") return VIDEO_MAX_BYTES;
+  if (type === "audio") return AUDIO_MAX_BYTES;
+  return 0;
+}
+
+function mediaHint(type: MorningBoardItemType): string {
+  if (type === "image") return "JPG / PNG / WEBP, עד 5MB";
+  if (type === "video") return "MP4 / WEBM, עד 100MB";
+  if (type === "audio") return "MP3 / WAV / M4A / OGG, עד 50MB";
+  return "";
 }
 
 function ItemEditorDialog({
@@ -297,25 +354,30 @@ function ItemEditorDialog({
   const [expiresAt, setExpiresAt] = useState(toLocalInputValue(row?.expires_at ?? null));
   const [file, setFile] = useState<File | null>(null);
   const [saving, setSaving] = useState(false);
+  const [isPinned, setIsPinned] = useState<boolean>(row?.is_pinned ?? false);
+  const [priority, setPriority] = useState<MorningBoardPriority>(row?.priority ?? "normal");
+  const [style, setStyle] = useState<MorningBoardStyle>(() => {
+    if (type === "highlight") return { ...DEFAULT_HIGHLIGHT_STYLE, ...(row?.style ?? {}) };
+    return row?.style ?? {};
+  });
   const fileRef = useRef<HTMLInputElement | null>(null);
 
-  const needsFile = (type === "image" || type === "video") && !isEdit;
-  const accept = type === "image" ? IMAGE_ACCEPT : type === "video" ? VIDEO_ACCEPT : "";
-  const maxBytes = type === "image" ? IMAGE_MAX_BYTES : VIDEO_MAX_BYTES;
+  const isMedia = type === "image" || type === "video" || type === "audio";
+  const needsFile = isMedia && !isEdit;
+  const accept = acceptForType(type);
+  const maxBytes = maxBytesForType(type);
 
   const validateFile = (f: File): string | null => {
-    const okTypes = accept.split(",");
-    if (!okTypes.includes(f.type)) return "פורמט לא נתמך.";
+    const okTypes = accept.split(",").map((s) => s.trim());
+    if (!okTypes.includes(f.type)) return "פורמט הקובץ אינו נתמך.";
     if (f.size > maxBytes) {
-      return type === "video"
-        ? "הקובץ גדול מדי. גודל מרבי 100MB."
-        : "הקובץ גדול מדי. גודל מרבי 5MB.";
+      return `הקובץ גדול מדי. ${mediaHint(type)}.`;
     }
     return null;
   };
 
   async function uploadFile(itemId: string, f: File): Promise<string> {
-    const ext = f.name.split(".").pop()?.toLowerCase() || (type === "video" ? "mp4" : "jpg");
+    const ext = f.name.split(".").pop()?.toLowerCase() || (type === "video" ? "mp4" : type === "audio" ? "mp3" : "jpg");
     const path = `${branchId}/${itemId}/${Date.now()}.${ext}`;
     const { error } = await supabase.storage
       .from(BUCKET)
@@ -327,7 +389,7 @@ function ItemEditorDialog({
   const handleSave = async () => {
     try {
       setSaving(true);
-      if (type === "announcement" && !title.trim()) {
+      if ((type === "announcement" || type === "highlight") && !title.trim()) {
         throw new Error("יש להזין כותרת להודעה");
       }
       if (needsFile && !file) throw new Error("יש לבחור קובץ");
@@ -335,6 +397,16 @@ function ItemEditorDialog({
         const err = validateFile(file);
         if (err) throw new Error(err);
       }
+
+      const commonFields = {
+        title: title.trim() || null,
+        description: description.trim() || null,
+        starts_at: fromLocalInputValue(startsAt),
+        expires_at: fromLocalInputValue(expiresAt),
+        is_pinned: isPinned,
+        priority,
+        style,
+      };
 
       if (!isEdit) {
         const nextOrder = existing.length
@@ -345,10 +417,7 @@ function ItemEditorDialog({
           .insert({
             branch_id: branchId,
             item_type: type,
-            title: title.trim() || null,
-            description: description.trim() || null,
-            starts_at: fromLocalInputValue(startsAt),
-            expires_at: fromLocalInputValue(expiresAt),
+            ...commonFields,
             display_order: nextOrder,
             created_by: profile?.id ?? null,
           } as any)
@@ -365,7 +434,6 @@ function ItemEditorDialog({
               .eq("id", inserted.id);
             if (updErr) throw updErr;
           } catch (e) {
-            // Roll back the empty row so the item does not linger without media.
             await supabase.from("morning_board_items").delete().eq("id", inserted.id);
             throw e;
           }
@@ -379,10 +447,7 @@ function ItemEditorDialog({
         const { error } = await supabase
           .from("morning_board_items")
           .update({
-            title: title.trim() || null,
-            description: description.trim() || null,
-            starts_at: fromLocalInputValue(startsAt),
-            expires_at: fromLocalInputValue(expiresAt),
+            ...commonFields,
             storage_path: newPath,
             mime_type: file?.type ?? row!.mime_type,
             file_size: file?.size ?? row!.file_size,
@@ -404,15 +469,15 @@ function ItemEditorDialog({
 
   return (
     <Dialog open onOpenChange={(v) => !v && onClose()}>
-      <DialogContent className="max-w-lg">
+      <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>
-            {isEdit ? "עריכת פריט" : "הוספת פריט"} — {typeLabel(type)}
+            {isEdit ? "עריכת פריט" : "הוספת פריט"} — {TYPE_LABEL[type]}
           </DialogTitle>
         </DialogHeader>
 
         <div className="space-y-3">
-          {(type === "image" || type === "video") && (
+          {isMedia && (
             <div>
               <Label>קובץ {isEdit ? "(אופציונלי — החלפה)" : ""}</Label>
               <Input
@@ -421,16 +486,12 @@ function ItemEditorDialog({
                 accept={accept}
                 onChange={(e) => setFile(e.target.files?.[0] ?? null)}
               />
-              <p className="text-[11px] text-muted-foreground mt-1">
-                {type === "image"
-                  ? "JPG / PNG / WEBP, עד 5MB"
-                  : "MP4 / WEBM, עד 100MB"}
-              </p>
+              <p className="text-[11px] text-muted-foreground mt-1">{mediaHint(type)}</p>
             </div>
           )}
 
           <div>
-            <Label>כותרת {type === "announcement" ? "*" : "(אופציונלי)"}</Label>
+            <Label>כותרת {type === "announcement" || type === "highlight" ? "*" : "(אופציונלי)"}</Label>
             <Input value={title} onChange={(e) => setTitle(e.target.value)} maxLength={200} />
           </div>
 
@@ -440,23 +501,51 @@ function ItemEditorDialog({
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               rows={3}
-              maxLength={1000}
+              maxLength={2000}
             />
           </div>
 
           <div className="grid grid-cols-2 gap-2">
             <div>
-              <Label>מתפרסם בתאריך (אופציונלי)</Label>
-              <Input type="datetime-local" value={startsAt} onChange={(e) => setStartsAt(e.target.value)} />
+              <Label>עדיפות</Label>
+              <Select value={priority} onValueChange={(v) => setPriority(v as MorningBoardPriority)}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {(Object.keys(PRIORITY_LABEL) as MorningBoardPriority[]).map((p) => (
+                    <SelectItem key={p} value={p}>{PRIORITY_LABEL[p]}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="flex items-end">
+              <label className="flex items-center gap-2 text-sm cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={isPinned}
+                  onChange={(e) => setIsPinned(e.target.checked)}
+                  className="size-4"
+                />
+                📌 נעץ בראש הלוח
+              </label>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+              <Label>תאריך ושעת התחלה (אופציונלי)</Label>
+              <Input dir="ltr" type="datetime-local" value={startsAt} onChange={(e) => setStartsAt(e.target.value)} />
             </div>
             <div>
-              <Label>תפוגה (אופציונלי)</Label>
-              <Input type="datetime-local" value={expiresAt} onChange={(e) => setExpiresAt(e.target.value)} />
+              <Label>תאריך ושעת סיום (אופציונלי)</Label>
+              <Input dir="ltr" type="datetime-local" value={expiresAt} onChange={(e) => setExpiresAt(e.target.value)} />
             </div>
           </div>
           <p className="text-[11px] text-muted-foreground">
-            ללא תאריך התחלה: מתפרסם מיד. ללא תאריך תפוגה: נשאר עד למחיקה ידנית.
+            ללא תאריך התחלה: מתפרסם מיד. ללא תאריך סיום: נשאר עד למחיקה ידנית.
+            עם הגעת תאריך הסיום הפריט מוסתר אוטומטית ונשמר לעריכה עתידית.
           </p>
+
+          {type === "highlight" && <HighlightStyleEditor value={style} onChange={setStyle} />}
         </div>
 
         <div className="flex justify-end gap-2 pt-2">
@@ -470,5 +559,140 @@ function ItemEditorDialog({
         </div>
       </DialogContent>
     </Dialog>
+  );
+}
+
+function ColorField({
+  label,
+  value,
+  onChange,
+  fallback,
+}: {
+  label: string;
+  value: string | undefined;
+  onChange: (v: string) => void;
+  fallback: string;
+}) {
+  return (
+    <div>
+      <Label>{label}</Label>
+      <div className="flex items-center gap-2">
+        <input
+          type="color"
+          value={value ?? fallback}
+          onChange={(e) => onChange(e.target.value)}
+          className="h-9 w-12 rounded border border-input bg-background cursor-pointer"
+          aria-label={label}
+        />
+        <Input dir="ltr" value={value ?? fallback} onChange={(e) => onChange(e.target.value)} className="flex-1" />
+      </div>
+    </div>
+  );
+}
+
+function HighlightStyleEditor({
+  value,
+  onChange,
+}: {
+  value: MorningBoardStyle;
+  onChange: (v: MorningBoardStyle) => void;
+}) {
+  const v: MorningBoardStyle = { ...DEFAULT_HIGHLIGHT_STYLE, ...value };
+  const set = (patch: Partial<MorningBoardStyle>) => onChange({ ...v, ...patch });
+
+  return (
+    <div className="border rounded-lg p-3 space-y-3 bg-muted/30">
+      <div className="font-semibold text-sm">עיצוב הודעה מודגשת</div>
+      <div className="grid grid-cols-2 gap-2">
+        <ColorField label="צבע מסגרת" value={v.borderColor} fallback="#dc2626" onChange={(c) => set({ borderColor: c })} />
+        <ColorField label="צבע רקע" value={v.backgroundColor} fallback="#fef2f2" onChange={(c) => set({ backgroundColor: c })} />
+        <ColorField label="צבע כותרת" value={v.titleColor} fallback="#991b1b" onChange={(c) => set({ titleColor: c })} />
+        <ColorField label="צבע טקסט" value={v.textColor} fallback="#450a0a" onChange={(c) => set({ textColor: c })} />
+      </div>
+
+      <div className="grid grid-cols-2 gap-2">
+        <div>
+          <Label>עובי מסגרת</Label>
+          <Select value={String(v.borderWidth ?? 2)} onValueChange={(x) => set({ borderWidth: Number(x) as 1 | 2 | 3 | 4 })}>
+            <SelectTrigger><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="1">דק</SelectItem>
+              <SelectItem value="2">בינוני</SelectItem>
+              <SelectItem value="3">עבה</SelectItem>
+              <SelectItem value="4">עבה מאוד</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+        <div>
+          <Label>עיגול פינות</Label>
+          <Select value={v.radius ?? "lg"} onValueChange={(x) => set({ radius: x as MorningBoardStyle["radius"] })}>
+            <SelectTrigger><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="sm">קטן</SelectItem>
+              <SelectItem value="md">בינוני</SelectItem>
+              <SelectItem value="lg">גדול</SelectItem>
+              <SelectItem value="xl">גדול מאוד</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+        <div>
+          <Label>גודל טקסט</Label>
+          <Select value={v.fontSize ?? "lg"} onValueChange={(x) => set({ fontSize: x as MorningBoardStyle["fontSize"] })}>
+            <SelectTrigger><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="sm">קטן</SelectItem>
+              <SelectItem value="md">בינוני</SelectItem>
+              <SelectItem value="lg">גדול</SelectItem>
+              <SelectItem value="xl">גדול מאוד</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+        <div>
+          <Label>עובי טקסט</Label>
+          <Select value={v.fontWeight ?? "bold"} onValueChange={(x) => set({ fontWeight: x as MorningBoardStyle["fontWeight"] })}>
+            <SelectTrigger><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="regular">רגיל</SelectItem>
+              <SelectItem value="bold">מודגש</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+        <div>
+          <Label>יישור</Label>
+          <Select value={v.align ?? "right"} onValueChange={(x) => set({ align: x as MorningBoardStyle["align"] })}>
+            <SelectTrigger><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="right">ימין</SelectItem>
+              <SelectItem value="center">מרכז</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+        <div>
+          <Label>אפקט תשומת לב</Label>
+          <Select value={v.attention ?? "pulse-title"} onValueChange={(x) => set({ attention: x as MorningBoardStyle["attention"] })}>
+            <SelectTrigger><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="none">ללא</SelectItem>
+              <SelectItem value="glow">מסגרת זוהרת</SelectItem>
+              <SelectItem value="pulse-title">פעימה עדינה בכותרת</SelectItem>
+              <SelectItem value="icon">אייקון בולט</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+        <div>
+          <Label>אייקון</Label>
+          <Select value={v.icon ?? "🚨"} onValueChange={(x) => set({ icon: x as MorningBoardStyle["icon"] })}>
+            <SelectTrigger><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="none">ללא</SelectItem>
+              <SelectItem value="🚨">🚨 חירום</SelectItem>
+              <SelectItem value="⚠️">⚠️ אזהרה</SelectItem>
+              <SelectItem value="📢">📢 הכרזה</SelectItem>
+              <SelectItem value="ℹ️">ℹ️ מידע</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+      </div>
+    </div>
   );
 }
