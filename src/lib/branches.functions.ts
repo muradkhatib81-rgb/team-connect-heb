@@ -183,8 +183,7 @@ export const createBranch = createServerFn({ method: "POST" })
     return { ok: true, id: inserted.id };
   });
 
-    return { ok: true, id: inserted.id };
-  });
+
 
 const updateSchema = z.object({
   id: z.string().uuid(),
