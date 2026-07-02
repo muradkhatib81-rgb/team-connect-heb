@@ -84,26 +84,37 @@ export function PlatformOwnerCreateDialog({
       <DialogContent>
         <DialogHeader>
           <DialogTitle>הוספת בעל מערכת</DialogTitle>
-          <DialogDescription>יצירת חשבון בעל מערכת חדש</DialogDescription>
+          <DialogDescription>
+            יצירת חשבון בעל מערכת חדש. זהו חשבון עצמאי — אינו קשור למשתמש
+            המחובר או לזהות עובד כלשהי.
+          </DialogDescription>
         </DialogHeader>
-        <div className="space-y-3">
-          <Field label="שם מלא" value={full_name} onChange={setFullName} required />
-          <Field label='דוא"ל' type="email" value={email} onChange={setEmail} required />
-          <Field label="סיסמה (מינ' 8 תווים)" type="password" value={password} onChange={setPassword} required />
-          <Field label="טלפון" value={phone} onChange={setPhone} />
-          <Field label="ת.ז" value={id_number} onChange={setIdNumber} />
-        </div>
-        <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>ביטול</Button>
-          <Button
-            onClick={() => mut.mutate()}
-            disabled={mut.isPending || full_name.trim().length < 2 || !email || password.length < 8}
-            className="gap-2"
-          >
-            {mut.isPending && <Loader2 className="size-4 animate-spin" />}
-            צור
-          </Button>
-        </DialogFooter>
+        {/* Hidden decoy fields deter aggressive browser autofill from populating
+            the current user's identity into a form for creating a *different* person. */}
+        <form
+          autoComplete="off"
+          onSubmit={(e) => { e.preventDefault(); mut.mutate(); }}
+          className="space-y-3"
+        >
+          <input type="text" name="username" autoComplete="username" className="hidden" tabIndex={-1} aria-hidden />
+          <input type="password" name="password" autoComplete="current-password" className="hidden" tabIndex={-1} aria-hidden />
+          <Field label="שם מלא" value={full_name} onChange={setFullName} required autoComplete="off" name="po-full-name" />
+          <Field label='דוא"ל' type="email" value={email} onChange={setEmail} required autoComplete="off" name="po-email" />
+          <Field label="סיסמה (מינ' 8 תווים)" type="password" value={password} onChange={setPassword} required autoComplete="new-password" name="po-password" />
+          <Field label="טלפון" value={phone} onChange={setPhone} autoComplete="off" name="po-phone" />
+          <Field label="ת.ז" value={id_number} onChange={setIdNumber} autoComplete="off" name="po-id-number" />
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>ביטול</Button>
+            <Button
+              type="submit"
+              disabled={mut.isPending || full_name.trim().length < 2 || !email || password.length < 8}
+              className="gap-2"
+            >
+              {mut.isPending && <Loader2 className="size-4 animate-spin" />}
+              צור
+            </Button>
+          </DialogFooter>
+        </form>
       </DialogContent>
     </Dialog>
   );
