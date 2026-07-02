@@ -156,6 +156,8 @@ If the answer is unclear, the concept is not ready to be added. Clarify its doma
 | DM-4 | One-time cleanup: NULL branch/department for existing Platform Owners | High | Data | Single row today. | **Done** |
 | DM-5 | Sweep employee-scope UI to confirm non-employee exclusion | Medium | UI | Post-migration verification. | Pending |
 | DM-6 | Sequencing plan to enforce the employee side of the membership invariant (AR-DM-7) | High | Auth / Onboarding / Schema | Three ordered steps: (1) provisioning flow update, (2) one-time reconciliation, (3) trigger tightening. See §2.6. | Pending |
+| UI-1 | Suppress trailing separator when identity has no department (Platform Owner sidebar) | Medium | UI / App Shell | AR-DM-8 formatting cleanup. | **Done** |
+| TC-1 | Terminology cleanup — remove legacy "מנהל ראשי" references from user-facing surfaces (login, dashboard, Platform Owner profile row) and replace with the current business identity label | High | UI / Data / Docs | Purely terminological; no authorization changes. | **Done** |
 
 *This list will grow during the functional review and be consolidated before the implementation roadmap is defined.*
 
