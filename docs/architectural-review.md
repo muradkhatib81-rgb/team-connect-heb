@@ -92,6 +92,10 @@ The analogous distinction applies to departments: `profiles.department_id` denot
 - **AR-DM-4:** Operational context (`current_active_branch()` and any future session-scoped context) is orthogonal to domain membership and is available to every authenticated user.
 - **AR-DM-5:** Authorization to enter a domain is determined by the authorization model (`user_roles` and its abstractions such as `is_platform_owner()`). The authorization model remains the **single source of truth** for domain classification. No parallel table shall duplicate this classification.
 - **AR-DM-6:** New identity classes introduced in the future MUST be modeled by extending the authorization model, not by adding parallel identity tables, unless a class requires identity-specific metadata that has no natural home on `user_roles` or `profiles`.
+- **AR-DM-7 (Employee side, total invariant):** Every Employee-domain user MUST always have a valid branch membership and a valid department membership. Both `profiles.branch_id` and `profiles.department_id` are NOT NULL for every user classified as an employee. There are no legitimate partial states.
+- **AR-DM-8 (Non-Employee side, total invariant):** Every Non-Employee-domain user MUST always have neither branch nor department membership. Both `profiles.branch_id` and `profiles.department_id` are NULL for every user classified as a non-employee identity. There are no legitimate partial states.
+
+Together, AR-DM-7 and AR-DM-8 make the membership invariant **total**: for every authenticated user, membership state is fully determined by domain classification. The architectural rule is absolute; only its mechanical enforcement is staged (see §2.6).
 
 ### 2.4 Applied to Platform Owners (today)
 
@@ -102,13 +106,29 @@ Platform Owners are the first concrete instance of a non-employee identity class
 - `user_roles` remains the single source of truth for Platform Ownership via `is_platform_owner()`.
 - Platform Owners participate in Active Branch Context through the existing branch switcher, unchanged.
 
-### 2.5 Enforcement checklist (post-review implementation)
+### 2.5 Current enforcement status
 
-- [ ] Make `profiles.department_id` nullable (and confirm `profiles.branch_id` nullable).
-- [ ] Add a validation trigger enforcing: **if the user is in the Employee domain, both fields are NOT NULL; if the user is outside the Employee domain, both fields are NULL.** Trigger, not CHECK, because the rule depends on `user_roles` (time-dependent data).
-- [ ] Adjust `handle_new_user()` so provisioning a non-employee identity does not resolve a fallback department/branch.
-- [ ] One-time data cleanup: set `department_id` and `branch_id` to NULL for existing Platform Owners.
-- [ ] Sweep employee-scope UI (Employees list, org chart, department picker, headcount views) to confirm non-employee identities are excluded by construction.
+| Rule | Enforcement | Mechanism |
+|------|-------------|-----------|
+| AR-DM-8 (non-employee side) | **Enforced end-to-end** | `enforce_non_employee_membership()` trigger on `profiles` + `enforce_owner_grant_membership()` trigger on `user_roles`. |
+| AR-DM-7 (employee side) | **Defined but not yet mechanically enforced** | Pending completion of DM-6 sequencing plan (§2.6). |
+
+The gap between defined and enforced exists only because the current employee-provisioning sequence briefly creates an employee row with `branch_id IS NULL` before an admin sets it via the UI. This is an implementation artifact, not an architectural allowance. All 41 existing employees satisfy AR-DM-7 in steady state; the invariant is respected in practice today.
+
+### 2.6 DM-6 — Sequencing plan to enforce AR-DM-7
+
+The employee-side invariant is closed in three ordered, independently backward-compatible steps. AR-DM-7 becomes database-provable only after all three land.
+
+**Step 1 — Provisioning flow update (application + `handle_new_user`).**
+The employee-invite flow resolves and passes `branch_id` at invite creation time, and `handle_new_user()` reads it from `raw_user_meta_data.branch_id` and populates it on the initial profile row. Fallback: the active branch of the inviting admin. Result: no employee row is ever created without a branch.
+
+**Step 2 — One-time reconciliation (data).**
+A read-only verification confirms that no non-owner profile has `branch_id IS NULL` or `department_id IS NULL`. Any exception surfaces for explicit admin decision — never silent migration.
+
+**Step 3 — Trigger tightening (schema).**
+`enforce_non_employee_membership()` is extended to also enforce the employee side: `IF NOT is_platform_owner(NEW.id) THEN require department_id IS NOT NULL AND branch_id IS NOT NULL`. At this point AR-DM-7 becomes total and database-provable, and any "temporary" language in prior corrections is retired.
+
+Until DM-6 is complete, AR-DM-7 remains the authoritative architectural rule; new code MUST assume the invariant holds and MUST NOT rely on employee rows having NULL membership fields.
 
 ---
 
@@ -124,17 +144,18 @@ If the answer is unclear, the concept is not ready to be added. Clarify its doma
 
 ## 4. Pending corrections list (from functional review)
 
-| ID | Item | Priority | Module | Notes |
-|----|------|----------|--------|-------|
-| JT-1 | Remove Platform Ownership labels from `job_titles` | High | Employees / Job Titles | Data cleanup across all branches. |
-| JT-2 | Add server-side guard rejecting ownership labels in job-title CRUD | High | Employees / Job Titles | Prevents re-introduction. |
-| JT-3 | Document the Job Title / Role / Ownership boundary | Medium | Documentation | To be added to `docs/employees.md` when created. |
-| JT-4 | Update Job Titles admin UI to explain the boundary visibly | Medium | Employees / Job Titles | Help text or inline documentation. |
-| DM-1 | Make `profiles.department_id` nullable; keep `branch_id` nullable | High | Schema / Employees | Enables non-employee identities. |
-| DM-2 | Validation trigger enforcing employee-vs-non-employee membership invariant | High | Schema / Security | Trigger, not CHECK. |
-| DM-3 | Adjust `handle_new_user()` for non-employee provisioning path | High | Auth / Onboarding | Skip department/branch resolution. |
-| DM-4 | One-time cleanup: NULL branch/department for existing Platform Owners | High | Data | Single row today. |
-| DM-5 | Sweep employee-scope UI to confirm non-employee exclusion | Medium | UI | Post-migration verification. |
+| ID | Item | Priority | Module | Notes | Status |
+|----|------|----------|--------|-------|--------|
+| JT-1 | Remove Platform Ownership labels from `job_titles` | High | Employees / Job Titles | Data cleanup across all branches. | Pending |
+| JT-2 | Add server-side guard rejecting ownership labels in job-title CRUD | High | Employees / Job Titles | Prevents re-introduction. | Pending |
+| JT-3 | Document the Job Title / Role / Ownership boundary | Medium | Documentation | To be added to `docs/employees.md` when created. | Pending |
+| JT-4 | Update Job Titles admin UI to explain the boundary visibly | Medium | Employees / Job Titles | Help text or inline documentation. | Pending |
+| DM-1 | Make `profiles.department_id` nullable; keep `branch_id` nullable | High | Schema / Employees | Enables non-employee identities. | **Done** |
+| DM-2 | Validation trigger enforcing non-employee side of the membership invariant (AR-DM-8) | High | Schema / Security | Trigger, not CHECK. Enforced on both `profiles` and `user_roles`. | **Done** |
+| DM-3 | Adjust `handle_new_user()` for non-employee provisioning path | High | Auth / Onboarding | Skip department/branch resolution for Platform Ownership roles. | **Done** |
+| DM-4 | One-time cleanup: NULL branch/department for existing Platform Owners | High | Data | Single row today. | **Done** |
+| DM-5 | Sweep employee-scope UI to confirm non-employee exclusion | Medium | UI | Post-migration verification. | Pending |
+| DM-6 | Sequencing plan to enforce the employee side of the membership invariant (AR-DM-7) | High | Auth / Onboarding / Schema | Three ordered steps: (1) provisioning flow update, (2) one-time reconciliation, (3) trigger tightening. See §2.6. | Pending |
 
 *This list will grow during the functional review and be consolidated before the implementation roadmap is defined.*
 
