@@ -41,6 +41,7 @@ import { NotificationsBell } from "@/components/notifications-bell";
 import { ActiveBranchProvider, useActiveBranch } from "@/lib/use-active-branch";
 import { BranchSwitcher, ActiveBranchBadge } from "@/components/branch-switcher";
 import { AppFooter } from "@/components/app-footer";
+import { usePlatformOwnerStatus } from "@/lib/platform-owners.hooks";
 
 interface NavItem {
   to: string;
