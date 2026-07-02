@@ -996,10 +996,13 @@ export type Database = {
           expires_at: string | null
           file_size: number | null
           id: string
+          is_pinned: boolean
           item_type: string
           mime_type: string | null
+          priority: string
           starts_at: string | null
           storage_path: string | null
+          style: Json
           title: string | null
           updated_at: string
         }
@@ -1012,10 +1015,13 @@ export type Database = {
           expires_at?: string | null
           file_size?: number | null
           id?: string
+          is_pinned?: boolean
           item_type: string
           mime_type?: string | null
+          priority?: string
           starts_at?: string | null
           storage_path?: string | null
+          style?: Json
           title?: string | null
           updated_at?: string
         }
@@ -1028,10 +1034,13 @@ export type Database = {
           expires_at?: string | null
           file_size?: number | null
           id?: string
+          is_pinned?: boolean
           item_type?: string
           mime_type?: string | null
+          priority?: string
           starts_at?: string | null
           storage_path?: string | null
+          style?: Json
           title?: string | null
           updated_at?: string
         }
