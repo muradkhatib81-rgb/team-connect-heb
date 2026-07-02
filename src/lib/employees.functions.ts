@@ -56,7 +56,7 @@ async function getEmployeeManagerCaps(supabase: any, userId: string) {
 function assertAssignableRole(role: (typeof APP_ROLES)[number], caps: Awaited<ReturnType<typeof getEmployeeManagerCaps>>) {
   if (caps.isMainAdmin) return;
   if (role === "main_admin" || role === "branch_manager") {
-    throw new Error("מנהל סניף אינו יכול להעניק תפקיד מנהל ראשי או מנהל סניף");
+    throw new Error("מנהל סניף אינו יכול להעניק תפקיד בעל המערכת או מנהל סניף");
   }
 }
 
@@ -66,7 +66,7 @@ async function assertTargetIsNotProtectedManager(supabase: any, targetUserId: st
   if (error) throw new Error(error.message);
   const roles = (data ?? []).map((r: any) => r.role as string);
   if (roles.includes("main_admin") || roles.includes("branch_manager") || roles.includes("system_admin")) {
-    throw new Error("רק מנהל ראשי יכול לערוך מנהל ראשי או מנהל סניף");
+    throw new Error("רק בעל המערכת יכול לערוך בעל המערכת או מנהל סניף");
   }
 }
 

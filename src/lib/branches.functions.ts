@@ -12,7 +12,7 @@ async function assertSystemAdmin(supabase: any, userId: string) {
     .eq("user_id", userId)
     .eq("role", "system_admin")
     .maybeSingle();
-  if (error || !data) throw new Error("רק מנהל מערכת ראשי יכול לבצע פעולה זו");
+  if (error || !data) throw new Error("רק בעל המערכת הראשי יכול לבצע פעולה זו");
 }
 
 /**

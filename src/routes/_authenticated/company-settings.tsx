@@ -157,7 +157,7 @@ function CompanySettingsPage() {
         </div>
         <h1 className="text-xl font-bold">אין הרשאה</h1>
         <p className="text-sm text-muted-foreground">
-          רק מנהל ראשי יכול לגשת להגדרות החברה.
+          רק בעל המערכת יכול לגשת להגדרות החברה.
         </p>
       </div>
     );

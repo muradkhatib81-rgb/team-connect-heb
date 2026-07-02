@@ -591,7 +591,7 @@ function EmployeeScheduleCard({ profile }: { profile: any }) {
             .eq("schedule_id", sched.id),
         ]);
         const roleLabels: Record<string, string> = {
-          main_admin: "מנהל ראשי",
+          main_admin: "בעל המערכת",
           branch_manager: "מנהל סניף",
           assistant_manager: "סגן מנהל",
           department_manager: "אחראי מחלקה",

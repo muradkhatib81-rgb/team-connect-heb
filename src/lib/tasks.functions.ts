@@ -642,7 +642,7 @@ export const setTaskManagementPermission = createServerFn({ method: "POST" })
   .inputValidator((d: unknown) => grantSchema.parse(d))
   .handler(async ({ data, context }) => {
     const caps = await getCallerCaps(context.supabase, context.userId);
-    if (!caps.isMainAdmin) throw new Error("רק מנהל ראשי יכול להעניק הרשאה זו");
+    if (!caps.isMainAdmin) throw new Error("רק בעל המערכת יכול להעניק הרשאה זו");
     const { error } = await context.supabase
       .from("user_task_permissions")
       .upsert(
@@ -866,7 +866,7 @@ export const closeTask = createServerFn({ method: "POST" })
   .inputValidator((d: unknown) => z.object({ id: z.string().uuid() }).parse(d))
   .handler(async ({ data, context }) => {
     const caps = await getCallerCaps(context.supabase, context.userId);
-    if (!caps.canCloseTasks) throw new Error("רק מנהל ראשי או בעלי הרשאת ניהול/אישור משימות יכולים לסגור משימה");
+    if (!caps.canCloseTasks) throw new Error("רק בעל המערכת או בעלי הרשאת ניהול/אישור משימות יכולים לסגור משימה");
     const { error } = await context.supabase
       .from("tasks")
       .update({ status: "closed" } as any)

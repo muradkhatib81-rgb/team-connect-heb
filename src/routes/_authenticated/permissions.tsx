@@ -272,7 +272,7 @@ function PermissionsPage() {
     return (
       <Card className="card-elevated p-8 text-center">
         <h2 className="text-lg font-semibold">אין הרשאה</h2>
-        <p className="text-sm text-muted-foreground mt-2">רק מנהל ראשי יכול לנהל הרשאות.</p>
+        <p className="text-sm text-muted-foreground mt-2">רק בעל המערכת יכול לנהל הרשאות.</p>
       </Card>
     );
   }

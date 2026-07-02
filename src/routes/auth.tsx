@@ -134,7 +134,7 @@ function AuthPage() {
       toast.error(signInErr.message);
       return;
     }
-    toast.success("נוצר מנהל ראשי. ברוך הבא!");
+    toast.success("נוצר בעל המערכת הראשי. ברוך הבא!");
     navigate({ to: "/dashboard", replace: true });
   }
 
@@ -170,7 +170,7 @@ function AuthPage() {
             {showBootstrap ? (
               <>
                 <div className="mb-5 text-center">
-                  <h2 className="text-lg font-semibold">הקמת מנהל ראשי</h2>
+                  <h2 className="text-lg font-semibold">הקמת בעל המערכת הראשי</h2>
                   <p className="text-xs text-muted-foreground mt-1">
                     אין משתמשים במערכת. צור את חשבון המנהל הראשי הראשון.
                   </p>
@@ -206,7 +206,7 @@ function AuthPage() {
                     />
                   </div>
                   <Button type="submit" className="w-full" disabled={loading} size="lg">
-                    {loading ? <Loader2 className="size-4 animate-spin" /> : "צור מנהל ראשי"}
+                    {loading ? <Loader2 className="size-4 animate-spin" /> : "צור בעל המערכת הראשי"}
                   </Button>
                 </form>
               </>
