@@ -41,6 +41,7 @@ import { NotificationsBell } from "@/components/notifications-bell";
 import { ActiveBranchProvider, useActiveBranch } from "@/lib/use-active-branch";
 import { BranchSwitcher, ActiveBranchBadge } from "@/components/branch-switcher";
 import { AppFooter } from "@/components/app-footer";
+import { usePlatformOwnerStatus } from "@/lib/platform-owners.hooks";
 
 interface NavItem {
   to: string;
@@ -58,6 +59,8 @@ export function AppShell({ children }: { children: ReactNode }) {
   const pathname = useRouterState({ select: (s) => s.location.pathname });
 
   const isMainAdminEarly = !!profile?.roles?.includes("main_admin");
+  const platformStatusQ = usePlatformOwnerStatus();
+  const isPlatformOwner = !!platformStatusQ.data?.isOwner;
 
   const breakPermQ = useQuery({
     enabled: !!profile?.id && !isMainAdminEarly,
@@ -162,10 +165,10 @@ export function AppShell({ children }: { children: ReactNode }) {
     { to: "/company-settings", label: "הגדרות חברה", icon: Building, visible: isMainAdmin },
     { to: "/profile", label: "הפרופיל שלי", icon: UserCircle, visible: isPlainEmployee },
 
-    // ===== Platform Management (visible to every Platform Owner: system_admin OR main_admin) =====
-    { to: "/platform", label: "דשבורד", icon: LayoutDashboard, visible: isSysAdmin || isMainAdmin, section: "ניהול פלטפורמה" },
-    { to: "/platform/owners", label: "בעלי מערכת", icon: Crown, visible: isSysAdmin || isMainAdmin, section: "ניהול פלטפורמה" },
-    { to: "/platform/audit-log", label: "יומן פעילות פלטפורמה", icon: ShieldCheck, visible: isSysAdmin || isMainAdmin, section: "ניהול פלטפורמה" },
+    // ===== Platform Management (visible only to authoritative Platform Owners) =====
+    { to: "/platform", label: "דשבורד", icon: LayoutDashboard, visible: isPlatformOwner, section: "ניהול פלטפורמה" },
+    { to: "/platform/owners", label: "בעלי מערכת", icon: Crown, visible: isPlatformOwner, section: "ניהול פלטפורמה" },
+    { to: "/platform/audit-log", label: "יומן פעילות פלטפורמה", icon: ShieldCheck, visible: isPlatformOwner, section: "ניהול פלטפורמה" },
 
     // ===== System Administrator section (visible only to the singleton system_admin) =====
     { to: "/system/branches", label: "סניפים", icon: Building2, visible: isSysAdmin, section: "ניהול מערכת" },
