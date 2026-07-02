@@ -119,7 +119,10 @@ export const createBranch = createServerFn({ method: "POST" })
   .inputValidator((data: unknown) => createSchema.parse(data))
   .handler(async ({ data, context }) => {
     await assertSystemAdmin(context.supabase, context.userId);
-    const supabase = context.supabase;
+    // Cross-branch admin flow: read from any source branch and insert into
+    // the newly created branch. Use an unscoped client so RLS doesn't clip
+    // reads to the caller's active branch.
+    const supabase = createUnscopedClient();
 
     const { data: existing } = await supabase
       .from("branches")
@@ -142,6 +145,8 @@ export const createBranch = createServerFn({ method: "POST" })
     if (error) throw new Error(error.message);
 
     if (data.copy_departments_from_branch_id) {
+      // Read source departments with the unscoped client (source branch may
+      // differ from the caller's active branch).
       const { data: srcDepts, error: dErr } = await supabase
         .from("departments")
         .select("name,code,is_active")
@@ -156,10 +161,27 @@ export const createBranch = createServerFn({ method: "POST" })
           branch_id: inserted.id,
           manager_id: null,
         }));
-        const { error: iErr } = await supabase.from("departments").insert(rows);
+        // Department INSERT policy requires branch_id = current_active_branch(),
+        // so send the NEW branch id as the active-branch header for this call.
+        const url = process.env.SUPABASE_URL!;
+        const key = process.env.SUPABASE_PUBLISHABLE_KEY!;
+        const auth = getRequest()?.headers.get("authorization") ?? "";
+        const targetScoped = createClient<Database>(url, key, {
+          global: {
+            headers: {
+              ...(auth ? { Authorization: auth } : {}),
+              "x-active-branch": inserted.id,
+            },
+          },
+          auth: { storage: undefined, persistSession: false, autoRefreshToken: false },
+        });
+        const { error: iErr } = await targetScoped.from("departments").insert(rows);
         if (iErr) throw new Error(iErr.message);
       }
     }
+
+    return { ok: true, id: inserted.id };
+  });
 
     return { ok: true, id: inserted.id };
   });
