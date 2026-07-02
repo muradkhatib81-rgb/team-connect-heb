@@ -59,6 +59,8 @@ export function AppShell({ children }: { children: ReactNode }) {
   const pathname = useRouterState({ select: (s) => s.location.pathname });
 
   const isMainAdminEarly = !!profile?.roles?.includes("main_admin");
+  const platformStatusQ = usePlatformOwnerStatus();
+  const isPlatformOwner = !!platformStatusQ.data?.isOwner;
 
   const breakPermQ = useQuery({
     enabled: !!profile?.id && !isMainAdminEarly,
