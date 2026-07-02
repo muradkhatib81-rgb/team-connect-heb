@@ -182,6 +182,7 @@ const CATEGORIES: Category[] = [
     icon: Trophy,
     perms: [
       { key: "can_manage_employee_of_month", label: "🏆 ניהול עובד החודש", description: "מאפשר לבחור עובדים מצטיינים לחודש, לעדכן סיבת בחירה, להעלות תמונות ולמחוק רשומות." },
+      { key: "can_manage_morning_board", label: "🖼️ ניהול לוח בוקר", description: "מאפשר להעלות, להחליף או להסיר את תמונת הבאנר של לוח הבוקר עבור הסניף." },
     ],
   },
   {

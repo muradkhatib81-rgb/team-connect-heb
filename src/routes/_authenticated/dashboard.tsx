@@ -30,6 +30,7 @@ import { EmployeeOfMonthSection } from "@/components/employee-of-month-section";
 import { formatHeDateTime } from "@/lib/date-format";
 import { CreateEmployeeDialog } from "./employees";
 import { ManagementOnShiftCard } from "@/components/management-on-shift-card";
+import { BranchBanner } from "@/components/branch-banner";
 
 export const Route = createFileRoute("/_authenticated/dashboard")({
   component: DashboardPage,
@@ -182,6 +183,7 @@ function DashboardPage() {
 
   return (
     <div className="space-y-8">
+      <BranchBanner />
       <ManagementOnShiftCard />
 
       <header>
