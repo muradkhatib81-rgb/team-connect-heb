@@ -2116,6 +2116,18 @@ export type Database = {
           year: number
         }[]
       }
+      get_management_on_shift: {
+        Args: never
+        Returns: {
+          avatar_url: string
+          full_name: string
+          id: string
+          job_title: string
+          role: Database["public"]["Enums"]["app_role"]
+          started_at: string
+          user_id: string
+        }[]
+      }
       get_message_read_receipts: {
         Args: { _message_id: string }
         Returns: {

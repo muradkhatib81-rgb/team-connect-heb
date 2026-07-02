@@ -39,41 +39,16 @@ export function ManagementOnShiftCard() {
     enabled: !!profile,
     queryKey: ["management-on-shift", activeBranchId],
     queryFn: async (): Promise<Row[]> => {
-      const { data, error } = await (supabase as any)
-        .from("management_on_shift")
-        .select("id, user_id, started_at, profiles:profiles!management_on_shift_user_id_fkey(full_name, avatar_url, job_title)")
-        .order("started_at", { ascending: true });
+      const { data, error } = await (supabase as any).rpc("get_management_on_shift");
       if (error) throw error;
-      const rows = (data ?? []) as any[];
-      if (rows.length === 0) return [];
-      const ids = rows.map((r) => r.user_id);
-      const { data: roles } = await supabase
-        .from("user_roles")
-        .select("user_id, role")
-        .in("user_id", ids);
-      const rank: Record<string, number> = {
-        branch_manager: 1,
-        assistant_manager: 2,
-      };
-      const bestRole = new Map<string, AppRole>();
-      (roles ?? []).forEach((r: any) => {
-        const cur = bestRole.get(r.user_id);
-        if (!cur || (rank[r.role] ?? 9) < (rank[cur] ?? 9)) {
-          if (r.role === "branch_manager" || r.role === "assistant_manager") {
-            bestRole.set(r.user_id, r.role);
-          } else if (!cur) {
-            bestRole.set(r.user_id, r.role);
-          }
-        }
-      });
-      return rows.map((r) => ({
+      return ((data ?? []) as any[]).map((r) => ({
         id: r.id,
         user_id: r.user_id,
         started_at: r.started_at,
-        full_name: r.profiles?.full_name ?? null,
-        avatar_url: r.profiles?.avatar_url ?? null,
-        job_title: r.profiles?.job_title ?? null,
-        role: bestRole.get(r.user_id) ?? null,
+        full_name: r.full_name ?? null,
+        avatar_url: r.avatar_url ?? null,
+        job_title: r.job_title ?? null,
+        role: (r.role as AppRole) ?? null,
       }));
     },
   });
