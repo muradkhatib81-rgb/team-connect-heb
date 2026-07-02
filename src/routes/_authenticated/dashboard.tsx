@@ -182,6 +182,8 @@ function DashboardPage() {
 
   return (
     <div className="space-y-8">
+      <ManagementOnShiftCard />
+
       <header>
         <p className="text-sm text-muted-foreground">שלום,</p>
         <h1 className="text-2xl sm:text-3xl font-bold mt-1">{profile.full_name}</h1>
@@ -195,8 +197,6 @@ function DashboardPage() {
           )}
         </div>
       </header>
-
-      <ManagementOnShiftCard />
 
       <EmployeeOfMonthSection />
 
