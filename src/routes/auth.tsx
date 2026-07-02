@@ -172,7 +172,7 @@ function AuthPage() {
                 <div className="mb-5 text-center">
                   <h2 className="text-lg font-semibold">הקמת בעל המערכת הראשי</h2>
                   <p className="text-xs text-muted-foreground mt-1">
-                    אין משתמשים במערכת. צור את חשבון המנהל הראשי הראשון.
+                    אין משתמשים במערכת. צור את חשבון בעל המערכת הראשי.
                   </p>
                 </div>
                 <form onSubmit={handleBootstrap} className="space-y-4">
@@ -241,7 +241,7 @@ function AuthPage() {
                   {loading ? <Loader2 className="size-4 animate-spin" /> : "התחבר"}
                 </Button>
                 <p className="text-xs text-muted-foreground text-center pt-2">
-                  אין לך חשבון? פנה למנהל הראשי לקבלת פרטי גישה.
+                  אין לך חשבון? פנה לבעל המערכת הראשי לקבלת פרטי גישה.
                 </p>
               </form>
             )}

@@ -28,7 +28,7 @@ Job Titles and authorization roles are **independent concepts** and must never b
 Platform Owners (`system_admin`, `main_admin`) are **business identities, not operational positions**. They administer the platform itself and are explicitly excluded from the employee domain.
 
 - **Platform Owner / Primary Platform Owner** (or any ownership identity) **must never appear as a Job Title** in the `job_titles` table or any employee-facing picker.
-- The existing entry "מנהל ראשי" (or its legacy / new label after the Platform Owner refactor) in `job_titles` is an **architectural inconsistency** and must be removed as part of the post-review corrections.
+- The legacy entry that previously existed in `job_titles` under the deprecated label was removed as part of JT-1 (see backlog §4). Any Platform Ownership label — current or deprecated — remains forbidden from this table.
 
 ### 1.3 Branch Manager / Assistant Manager — legitimate operational positions
 
@@ -47,7 +47,7 @@ These positions happen to be associated with authorization roles (`branch_manage
 
 ### 1.5 Enforcement checklist (post-review implementation)
 
-- [ ] Remove Platform Ownership labels from `job_titles` (data cleanup).
+- [x] Remove Platform Ownership labels from `job_titles` (data cleanup). — **Done (JT-1).**
 - [ ] Add a server-side guard in job-title creation / update that rejects labels matching `ROLE_LABELS` for `system_admin` or `main_admin` (or any future ownership identity).
 - [ ] Document the boundary in `docs/employees.md` (or equivalent) when created: "Job Titles = operational positions. Platform Ownership identities MUST NOT appear here."
 - [ ] Ensure the Job Titles admin screen visibly documents this rule.
@@ -146,7 +146,7 @@ If the answer is unclear, the concept is not ready to be added. Clarify its doma
 
 | ID | Item | Priority | Module | Notes | Status |
 |----|------|----------|--------|-------|--------|
-| JT-1 | Remove Platform Ownership labels from `job_titles` | High | Employees / Job Titles | Data cleanup across all branches. | Pending |
+| JT-1 | Remove Platform Ownership labels from `job_titles` | High | Employees / Job Titles | Data cleanup across all branches. | **Done** |
 | JT-2 | Add server-side guard rejecting ownership labels in job-title CRUD | High | Employees / Job Titles | Prevents re-introduction. | Pending |
 | JT-3 | Document the Job Title / Role / Ownership boundary | Medium | Documentation | To be added to `docs/employees.md` when created. | Pending |
 | JT-4 | Update Job Titles admin UI to explain the boundary visibly | Medium | Employees / Job Titles | Help text or inline documentation. | Pending |
@@ -156,6 +156,8 @@ If the answer is unclear, the concept is not ready to be added. Clarify its doma
 | DM-4 | One-time cleanup: NULL branch/department for existing Platform Owners | High | Data | Single row today. | **Done** |
 | DM-5 | Sweep employee-scope UI to confirm non-employee exclusion | Medium | UI | Post-migration verification. | Pending |
 | DM-6 | Sequencing plan to enforce the employee side of the membership invariant (AR-DM-7) | High | Auth / Onboarding / Schema | Three ordered steps: (1) provisioning flow update, (2) one-time reconciliation, (3) trigger tightening. See §2.6. | Pending |
+| UI-1 | Suppress trailing separator when identity has no department (Platform Owner sidebar) | Medium | UI / App Shell | AR-DM-8 formatting cleanup. | **Done** |
+| TC-1 | Terminology cleanup — remove legacy "מנהל ראשי" references from user-facing surfaces (login, dashboard, Platform Owner profile row) and replace with the current business identity label | High | UI / Data / Docs | Purely terminological; no authorization changes. | **Done** |
 
 *This list will grow during the functional review and be consolidated before the implementation roadmap is defined.*
 
