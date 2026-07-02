@@ -302,7 +302,7 @@ function DeptManagerDashboard({
   if (!data.dept) {
     return (
       <Card className="card-elevated p-6 text-sm text-muted-foreground">
-        עדיין לא שויכת כאחראי מחלקה. פנה למנהל הראשי.
+        עדיין לא שויכת כאחראי מחלקה. פנה לבעל המערכת הראשי.
       </Card>
     );
   }
