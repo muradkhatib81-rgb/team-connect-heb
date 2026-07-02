@@ -151,7 +151,19 @@ export const createPlatformOwner = createServerFn({ method: "POST" })
       },
     });
     if (createErr || !created?.user) {
-      throw new Error(createErr?.message ?? "יצירת המשתמש נכשלה");
+      // Log the complete error server-side and surface the real cause.
+      const errAny = createErr as any;
+      console.error("createPlatformOwner: auth.admin.createUser failed", {
+        message: errAny?.message,
+        status: errAny?.status,
+        code: errAny?.code,
+        name: errAny?.name,
+        stack: errAny?.stack,
+      });
+      const detail = [errAny?.message, errAny?.code ? `(code: ${errAny.code})` : null, errAny?.status ? `(status: ${errAny.status})` : null]
+        .filter(Boolean)
+        .join(" ");
+      throw new Error(detail || "יצירת המשתמש נכשלה (שגיאת שרת לא ידועה)");
     }
     const newUserId = created.user.id;
 
