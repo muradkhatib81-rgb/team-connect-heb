@@ -24,10 +24,13 @@ export interface PlatformOwnerRow {
   email: string | null;
   phone: string | null;
   id_number: string | null;
+  avatar_url: string | null;
   level: PlatformOwnerLevel;
   is_active: boolean;
   created_at: string | null;
+  last_sign_in_at: string | null;
 }
+
 
 async function assertCallerIsPlatformOwner(
   supabase: any,
