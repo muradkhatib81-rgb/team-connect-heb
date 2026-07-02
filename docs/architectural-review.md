@@ -47,7 +47,7 @@ These positions happen to be associated with authorization roles (`branch_manage
 
 ### 1.5 Enforcement checklist (post-review implementation)
 
-- [ ] Remove Platform Ownership labels from `job_titles` (data cleanup).
+- [x] Remove Platform Ownership labels from `job_titles` (data cleanup). — **Done (JT-1).**
 - [ ] Add a server-side guard in job-title creation / update that rejects labels matching `ROLE_LABELS` for `system_admin` or `main_admin` (or any future ownership identity).
 - [ ] Document the boundary in `docs/employees.md` (or equivalent) when created: "Job Titles = operational positions. Platform Ownership identities MUST NOT appear here."
 - [ ] Ensure the Job Titles admin screen visibly documents this rule.
