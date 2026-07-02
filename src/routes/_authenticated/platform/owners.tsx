@@ -143,7 +143,7 @@ function PlatformOwnersPage() {
             <Input
               value={search.q ?? ""}
               onChange={(e) =>
-                navigate({ search: ((prev: typeof search) => ({ ...prev, q: e.target.value }) })
+                navigate({ search: (prev: typeof search) => ({ ...prev, q: e.target.value }) })
               }
               placeholder="חיפוש לפי שם, דוא״ל או טלפון…"
               className="pr-9"
@@ -152,7 +152,7 @@ function PlatformOwnersPage() {
           <Select
             value={search.level ?? "all"}
             onValueChange={(v) =>
-              navigate({ search: ((prev: typeof search) => ({ ...prev, level: v as any }) })
+              navigate({ search: (prev: typeof search) => ({ ...prev, level: v as any }) })
             }
           >
             <SelectTrigger className="w-full sm:w-52"><SelectValue /></SelectTrigger>
@@ -165,7 +165,7 @@ function PlatformOwnersPage() {
           <Select
             value={search.status ?? "all"}
             onValueChange={(v) =>
-              navigate({ search: ((prev: typeof search) => ({ ...prev, status: v as any }) })
+              navigate({ search: (prev: typeof search) => ({ ...prev, status: v as any }) })
             }
           >
             <SelectTrigger className="w-full sm:w-44"><SelectValue /></SelectTrigger>
