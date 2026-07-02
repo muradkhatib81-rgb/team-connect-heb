@@ -146,7 +146,7 @@ If the answer is unclear, the concept is not ready to be added. Clarify its doma
 
 | ID | Item | Priority | Module | Notes | Status |
 |----|------|----------|--------|-------|--------|
-| JT-1 | Remove Platform Ownership labels from `job_titles` | High | Employees / Job Titles | Data cleanup across all branches. | Pending |
+| JT-1 | Remove Platform Ownership labels from `job_titles` | High | Employees / Job Titles | Data cleanup across all branches. | **Done** |
 | JT-2 | Add server-side guard rejecting ownership labels in job-title CRUD | High | Employees / Job Titles | Prevents re-introduction. | Pending |
 | JT-3 | Document the Job Title / Role / Ownership boundary | Medium | Documentation | To be added to `docs/employees.md` when created. | Pending |
 | JT-4 | Update Job Titles admin UI to explain the boundary visibly | Medium | Employees / Job Titles | Help text or inline documentation. | Pending |
