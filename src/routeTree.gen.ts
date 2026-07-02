@@ -35,6 +35,7 @@ import { Route as AuthenticatedSystemSettingsRouteImport } from './routes/_authe
 import { Route as AuthenticatedSystemPermissionsRouteImport } from './routes/_authenticated/system.permissions'
 import { Route as AuthenticatedSystemBranchesRouteImport } from './routes/_authenticated/system.branches'
 import { Route as AuthenticatedSystemBranchManagersRouteImport } from './routes/_authenticated/system.branch-managers'
+import { Route as AuthenticatedPlatformOwnersRouteImport } from './routes/_authenticated/platform/owners'
 import { Route as ApiPublicHooksGenerateRecurringTasksRouteImport } from './routes/api/public/hooks/generate-recurring-tasks'
 
 const AuthRoute = AuthRouteImport.update({
@@ -181,6 +182,12 @@ const AuthenticatedSystemBranchManagersRoute =
     path: '/branch-managers',
     getParentRoute: () => AuthenticatedSystemRoute,
   } as any)
+const AuthenticatedPlatformOwnersRoute =
+  AuthenticatedPlatformOwnersRouteImport.update({
+    id: '/owners',
+    path: '/owners',
+    getParentRoute: () => AuthenticatedPlatformRouteRoute,
+  } as any)
 const ApiPublicHooksGenerateRecurringTasksRoute =
   ApiPublicHooksGenerateRecurringTasksRouteImport.update({
     id: '/api/public/hooks/generate-recurring-tasks',
@@ -209,6 +216,7 @@ export interface FileRoutesByFullPath {
   '/shift-settings': typeof AuthenticatedShiftSettingsRoute
   '/system': typeof AuthenticatedSystemRouteWithChildren
   '/tasks': typeof AuthenticatedTasksRoute
+  '/platform/owners': typeof AuthenticatedPlatformOwnersRoute
   '/system/branch-managers': typeof AuthenticatedSystemBranchManagersRoute
   '/system/branches': typeof AuthenticatedSystemBranchesRoute
   '/system/permissions': typeof AuthenticatedSystemPermissionsRoute
@@ -236,6 +244,7 @@ export interface FileRoutesByTo {
   '/shift-settings': typeof AuthenticatedShiftSettingsRoute
   '/system': typeof AuthenticatedSystemRouteWithChildren
   '/tasks': typeof AuthenticatedTasksRoute
+  '/platform/owners': typeof AuthenticatedPlatformOwnersRoute
   '/system/branch-managers': typeof AuthenticatedSystemBranchManagersRoute
   '/system/branches': typeof AuthenticatedSystemBranchesRoute
   '/system/permissions': typeof AuthenticatedSystemPermissionsRoute
@@ -266,6 +275,7 @@ export interface FileRoutesById {
   '/_authenticated/shift-settings': typeof AuthenticatedShiftSettingsRoute
   '/_authenticated/system': typeof AuthenticatedSystemRouteWithChildren
   '/_authenticated/tasks': typeof AuthenticatedTasksRoute
+  '/_authenticated/platform/owners': typeof AuthenticatedPlatformOwnersRoute
   '/_authenticated/system/branch-managers': typeof AuthenticatedSystemBranchManagersRoute
   '/_authenticated/system/branches': typeof AuthenticatedSystemBranchesRoute
   '/_authenticated/system/permissions': typeof AuthenticatedSystemPermissionsRoute
@@ -296,6 +306,7 @@ export interface FileRouteTypes {
     | '/shift-settings'
     | '/system'
     | '/tasks'
+    | '/platform/owners'
     | '/system/branch-managers'
     | '/system/branches'
     | '/system/permissions'
@@ -323,6 +334,7 @@ export interface FileRouteTypes {
     | '/shift-settings'
     | '/system'
     | '/tasks'
+    | '/platform/owners'
     | '/system/branch-managers'
     | '/system/branches'
     | '/system/permissions'
@@ -352,6 +364,7 @@ export interface FileRouteTypes {
     | '/_authenticated/shift-settings'
     | '/_authenticated/system'
     | '/_authenticated/tasks'
+    | '/_authenticated/platform/owners'
     | '/_authenticated/system/branch-managers'
     | '/_authenticated/system/branches'
     | '/_authenticated/system/permissions'
@@ -551,6 +564,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedSystemBranchManagersRouteImport
       parentRoute: typeof AuthenticatedSystemRoute
     }
+    '/_authenticated/platform/owners': {
+      id: '/_authenticated/platform/owners'
+      path: '/owners'
+      fullPath: '/platform/owners'
+      preLoaderRoute: typeof AuthenticatedPlatformOwnersRouteImport
+      parentRoute: typeof AuthenticatedPlatformRouteRoute
+    }
     '/api/public/hooks/generate-recurring-tasks': {
       id: '/api/public/hooks/generate-recurring-tasks'
       path: '/api/public/hooks/generate-recurring-tasks'
@@ -562,11 +582,13 @@ declare module '@tanstack/react-router' {
 }
 
 interface AuthenticatedPlatformRouteRouteChildren {
+  AuthenticatedPlatformOwnersRoute: typeof AuthenticatedPlatformOwnersRoute
   AuthenticatedPlatformIndexRoute: typeof AuthenticatedPlatformIndexRoute
 }
 
 const AuthenticatedPlatformRouteRouteChildren: AuthenticatedPlatformRouteRouteChildren =
   {
+    AuthenticatedPlatformOwnersRoute: AuthenticatedPlatformOwnersRoute,
     AuthenticatedPlatformIndexRoute: AuthenticatedPlatformIndexRoute,
   }
 
