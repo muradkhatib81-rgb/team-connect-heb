@@ -7,6 +7,8 @@ import { Trophy, Settings, Loader2, UserRound } from "lucide-react";
 
 import { supabase } from "@/integrations/supabase/client";
 import { useCanManageEom } from "@/lib/use-eom-perm";
+import { useActiveBranch } from "@/lib/use-active-branch";
+import { branchScopedFilter } from "@/integrations/supabase/active-branch";
 
 type Row = {
   id: string;
@@ -38,60 +40,86 @@ async function signUrl(bucket: string, path: string | null): Promise<string | nu
 export function EmployeeOfMonthSection() {
   const canManage = useCanManageEom();
   const qc = useQueryClient();
+  const { activeBranchId } = useActiveBranch();
   const now = new Date();
   const year = now.getFullYear();
   const month = now.getMonth() + 1;
 
+  // Realtime updates scoped to the currently active branch. The Realtime
+  // WebSocket cannot carry per-request headers so we apply the branch
+  // filter directly on the postgres_changes subscription.
   useEffect(() => {
+    const branchFilter = branchScopedFilter(activeBranchId);
     const channel = supabase
-      .channel("eom-realtime")
+      .channel(`eom-realtime-${activeBranchId ?? "all"}`)
       .on(
         "postgres_changes",
-        { event: "*", schema: "public", table: "employee_of_month" },
-        () => qc.invalidateQueries({ queryKey: ["eom", "current", year, month] }),
+        {
+          event: "*",
+          schema: "public",
+          table: "employee_of_month",
+          ...(branchFilter ? { filter: branchFilter } : {}),
+        },
+        () =>
+          qc.invalidateQueries({
+            queryKey: ["eom", "current", activeBranchId, year, month],
+          }),
       )
       .on(
         "postgres_changes",
-        { event: "*", schema: "public", table: "profiles" },
-        () => qc.invalidateQueries({ queryKey: ["eom", "current", year, month] }),
+        {
+          event: "*",
+          schema: "public",
+          table: "profiles",
+          ...(branchFilter ? { filter: branchFilter } : {}),
+        },
+        () =>
+          qc.invalidateQueries({
+            queryKey: ["eom", "current", activeBranchId, year, month],
+          }),
       )
       .subscribe();
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [qc, year, month]);
+  }, [qc, activeBranchId, year, month]);
 
-
-
+  // Include activeBranchId in the queryKey so switching branches refetches
+  // immediately. `supabase.from(...)` is already branch-scoped by the
+  // installed proxy, so both queries below transparently return rows only
+  // for the currently active branch.
   const q = useQuery({
-    queryKey: ["eom", "current", year, month],
+    queryKey: ["eom", "current", activeBranchId, year, month],
     refetchOnMount: "always",
     queryFn: async () => {
-      const { data: rows, error } = await supabase.rpc("get_employees_of_month", {
-        _year: year,
-        _month: month,
-      });
+      const { data: rows, error } = await supabase
+        .from("employee_of_month")
+        .select("id, year, month, employee_id, reason, image_url")
+        .eq("year", year)
+        .eq("month", month)
+        .order("created_at");
       if (error) throw error;
-      const raw = (rows ?? []) as Array<{
-        id: string; year: number; month: number; employee_id: string;
-        reason: string | null; image_url: string | null;
-        full_name: string | null; avatar_url: string | null;
-        job_title: string | null; department_name: string | null;
-      }>;
-      const list: Row[] = raw.map((r) => ({
-        id: r.id, year: r.year, month: r.month, employee_id: r.employee_id,
-        reason: r.reason, image_url: r.image_url,
-      }));
+      const list = (rows ?? []) as Row[];
+
       const profilesMap: Record<string, Profile> = {};
-      raw.forEach((r) => {
-        profilesMap[r.employee_id] = {
-          id: r.employee_id,
-          full_name: r.full_name ?? "—",
-          avatar_url: r.avatar_url,
-          job_title: r.job_title,
-          departments: r.department_name ? { name: r.department_name } : null,
-        };
-      });
+      if (list.length > 0) {
+        const ids = Array.from(new Set(list.map((r) => r.employee_id)));
+        const { data: ps, error: pErr } = await supabase
+          .from("profiles")
+          .select("id, full_name, avatar_url, job_title, departments(name)")
+          .in("id", ids);
+        if (pErr) throw pErr;
+        (ps ?? []).forEach((p: any) => {
+          profilesMap[p.id] = {
+            id: p.id,
+            full_name: p.full_name ?? "—",
+            avatar_url: p.avatar_url,
+            job_title: p.job_title,
+            departments: p.departments ?? null,
+          };
+        });
+      }
+
       if (list.length === 0) {
         return { list, profiles: profilesMap, images: {} as Record<string, string>, avatars: {} as Record<string, string> };
       }
@@ -99,7 +127,7 @@ export function EmployeeOfMonthSection() {
         list.map(async (r) => [r.id, await signUrl("employee-of-month", r.image_url)] as const),
       );
       const avatarEntries = await Promise.all(
-        raw.map(async (r) => [r.employee_id, await signUrl("avatars", r.avatar_url)] as const),
+        list.map(async (r) => [r.employee_id, await signUrl("avatars", profilesMap[r.employee_id]?.avatar_url ?? null)] as const),
       );
       return {
         list,
