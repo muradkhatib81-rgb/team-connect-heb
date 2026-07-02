@@ -183,7 +183,7 @@ export function BreakSettingsPage() {
       <Card className="card-elevated p-8 text-center">
         <h2 className="text-lg font-semibold">אין הרשאה</h2>
         <p className="text-sm text-muted-foreground mt-2">
-          רק מנהל ראשי או משתמש עם הרשאת "ניהול הפסקות" יכול לגשת למסך זה.
+          רק בעל המערכת או משתמש עם הרשאת "ניהול הפסקות" יכול לגשת למסך זה.
         </p>
       </Card>
     );

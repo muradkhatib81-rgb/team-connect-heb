@@ -16,7 +16,7 @@ export function SystemAdminPlaceholder({ title, icon: Icon, description }: Props
         </div>
         <div>
           <h1 className="text-2xl font-bold">{title}</h1>
-          <p className="text-sm text-muted-foreground">ניהול מערכת · מנהל מערכת ראשי</p>
+          <p className="text-sm text-muted-foreground">ניהול מערכת · בעל המערכת הראשי</p>
         </div>
       </div>
 

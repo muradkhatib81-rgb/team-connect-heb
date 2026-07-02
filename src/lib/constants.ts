@@ -17,8 +17,8 @@ export type Department =
   | "general";
 
 export const ROLE_LABELS: Record<AppRole, string> = {
-  system_admin: "מנהל מערכת ראשי",
-  main_admin: "מנהל ראשי",
+  system_admin: "בעל המערכת הראשי",
+  main_admin: "בעל המערכת",
   branch_manager: "מנהל סניף",
   assistant_manager: "סגן מנהל",
   department_manager: "אחראי מחלקה",

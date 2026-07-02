@@ -135,7 +135,7 @@ export function BreakPolicySettingsCard() {
   if (!isMainAdmin) {
     return (
       <Card className="p-6 text-center text-sm text-muted-foreground">
-        רק מנהל ראשי יכול לגשת להגדרות המערכת של ההפסקות.
+        רק בעל המערכת יכול לגשת להגדרות המערכת של ההפסקות.
       </Card>
     );
   }
