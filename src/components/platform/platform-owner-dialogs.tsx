@@ -371,18 +371,26 @@ export function PlatformOwnerTransferDialog({
 // -------------------- Small helpers --------------------
 
 function Field({
-  label, value, onChange, type = "text", required,
+  label, value, onChange, type = "text", required, autoComplete, name,
 }: {
   label: string;
   value: string;
   onChange: (v: string) => void;
   type?: string;
   required?: boolean;
+  autoComplete?: string;
+  name?: string;
 }) {
   return (
     <div className="space-y-1">
       <Label>{label}{required ? " *" : ""}</Label>
-      <Input type={type} value={value} onChange={(e) => onChange(e.target.value)} />
+      <Input
+        type={type}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        autoComplete={autoComplete}
+        name={name}
+      />
     </div>
   );
 }
