@@ -40,7 +40,7 @@ function ProfilePage() {
         <Row label="שם מלא" value={me.full_name ?? "—"} />
         <Row label="מספר זהות" value={me.id_number ?? "—"} />
         <Row label="טלפון" value={me.phone ?? "—"} />
-        <Row label="מחלקה" value={deptLabel} />
+        {!isPlatformOwner(me.roles) && <Row label="מחלקה" value={me.department_name ?? "—"} />}
         <Row label="תפקיד" value={roleLabel} />
       </Card>
 
