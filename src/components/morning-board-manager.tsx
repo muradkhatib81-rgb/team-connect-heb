@@ -186,7 +186,7 @@ export function MorningBoardManager({
           </div>
         ) : rows.length === 0 ? (
           <Card className="p-6 text-center text-sm text-muted-foreground">
-            עדיין לא נוסף תוכן ללוח הבוקר.
+            עדיין לא נוסף תוכן ללוח הראשי.
           </Card>
         ) : (
           <div className="space-y-2">
