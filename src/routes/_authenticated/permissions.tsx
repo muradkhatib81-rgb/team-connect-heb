@@ -187,8 +187,8 @@ const CATEGORIES: Category[] = [
   {
     id: "morning_board",
     title: "לוח ראשי",
-    description: "בעל המערכת הראשי בלבד יכול להעניק הרשאה זו לאחראי סניף או לסגן אחראי סניף.",
-    items: [
+    icon: Megaphone,
+    perms: [
       { key: "can_manage_morning_board", label: "📢 ניהול תוכן לוח ראשי", description: "מאפשר להוסיף, לערוך, לסדר ולמחוק את פריטי הלוח הראשי של הסניף — תמונות, סרטונים והודעות. ניתן להעניק רק לאחראי סניף או סגן אחראי." },
     ],
   },
