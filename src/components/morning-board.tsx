@@ -90,16 +90,34 @@ export function MorningBoard() {
     };
   }, [activeBranchId, qc]);
 
+  const [nowTick, setNowTick] = useState(() => Date.now());
+
+  // Schedule a precise re-render at the next start_at / expires_at boundary
+  // so ads appear / disappear instantly without a page refresh. Falls back to
+  // a 30s safety tick.
   useEffect(() => {
-    const t = window.setInterval(() => {
-      qc.invalidateQueries({ queryKey: ["morning-board", activeBranchId] });
-    }, 60 * 1000);
-    return () => window.clearInterval(t);
-  }, [activeBranchId, qc]);
+    const rows = q.data?.rows ?? [];
+    const now = Date.now();
+    const upcoming: number[] = [];
+    for (const r of rows) {
+      if (r.starts_at) {
+        const t = new Date(r.starts_at).getTime();
+        if (t > now) upcoming.push(t);
+      }
+      if (r.expires_at) {
+        const t = new Date(r.expires_at).getTime();
+        if (t > now) upcoming.push(t);
+      }
+    }
+    const nextBoundary = upcoming.length ? Math.min(...upcoming) : now + 30_000;
+    const delay = Math.max(500, Math.min(nextBoundary - now + 250, 30_000));
+    const t = window.setTimeout(() => setNowTick(Date.now()), delay);
+    return () => window.clearTimeout(t);
+  }, [q.data, nowTick]);
 
   const visible = useMemo(
-    () => (q.data?.rows ?? []).filter((r) => isVisibleNow(r)),
-    [q.data],
+    () => (q.data?.rows ?? []).filter((r) => isVisibleNow(r, nowTick)),
+    [q.data, nowTick],
   );
 
   if (!activeBranchId) return null;
@@ -107,12 +125,12 @@ export function MorningBoard() {
   if (visible.length === 0 && !canManage) return null;
 
   return (
-    <section aria-label={`לוח בוקר ${activeBranch?.name ?? ""}`} className="space-y-3">
+    <section aria-label={`לוח ראשי ${activeBranch?.name ?? ""}`} className="space-y-3">
       {canManage && (
         <div className="flex items-center justify-between">
           <h2 className="text-lg font-semibold flex items-center gap-2">
             <Megaphone className="size-5 text-primary" />
-            לוח בוקר
+            לוח ראשי
           </h2>
           <Button size="sm" variant="outline" onClick={() => setManagerOpen(true)}>
             <Settings2 className="size-4" />
