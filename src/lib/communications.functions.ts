@@ -213,35 +213,6 @@ export async function restoreMessage(messageId: string) {
   await logAudit("message", messageId, "restored");
 }
 
-export async function markAnnouncementRead(annId: string) {
-  const { data: u } = await supabase.auth.getUser();
-  if (!u.user) return;
-  const { error } = await supabase
-    .from("announcement_reads")
-    .upsert(
-      { announcement_id: annId, user_id: u.user.id, read_at: new Date().toISOString() },
-      { onConflict: "announcement_id,user_id", ignoreDuplicates: false },
-    );
-  if (!error) await logAudit("announcement", annId, "read");
-}
-
-export async function deleteAnnouncement(annId: string) {
-  const { error } = await supabase
-    .from("announcements")
-    .update({ deleted_at: new Date().toISOString() })
-    .eq("id", annId);
-  if (error) throw error;
-  await logAudit("announcement", annId, "deleted");
-}
-
-export async function restoreAnnouncement(annId: string) {
-  const { error } = await supabase
-    .from("announcements")
-    .update({ deleted_at: null })
-    .eq("id", annId);
-  if (error) throw error;
-  await logAudit("announcement", annId, "restored");
-}
 
 // ---------------- Edit ----------------
 export interface EditMessageInput {
