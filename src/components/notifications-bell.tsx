@@ -1,5 +1,5 @@
 import { useEffect, useMemo } from "react";
-import { Bell, CalendarDays, MessageSquare, Megaphone } from "lucide-react";
+import { Bell, CalendarDays, MessageSquare } from "lucide-react";
 import { Link } from "@tanstack/react-router";
 import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
@@ -8,9 +8,9 @@ import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
 import { formatHeDateTime } from "@/lib/date-format";
-import { markMessageRead, markAnnouncementRead } from "@/lib/communications.functions";
+import { markMessageRead } from "@/lib/communications.functions";
 
-type Kind = "schedule" | "message" | "announcement";
+type Kind = "schedule" | "message";
 
 interface UnifiedItem {
   id: string;
@@ -20,7 +20,7 @@ interface UnifiedItem {
   read: boolean;
   to: string;
   search?: Record<string, any>;
-  refId: string; // scheduleNotifId | messageId | announcementId
+  refId: string; // scheduleNotifId | messageId
 }
 
 export function NotificationsBell() {
@@ -67,37 +67,7 @@ export function NotificationsBell() {
     },
   });
 
-  // Unread announcements visible to the user
-  const annQ = useQuery({
-    queryKey: ["notif", "announcements", userId],
-    enabled: !!userId,
-    refetchInterval: 60_000,
-    queryFn: async () => {
-      const nowIso = new Date().toISOString();
-      const { data: anns } = await supabase
-        .from("announcements")
-        .select("id, title, starts_at, ends_at, created_at, sender_id")
-        .is("deleted_at", null)
-        .neq("sender_id", userId!)
-        .lte("starts_at", nowIso)
-        .order("starts_at", { ascending: false })
-        .limit(30);
-      const rows = ((anns ?? []) as any[]).filter((a) => !a.ends_at || a.ends_at > nowIso);
-      if (!rows.length) return [];
-      const { data: reads } = await supabase
-        .from("announcement_reads")
-        .select("announcement_id")
-        .in(
-          "announcement_id",
-          rows.map((r) => r.id),
-        )
-        .eq("user_id", userId!);
-      const readSet = new Set((reads ?? []).map((r: any) => r.announcement_id));
-      return rows.filter((r) => !readSet.has(r.id));
-    },
-  });
-
-  // Realtime invalidations across all three sources
+  // Realtime invalidations across both sources
   useEffect(() => {
     if (!userId) return;
     const inv = (key: string) => () => qc.invalidateQueries({ queryKey: ["notif", key, userId] });
@@ -117,21 +87,6 @@ export function NotificationsBell() {
         "postgres_changes",
         { event: "*", schema: "public", table: "messages" },
         inv("messages"),
-      )
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "announcements" },
-        inv("announcements"),
-      )
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "announcement_reads", filter: `user_id=eq.${userId}` },
-        inv("announcements"),
-      )
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "announcement_targets" },
-        inv("announcements"),
       )
       .subscribe();
     return () => {
@@ -168,22 +123,10 @@ export function NotificationsBell() {
         refId: r.message_id,
       }),
     );
-    (annQ.data ?? []).forEach((a: any) =>
-      out.push({
-        id: `a-${a.id}`,
-        kind: "announcement",
-        title: a.title,
-        created_at: a.starts_at ?? a.created_at,
-        read: false,
-        to: "/communications",
-        search: { tab: "announcements", ann: a.id },
-        refId: a.id,
-      }),
-    );
     return out
       .sort((x, y) => +new Date(y.created_at) - +new Date(x.created_at))
       .slice(0, 30);
-  }, [schedQ.data, msgQ.data, annQ.data]);
+  }, [schedQ.data, msgQ.data]);
 
   const markOneRead = async (n: UnifiedItem) => {
     if (!userId) return;
@@ -193,10 +136,8 @@ export function NotificationsBell() {
           .from("schedule_notifications")
           .update({ read_at: new Date().toISOString() })
           .eq("id", n.refId);
-      } else if (n.kind === "message") {
-        await markMessageRead(n.refId);
       } else {
-        await markAnnouncementRead(n.refId);
+        await markMessageRead(n.refId);
       }
     } finally {
       qc.invalidateQueries({ queryKey: ["notif"] });
@@ -216,7 +157,6 @@ export function NotificationsBell() {
           .in("id", schedIds);
       }
       await Promise.all((msgQ.data ?? []).map((r: any) => markMessageRead(r.message_id)));
-      await Promise.all((annQ.data ?? []).map((a: any) => markAnnouncementRead(a.id)));
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["notif"] });
@@ -225,8 +165,7 @@ export function NotificationsBell() {
 
   if (!userId) return null;
 
-  const iconFor = (k: Kind) =>
-    k === "message" ? MessageSquare : k === "announcement" ? Megaphone : CalendarDays;
+  const iconFor = (k: Kind) => (k === "message" ? MessageSquare : CalendarDays);
 
   return (
     <Popover>
@@ -277,7 +216,6 @@ export function NotificationsBell() {
                         className={cn(
                           "size-4 mt-0.5 shrink-0",
                           n.kind === "message" && "text-blue-600",
-                          n.kind === "announcement" && "text-amber-600",
                           n.kind === "schedule" && "text-primary",
                         )}
                       />
