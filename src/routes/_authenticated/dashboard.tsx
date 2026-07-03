@@ -433,6 +433,9 @@ function AdminDashboard({
         <StatCard label="❌ עובדים לא פעילים" value={stats.inactive} icon={UserX} tone="muted" onClick={() => go("inactive")} />
       </section>
 
+      <LiveShiftCardsSection />
+
+
       <section>
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-lg font-semibold flex items-center gap-2">
