@@ -78,31 +78,20 @@ export function AppShell({ children }: { children: ReactNode }) {
     },
   });
 
-  // Unread communications count (messages + unread announcements)
+  // Unread messages count (announcements module removed)
   const commUnreadQ = useQuery({
     enabled: !!profile?.id,
     queryKey: ["shell-comm-unread", profile?.id],
     refetchInterval: 60_000,
     queryFn: async () => {
       const uid = profile!.id;
-      const [{ count: msgCount }, annRes, readsRes] = await Promise.all([
-        supabase
-          .from("message_recipients")
-          .select("message_id", { count: "exact", head: true })
-          .eq("user_id", uid)
-          .is("read_at", null)
-          .is("archived_at", null),
-        supabase
-          .from("announcements")
-          .select("id")
-          .is("deleted_at", null)
-          .lte("starts_at", new Date().toISOString()),
-        supabase.from("announcement_reads").select("announcement_id").eq("user_id", uid),
-      ]);
-      const annIds = (annRes.data ?? []).map((a: any) => a.id);
-      const readIds = new Set((readsRes.data ?? []).map((r: any) => r.announcement_id));
-      const annUnread = annIds.filter((id) => !readIds.has(id)).length;
-      return (msgCount ?? 0) + annUnread;
+      const { count: msgCount } = await supabase
+        .from("message_recipients")
+        .select("message_id", { count: "exact", head: true })
+        .eq("user_id", uid)
+        .is("read_at", null)
+        .is("archived_at", null);
+      return msgCount ?? 0;
     },
   });
 
@@ -417,14 +406,6 @@ function RealtimeBridge({ uid }: { uid: string }) {
         qc.invalidateQueries({ queryKey: ["shell-comm-unread", uid] });
       })
       .on("postgres_changes", { event: "*", schema: "public", table: "message_recipients" }, () => {
-        qc.invalidateQueries({ queryKey: ["communications"] });
-        qc.invalidateQueries({ queryKey: ["shell-comm-unread", uid] });
-      })
-      .on("postgres_changes", { event: "*", schema: "public", table: "announcements" }, () => {
-        qc.invalidateQueries({ queryKey: ["communications"] });
-        qc.invalidateQueries({ queryKey: ["shell-comm-unread", uid] });
-      })
-      .on("postgres_changes", { event: "*", schema: "public", table: "announcement_reads" }, () => {
         qc.invalidateQueries({ queryKey: ["communications"] });
         qc.invalidateQueries({ queryKey: ["shell-comm-unread", uid] });
       })

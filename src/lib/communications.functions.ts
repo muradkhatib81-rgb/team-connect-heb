@@ -19,16 +19,6 @@ export interface SendMessageInput {
   file?: File | null;
 }
 
-export interface CreateAnnouncementInput {
-  title: string;
-  body: string;
-  priority: CommPriority;
-  image_url?: string | null;
-  starts_at?: string | null;
-  ends_at?: string | null;
-  targets: MessageTargetsInput;
-  file?: File | null;
-}
 
 // ---------------- Helpers ----------------
 async function resolveTargetUserIds(
@@ -158,53 +148,6 @@ export async function sendMessage(input: SendMessageInput) {
   return { id: messageId };
 }
 
-export async function createAnnouncement(input: CreateAnnouncementInput) {
-  const { data: u } = await supabase.auth.getUser();
-  if (!u.user) throw new Error("לא מחובר");
-  const senderId = u.user.id;
-
-  const { data: ann, error } = await supabase
-    .from("announcements")
-    .insert({
-      title: input.title.trim(),
-      body: input.body.trim(),
-      priority: input.priority,
-      image_url: input.image_url ?? null,
-      starts_at: input.starts_at ?? new Date().toISOString(),
-      ends_at: input.ends_at ?? null,
-      sender_id: senderId,
-    })
-    .select("id")
-    .single();
-  if (error) throw error;
-  const annId = ann.id;
-
-  const tgtRows: any[] = [];
-  if (input.targets.all) tgtRows.push({ announcement_id: annId, target_type: "all" });
-  (input.targets.departments ?? []).forEach((d) =>
-    tgtRows.push({ announcement_id: annId, target_type: "department", target_id: d }),
-  );
-  (input.targets.users ?? []).forEach((uid) =>
-    tgtRows.push({ announcement_id: annId, target_type: "user", target_id: uid }),
-  );
-  if (!tgtRows.length) tgtRows.push({ announcement_id: annId, target_type: "all" });
-  const { error: tErr } = await supabase.from("announcement_targets").insert(tgtRows);
-  if (tErr) throw tErr;
-
-  if (input.file) {
-    const up = await uploadAttachment(input.file, senderId);
-    await supabase.from("announcement_attachments").insert({
-      announcement_id: annId,
-      file_name: up.name,
-      storage_path: up.path,
-      mime_type: up.mime,
-      file_size: up.size,
-    });
-  }
-
-  await logAudit("announcement", annId, "created");
-  return { id: annId };
-}
 
 // ---------------- Read / Ack / Archive ----------------
 export async function markMessageRead(messageId: string) {
@@ -270,35 +213,6 @@ export async function restoreMessage(messageId: string) {
   await logAudit("message", messageId, "restored");
 }
 
-export async function markAnnouncementRead(annId: string) {
-  const { data: u } = await supabase.auth.getUser();
-  if (!u.user) return;
-  const { error } = await supabase
-    .from("announcement_reads")
-    .upsert(
-      { announcement_id: annId, user_id: u.user.id, read_at: new Date().toISOString() },
-      { onConflict: "announcement_id,user_id", ignoreDuplicates: false },
-    );
-  if (!error) await logAudit("announcement", annId, "read");
-}
-
-export async function deleteAnnouncement(annId: string) {
-  const { error } = await supabase
-    .from("announcements")
-    .update({ deleted_at: new Date().toISOString() })
-    .eq("id", annId);
-  if (error) throw error;
-  await logAudit("announcement", annId, "deleted");
-}
-
-export async function restoreAnnouncement(annId: string) {
-  const { error } = await supabase
-    .from("announcements")
-    .update({ deleted_at: null })
-    .eq("id", annId);
-  if (error) throw error;
-  await logAudit("announcement", annId, "restored");
-}
 
 // ---------------- Edit ----------------
 export interface EditMessageInput {
@@ -402,81 +316,6 @@ export async function editMessage(messageId: string, input: EditMessageInput) {
   return { id: messageId };
 }
 
-export interface EditAnnouncementInput {
-  title?: string;
-  body?: string;
-  priority?: CommPriority;
-  image_url?: string | null;
-  starts_at?: string | null;
-  ends_at?: string | null;
-  targets?: MessageTargetsInput;
-  file?: File | null;
-}
-
-export async function editAnnouncement(annId: string, input: EditAnnouncementInput) {
-  const { data: u } = await supabase.auth.getUser();
-  if (!u.user) throw new Error("לא מחובר");
-  const userId = u.user.id;
-
-  const { data: existing, error: exErr } = await supabase
-    .from("announcements")
-    .select("id, title, edit_count")
-    .eq("id", annId)
-    .single();
-  if (exErr) throw exErr;
-
-  const patch: any = {
-    edited_at: new Date().toISOString(),
-    edited_by: userId,
-    edit_count: (existing.edit_count ?? 0) + 1,
-  };
-  if (input.title !== undefined) patch.title = input.title.trim();
-  if (input.body !== undefined) patch.body = input.body.trim();
-  if (input.priority !== undefined) patch.priority = input.priority;
-  if (input.image_url !== undefined) patch.image_url = input.image_url;
-  if (input.starts_at !== undefined) patch.starts_at = input.starts_at;
-  if (input.ends_at !== undefined) patch.ends_at = input.ends_at;
-
-  const { error } = await supabase.from("announcements").update(patch).eq("id", annId);
-  if (error) throw error;
-
-  if (input.targets) {
-    await supabase.from("announcement_targets").delete().eq("announcement_id", annId);
-    const tgtRows: any[] = [];
-    if (input.targets.all) tgtRows.push({ announcement_id: annId, target_type: "all" });
-    (input.targets.departments ?? []).forEach((d) =>
-      tgtRows.push({ announcement_id: annId, target_type: "department", target_id: d }),
-    );
-    (input.targets.users ?? []).forEach((uid) =>
-      tgtRows.push({ announcement_id: annId, target_type: "user", target_id: uid }),
-    );
-    if (!tgtRows.length) tgtRows.push({ announcement_id: annId, target_type: "all" });
-    await supabase.from("announcement_targets").insert(tgtRows);
-  }
-
-  if (input.file) {
-    const up = await uploadAttachment(input.file, userId);
-    await supabase.from("announcement_attachments").insert({
-      announcement_id: annId,
-      file_name: up.name,
-      storage_path: up.path,
-      mime_type: up.mime,
-      file_size: up.size,
-    });
-  }
-
-  try {
-    await supabase.rpc("notify_announcement_edited", {
-      _ann_id: annId,
-      _title: patch.title ?? existing.title,
-    });
-  } catch {
-    /* noop */
-  }
-
-  await logAudit("announcement", annId, "edited", { fields: Object.keys(patch) });
-  return { id: annId };
-}
 
 // ---------------- Permanent (global) delete ----------------
 // Removes the entity from every user — cascades clean up
@@ -489,9 +328,4 @@ export async function permanentDeleteMessage(messageId: string) {
   if (error) throw error;
 }
 
-export async function permanentDeleteAnnouncement(annId: string) {
-  await logAudit("announcement", annId, "deleted", { permanent: true });
-  const { error } = await supabase.rpc("purge_announcement_global", { _ann_id: annId });
-  if (error) throw error;
-}
 

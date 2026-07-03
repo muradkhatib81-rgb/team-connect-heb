@@ -782,7 +782,7 @@ export const PERMISSION_KEYS = [
   "can_send_message_employee",
   "can_send_message_department",
   "can_send_message_all",
-  "can_send_announcements",
+  
   "can_manage_communications",
   "can_delete_communications",
   "can_view_read_receipts",

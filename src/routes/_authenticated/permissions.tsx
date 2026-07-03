@@ -162,10 +162,9 @@ const CATEGORIES: Category[] = [
       { key: "can_send_message_employee", label: "שליחת הודעה לעובד", description: "מאפשר לשלוח הודעה אישית לעובד בודד." },
       { key: "can_send_message_department", label: "שליחת הודעה למחלקה", description: "מאפשר לשלוח הודעה לכל עובדי מחלקה." },
       { key: "can_send_message_all", label: "שליחת הודעה לכל העובדים", description: "מאפשר לשלוח הודעה לכל עובדי החברה." },
-      { key: "can_send_announcements", label: "פרסום הכרזות", description: "מאפשר לפרסם הכרזות רשמיות לסניף או למחלקה." },
-      { key: "can_manage_communications", label: "ניהול מרכז התקשורת", description: "מאפשר לערוך ולמחוק הודעות והכרזות של אחרים, וצפייה בלוג הפעילות." },
-      { key: "can_delete_communications", label: "מחיקת הודעות והכרזות", description: "מאפשר למחוק הודעות והכרזות (כולל מחיקה לצמיתות)." },
-      { key: "can_view_read_receipts", label: "צפייה באישורי קריאה", description: "מאפשר לראות מי קרא הודעות והכרזות ומי טרם קרא." },
+      { key: "can_manage_communications", label: "ניהול מרכז התקשורת", description: "מאפשר לערוך ולמחוק הודעות של אחרים, וצפייה בלוג הפעילות." },
+      { key: "can_delete_communications", label: "מחיקת הודעות", description: "מאפשר למחוק הודעות (כולל מחיקה לצמיתות)." },
+      { key: "can_view_read_receipts", label: "צפייה באישורי קריאה", description: "מאפשר לראות מי קרא הודעות ומי טרם קרא." },
     ],
   },
   {

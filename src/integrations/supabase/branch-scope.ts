@@ -22,7 +22,7 @@ import { supabase } from "./client";
 // Every public table that owns a `branch_id` column. Keep in sync with the
 // schema; queries against any other table are left untouched.
 const BRANCH_SCOPED_TABLES = new Set<string>([
-  "announcements",
+  
   "break_requests",
   "break_settings",
   "communications_audit_log",

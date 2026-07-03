@@ -41,28 +41,19 @@ import {
   AlertCircle,
   Loader2,
   Eye,
-  EyeOff,
   Pencil,
 } from "lucide-react";
 import { toast } from "sonner";
 import { formatHeDateTime } from "@/lib/date-format";
 import {
   sendMessage,
-  createAnnouncement,
   markMessageRead,
-  markMessageUnread,
   acknowledgeMessage,
   archiveMessage,
   deleteMessage,
-  restoreMessage,
-  markAnnouncementRead,
-  deleteAnnouncement,
-  restoreAnnouncement,
   getAttachmentUrl,
   editMessage,
-  editAnnouncement,
   permanentDeleteMessage,
-  permanentDeleteAnnouncement,
   type CommPriority,
 } from "@/lib/communications.functions";
 import { cn } from "@/lib/utils";
@@ -79,9 +70,8 @@ import {
 import { CommSenderHeader } from "@/components/comm-sender-header";
 
 type CommSearch = {
-  tab?: "inbox" | "announcements" | "sent" | "archive";
+  tab?: "inbox" | "sent" | "archive";
   msg?: string;
-  ann?: string;
 };
 
 export const Route = createFileRoute("/_authenticated/communications")({
@@ -89,12 +79,8 @@ export const Route = createFileRoute("/_authenticated/communications")({
   validateSearch: (s: Record<string, unknown>): CommSearch => {
     const tab = s.tab as string | undefined;
     return {
-      tab:
-        tab === "inbox" || tab === "announcements" || tab === "sent" || tab === "archive"
-          ? tab
-          : undefined,
+      tab: tab === "inbox" || tab === "sent" || tab === "archive" ? tab : undefined,
       msg: typeof s.msg === "string" ? s.msg : undefined,
-      ann: typeof s.ann === "string" ? s.ann : undefined,
     };
   },
 });
@@ -123,7 +109,6 @@ interface PermsRow {
   can_send_message_employee: boolean | null;
   can_send_message_department: boolean | null;
   can_send_message_all: boolean | null;
-  can_send_announcements: boolean | null;
   can_manage_communications: boolean | null;
   can_delete_communications: boolean | null;
   can_view_read_receipts: boolean | null;
@@ -144,7 +129,7 @@ function CommunicationsPage() {
       const { data } = await supabase
         .from("user_task_permissions")
         .select(
-          "can_view_messages, can_send_messages, can_send_message_employee, can_send_message_department, can_send_message_all, can_send_announcements, can_manage_communications, can_delete_communications, can_view_read_receipts",
+          "can_view_messages, can_send_messages, can_send_message_employee, can_send_message_department, can_send_message_all, can_manage_communications, can_delete_communications, can_view_read_receipts",
         )
         .eq("user_id", userId!)
         .maybeSingle();
@@ -152,22 +137,17 @@ function CommunicationsPage() {
     },
   });
   const p = permsQ.data ?? ({} as PermsRow);
-  // Permission-based only (no role fallback besides main_admin).
   // Department managers behave like regular employees in communications:
-  // read-only access (inbox/announcements/archive). All send/edit/delete/receipts
-  // capabilities are forcibly disabled in the UI for dept managers unless they
-  // are also an admin.
+  // read-only inbox/archive. All send/edit/delete/receipts capabilities
+  // are forcibly disabled unless they are also an admin.
   const deptMgrOnly = isDeptManager && !admin;
   const canSendMsg = !deptMgrOnly && (admin || !!p.can_send_messages || !!p.can_manage_communications);
-  const canSendAnnouncement = !deptMgrOnly && (admin || !!p.can_send_announcements || !!p.can_manage_communications);
   const canManage = !deptMgrOnly && (admin || !!p.can_manage_communications);
   const canDelete = !deptMgrOnly && (admin || !!p.can_delete_communications || !!p.can_manage_communications);
   const canViewReceipts = !deptMgrOnly && (admin || !!p.can_view_read_receipts || !!p.can_manage_communications);
-  const canSeeSent = canSendMsg || canSendAnnouncement || canManage;
+  const canSeeSent = canSendMsg || canManage;
 
-
-
-  // Realtime subscriptions
+  // Realtime subscriptions (messages only — announcements module removed)
   useEffect(() => {
     if (!userId) return;
     const ch = supabase
@@ -182,16 +162,6 @@ function CommunicationsPage() {
         { event: "*", schema: "public", table: "message_recipients", filter: `user_id=eq.${userId}` },
         () => qc.invalidateQueries({ queryKey: ["comm"] }),
       )
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "announcements" },
-        () => qc.invalidateQueries({ queryKey: ["comm"] }),
-      )
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "announcement_reads", filter: `user_id=eq.${userId}` },
-        () => qc.invalidateQueries({ queryKey: ["comm"] }),
-      )
       .subscribe();
     return () => {
       supabase.removeChannel(ch);
@@ -200,22 +170,20 @@ function CommunicationsPage() {
 
   const search = Route.useSearch();
   const navigate = useNavigate();
-  const initialTab: "inbox" | "announcements" | "sent" | "archive" =
-    search.tab ?? (search.ann ? "announcements" : search.msg ? "inbox" : "inbox");
+  const initialTab: "inbox" | "sent" | "archive" =
+    search.tab ?? (search.msg ? "inbox" : "inbox");
   const [tab, setTab] = useState<string>(initialTab);
   const [composeOpen, setComposeOpen] = useState(false);
-  const [annOpen, setAnnOpen] = useState(false);
 
   // React to incoming search params (e.g. clicking a different notification while page is open)
   useEffect(() => {
     if (search.tab) setTab(search.tab);
-    else if (search.ann) setTab("announcements");
     else if (search.msg) setTab("inbox");
-  }, [search.tab, search.ann, search.msg]);
+  }, [search.tab, search.msg]);
 
   // Clears the deep-link search params (used after a dialog is closed)
   const clearDeepLink = () => {
-    if (search.msg || search.ann || search.tab) {
+    if (search.msg || search.tab) {
       navigate({
         to: "/communications",
         search: {},
@@ -233,7 +201,7 @@ function CommunicationsPage() {
           <h1 className="text-2xl font-bold flex items-center gap-2">
             <Megaphone className="size-6 text-primary" /> מרכז תקשורת
           </h1>
-          <p className="text-sm text-muted-foreground">הודעות פנימיות, הכרזות וארכיון</p>
+          <p className="text-sm text-muted-foreground">הודעות פנימיות וארכיון</p>
         </div>
         <div className="flex gap-2">
           {canSendMsg && (
@@ -241,21 +209,13 @@ function CommunicationsPage() {
               <PenSquare className="size-4" /> הודעה חדשה
             </Button>
           )}
-          {canSendAnnouncement && (
-            <Button onClick={() => setAnnOpen(true)} variant="secondary" className="gap-2">
-              <Megaphone className="size-4" /> הכרזה חדשה
-            </Button>
-          )}
         </div>
       </header>
 
       <Tabs value={canSeeSent ? tab : tab === "sent" ? "inbox" : tab} onValueChange={setTab}>
-        <TabsList className={`grid ${canSeeSent ? "grid-cols-2 sm:grid-cols-4" : "grid-cols-3"} w-full`}>
+        <TabsList className={`grid ${canSeeSent ? "grid-cols-3" : "grid-cols-2"} w-full`}>
           <TabsTrigger value="inbox" className="gap-1.5">
             <Inbox className="size-4" /> דואר נכנס
-          </TabsTrigger>
-          <TabsTrigger value="announcements" className="gap-1.5">
-            <Megaphone className="size-4" /> הכרזות
           </TabsTrigger>
           {canSeeSent && (
             <TabsTrigger value="sent" className="gap-1.5">
@@ -275,25 +235,15 @@ function CommunicationsPage() {
             onClearDeepLink={clearDeepLink}
           />
         </TabsContent>
-        <TabsContent value="announcements" className="mt-4">
-          <AnnouncementsTab
-            userId={userId!}
-            canDelete={canDelete}
-            canViewReceipts={canViewReceipts}
-            initialAnnouncementId={search.ann ?? null}
-            onClearDeepLink={clearDeepLink}
-          />
-        </TabsContent>
         {canSeeSent && (
           <TabsContent value="sent" className="mt-4">
-            <SentTab userId={userId!} canManage={canManage} canDelete={canDelete} canViewReceipts={canViewReceipts} admin={admin} />
+            <SentTab userId={userId!} canManage={canManage} canDelete={canDelete} canViewReceipts={canViewReceipts} />
           </TabsContent>
         )}
         <TabsContent value="archive" className="mt-4">
           <ArchiveTab userId={userId!} canDelete={canDelete} />
         </TabsContent>
       </Tabs>
-
 
       {composeOpen && (
         <ComposeMessageDialog
@@ -302,14 +252,6 @@ function CommunicationsPage() {
           perms={p}
           admin={admin}
           isDeptManager={isDeptManager}
-          myDeptId={me.department_id}
-        />
-      )}
-      {annOpen && (
-        <ComposeAnnouncementDialog
-          open={annOpen}
-          onOpenChange={setAnnOpen}
-          admin={admin}
           myDeptId={me.department_id}
         />
       )}
@@ -353,7 +295,6 @@ function InboxTab({
   const [filter, setFilter] = useState<"all" | "unread" | "important">("all");
   const [selected, setSelected] = useState<string | null>(initialMessageId ?? null);
 
-  // React to deep-link changes after initial mount
   useEffect(() => {
     if (initialMessageId) setSelected(initialMessageId);
   }, [initialMessageId]);
@@ -487,20 +428,13 @@ function SentTab({
   canManage,
   canDelete,
   canViewReceipts,
-  admin,
 }: {
   userId: string;
   canManage: boolean;
   canDelete: boolean;
   canViewReceipts: boolean;
-  admin: boolean;
 }) {
-  const qc = useQueryClient();
   const [selected, setSelected] = useState<string | null>(null);
-  const [selectedAnn, setSelectedAnn] = useState<string | null>(null);
-  const [editAnn, setEditAnn] = useState<any | null>(null);
-  const [delAnn, setDelAnn] = useState<string | null>(null);
-  const [receiptsAnn, setReceiptsAnn] = useState<string | null>(null);
 
   const q = useQuery({
     queryKey: ["comm", "sent", userId],
@@ -512,7 +446,6 @@ function SentTab({
         .is("deleted_at", null)
         .order("created_at", { ascending: false });
       if (error) throw error;
-      // Read stats
       const ids = (data ?? []).map((m: any) => m.id);
       let statsMap: Record<string, { total: number; read: number; ack: number }> = {};
       if (ids.length) {
@@ -529,63 +462,6 @@ function SentTab({
       }
       return (data ?? []).map((m: any) => ({ ...m, stats: statsMap[m.id] ?? { total: 0, read: 0, ack: 0 } }));
     },
-  });
-
-  // Sent announcements — own (or all when main_admin)
-  const annsQ = useQuery({
-    queryKey: ["comm", "sent-anns", userId, admin],
-    queryFn: async () => {
-      let qy = supabase
-        .from("announcements")
-        .select("id, title, body, priority, image_url, starts_at, ends_at, sender_id, created_at, deleted_at, edited_at")
-        .is("deleted_at", null)
-        .order("created_at", { ascending: false });
-      if (!admin) qy = qy.eq("sender_id", userId);
-      const { data, error } = await qy;
-      if (error) throw error;
-      const rows = (data ?? []) as any[];
-      // Read counts
-      const ids = rows.map((r) => r.id);
-      let readMap: Record<string, number> = {};
-      if (ids.length) {
-        const { data: reads } = await supabase
-          .from("announcement_reads")
-          .select("announcement_id")
-          .in("announcement_id", ids);
-        (reads ?? []).forEach((r: any) => {
-          readMap[r.announcement_id] = (readMap[r.announcement_id] ?? 0) + 1;
-        });
-      }
-      // Sender names for admin view
-      const senderIds = [...new Set(rows.map((r) => r.sender_id).filter(Boolean))];
-      let senderMap: Record<string, string> = {};
-      if (senderIds.length) {
-        const { data: sp } = await supabase.from("profiles").select("id, full_name").in("id", senderIds);
-        (sp ?? []).forEach((p: any) => (senderMap[p.id] = p.full_name));
-      }
-      return rows.map((a) => ({
-        ...a,
-        reads: readMap[a.id] ?? 0,
-        sender_name: senderMap[a.sender_id] ?? "—",
-      }));
-    },
-  });
-
-  const delAnnMut = useMutation({
-    mutationFn: (id: string) => deleteAnnouncement(id),
-    onSuccess: () => {
-      toast.success("ההכרזה הועברה לארכיון");
-      qc.invalidateQueries({ queryKey: ["comm"] });
-    },
-    onError: (e: any) => toast.error(e?.message ?? "שגיאה"),
-  });
-  const permDelAnnMut = useMutation({
-    mutationFn: (id: string) => permanentDeleteAnnouncement(id),
-    onSuccess: () => {
-      toast.success("ההכרזה נמחקה לצמיתות");
-      qc.invalidateQueries({ queryKey: ["comm"] });
-    },
-    onError: (e: any) => toast.error(e?.message ?? "שגיאה במחיקה"),
   });
 
   return (
@@ -634,73 +510,6 @@ function SentTab({
         )}
       </section>
 
-      <section className="space-y-2">
-        <h3 className="text-sm font-semibold text-muted-foreground flex items-center gap-1.5">
-          <Megaphone className="size-4" /> הכרזות שנשלחו
-        </h3>
-        {annsQ.isLoading ? (
-          <Loader2 className="mx-auto size-5 animate-spin text-muted-foreground" />
-        ) : (annsQ.data ?? []).length === 0 ? (
-          <Card className="p-6 text-center text-sm text-muted-foreground">לא פרסמת הכרזות עדיין</Card>
-        ) : (
-          (annsQ.data ?? []).map((a: any) => {
-            const ownThis = a.sender_id === userId;
-            const canEditThis = ownThis && canManage;
-            const canDeleteThis = (ownThis || admin) && canDelete;
-            return (
-              <Card key={a.id} className="p-3 hover:bg-accent/50 transition-colors">
-                <div className="flex items-start justify-between gap-2 flex-wrap">
-                  <div
-                    className="min-w-0 flex-1 cursor-pointer"
-                    onClick={() => setSelectedAnn(a.id)}
-                  >
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <p className="font-semibold text-sm">{a.title}</p>
-                      <PriorityBadge p={a.priority} />
-                      {a.edited_at && (
-                        <Badge variant="outline" className="gap-1 text-[10px]">
-                          <Pencil className="size-3" /> נערך
-                        </Badge>
-                      )}
-                    </div>
-                    <p className="text-xs text-muted-foreground mt-0.5">
-                      פורסם {formatHeDateTime(a.created_at)}
-                      {admin && !ownThis && ` · מאת ${a.sender_name}`}
-                      {a.ends_at && ` · עד ${formatHeDateTime(a.ends_at)}`}
-                    </p>
-                  </div>
-                  <div className="text-xs text-muted-foreground text-left flex flex-col items-end gap-1">
-                    <div>{a.reads} קראו</div>
-                    <div className="flex gap-1">
-                      {(canViewReceipts || ownThis) && (
-                        <Button size="sm" variant="ghost" className="h-7 px-2 gap-1" onClick={() => setReceiptsAnn(a.id)}>
-                          <Eye className="size-3.5" /> אישורי קריאה
-                        </Button>
-                      )}
-                      {canEditThis && (
-                        <Button size="sm" variant="ghost" className="h-7 px-2 gap-1" onClick={() => setEditAnn(a)}>
-                          <Pencil className="size-3.5" /> ערוך
-                        </Button>
-                      )}
-                      {canDeleteThis && (
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          className="h-7 px-2 gap-1 text-destructive"
-                          onClick={() => setDelAnn(a.id)}
-                        >
-                          <Trash2 className="size-3.5" /> מחק
-                        </Button>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              </Card>
-            );
-          })
-        )}
-      </section>
-
       {selected && (
         <MessageDetailDialog
           messageId={selected}
@@ -711,477 +520,7 @@ function SentTab({
           canViewReceipts={canViewReceipts}
         />
       )}
-
-      {selectedAnn && (
-        <AnnouncementDetailDialog
-          annId={selectedAnn}
-          onClose={() => setSelectedAnn(null)}
-        />
-      )}
-
-      {editAnn && (
-        <EditAnnouncementDialog ann={editAnn} onClose={() => setEditAnn(null)} />
-      )}
-
-      {receiptsAnn && (
-        <ReadReceiptsDialog
-          kind="announcement"
-          targetId={receiptsAnn}
-          onClose={() => setReceiptsAnn(null)}
-        />
-      )}
-
-      <AlertDialog open={!!delAnn} onOpenChange={(o) => !o && setDelAnn(null)}>
-        <AlertDialogContent dir="rtl">
-          <AlertDialogHeader>
-            <AlertDialogTitle>⚠️ אישור מחיקה</AlertDialogTitle>
-            <AlertDialogDescription>
-              האם אתה בטוח שברצונך למחוק פריט זה?
-              <br />
-              המחיקה תסיר את ההכרזה ואת כל ההתראות הקשורות מכל הנמענים.
-              <br />
-              לאחר המחיקה לא ניתן יהיה לשחזר את הנתונים.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter className="gap-2 flex-wrap">
-            <AlertDialogCancel>❌ ביטול</AlertDialogCancel>
-            <AlertDialogAction
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-              onClick={() => {
-                const id = delAnn!;
-                setDelAnn(null);
-                permDelAnnMut.mutate(id);
-              }}
-            >
-              🗑️ מחק
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-
     </div>
-  );
-}
-
-// Announcement preview dialog – used in Sent screen and as deep-link target
-function AnnouncementDetailDialog({
-  annId,
-  onClose,
-  showSender = false,
-}: {
-  annId: string;
-  onClose: () => void;
-  showSender?: boolean;
-}) {
-  const qc = useQueryClient();
-  const q = useQuery({
-    queryKey: ["comm", "ann-detail", annId],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("announcements")
-        .select(
-          "id, title, body, priority, image_url, starts_at, ends_at, created_at, edited_at, sender_id, deleted_at",
-        )
-        .eq("id", annId)
-        .maybeSingle();
-      if (error) throw error;
-      return data as any;
-    },
-  });
-
-  useEffect(() => {
-    if (!q.data || q.data.deleted_at) return;
-    markAnnouncementRead(annId)
-      .then(() => {
-        qc.invalidateQueries({ queryKey: ["comm"] });
-        qc.invalidateQueries({ queryKey: ["notif"] });
-        qc.invalidateQueries({ queryKey: ["shell-comm-unread"] });
-      })
-      .catch(() => {});
-  }, [annId, q.data, qc]);
-
-  const d = q.data;
-  const missing = !q.isLoading && (!d || d.deleted_at);
-
-  return (
-    <Dialog open onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="max-w-xl max-h-[90vh] overflow-y-auto" dir="rtl">
-        {q.isLoading ? (
-          <Loader2 className="mx-auto size-5 animate-spin" />
-        ) : missing ? (
-          <>
-            <DialogHeader>
-              <DialogTitle>הפריט אינו קיים עוד.</DialogTitle>
-              <DialogDescription>
-                הכרזה זו נמחקה או אינה זמינה. ההתראה הישנה הוסרה מהמערכת.
-              </DialogDescription>
-            </DialogHeader>
-            <DialogFooter>
-              <Button onClick={onClose}>סגור</Button>
-            </DialogFooter>
-          </>
-        ) : (
-          <>
-            <DialogHeader>
-              <DialogTitle className="flex items-center gap-2 flex-wrap">
-                {d.title}
-                <PriorityBadge p={d.priority} />
-              </DialogTitle>
-              <DialogDescription>
-                פורסם {formatHeDateTime(d.created_at)}
-                {d.ends_at && ` · בתוקף עד ${formatHeDateTime(d.ends_at)}`}
-              </DialogDescription>
-            </DialogHeader>
-            {showSender && d.sender_id && (
-              <CommSenderHeader senderId={d.sender_id} sentAt={d.created_at} />
-            )}
-            {d.image_url && (
-              <img src={d.image_url} alt="" className="w-full max-h-64 object-cover rounded-md" />
-            )}
-            <div className="whitespace-pre-wrap text-sm leading-relaxed">{d.body}</div>
-            <DialogFooter>
-              <Button variant="outline" onClick={onClose}>סגור</Button>
-            </DialogFooter>
-          </>
-        )}
-      </DialogContent>
-    </Dialog>
-  );
-}
-
-// ---------------- Announcements ----------------
-function AnnouncementsTab({
-  userId,
-  canDelete,
-  canViewReceipts,
-  initialAnnouncementId,
-  onClearDeepLink,
-}: {
-  userId: string;
-  canDelete: boolean;
-  canViewReceipts: boolean;
-  initialAnnouncementId?: string | null;
-  onClearDeepLink?: () => void;
-}) {
-  const qc = useQueryClient();
-  const q = useQuery({
-    queryKey: ["comm", "announcements", userId],
-    queryFn: async () => {
-      const nowIso = new Date().toISOString();
-      const { data, error } = await supabase
-        .from("announcements")
-        .select(
-          "id, title, body, priority, image_url, starts_at, ends_at, sender_id, created_at, deleted_at, edited_at, edited_by",
-        )
-        .is("deleted_at", null)
-        .neq("sender_id", userId)
-        .lte("starts_at", nowIso)
-        .order("starts_at", { ascending: false });
-      if (error) throw error;
-
-      const rows = ((data ?? []) as any[]).filter((a) => !a.ends_at || a.ends_at > nowIso);
-      const senderIds = [...new Set(rows.map((r) => r.sender_id).filter(Boolean))];
-      let senderMap: Record<string, string> = {};
-      if (senderIds.length) {
-        const { data: sp } = await supabase
-          .from("profiles")
-          .select("id, full_name")
-          .in("id", senderIds);
-        (sp ?? []).forEach((u: any) => (senderMap[u.id] = u.full_name));
-      }
-      // Reads
-      let readMap: Record<string, boolean> = {};
-      if (rows.length) {
-        const { data: reads } = await supabase
-          .from("announcement_reads")
-          .select("announcement_id")
-          .in("announcement_id", rows.map((r) => r.id))
-          .eq("user_id", userId);
-        (reads ?? []).forEach((r: any) => (readMap[r.announcement_id] = true));
-      }
-      return rows.map((a) => ({
-        ...a,
-        sender_name: senderMap[a.sender_id] ?? "—",
-        is_read: !!readMap[a.id],
-      }));
-    },
-  });
-
-  const delMut = useMutation({
-    mutationFn: (id: string) => deleteAnnouncement(id),
-    onSuccess: () => {
-      toast.success("ההכרזה הועברה לארכיון");
-      qc.invalidateQueries({ queryKey: ["comm"] });
-    },
-    onError: (e: any) => toast.error(e?.message ?? "שגיאה"),
-  });
-  const permDelMut = useMutation({
-    mutationFn: (id: string) => permanentDeleteAnnouncement(id),
-    onSuccess: () => {
-      toast.success("ההכרזה נמחקה לצמיתות");
-      qc.invalidateQueries({ queryKey: ["comm"] });
-    },
-    onError: (e: any) => toast.error(e?.message ?? "שגיאה במחיקה"),
-  });
-
-  const [editAnn, setEditAnn] = useState<any | null>(null);
-  const [delAnn, setDelAnn] = useState<string | null>(null);
-  const [receiptsAnn, setReceiptsAnn] = useState<string | null>(null);
-  const [openAnn, setOpenAnn] = useState<string | null>(initialAnnouncementId ?? null);
-
-  useEffect(() => {
-    if (initialAnnouncementId) setOpenAnn(initialAnnouncementId);
-  }, [initialAnnouncementId]);
-
-  if (q.isLoading) return <Loader2 className="mx-auto size-5 animate-spin text-muted-foreground" />;
-  const list = q.data ?? [];
-
-  return (
-    <div className="space-y-3">
-      {list.length === 0 ? (
-        <Card className="p-8 text-center text-sm text-muted-foreground">אין הכרזות פעילות</Card>
-      ) : (
-        <div className="grid sm:grid-cols-2 gap-3">
-          {list.map((a: any) => {
-            const canEditThis = a.sender_id === userId;
-            const canDeleteThis = canDelete;
-            return (
-              <AnnouncementCard
-                key={a.id}
-                ann={a}
-                userId={userId}
-                canEditThis={canEditThis}
-                canDeleteThis={canDeleteThis}
-                canViewReceipts={canViewReceipts}
-                onOpen={() => setOpenAnn(a.id)}
-                onEdit={() => setEditAnn(a)}
-                onDelete={() => setDelAnn(a.id)}
-                onShowReceipts={() => setReceiptsAnn(a.id)}
-              />
-            );
-          })}
-        </div>
-      )}
-
-      {openAnn && (
-        <AnnouncementDetailDialog
-          annId={openAnn}
-          showSender
-          onClose={() => {
-            setOpenAnn(null);
-            onClearDeepLink?.();
-          }}
-        />
-      )}
-
-      {editAnn && (
-        <EditAnnouncementDialog ann={editAnn} onClose={() => setEditAnn(null)} />
-      )}
-
-      {receiptsAnn && (
-        <ReadReceiptsDialog
-          kind="announcement"
-          targetId={receiptsAnn}
-          onClose={() => setReceiptsAnn(null)}
-        />
-      )}
-
-      <AlertDialog open={!!delAnn} onOpenChange={(o) => !o && setDelAnn(null)}>
-        <AlertDialogContent dir="rtl">
-          <AlertDialogHeader>
-            <AlertDialogTitle>⚠️ אישור מחיקה</AlertDialogTitle>
-            <AlertDialogDescription>
-              האם אתה בטוח שברצונך למחוק פריט זה?
-              <br />
-              המחיקה תסיר את ההכרזה ואת כל ההתראות הקשורות מכל הנמענים.
-              <br />
-              לאחר המחיקה לא ניתן יהיה לשחזר את הנתונים.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter className="gap-2 flex-wrap">
-            <AlertDialogCancel>❌ ביטול</AlertDialogCancel>
-            <AlertDialogAction
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-              onClick={() => {
-                const id = delAnn!;
-                setDelAnn(null);
-                permDelMut.mutate(id);
-              }}
-            >
-              🗑️ מחק
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-    </div>
-  );
-}
-
-function EditAnnouncementDialog({ ann, onClose }: { ann: any; onClose: () => void }) {
-  const qc = useQueryClient();
-  const [title, setTitle] = useState(ann.title);
-  const [body, setBody] = useState(ann.body);
-  const [priority, setPriority] = useState<CommPriority>(ann.priority);
-  const [endsAt, setEndsAt] = useState<string>(ann.ends_at ?? "");
-  const [file, setFile] = useState<File | null>(null);
-
-  const mut = useMutation({
-    mutationFn: () =>
-      editAnnouncement(ann.id, {
-        title,
-        body,
-        priority,
-        ends_at: endsAt || null,
-        file,
-      }),
-    onSuccess: () => {
-      toast.success("ההכרזה עודכנה");
-      qc.invalidateQueries({ queryKey: ["comm"] });
-      onClose();
-    },
-    onError: (e: any) => toast.error(e?.message ?? "שגיאה"),
-  });
-
-  return (
-    <Dialog open onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="max-w-xl" dir="rtl">
-        <DialogHeader>
-          <DialogTitle>עריכת הכרזה</DialogTitle>
-          <DialogDescription>הקוראים הקודמים יקבלו התראה על העדכון</DialogDescription>
-        </DialogHeader>
-        <div className="space-y-3">
-          <div>
-            <Label>כותרת</Label>
-            <Input value={title} onChange={(e) => setTitle(e.target.value)} />
-          </div>
-          <div>
-            <Label>תוכן</Label>
-            <Textarea rows={6} value={body} onChange={(e) => setBody(e.target.value)} />
-          </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <Label>עדיפות</Label>
-              <Select value={priority} onValueChange={(v) => setPriority(v as CommPriority)}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="low">נמוכה</SelectItem>
-                  <SelectItem value="normal">רגילה</SelectItem>
-                  <SelectItem value="high">גבוהה</SelectItem>
-                  <SelectItem value="urgent">דחופה</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div>
-              <Label>תוקף עד</Label>
-              <Input
-                type="datetime-local"
-                value={endsAt ? endsAt.slice(0, 16) : ""}
-                onChange={(e) => setEndsAt(e.target.value ? new Date(e.target.value).toISOString() : "")}
-              />
-            </div>
-          </div>
-          <div>
-            <Label>הוספת קובץ (אופציונלי)</Label>
-            <Input type="file" onChange={(e) => setFile(e.target.files?.[0] ?? null)} />
-          </div>
-        </div>
-        <DialogFooter>
-          <Button variant="outline" onClick={onClose}>ביטול</Button>
-          <Button onClick={() => mut.mutate()} disabled={mut.isPending || !title.trim() || !body.trim()}>
-            {mut.isPending && <Loader2 className="ml-2 size-4 animate-spin" />}
-            שמור שינויים
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  );
-}
-
-// ---------------- Announcement Card (auto-marks read on mount) ----------------
-function AnnouncementCard({
-  ann,
-  userId,
-  canEditThis,
-  canDeleteThis,
-  canViewReceipts,
-  onOpen,
-  onEdit,
-  onDelete,
-  onShowReceipts,
-}: {
-  ann: any;
-  userId: string;
-  canEditThis: boolean;
-  canDeleteThis: boolean;
-  canViewReceipts: boolean;
-  onOpen: () => void;
-  onEdit: () => void;
-  onDelete: () => void;
-  onShowReceipts: () => void;
-}) {
-  const qc = useQueryClient();
-  useEffect(() => {
-    if (!ann.is_read) {
-      markAnnouncementRead(ann.id).then(() =>
-        qc.invalidateQueries({ queryKey: ["comm"] }),
-      );
-    }
-  }, [ann.id, ann.is_read, qc]);
-
-  return (
-    <Card
-      onClick={onOpen}
-      className={cn(
-        "p-4 space-y-2 relative cursor-pointer hover:bg-accent/40 transition-colors",
-        !ann.is_read && "ring-2 ring-primary/40",
-      )}
-    >
-      {ann.image_url && (
-        <img src={ann.image_url} alt="" className="w-full h-32 object-cover rounded-md" />
-      )}
-      <div className="flex items-center justify-between gap-2 flex-wrap">
-        <h3 className="font-bold">{ann.title}</h3>
-        <div className="flex items-center gap-1.5">
-          <PriorityBadge p={ann.priority} />
-          {ann.edited_at && (
-            <Badge variant="outline" className="gap-1 text-[10px]">
-              <Pencil className="size-3" /> נערך
-            </Badge>
-          )}
-        </div>
-      </div>
-      <p className="text-sm whitespace-pre-wrap">{ann.body}</p>
-      <p className="text-xs text-muted-foreground">
-        פורסם ע"י {ann.sender_name} · {formatHeDateTime(ann.starts_at)}
-        {ann.ends_at && ` · עד ${formatHeDateTime(ann.ends_at)}`}
-        {ann.edited_at && ` · עודכן ${formatHeDateTime(ann.edited_at)}`}
-      </p>
-      <div
-        className="flex items-center justify-end pt-1 flex-wrap gap-1"
-        onClick={(e) => e.stopPropagation()}
-      >
-        {(canViewReceipts || ann.sender_id === userId) && (
-          <Button size="sm" variant="outline" onClick={onShowReceipts} className="gap-1.5">
-            <Eye className="size-4" /> 👁️ אישורי קריאה
-          </Button>
-        )}
-        {canEditThis && (
-          <Button size="sm" variant="outline" onClick={onEdit} className="gap-1.5">
-            <Pencil className="size-4" /> ערוך
-          </Button>
-        )}
-        {canDeleteThis && (
-          <Button
-            size="sm"
-            variant="ghost"
-            onClick={onDelete}
-            className="gap-1.5 text-destructive"
-          >
-            <Trash2 className="size-4" /> מחק
-          </Button>
-        )}
-      </div>
-    </Card>
   );
 }
 
@@ -1205,26 +544,8 @@ function ArchiveTab({ userId, canDelete }: { userId: string; canDelete: boolean 
     },
   });
 
-  const annsQ = useQuery({
-    enabled: canDelete,
-    queryKey: ["comm", "archive-anns", userId],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("announcements")
-        .select("id, title, body, priority, deleted_at, created_at, ends_at")
-        .not("deleted_at", "is", null)
-        .order("deleted_at", { ascending: false });
-      if (error) throw error;
-      return (data ?? []) as any[];
-    },
-  });
-
   const restoreMsg = useMutation({
     mutationFn: (id: string) => archiveMessage(id, false),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["comm"] }),
-  });
-  const restoreAnn = useMutation({
-    mutationFn: (id: string) => restoreAnnouncement(id),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["comm"] }),
   });
   const delMsg = useMutation({
@@ -1275,36 +596,6 @@ function ArchiveTab({ userId, canDelete }: { userId: string; canDelete: boolean 
           </div>
         )}
       </section>
-
-      {canDelete && (
-        <section>
-          <h3 className="text-sm font-semibold mb-2 text-muted-foreground">הכרזות בארכיון</h3>
-          {(annsQ.data ?? []).length === 0 ? (
-            <Card className="p-6 text-center text-sm text-muted-foreground">ריק</Card>
-          ) : (
-            <div className="space-y-2">
-              {(annsQ.data ?? []).map((a: any) => (
-                <Card key={a.id} className="p-3 flex items-center justify-between gap-2">
-                  <div className="min-w-0">
-                    <p className="text-sm font-medium truncate">{a.title}</p>
-                    <p className="text-xs text-muted-foreground">
-                      נמחק ב-{formatHeDateTime(a.deleted_at)}
-                    </p>
-                  </div>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() => restoreAnn.mutate(a.id)}
-                    className="gap-1.5"
-                  >
-                    <RotateCcw className="size-4" /> שחזר
-                  </Button>
-                </Card>
-              ))}
-            </div>
-          )}
-        </section>
-      )}
     </div>
   );
 }
@@ -1375,7 +666,6 @@ function MessageDetailDialog({
     },
   });
 
-  // Auto-mark read in inbox mode
   useEffect(() => {
     if (viewerMode !== "inbox") return;
     if (!q.data || q.data.missing) return;
@@ -1400,14 +690,6 @@ function MessageDetailDialog({
     mutationFn: () => archiveMessage(messageId, true),
     onSuccess: () => {
       toast.success("הועבר לארכיון");
-      qc.invalidateQueries({ queryKey: ["comm"] });
-      onClose();
-    },
-  });
-  const delMut = useMutation({
-    mutationFn: () => deleteMessage(messageId),
-    onSuccess: () => {
-      toast.success("הועבר לארכיון מערכת (ניתן לשחזור)");
       qc.invalidateQueries({ queryKey: ["comm"] });
       onClose();
     },
@@ -1531,7 +813,6 @@ function MessageDetailDialog({
 
             {receiptsOpen && (
               <ReadReceiptsDialog
-                kind="message"
                 targetId={messageId}
                 onClose={() => setReceiptsOpen(false)}
               />
@@ -1576,7 +857,6 @@ function MessageDetailDialog({
                 </AlertDialogFooter>
               </AlertDialogContent>
             </AlertDialog>
-
           </>
         )}
       </DialogContent>
@@ -1669,7 +949,6 @@ function EditMessageDialog({
   );
 }
 
-
 function AttachmentLink({ att }: { att: any }) {
   const [url, setUrl] = useState<string | null>(null);
   useEffect(() => {
@@ -1735,7 +1014,7 @@ function RecipientsBreakdown({
   );
 }
 
-// ---------------- Compose dialogs ----------------
+// ---------------- Compose dialog ----------------
 function useDepartments() {
   return useQuery({
     queryKey: ["comm", "departments"],
@@ -1801,7 +1080,6 @@ function ComposeMessageDialog({
   const [selectedUsers, setSelectedUsers] = useState<string[]>([]);
   const [file, setFile] = useState<File | null>(null);
 
-  // Dept managers: restrict picker to their dept
   const visibleDepts = useMemo(() => {
     const list = depsQ.data ?? [];
     if (admin) return list;
@@ -1960,193 +1238,20 @@ function ComposeMessageDialog({
   );
 }
 
-function ComposeAnnouncementDialog({
-  open,
-  onOpenChange,
-  admin,
-  myDeptId,
-}: {
-  open: boolean;
-  onOpenChange: (o: boolean) => void;
-  admin: boolean;
-  myDeptId: string | null;
-}) {
-  const qc = useQueryClient();
-  const depsQ = useDepartments();
-
-  const [scope, setScope] = useState<"all" | "departments">(admin ? "all" : "departments");
-  const [title, setTitle] = useState("");
-  const [body, setBody] = useState("");
-  const [priority, setPriority] = useState<CommPriority>("normal");
-  const [imageUrl, setImageUrl] = useState("");
-  const [startsAt, setStartsAt] = useState("");
-  const [endsAt, setEndsAt] = useState("");
-  const [selectedDepts, setSelectedDepts] = useState<string[]>(
-    !admin && myDeptId ? [myDeptId] : [],
-  );
-  const [file, setFile] = useState<File | null>(null);
-
-  const visibleDepts = useMemo(() => {
-    const list = depsQ.data ?? [];
-    if (admin) return list;
-    if (myDeptId) return list.filter((d) => d.id === myDeptId);
-    return [];
-  }, [depsQ.data, admin, myDeptId]);
-
-  const mut = useMutation({
-    mutationFn: () =>
-      createAnnouncement({
-        title,
-        body,
-        priority,
-        image_url: imageUrl || null,
-        starts_at: startsAt ? new Date(startsAt).toISOString() : null,
-        ends_at: endsAt ? new Date(endsAt).toISOString() : null,
-        targets: {
-          all: scope === "all",
-          departments: scope === "departments" ? selectedDepts : [],
-        },
-        file,
-      }),
-    onSuccess: () => {
-      toast.success("ההכרזה פורסמה");
-      qc.invalidateQueries({ queryKey: ["comm"] });
-      onOpenChange(false);
-    },
-    onError: (e: any) => toast.error(e?.message ?? "שגיאה ביצירת הכרזה"),
-  });
-
-  function toggle(id: string) {
-    setSelectedDepts(
-      selectedDepts.includes(id)
-        ? selectedDepts.filter((x) => x !== id)
-        : [...selectedDepts, id],
-    );
-  }
-
-  return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-xl max-h-[90vh] overflow-y-auto" dir="rtl">
-        <DialogHeader>
-          <DialogTitle>הכרזה חדשה</DialogTitle>
-          <DialogDescription>הכרזות מוצגות בלוח הבקרה ובמרכז התקשורת</DialogDescription>
-        </DialogHeader>
-        <div className="space-y-3">
-          <div>
-            <Label>כותרת</Label>
-            <Input value={title} onChange={(e) => setTitle(e.target.value)} />
-          </div>
-          <div>
-            <Label>תוכן</Label>
-            <Textarea value={body} onChange={(e) => setBody(e.target.value)} rows={5} />
-          </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <Label>עדיפות</Label>
-              <Select value={priority} onValueChange={(v: any) => setPriority(v)}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="low">נמוכה</SelectItem>
-                  <SelectItem value="normal">רגילה</SelectItem>
-                  <SelectItem value="high">גבוהה</SelectItem>
-                  <SelectItem value="urgent">דחופה</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div>
-              <Label>קישור תמונה (אופציונלי)</Label>
-              <Input value={imageUrl} onChange={(e) => setImageUrl(e.target.value)} />
-            </div>
-            <div>
-              <Label>תאריך התחלה</Label>
-              <Input
-                type="datetime-local"
-                value={startsAt}
-                onChange={(e) => setStartsAt(e.target.value)}
-              />
-            </div>
-            <div>
-              <Label>תאריך סיום</Label>
-              <Input
-                type="datetime-local"
-                value={endsAt}
-                onChange={(e) => setEndsAt(e.target.value)}
-              />
-            </div>
-          </div>
-
-          <div>
-            <Label>פרסום ל-</Label>
-            <Select value={scope} onValueChange={(v: any) => setScope(v)}>
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {admin && <SelectItem value="all">כל עובדי החברה</SelectItem>}
-                <SelectItem value="departments">מחלקות</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-
-          {scope === "departments" && (
-            <div className="border rounded-md p-2 max-h-40 overflow-y-auto space-y-1">
-              {visibleDepts.map((d) => (
-                <label key={d.id} className="flex items-center gap-2 text-sm cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={selectedDepts.includes(d.id)}
-                    onChange={() => toggle(d.id)}
-                  />
-                  {d.name}
-                </label>
-              ))}
-            </div>
-          )}
-
-          <div>
-            <Label className="flex items-center gap-1.5">
-              <Paperclip className="size-4" /> קובץ מצורף (אופציונלי)
-            </Label>
-            <Input type="file" onChange={(e) => setFile(e.target.files?.[0] ?? null)} />
-          </div>
-        </div>
-
-        <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>
-            ביטול
-          </Button>
-          <Button
-            disabled={!title.trim() || !body.trim() || mut.isPending}
-            onClick={() => mut.mutate()}
-            className="gap-1.5"
-          >
-            {mut.isPending && <Loader2 className="size-4 animate-spin" />}
-            <Megaphone className="size-4" /> פרסם
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  );
-}
-
-// ---------------- Read Receipts Dialog ----------------
+// ---------------- Read Receipts Dialog (messages only) ----------------
 function ReadReceiptsDialog({
-  kind,
   targetId,
   onClose,
 }: {
-  kind: "message" | "announcement";
   targetId: string;
   onClose: () => void;
 }) {
   const q = useQuery({
-    queryKey: ["comm", "receipts", kind, targetId],
+    queryKey: ["comm", "receipts", "message", targetId],
     queryFn: async () => {
-      const fn = kind === "message" ? "get_message_read_receipts" : "get_announcement_read_receipts";
-      const arg = kind === "message" ? { _message_id: targetId } : { _ann_id: targetId };
-      const { data, error } = await supabase.rpc(fn as any, arg as any);
+      const { data, error } = await supabase.rpc("get_message_read_receipts" as any, {
+        _message_id: targetId,
+      } as any);
       if (error) throw error;
       return (data ?? []) as Array<{
         user_id: string;

@@ -1,10 +1,9 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo } from "react";
 import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Loader2, ShieldCheck, LogIn, LogOut, Clock } from "lucide-react";
+import { Loader2, ShieldCheck, LogIn, LogOut, Clock, CalendarDays } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/use-auth";
 import { ROLE_LABELS, type AppRole } from "@/lib/constants";
@@ -21,9 +20,22 @@ type Row = {
   role: AppRole | null;
 };
 
+/** 24-hour time (HH:mm). */
 function timeHM(iso: string) {
-  const d = new Date(iso);
-  return d.toLocaleTimeString("he-IL", { hour: "2-digit", minute: "2-digit" });
+  return new Date(iso).toLocaleTimeString("he-IL", {
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  });
+}
+
+/** Full date in Hebrew locale (dd/MM/yyyy). */
+function dateDMY(iso: string) {
+  return new Date(iso).toLocaleDateString("he-IL", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+  });
 }
 
 export function ManagementOnShiftCard() {
@@ -35,38 +47,86 @@ export function ManagementOnShiftCard() {
     (profile.roles.includes("branch_manager") ||
       profile.roles.includes("assistant_manager"));
 
+  // Effective branch to scope the card to. Platform Owners get the branch
+  // they explicitly selected in the switcher; everyone else is locked to
+  // their own profile branch. This mirrors the Employee-of-the-Month
+  // branch filtering behaviour.
+  const scopedBranchId = activeBranchId ?? profile?.branch_id ?? null;
+
   const q = useQuery({
-    enabled: !!profile,
-    queryKey: ["management-on-shift", activeBranchId],
+    enabled: !!profile && !!scopedBranchId,
+    queryKey: ["management-on-shift", scopedBranchId],
     queryFn: async (): Promise<Row[]> => {
-      const { data, error } = await (supabase as any).rpc("get_management_on_shift");
+      // 1) Shifts strictly filtered to the selected branch.
+      const { data: shifts, error } = await supabase
+        .from("management_on_shift")
+        .select("id, user_id, started_at, branch_id")
+        .eq("branch_id", scopedBranchId!)
+        .order("started_at", { ascending: true });
       if (error) throw error;
-      return ((data ?? []) as any[]).map((r) => ({
-        id: r.id,
-        user_id: r.user_id,
-        started_at: r.started_at,
-        full_name: r.full_name ?? null,
-        avatar_url: r.avatar_url ?? null,
-        job_title: r.job_title ?? null,
-        role: (r.role as AppRole) ?? null,
-      }));
+      const rows = (shifts ?? []) as Array<{
+        id: string;
+        user_id: string;
+        started_at: string;
+      }>;
+      if (rows.length === 0) return [];
+
+      const userIds = [...new Set(rows.map((r) => r.user_id))];
+
+      // 2) Profiles for name / avatar / title.
+      const { data: profs } = await supabase
+        .from("profiles")
+        .select("id, full_name, avatar_url, job_title")
+        .in("id", userIds);
+      const profMap = new Map<string, any>((profs ?? []).map((p: any) => [p.id, p]));
+
+      // 3) Roles — pick manager > assistant_manager for label.
+      const { data: rolesData } = await (supabase as any)
+        .from("user_roles")
+        .select("user_id, role")
+        .in("user_id", userIds);
+      const roleMap = new Map<string, AppRole>();
+      for (const r of (rolesData ?? []) as Array<{ user_id: string; role: AppRole }>) {
+        const existing = roleMap.get(r.user_id);
+        const rank = (x: AppRole | undefined) =>
+          x === "branch_manager" ? 1 : x === "assistant_manager" ? 2 : 9;
+        if (!existing || rank(r.role) < rank(existing)) roleMap.set(r.user_id, r.role);
+      }
+
+      return rows.map((s) => {
+        const p = profMap.get(s.user_id);
+        return {
+          id: s.id,
+          user_id: s.user_id,
+          started_at: s.started_at,
+          full_name: p?.full_name ?? null,
+          avatar_url: p?.avatar_url ?? null,
+          job_title: p?.job_title ?? null,
+          role: roleMap.get(s.user_id) ?? null,
+        } satisfies Row;
+      });
     },
   });
 
   useEffect(() => {
-    if (!profile) return;
+    if (!profile || !scopedBranchId) return;
     const ch = supabase
-      .channel(`mos-${profile.id}-${activeBranchId ?? "own"}`)
+      .channel(`mos-${profile.id}-${scopedBranchId}`)
       .on(
         "postgres_changes",
-        { event: "*", schema: "public", table: "management_on_shift" },
-        () => qc.invalidateQueries({ queryKey: ["management-on-shift"] }),
+        {
+          event: "*",
+          schema: "public",
+          table: "management_on_shift",
+          filter: `branch_id=eq.${scopedBranchId}`,
+        },
+        () => qc.invalidateQueries({ queryKey: ["management-on-shift", scopedBranchId] }),
       )
       .subscribe();
     return () => {
       supabase.removeChannel(ch);
     };
-  }, [profile?.id, activeBranchId, qc]);
+  }, [profile?.id, scopedBranchId, qc]);
 
   const myRow = useMemo(
     () => q.data?.find((r) => r.user_id === profile?.id),
@@ -180,9 +240,9 @@ export function ManagementOnShiftCard() {
                 aria-hidden
                 className="absolute inset-y-0 left-0 w-1.5 bg-gradient-to-b from-red-500 to-red-600"
               />
-              <div className="flex items-center gap-3 p-4 pl-5">
+              <div className="flex items-start gap-3 p-4 pl-5">
                 <div className="relative shrink-0">
-                  <Avatar className="size-12 ring-2 ring-background shadow">
+                  <Avatar className="size-14 ring-2 ring-background shadow">
                     <AvatarImage src={r.avatar_url ?? undefined} alt={r.full_name ?? ""} />
                     <AvatarFallback className="font-semibold">
                       {r.full_name?.charAt(0) ?? "?"}
@@ -200,11 +260,15 @@ export function ManagementOnShiftCard() {
                     {r.full_name ?? "—"}
                   </p>
                   <p className="text-[12px] font-medium text-red-600 dark:text-red-400 mt-0.5">
-                    {r.role ? (ROLE_LABELS[r.role] ?? r.role) : "הנהלה"}
+                    {r.job_title ?? (r.role ? (ROLE_LABELS[r.role] ?? r.role) : "הנהלה")}
                   </p>
                   <div className="flex items-center gap-1 mt-1.5 text-[11px] text-muted-foreground">
+                    <CalendarDays className="size-3" />
+                    <span>{dateDMY(r.started_at)}</span>
+                  </div>
+                  <div className="flex items-center gap-1 mt-0.5 text-[11px] text-muted-foreground">
                     <Clock className="size-3" />
-                    <span>החל/ה משמרת בשעה {timeHM(r.started_at)}</span>
+                    <span>שעת התחלה: {timeHM(r.started_at)}</span>
                   </div>
                 </div>
               </div>
