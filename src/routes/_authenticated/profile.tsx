@@ -3,7 +3,7 @@ import { useAuth } from "@/lib/use-auth";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Loader2, KeyRound, User } from "lucide-react";
-import { ROLE_LABELS, DEPARTMENT_LABELS } from "@/lib/constants";
+import { ROLE_LABELS, isPlatformOwner } from "@/lib/constants";
 import { EmployeeOfMonthSection } from "@/components/employee-of-month-section";
 
 
@@ -23,7 +23,6 @@ function ProfilePage() {
   }
 
   const roleLabel = me.roles?.[0] ? ROLE_LABELS[me.roles[0]] : "—";
-  const deptLabel = me.department_name ?? "—";
 
   return (
     <div className="space-y-6">
@@ -41,7 +40,7 @@ function ProfilePage() {
         <Row label="שם מלא" value={me.full_name ?? "—"} />
         <Row label="מספר זהות" value={me.id_number ?? "—"} />
         <Row label="טלפון" value={me.phone ?? "—"} />
-        <Row label="מחלקה" value={deptLabel} />
+        {!isPlatformOwner(me.roles) && <Row label="מחלקה" value={me.department_name ?? "—"} />}
         <Row label="תפקיד" value={roleLabel} />
       </Card>
 
