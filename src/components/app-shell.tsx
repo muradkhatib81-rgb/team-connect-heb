@@ -409,14 +409,6 @@ function RealtimeBridge({ uid }: { uid: string }) {
         qc.invalidateQueries({ queryKey: ["communications"] });
         qc.invalidateQueries({ queryKey: ["shell-comm-unread", uid] });
       })
-      .on("postgres_changes", { event: "*", schema: "public", table: "announcements" }, () => {
-        qc.invalidateQueries({ queryKey: ["communications"] });
-        qc.invalidateQueries({ queryKey: ["shell-comm-unread", uid] });
-      })
-      .on("postgres_changes", { event: "*", schema: "public", table: "announcement_reads" }, () => {
-        qc.invalidateQueries({ queryKey: ["communications"] });
-        qc.invalidateQueries({ queryKey: ["shell-comm-unread", uid] });
-      })
       .on("postgres_changes", { event: "*", schema: "public", table: "company_settings" }, () =>
         qc.invalidateQueries({ queryKey: ["company-settings"] }))
       .on("postgres_changes", { event: "*", schema: "public", table: "employee_of_month" }, () =>
