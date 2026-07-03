@@ -1312,10 +1312,12 @@ export type Database = {
           created_at: string
           day_date: string
           employee_id: string
+          end_time: string | null
           id: string
           published_shift: string | null
           schedule_id: string
           shift: string
+          start_time: string | null
           updated_at: string
         }
         Insert: {
@@ -1323,10 +1325,12 @@ export type Database = {
           created_at?: string
           day_date: string
           employee_id: string
+          end_time?: string | null
           id?: string
           published_shift?: string | null
           schedule_id: string
           shift: string
+          start_time?: string | null
           updated_at?: string
         }
         Update: {
@@ -1334,10 +1338,12 @@ export type Database = {
           created_at?: string
           day_date?: string
           employee_id?: string
+          end_time?: string | null
           id?: string
           published_shift?: string | null
           schedule_id?: string
           shift?: string
+          start_time?: string | null
           updated_at?: string
         }
         Relationships: [

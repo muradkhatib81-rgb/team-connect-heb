@@ -31,6 +31,7 @@ import { formatHeDateTime } from "@/lib/date-format";
 import { CreateEmployeeDialog } from "./employees";
 import { ManagementOnShiftCard } from "@/components/management-on-shift-card";
 import { MorningBoard } from "@/components/morning-board";
+import { LiveShiftCardsSection } from "@/components/live-shift-cards";
 
 export const Route = createFileRoute("/_authenticated/dashboard")({
   component: DashboardPage,
@@ -431,6 +432,9 @@ function AdminDashboard({
         <StatCard label="🏖️ בחופשה" value={stats.onLeave} icon={Plane} tone="warning" onClick={() => go("on_leave")} />
         <StatCard label="❌ עובדים לא פעילים" value={stats.inactive} icon={UserX} tone="muted" onClick={() => go("inactive")} />
       </section>
+
+      <LiveShiftCardsSection />
+
 
       <section>
         <div className="flex items-center justify-between mb-4">

@@ -487,7 +487,7 @@ function SchedulesPage() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("schedule_shifts")
-        .select("employee_id, day_date, shift, published_shift")
+        .select("employee_id, day_date, shift, published_shift, start_time, end_time")
         .eq("schedule_id", visible!.id);
       if (error) throw error;
       return data ?? [];
@@ -496,13 +496,24 @@ function SchedulesPage() {
 
   // Local edits map: emp -> day -> shift
   const [edits, setEdits] = useState<Record<string, Record<string, Shift>>>({});
+  // Per-cell time overrides. `null` = use shift definition default.
+  const [timeEdits, setTimeEdits] = useState<
+    Record<string, Record<string, { start: string | null; end: string | null }>>
+  >({});
+
   useEffect(() => {
     const next: Record<string, Record<string, Shift>> = {};
+    const t: Record<string, Record<string, { start: string | null; end: string | null }>> = {};
     for (const s of shiftsQ.data ?? []) {
       next[s.employee_id] ??= {};
       next[s.employee_id][s.day_date] = s.shift as Shift;
+      t[s.employee_id] ??= {};
+      const st = (s as any).start_time ? String((s as any).start_time).slice(0, 5) : null;
+      const en = (s as any).end_time ? String((s as any).end_time).slice(0, 5) : null;
+      t[s.employee_id][s.day_date] = { start: st, end: en };
     }
     setEdits(next);
+    setTimeEdits(t);
   }, [shiftsQ.data]);
 
   // Published-snapshot map (from DB) — drives the "modified after publish" marker
@@ -558,13 +569,7 @@ function SchedulesPage() {
 
   const saveMut = useMutation({
     mutationFn: () => {
-      const list: { employee_id: string; day_date: string; shift: Shift }[] = [];
-      for (const [emp, m] of Object.entries(edits)) {
-        for (const [day, shift] of Object.entries(m)) {
-          list.push({ employee_id: emp, day_date: day, shift });
-        }
-      }
-      return saveFn({ data: { schedule_id: visible!.id, shifts: list } });
+      return saveFn({ data: { schedule_id: visible!.id, shifts: buildShiftPayload() } });
     },
     onSuccess: () => {
       toast.success("נשמר");
@@ -580,13 +585,7 @@ function SchedulesPage() {
     mutationFn: async () => {
       // Persist any unsaved local edits before validating on the server,
       // so the validator sees the actual on-screen schedule.
-      const list: { employee_id: string; day_date: string; shift: Shift }[] = [];
-      for (const [emp, m] of Object.entries(edits)) {
-        for (const [day, shift] of Object.entries(m)) {
-          list.push({ employee_id: emp, day_date: day, shift });
-        }
-      }
-      await saveFn({ data: { schedule_id: visible!.id, shifts: list } });
+      await saveFn({ data: { schedule_id: visible!.id, shifts: buildShiftPayload() } });
       return submitFn({ data: { schedule_id: visible!.id } });
     },
     onSuccess: (r: any) => {
@@ -606,13 +605,7 @@ function SchedulesPage() {
     mutationFn: async () => {
       // Persist any current edits made by the approver before publishing,
       // so the published version reflects exactly what's on screen.
-      const list: { employee_id: string; day_date: string; shift: Shift }[] = [];
-      for (const [emp, m] of Object.entries(edits)) {
-        for (const [day, shift] of Object.entries(m)) {
-          list.push({ employee_id: emp, day_date: day, shift });
-        }
-      }
-      await saveFn({ data: { schedule_id: visible!.id, shifts: list } });
+      await saveFn({ data: { schedule_id: visible!.id, shifts: buildShiftPayload() } });
       return approveFn({ data: { schedule_id: visible!.id } });
     },
     onSuccess: (r: any) => {
@@ -631,13 +624,7 @@ function SchedulesPage() {
 
   const publishMut = useMutation({
     mutationFn: async () => {
-      const list: { employee_id: string; day_date: string; shift: Shift }[] = [];
-      for (const [emp, m] of Object.entries(edits)) {
-        for (const [day, shift] of Object.entries(m)) {
-          list.push({ employee_id: emp, day_date: day, shift });
-        }
-      }
-      await saveFn({ data: { schedule_id: visible!.id, shifts: list } });
+      await saveFn({ data: { schedule_id: visible!.id, shifts: buildShiftPayload() } });
       return publishFn({ data: { schedule_id: visible!.id } });
     },
     onSuccess: () => {
@@ -699,6 +686,45 @@ function SchedulesPage() {
 
   function setShift(empId: string, day: string, shift: Shift) {
     setEdits((prev) => ({ ...prev, [empId]: { ...(prev[empId] ?? {}), [day]: shift } }));
+  }
+
+  function setCellTime(empId: string, day: string, which: "start" | "end", value: string) {
+    setTimeEdits((prev) => {
+      const cur = prev[empId]?.[day] ?? { start: null, end: null };
+      const next = { ...cur, [which]: value ? value.slice(0, 5) : null };
+      return { ...prev, [empId]: { ...(prev[empId] ?? {}), [day]: next } };
+    });
+  }
+
+  function buildShiftPayload(): {
+    employee_id: string;
+    day_date: string;
+    shift: Shift;
+    start_time: string | null;
+    end_time: string | null;
+  }[] {
+    const list: {
+      employee_id: string;
+      day_date: string;
+      shift: Shift;
+      start_time: string | null;
+      end_time: string | null;
+    }[] = [];
+    for (const [emp, m] of Object.entries(edits)) {
+      for (const [day, shift] of Object.entries(m)) {
+        const t = timeEdits[emp]?.[day];
+        const norm = (v: string | null | undefined) =>
+          v && /^\d{2}:\d{2}$/.test(v) ? `${v}:00` : v && /^\d{2}:\d{2}:\d{2}$/.test(v) ? v : null;
+        list.push({
+          employee_id: emp,
+          day_date: day,
+          shift,
+          start_time: norm(t?.start ?? null),
+          end_time: norm(t?.end ?? null),
+        });
+      }
+    }
+    return list;
   }
 
   const editable =
@@ -1349,6 +1375,14 @@ function SchedulesPage() {
                     {days.map((day) => {
                       const cur = edits[emp.id]?.[day];
                       const pub = publishedMap[emp.id]?.[day] ?? null;
+                      const def = cur ? shiftDefsQ.map.get(cur) : undefined;
+                      const cellTimes = timeEdits[emp.id]?.[day];
+                      const effStart =
+                        cellTimes?.start ??
+                        (def?.start_time ? String(def.start_time).slice(0, 5) : null);
+                      const effEnd =
+                        cellTimes?.end ??
+                        (def?.end_time ? String(def.end_time).slice(0, 5) : null);
                       // Mark as "modified after publish" only when the schedule is approved
                       // and the current value differs from the published snapshot.
                       const isModified =
@@ -1356,17 +1390,24 @@ function SchedulesPage() {
                         (cur ?? null) !== pub;
                       if (!editable) {
                         return (
-                          <td key={day} className="p-2 text-center">
+                          <td key={day} className="p-2 text-center align-top">
                             <div className="relative inline-block">
                               {cur ? (
-                                <span
-                                  className={`inline-block px-2 py-1 rounded-md text-xs font-medium border ${
-                                    isModified ? "ring-2 ring-orange-500 border-orange-500" : ""
-                                  }`}
-                                  style={shiftStyle(cur)}
-                                >
-                                  {shiftLabel(cur)}
-                                </span>
+                                <>
+                                  <span
+                                    className={`inline-block px-2 py-1 rounded-md text-xs font-medium border ${
+                                      isModified ? "ring-2 ring-orange-500 border-orange-500" : ""
+                                    }`}
+                                    style={shiftStyle(cur)}
+                                  >
+                                    {shiftLabel(cur)}
+                                  </span>
+                                  {effStart && effEnd && (
+                                    <div className="text-[10px] text-muted-foreground mt-1 tabular-nums" dir="ltr">
+                                      {effStart}–{effEnd}
+                                    </div>
+                                  )}
+                                </>
                               ) : (
                                 <span className="text-muted-foreground text-xs">—</span>
                               )}
@@ -1381,8 +1422,8 @@ function SchedulesPage() {
                         );
                       }
                       return (
-                        <td key={day} className="p-2">
-                          <div className="relative">
+                        <td key={day} className="p-2 align-top">
+                          <div className="relative space-y-1">
                             <Select
                               value={cur ?? ""}
                               onValueChange={(v) => setShift(emp.id, day, v as Shift)}
@@ -1407,6 +1448,33 @@ function SchedulesPage() {
                                 ))}
                               </SelectContent>
                             </Select>
+                            {cur && def?.start_time && def?.end_time && (
+                              <div className="flex items-center gap-1" dir="ltr">
+                                <input
+                                  type="time"
+                                  step={60}
+                                  lang="he-IL"
+                                  aria-label="שעת התחלה"
+                                  value={effStart ?? ""}
+                                  onChange={(e) =>
+                                    setCellTime(emp.id, day, "start", e.target.value)
+                                  }
+                                  className="h-7 w-full min-w-0 rounded-md border border-input bg-background px-1 text-[11px] tabular-nums focus:outline-none focus:ring-1 focus:ring-ring"
+                                />
+                                <span className="text-[10px] text-muted-foreground">–</span>
+                                <input
+                                  type="time"
+                                  step={60}
+                                  lang="he-IL"
+                                  aria-label="שעת סיום"
+                                  value={effEnd ?? ""}
+                                  onChange={(e) =>
+                                    setCellTime(emp.id, day, "end", e.target.value)
+                                  }
+                                  className="h-7 w-full min-w-0 rounded-md border border-input bg-background px-1 text-[11px] tabular-nums focus:outline-none focus:ring-1 focus:ring-ring"
+                                />
+                              </div>
+                            )}
                             {isModified && (
                               <RefreshCw
                                 className="size-3 text-orange-600 absolute -top-1 -left-1 bg-background rounded-full p-0.5 box-content border border-orange-500"
