@@ -84,6 +84,10 @@ export function isSystemAdmin(roles: AppRole[]): boolean {
   return roles.includes("system_admin");
 }
 
+export function isPlatformOwner(roles: AppRole[]): boolean {
+  return roles.some((r) => r === "system_admin" || r === "main_admin");
+}
+
 export const APP_NAME = "מערכת ניהול עובדים";
 // Legacy fallback: kept as empty string so no company/branch brand is hardcoded.
 // The active branch name is shown dynamically instead (see BranchSubtitle).
