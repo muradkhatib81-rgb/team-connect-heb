@@ -148,53 +148,6 @@ export async function sendMessage(input: SendMessageInput) {
   return { id: messageId };
 }
 
-export async function createAnnouncement(input: CreateAnnouncementInput) {
-  const { data: u } = await supabase.auth.getUser();
-  if (!u.user) throw new Error("לא מחובר");
-  const senderId = u.user.id;
-
-  const { data: ann, error } = await supabase
-    .from("announcements")
-    .insert({
-      title: input.title.trim(),
-      body: input.body.trim(),
-      priority: input.priority,
-      image_url: input.image_url ?? null,
-      starts_at: input.starts_at ?? new Date().toISOString(),
-      ends_at: input.ends_at ?? null,
-      sender_id: senderId,
-    })
-    .select("id")
-    .single();
-  if (error) throw error;
-  const annId = ann.id;
-
-  const tgtRows: any[] = [];
-  if (input.targets.all) tgtRows.push({ announcement_id: annId, target_type: "all" });
-  (input.targets.departments ?? []).forEach((d) =>
-    tgtRows.push({ announcement_id: annId, target_type: "department", target_id: d }),
-  );
-  (input.targets.users ?? []).forEach((uid) =>
-    tgtRows.push({ announcement_id: annId, target_type: "user", target_id: uid }),
-  );
-  if (!tgtRows.length) tgtRows.push({ announcement_id: annId, target_type: "all" });
-  const { error: tErr } = await supabase.from("announcement_targets").insert(tgtRows);
-  if (tErr) throw tErr;
-
-  if (input.file) {
-    const up = await uploadAttachment(input.file, senderId);
-    await supabase.from("announcement_attachments").insert({
-      announcement_id: annId,
-      file_name: up.name,
-      storage_path: up.path,
-      mime_type: up.mime,
-      file_size: up.size,
-    });
-  }
-
-  await logAudit("announcement", annId, "created");
-  return { id: annId };
-}
 
 // ---------------- Read / Ack / Archive ----------------
 export async function markMessageRead(messageId: string) {
