@@ -141,7 +141,7 @@ export function MorningBoard() {
 
       {visible.length === 0 ? (
         <Card className="p-6 text-center text-sm text-muted-foreground">
-          עדיין לא הוגדר תוכן ללוח הבוקר של הסניף.
+          עדיין לא הוגדר תוכן ללוח הראשי של הסניף.
         </Card>
       ) : (
         <div className="space-y-4">
