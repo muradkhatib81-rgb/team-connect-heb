@@ -31,6 +31,7 @@ import { formatHeDateTime } from "@/lib/date-format";
 import { CreateEmployeeDialog } from "./employees";
 import { ManagementOnShiftCard } from "@/components/management-on-shift-card";
 import { MorningBoard } from "@/components/morning-board";
+import { LiveShiftCardsSection } from "@/components/live-shift-cards";
 
 export const Route = createFileRoute("/_authenticated/dashboard")({
   component: DashboardPage,

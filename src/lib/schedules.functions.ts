@@ -123,6 +123,12 @@ export const createOrGetSchedule = createServerFn({ method: "POST" })
   });
 
 // ---------- SAVE shifts (bulk) ----------
+const timeStr = z
+  .string()
+  .regex(/^\d{2}:\d{2}(:\d{2})?$/, "פורמט שעה לא תקין")
+  .nullable()
+  .optional();
+
 const saveShiftsSchema = z.object({
   schedule_id: z.string().uuid(),
   shifts: z.array(
@@ -130,6 +136,8 @@ const saveShiftsSchema = z.object({
       employee_id: z.string().uuid(),
       day_date: z.string(),
       shift: shiftCode,
+      start_time: timeStr,
+      end_time: timeStr,
     }),
   ),
 });
