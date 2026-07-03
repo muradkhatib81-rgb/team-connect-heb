@@ -67,6 +67,7 @@ import {
   Cog,
   Trophy,
   Sun,
+  Megaphone,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useServerFn } from "@tanstack/react-start";
@@ -186,10 +187,10 @@ const CATEGORIES: Category[] = [
   },
   {
     id: "morning_board",
-    title: "לוח בוקר",
-    icon: Sun,
+    title: "לוח ראשי",
+    icon: Megaphone,
     perms: [
-      { key: "can_manage_morning_board", label: "📢 ניהול תוכן לוח בוקר", description: "מאפשר להוסיף, לערוך, לסדר ולמחוק את פריטי לוח הבוקר של הסניף — תמונות, סרטונים והודעות. ניתן להעניק רק לאחראי סניף או סגן אחראי." },
+      { key: "can_manage_morning_board", label: "📢 ניהול תוכן לוח ראשי", description: "מאפשר להוסיף, לערוך, לסדר ולמחוק את פריטי הלוח הראשי של הסניף — תמונות, סרטונים והודעות. ניתן להעניק רק לאחראי סניף או סגן אחראי." },
     ],
   },
   {
