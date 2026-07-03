@@ -430,20 +430,20 @@ function ShiftDialog({
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
               <Label htmlFor="sh-start">שעת התחלה</Label>
-              <Input
+              <Time24Input
                 id="sh-start"
-                type="time"
                 value={startTime}
-                onChange={(e) => setStartTime(e.target.value)}
+                onChange={(v) => setStartTime(v)}
+                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
               />
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="sh-end">שעת סיום</Label>
-              <Input
+              <Time24Input
                 id="sh-end"
-                type="time"
                 value={endTime}
-                onChange={(e) => setEndTime(e.target.value)}
+                onChange={(v) => setEndTime(v)}
+                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
               />
             </div>
           </div>
