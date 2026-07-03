@@ -328,9 +328,4 @@ export async function permanentDeleteMessage(messageId: string) {
   if (error) throw error;
 }
 
-export async function permanentDeleteAnnouncement(annId: string) {
-  await logAudit("announcement", annId, "deleted", { permanent: true });
-  const { error } = await supabase.rpc("purge_announcement_global", { _ann_id: annId });
-  if (error) throw error;
-}
 
