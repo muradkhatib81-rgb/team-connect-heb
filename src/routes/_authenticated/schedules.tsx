@@ -60,6 +60,7 @@ import {
 } from "@/lib/schedules.functions";
 import { formatHeDate, formatHeDateTime } from "@/lib/date-format";
 import { useShiftDefinitions } from "@/lib/use-shift-definitions";
+import { Time24Input } from "@/components/ui/time24-input";
 
 type SchedulesSearch = { dept?: string; week?: string; view?: "pending" | "editor" | "approved" };
 export const Route = createFileRoute("/_authenticated/schedules")({
