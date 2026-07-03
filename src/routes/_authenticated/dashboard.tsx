@@ -518,7 +518,7 @@ function EmployeeDashboard({ profile }: { profile: any }) {
       <EmployeeScheduleCard profile={profile} />
       <EmployeeNotificationsCard userId={profile.id} />
       <EmployeeNewMessagesCard userId={profile.id} />
-      <EmployeeNewAnnouncementsCard userId={profile.id} />
+      
     </div>
   );
 }
