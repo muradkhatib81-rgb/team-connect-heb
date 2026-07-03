@@ -19,16 +19,6 @@ export interface SendMessageInput {
   file?: File | null;
 }
 
-export interface CreateAnnouncementInput {
-  title: string;
-  body: string;
-  priority: CommPriority;
-  image_url?: string | null;
-  starts_at?: string | null;
-  ends_at?: string | null;
-  targets: MessageTargetsInput;
-  file?: File | null;
-}
 
 // ---------------- Helpers ----------------
 async function resolveTargetUserIds(
