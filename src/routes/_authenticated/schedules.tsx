@@ -60,6 +60,7 @@ import {
 } from "@/lib/schedules.functions";
 import { formatHeDate, formatHeDateTime } from "@/lib/date-format";
 import { useShiftDefinitions } from "@/lib/use-shift-definitions";
+import { Time24Input } from "@/components/ui/time24-input";
 
 type SchedulesSearch = { dept?: string; week?: string; view?: "pending" | "editor" | "approved" };
 export const Route = createFileRoute("/_authenticated/schedules")({
@@ -1450,28 +1451,18 @@ function SchedulesPage() {
                             </Select>
                             {cur && def?.start_time && def?.end_time && (
                               <div className="flex items-center gap-1" dir="ltr">
-                                <input
-                                  type="time"
-                                  step={60}
-                                  lang="he-IL"
+                                <Time24Input
                                   aria-label="שעת התחלה"
                                   value={effStart ?? ""}
-                                  onChange={(e) =>
-                                    setCellTime(emp.id, day, "start", e.target.value)
-                                  }
-                                  className="h-7 w-full min-w-0 rounded-md border border-input bg-background px-1 text-[11px] tabular-nums focus:outline-none focus:ring-1 focus:ring-ring"
+                                  onChange={(v) => setCellTime(emp.id, day, "start", v)}
+                                  className="h-7 w-full min-w-0 rounded-md border border-input bg-background px-1 text-[11px] focus:outline-none focus:ring-1 focus:ring-ring"
                                 />
                                 <span className="text-[10px] text-muted-foreground">–</span>
-                                <input
-                                  type="time"
-                                  step={60}
-                                  lang="he-IL"
+                                <Time24Input
                                   aria-label="שעת סיום"
                                   value={effEnd ?? ""}
-                                  onChange={(e) =>
-                                    setCellTime(emp.id, day, "end", e.target.value)
-                                  }
-                                  className="h-7 w-full min-w-0 rounded-md border border-input bg-background px-1 text-[11px] tabular-nums focus:outline-none focus:ring-1 focus:ring-ring"
+                                  onChange={(v) => setCellTime(emp.id, day, "end", v)}
+                                  className="h-7 w-full min-w-0 rounded-md border border-input bg-background px-1 text-[11px] focus:outline-none focus:ring-1 focus:ring-ring"
                                 />
                               </div>
                             )}
