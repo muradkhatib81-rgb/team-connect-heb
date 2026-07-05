@@ -705,7 +705,9 @@ function SchedulesPage() {
       qc.invalidateQueries({ queryKey: ["schedule"] });
       qc.invalidateQueries({ queryKey: ["schedules-pending"] });
       qc.invalidateQueries({ queryKey: ["dashboard-schedules"] });
+      qc.invalidateQueries({ queryKey: ["schedules-week-saved-depts", weekStart] });
     },
+
     onError: (e: any) => {
       toast.error(e?.message ?? "שגיאה");
       setDeleteOpen(false);
