@@ -210,6 +210,14 @@ function SchedulesPage() {
     },
   });
 
+  // Departments that already have a SAVED schedule (has ≥1 shift row) for the
+  // selected week. Used to hide them from the department dropdown so each
+  // department can only have one saved schedule per week.
+  const [weekStartForSavedQ, setWeekStartForSavedQ] = useState<string | null>(null);
+  void weekStartForSavedQ;
+
+
+
   const myDeptId = me?.department_id ?? null;
   const [selectedDept, setSelectedDept] = useState<string | null>(search.dept ?? null);
   useEffect(() => {
