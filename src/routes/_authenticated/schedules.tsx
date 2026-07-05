@@ -210,6 +210,15 @@ function SchedulesPage() {
     },
   });
 
+  // Departments that already have a SAVED schedule (schedule row + at least
+  // one shift) for the selected week. Used to hide them from the department
+  // dropdown so each department can only have one saved schedule per week.
+  // The query key includes weekStart so it recomputes automatically when the
+  // week changes, and it is invalidated after save/delete mutations.
+
+
+
+
   const myDeptId = me?.department_id ?? null;
   const [selectedDept, setSelectedDept] = useState<string | null>(search.dept ?? null);
   useEffect(() => {
@@ -228,6 +237,32 @@ function SchedulesPage() {
     () => Array.from({ length: 7 }, (_, i) => addDaysISO(weekStart, i)),
     [weekStart],
   );
+
+  // Departments that already have a saved schedule for this week (schedule
+  // row + at least one shift). Used to hide them from the dropdown.
+  const savedDeptsQ = useQuery({
+    queryKey: ["schedules-week-saved-depts", weekStart],
+    queryFn: async () => {
+      const { data: scheds, error } = await supabase
+        .from("schedules")
+        .select("id, department_id")
+        .eq("week_start", weekStart);
+      if (error) throw error;
+      if (!scheds?.length) return [] as string[];
+      const ids = scheds.map((s: any) => s.id);
+      const { data: shiftRows, error: e2 } = await supabase
+        .from("schedule_shifts")
+        .select("schedule_id")
+        .in("schedule_id", ids);
+      if (e2) throw e2;
+      const withShifts = new Set((shiftRows ?? []).map((r: any) => r.schedule_id));
+      const deptIds = new Set<string>();
+      for (const s of scheds as any[]) if (withShifts.has(s.id)) deptIds.add(s.department_id);
+      return Array.from(deptIds);
+    },
+  });
+  const savedDeptSet = useMemo(() => new Set(savedDeptsQ.data ?? []), [savedDeptsQ.data]);
+
 
   // Default view for approvers = pending approvals list across all departments they can see.
   const [view, setView] = useState<"pending" | "editor" | "approved">(
@@ -578,7 +613,9 @@ function SchedulesPage() {
       qc.invalidateQueries({ queryKey: ["schedule-shifts", visible?.id] });
       qc.invalidateQueries({ queryKey: ["schedule-decision"] });
       qc.invalidateQueries({ queryKey: ["dashboard-schedules"] });
+      qc.invalidateQueries({ queryKey: ["schedules-week-saved-depts", weekStart] });
     },
+
     onError: (e: any) => toast.error(e?.message ?? "שגיאה"),
   });
 
@@ -651,7 +688,9 @@ function SchedulesPage() {
       qc.invalidateQueries({ queryKey: ["schedule-shifts", visible?.id] });
       qc.invalidateQueries({ queryKey: ["schedule-decision"] });
       qc.invalidateQueries({ queryKey: ["dashboard-schedules"] });
+      qc.invalidateQueries({ queryKey: ["schedules-week-saved-depts", weekStart] });
     },
+
     onError: (e: any) => {
       toast.error(e?.message ?? "שגיאה");
       setCopyOpen(false);
@@ -668,7 +707,9 @@ function SchedulesPage() {
       qc.invalidateQueries({ queryKey: ["schedule"] });
       qc.invalidateQueries({ queryKey: ["schedules-pending"] });
       qc.invalidateQueries({ queryKey: ["dashboard-schedules"] });
+      qc.invalidateQueries({ queryKey: ["schedules-week-saved-depts", weekStart] });
     },
+
     onError: (e: any) => {
       toast.error(e?.message ?? "שגיאה");
       setDeleteOpen(false);
@@ -1110,11 +1151,14 @@ function SchedulesPage() {
                 <SelectValue placeholder="בחר מחלקה" />
               </SelectTrigger>
               <SelectContent>
-                {(deptsQ.data ?? []).map((d) => (
-                  <SelectItem key={d.id} value={d.id}>
-                    {d.name}
-                  </SelectItem>
-                ))}
+                {(deptsQ.data ?? [])
+                  .filter((d) => d.id === selectedDept || !savedDeptSet.has(d.id))
+                  .map((d) => (
+                    <SelectItem key={d.id} value={d.id}>
+                      {d.name}
+                    </SelectItem>
+                  ))}
+
               </SelectContent>
             </Select>
           )}
