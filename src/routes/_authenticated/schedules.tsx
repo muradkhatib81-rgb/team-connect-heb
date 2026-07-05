@@ -1145,11 +1145,14 @@ function SchedulesPage() {
                 <SelectValue placeholder="בחר מחלקה" />
               </SelectTrigger>
               <SelectContent>
-                {(deptsQ.data ?? []).map((d) => (
-                  <SelectItem key={d.id} value={d.id}>
-                    {d.name}
-                  </SelectItem>
-                ))}
+                {(deptsQ.data ?? [])
+                  .filter((d) => d.id === selectedDept || !savedDeptSet.has(d.id))
+                  .map((d) => (
+                    <SelectItem key={d.id} value={d.id}>
+                      {d.name}
+                    </SelectItem>
+                  ))}
+
               </SelectContent>
             </Select>
           )}
