@@ -688,7 +688,9 @@ function SchedulesPage() {
       qc.invalidateQueries({ queryKey: ["schedule-shifts", visible?.id] });
       qc.invalidateQueries({ queryKey: ["schedule-decision"] });
       qc.invalidateQueries({ queryKey: ["dashboard-schedules"] });
+      qc.invalidateQueries({ queryKey: ["schedules-week-saved-depts", weekStart] });
     },
+
     onError: (e: any) => {
       toast.error(e?.message ?? "שגיאה");
       setCopyOpen(false);
