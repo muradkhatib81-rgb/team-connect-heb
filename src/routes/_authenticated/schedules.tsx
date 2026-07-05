@@ -1354,12 +1354,29 @@ function SchedulesPage() {
                   <th className="text-right p-3 sticky right-0 bg-muted/50 z-10 min-w-[160px]">
                     עובד
                   </th>
-                  {days.map((d, i) => (
-                    <th key={d} className="p-2 text-center min-w-[110px]">
-                      <div className="font-semibold">{DAY_NAMES[i]}</div>
-                      <div className="text-xs text-muted-foreground">{formatHeDate(d)}</div>
-                    </th>
-                  ))}
+                  {days.map((d, i) => {
+                    const dayCounts = dailyShiftSummary[i]?.counts ?? [];
+                    return (
+                      <th key={d} className="p-2 text-center min-w-[110px] align-top">
+                        <div className="font-semibold">{DAY_NAMES[i]}</div>
+                        <div className="text-xs text-muted-foreground">{formatHeDate(d)}</div>
+                        {dayCounts.length > 0 && (
+                          <div className="mt-1 flex flex-wrap gap-1 justify-center">
+                            {dayCounts.map((s) => (
+                              <span
+                                key={`hdr-${d}-${s.code}`}
+                                className="px-1.5 py-0.5 rounded text-[10px] font-medium border leading-none"
+                                style={shiftStyle(s.code)}
+                                title={`${s.name}: ${s.count}`}
+                              >
+                                {s.name} ({s.count})
+                              </span>
+                            ))}
+                          </div>
+                        )}
+                      </th>
+                    );
+                  })}
                 </tr>
               </thead>
               <tbody>
