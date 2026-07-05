@@ -210,11 +210,12 @@ function SchedulesPage() {
     },
   });
 
-  // Departments that already have a SAVED schedule (has ≥1 shift row) for the
-  // selected week. Used to hide them from the department dropdown so each
-  // department can only have one saved schedule per week.
-  const [weekStartForSavedQ, setWeekStartForSavedQ] = useState<string | null>(null);
-  void weekStartForSavedQ;
+  // Departments that already have a SAVED schedule (schedule row + at least
+  // one shift) for the selected week. Used to hide them from the department
+  // dropdown so each department can only have one saved schedule per week.
+  // The query key includes weekStart so it recomputes automatically when the
+  // week changes, and it is invalidated after save/delete mutations.
+
 
 
 
