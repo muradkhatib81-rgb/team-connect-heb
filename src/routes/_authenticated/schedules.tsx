@@ -62,14 +62,19 @@ import { formatHeDate, formatHeDateTime } from "@/lib/date-format";
 import { useShiftDefinitions } from "@/lib/use-shift-definitions";
 import { Time24Input } from "@/components/ui/time24-input";
 
-type SchedulesSearch = { dept?: string; week?: string; view?: "pending" | "editor" | "approved" };
+type SchedulesView = "pending" | "editor" | "approved" | "saved";
+type SchedulesSearch = { dept?: string; week?: string; view?: SchedulesView };
 export const Route = createFileRoute("/_authenticated/schedules")({
   component: SchedulesPage,
   validateSearch: (s: Record<string, unknown>): SchedulesSearch => ({
     dept: typeof s.dept === "string" ? s.dept : undefined,
     week: typeof s.week === "string" ? s.week : undefined,
-    view: s.view === "pending" || s.view === "editor" || s.view === "approved" ? s.view : undefined,
+    view:
+      s.view === "pending" || s.view === "editor" || s.view === "approved" || s.view === "saved"
+        ? s.view
+        : undefined,
   }),
+
 });
 
 // Shift codes are dynamic — labels and colors come from public.shift_definitions.
@@ -238,36 +243,62 @@ function SchedulesPage() {
     [weekStart],
   );
 
-  // Departments that already have a saved schedule for this week (schedule
-  // row + at least one shift). Used to hide them from the dropdown.
-  const savedDeptsQ = useQuery({
-    queryKey: ["schedules-week-saved-depts", weekStart],
+  // All schedules + shifts for the selected week. Powers:
+  //  - `savedDeptSet`: departments with at least one saved shift (hidden from
+  //    the department dropdown so each dept has only one saved schedule/week).
+  //  - `dailyShiftSummary`: cross-branch daily counters — saved shifts from
+  //    OTHER departments + current unsaved edits from the selected dept.
+  //  - The "סידורי עבודה שמורים" card listing saved departments.
+  const weekSavedQ = useQuery({
+    queryKey: ["schedules-week-saved", weekStart],
     queryFn: async () => {
       const { data: scheds, error } = await supabase
         .from("schedules")
-        .select("id, department_id")
+        .select("id, department_id, status, published_at, updated_at")
         .eq("week_start", weekStart);
       if (error) throw error;
-      if (!scheds?.length) return [] as string[];
+      if (!scheds?.length)
+        return {
+          shifts: [] as { schedule_id: string; department_id: string; employee_id: string; day_date: string; shift: string }[],
+          deptIdsWithSaved: [] as string[],
+          savedList: [] as { schedule_id: string; department_id: string; status: string; published_at: string | null; updated_at: string | null }[],
+        };
       const ids = scheds.map((s: any) => s.id);
       const { data: shiftRows, error: e2 } = await supabase
         .from("schedule_shifts")
-        .select("schedule_id")
+        .select("schedule_id, employee_id, day_date, shift")
         .in("schedule_id", ids);
       if (e2) throw e2;
-      const withShifts = new Set((shiftRows ?? []).map((r: any) => r.schedule_id));
-      const deptIds = new Set<string>();
-      for (const s of scheds as any[]) if (withShifts.has(s.id)) deptIds.add(s.department_id);
-      return Array.from(deptIds);
+      const schedById = new Map<string, any>((scheds as any[]).map((s) => [s.id, s]));
+      const shifts = (shiftRows ?? []).map((r: any) => ({
+        ...r,
+        department_id: schedById.get(r.schedule_id)?.department_id as string,
+      }));
+      const withShiftsIds = new Set(shifts.map((r) => r.schedule_id));
+      const savedScheds = (scheds as any[]).filter((s) => withShiftsIds.has(s.id));
+      const deptIdsWithSaved = Array.from(new Set(savedScheds.map((s) => s.department_id)));
+      const savedList = savedScheds.map((s) => ({
+        schedule_id: s.id,
+        department_id: s.department_id,
+        status: s.status,
+        published_at: s.published_at ?? null,
+        updated_at: s.updated_at ?? null,
+      }));
+      return { shifts, deptIdsWithSaved, savedList };
     },
   });
-  const savedDeptSet = useMemo(() => new Set(savedDeptsQ.data ?? []), [savedDeptsQ.data]);
+  const savedDeptSet = useMemo(
+    () => new Set(weekSavedQ.data?.deptIdsWithSaved ?? []),
+    [weekSavedQ.data],
+  );
+
 
 
   // Default view for approvers = pending approvals list across all departments they can see.
-  const [view, setView] = useState<"pending" | "editor" | "approved">(
+  const [view, setView] = useState<SchedulesView>(
     search.view ?? (search.dept || search.week ? "editor" : canApprove ? "pending" : canPublishDirect ? "approved" : "editor"),
   );
+
   useEffect(() => {
     if (canSeeScheduleQueues && view === "editor" && !selectedDept) setView(canApprove ? "pending" : "approved");
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -613,7 +644,7 @@ function SchedulesPage() {
       qc.invalidateQueries({ queryKey: ["schedule-shifts", visible?.id] });
       qc.invalidateQueries({ queryKey: ["schedule-decision"] });
       qc.invalidateQueries({ queryKey: ["dashboard-schedules"] });
-      qc.invalidateQueries({ queryKey: ["schedules-week-saved-depts", weekStart] });
+      qc.invalidateQueries({ queryKey: ["schedules-week-saved", weekStart] });
     },
 
     onError: (e: any) => toast.error(e?.message ?? "שגיאה"),
@@ -634,6 +665,7 @@ function SchedulesPage() {
       qc.invalidateQueries({ queryKey: ["schedules-approved"] });
       qc.invalidateQueries({ queryKey: ["dashboard-schedules"] });
       qc.invalidateQueries({ queryKey: ["dashboard-approved-list"] });
+      qc.invalidateQueries({ queryKey: ["schedules-week-saved", weekStart] });
     },
     onError: (e: any) => toast.error(e?.message ?? "שגיאה"),
   });
@@ -655,6 +687,7 @@ function SchedulesPage() {
       qc.invalidateQueries({ queryKey: ["schedule-decision"] });
       qc.invalidateQueries({ queryKey: ["dashboard-schedules"] });
       qc.invalidateQueries({ queryKey: ["dashboard-approved-list"] });
+      qc.invalidateQueries({ queryKey: ["schedules-week-saved", weekStart] });
       qc.invalidateQueries({ queryKey: ["emp-dash-schedule"] });
     },
     onError: (e: any) => toast.error(e?.message ?? "שגיאה"),
@@ -673,6 +706,7 @@ function SchedulesPage() {
       qc.invalidateQueries({ queryKey: ["schedule-decision"] });
       qc.invalidateQueries({ queryKey: ["dashboard-schedules"] });
       qc.invalidateQueries({ queryKey: ["dashboard-approved-list"] });
+      qc.invalidateQueries({ queryKey: ["schedules-week-saved", weekStart] });
       qc.invalidateQueries({ queryKey: ["emp-dash-schedule"] });
     },
     onError: (e: any) => toast.error(e?.message ?? "שגיאה"),
@@ -688,7 +722,7 @@ function SchedulesPage() {
       qc.invalidateQueries({ queryKey: ["schedule-shifts", visible?.id] });
       qc.invalidateQueries({ queryKey: ["schedule-decision"] });
       qc.invalidateQueries({ queryKey: ["dashboard-schedules"] });
-      qc.invalidateQueries({ queryKey: ["schedules-week-saved-depts", weekStart] });
+      qc.invalidateQueries({ queryKey: ["schedules-week-saved", weekStart] });
     },
 
     onError: (e: any) => {
@@ -707,7 +741,7 @@ function SchedulesPage() {
       qc.invalidateQueries({ queryKey: ["schedule"] });
       qc.invalidateQueries({ queryKey: ["schedules-pending"] });
       qc.invalidateQueries({ queryKey: ["dashboard-schedules"] });
-      qc.invalidateQueries({ queryKey: ["schedules-week-saved-depts", weekStart] });
+      qc.invalidateQueries({ queryKey: ["schedules-week-saved", weekStart] });
     },
 
     onError: (e: any) => {
@@ -798,15 +832,23 @@ function SchedulesPage() {
         day,
         label: FULL_DAY_NAMES[idx],
         counts: activeShifts.map((s) => {
-          let count = 0;
-          for (const emp of empsQ.data ?? []) {
-            if (edits[emp.id]?.[day] === s.code) count++;
+          const set = new Set<string>();
+          // Saved shifts from OTHER departments in this branch (already persisted).
+          for (const row of weekSavedQ.data?.shifts ?? []) {
+            if (row.department_id === selectedDept) continue;
+            if (row.day_date === day && row.shift === s.code) set.add(row.employee_id);
           }
-          return { ...s, count };
+          // Current department: use the live (unsaved) edits so counters update
+          // as the manager builds the schedule.
+          for (const emp of empsQ.data ?? []) {
+            if (edits[emp.id]?.[day] === s.code) set.add(emp.id);
+          }
+          return { ...s, count: set.size };
         }),
       })),
-    [days, activeShifts, empsQ.data, edits],
+    [days, activeShifts, empsQ.data, edits, weekSavedQ.data, selectedDept],
   );
+
 
   // Combined cross-department summary for all unpublished schedules in this week.
   const getWeekSummaryFn = useServerFn(getUnpublishedWeekSummary);
@@ -867,7 +909,10 @@ function SchedulesPage() {
               ? "ממתינים לאישור — כל המחלקות"
               : view === "approved" && canSeeScheduleQueues
               ? "סידורים מאושרים — כל המחלקות"
+              : view === "saved"
+              ? "סידורי עבודה שמורים — כל המחלקות"
               : `${formatHeDate(weekStart)} – ${formatHeDate(weekEnd)}`}
+
           </p>
         </div>
       </header>
@@ -906,32 +951,48 @@ function SchedulesPage() {
 
 
 
-      {canSeeScheduleQueues && (
-        <div className="flex gap-2">
+      {(canSeeScheduleQueues || canCreate) && !isEmployee && (
+        <div className="flex gap-2 flex-wrap">
+          {canSeeScheduleQueues && (
+            <Button
+              size="sm"
+              variant={view === "pending" ? "default" : "outline"}
+              onClick={() => setView("pending")}
+            >
+              ממתינים לאישור
+              {pendingQ.data && pendingQ.data.length > 0 && (
+                <Badge variant="secondary" className="mr-2">
+                  {pendingQ.data.length}
+                </Badge>
+              )}
+            </Button>
+          )}
           <Button
             size="sm"
-            variant={view === "pending" ? "default" : "outline"}
-            onClick={() => setView("pending")}
+            variant={view === "saved" ? "default" : "outline"}
+            onClick={() => setView("saved")}
           >
-            ממתינים לאישור
-            {pendingQ.data && pendingQ.data.length > 0 && (
+            סידורי עבודה שמורים
+            {weekSavedQ.data && weekSavedQ.data.savedList.length > 0 && (
               <Badge variant="secondary" className="mr-2">
-                {pendingQ.data.length}
+                {weekSavedQ.data.savedList.length}
               </Badge>
             )}
           </Button>
-          <Button
-            size="sm"
-            variant={view === "approved" ? "default" : "outline"}
-            onClick={() => setView("approved")}
-          >
-            סידורים מאושרים
-            {approvedQ.data && approvedQ.data.length > 0 && (
-              <Badge variant="secondary" className="mr-2">
-                {approvedQ.data.length}
-              </Badge>
-            )}
-          </Button>
+          {canSeeScheduleQueues && (
+            <Button
+              size="sm"
+              variant={view === "approved" ? "default" : "outline"}
+              onClick={() => setView("approved")}
+            >
+              סידורים מאושרים
+              {approvedQ.data && approvedQ.data.length > 0 && (
+                <Badge variant="secondary" className="mr-2">
+                  {approvedQ.data.length}
+                </Badge>
+              )}
+            </Button>
+          )}
           <Button
             size="sm"
             variant={view === "editor" ? "default" : "outline"}
@@ -942,7 +1003,88 @@ function SchedulesPage() {
         </div>
       )}
 
-      {canSeeScheduleQueues && view === "pending" ? (
+
+      {view === "saved" && !isEmployee ? (
+        <Card className="card-elevated p-0 overflow-hidden">
+          {weekSavedQ.isLoading ? (
+            <div className="flex justify-center py-12">
+              <Loader2 className="size-6 animate-spin text-primary" />
+            </div>
+          ) : !weekSavedQ.data || weekSavedQ.data.savedList.length === 0 ? (
+            <div className="p-8 text-center text-sm text-muted-foreground">
+              אין סידורי עבודה שמורים לשבוע זה.
+            </div>
+          ) : (
+            <table className="w-full text-sm">
+              <thead className="bg-muted/50">
+                <tr>
+                  <th className="text-right p-3">מחלקה</th>
+                  <th className="text-right p-3">טווח תאריכים</th>
+                  <th className="text-right p-3">סטטוס</th>
+                  <th className="text-right p-3">עודכן</th>
+                  <th className="text-right p-3" />
+                </tr>
+              </thead>
+              <tbody>
+                {weekSavedQ.data.savedList.map((s) => (
+                  <tr
+                    key={s.schedule_id}
+                    className="border-t hover:bg-muted/30 cursor-pointer"
+                    onClick={() =>
+                      openScheduleFromPending({
+                        department_id: s.department_id,
+                        week_start: weekStart,
+                      })
+                    }
+                  >
+                    <td className="p-3 font-medium">
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          openScheduleFromPending({
+                            department_id: s.department_id,
+                            week_start: weekStart,
+                          });
+                        }}
+                        className="text-primary hover:underline font-semibold"
+                      >
+                        {deptNameById[s.department_id] ?? "—"}
+                      </button>
+                    </td>
+                    <td className="p-3">
+                      {formatHeDate(weekStart)} – {formatHeDate(weekEnd)}
+                    </td>
+                    <td className="p-3">
+                      <Badge variant={STATUS_VARIANT[s.status]}>
+                        {STATUS_LABEL[s.status as keyof typeof STATUS_LABEL] ?? s.status}
+                      </Badge>
+                    </td>
+                    <td className="p-3 text-xs text-muted-foreground">
+                      {s.updated_at ? formatHeDateTime(s.updated_at) : "—"}
+                    </td>
+                    <td className="p-3 text-left">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() =>
+                          openScheduleFromPending({
+                            department_id: s.department_id,
+                            week_start: weekStart,
+                          })
+                        }
+                      >
+                        פתח לעריכה
+                      </Button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </Card>
+      ) : canSeeScheduleQueues && view === "pending" ? (
+
         <Card className="card-elevated p-0 overflow-hidden">
           {pendingQ.isLoading ? (
             <div className="flex justify-center py-12">
