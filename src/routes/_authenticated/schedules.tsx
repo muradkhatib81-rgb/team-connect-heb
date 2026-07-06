@@ -906,7 +906,10 @@ function SchedulesPage() {
               ? "ממתינים לאישור — כל המחלקות"
               : view === "approved" && canSeeScheduleQueues
               ? "סידורים מאושרים — כל המחלקות"
+              : view === "saved"
+              ? "סידורי עבודה שמורים — כל המחלקות"
               : `${formatHeDate(weekStart)} – ${formatHeDate(weekEnd)}`}
+
           </p>
         </div>
       </header>
