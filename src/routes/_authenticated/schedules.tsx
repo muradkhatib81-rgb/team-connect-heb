@@ -945,32 +945,48 @@ function SchedulesPage() {
 
 
 
-      {canSeeScheduleQueues && (
-        <div className="flex gap-2">
+      {(canSeeScheduleQueues || canCreate) && !isEmployee && (
+        <div className="flex gap-2 flex-wrap">
+          {canSeeScheduleQueues && (
+            <Button
+              size="sm"
+              variant={view === "pending" ? "default" : "outline"}
+              onClick={() => setView("pending")}
+            >
+              ממתינים לאישור
+              {pendingQ.data && pendingQ.data.length > 0 && (
+                <Badge variant="secondary" className="mr-2">
+                  {pendingQ.data.length}
+                </Badge>
+              )}
+            </Button>
+          )}
           <Button
             size="sm"
-            variant={view === "pending" ? "default" : "outline"}
-            onClick={() => setView("pending")}
+            variant={view === "saved" ? "default" : "outline"}
+            onClick={() => setView("saved")}
           >
-            ממתינים לאישור
-            {pendingQ.data && pendingQ.data.length > 0 && (
+            סידורי עבודה שמורים
+            {weekSavedQ.data && weekSavedQ.data.savedList.length > 0 && (
               <Badge variant="secondary" className="mr-2">
-                {pendingQ.data.length}
+                {weekSavedQ.data.savedList.length}
               </Badge>
             )}
           </Button>
-          <Button
-            size="sm"
-            variant={view === "approved" ? "default" : "outline"}
-            onClick={() => setView("approved")}
-          >
-            סידורים מאושרים
-            {approvedQ.data && approvedQ.data.length > 0 && (
-              <Badge variant="secondary" className="mr-2">
-                {approvedQ.data.length}
-              </Badge>
-            )}
-          </Button>
+          {canSeeScheduleQueues && (
+            <Button
+              size="sm"
+              variant={view === "approved" ? "default" : "outline"}
+              onClick={() => setView("approved")}
+            >
+              סידורים מאושרים
+              {approvedQ.data && approvedQ.data.length > 0 && (
+                <Badge variant="secondary" className="mr-2">
+                  {approvedQ.data.length}
+                </Badge>
+              )}
+            </Button>
+          )}
           <Button
             size="sm"
             variant={view === "editor" ? "default" : "outline"}
@@ -980,6 +996,7 @@ function SchedulesPage() {
           </Button>
         </div>
       )}
+
 
       {canSeeScheduleQueues && view === "pending" ? (
         <Card className="card-elevated p-0 overflow-hidden">
