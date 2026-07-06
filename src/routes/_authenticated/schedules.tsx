@@ -295,9 +295,10 @@ function SchedulesPage() {
 
 
   // Default view for approvers = pending approvals list across all departments they can see.
-  const [view, setView] = useState<"pending" | "editor" | "approved">(
+  const [view, setView] = useState<SchedulesView>(
     search.view ?? (search.dept || search.week ? "editor" : canApprove ? "pending" : canPublishDirect ? "approved" : "editor"),
   );
+
   useEffect(() => {
     if (canSeeScheduleQueues && view === "editor" && !selectedDept) setView(canApprove ? "pending" : "approved");
     // eslint-disable-next-line react-hooks/exhaustive-deps
