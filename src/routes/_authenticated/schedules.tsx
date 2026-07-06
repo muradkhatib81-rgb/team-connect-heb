@@ -62,14 +62,19 @@ import { formatHeDate, formatHeDateTime } from "@/lib/date-format";
 import { useShiftDefinitions } from "@/lib/use-shift-definitions";
 import { Time24Input } from "@/components/ui/time24-input";
 
-type SchedulesSearch = { dept?: string; week?: string; view?: "pending" | "editor" | "approved" };
+type SchedulesView = "pending" | "editor" | "approved" | "saved";
+type SchedulesSearch = { dept?: string; week?: string; view?: SchedulesView };
 export const Route = createFileRoute("/_authenticated/schedules")({
   component: SchedulesPage,
   validateSearch: (s: Record<string, unknown>): SchedulesSearch => ({
     dept: typeof s.dept === "string" ? s.dept : undefined,
     week: typeof s.week === "string" ? s.week : undefined,
-    view: s.view === "pending" || s.view === "editor" || s.view === "approved" ? s.view : undefined,
+    view:
+      s.view === "pending" || s.view === "editor" || s.view === "approved" || s.view === "saved"
+        ? s.view
+        : undefined,
   }),
+
 });
 
 // Shift codes are dynamic — labels and colors come from public.shift_definitions.
