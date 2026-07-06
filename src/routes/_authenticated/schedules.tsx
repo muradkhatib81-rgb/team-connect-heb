@@ -823,15 +823,23 @@ function SchedulesPage() {
         day,
         label: FULL_DAY_NAMES[idx],
         counts: activeShifts.map((s) => {
-          let count = 0;
-          for (const emp of empsQ.data ?? []) {
-            if (edits[emp.id]?.[day] === s.code) count++;
+          const set = new Set<string>();
+          // Saved shifts from OTHER departments in this branch (already persisted).
+          for (const row of weekSavedQ.data?.shifts ?? []) {
+            if (row.department_id === selectedDept) continue;
+            if (row.day_date === day && row.shift === s.code) set.add(row.employee_id);
           }
-          return { ...s, count };
+          // Current department: use the live (unsaved) edits so counters update
+          // as the manager builds the schedule.
+          for (const emp of empsQ.data ?? []) {
+            if (edits[emp.id]?.[day] === s.code) set.add(emp.id);
+          }
+          return { ...s, count: set.size };
         }),
       })),
-    [days, activeShifts, empsQ.data, edits],
+    [days, activeShifts, empsQ.data, edits, weekSavedQ.data, selectedDept],
   );
+
 
   // Combined cross-department summary for all unpublished schedules in this week.
   const getWeekSummaryFn = useServerFn(getUnpublishedWeekSummary);
