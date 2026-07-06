@@ -238,30 +238,55 @@ function SchedulesPage() {
     [weekStart],
   );
 
-  // Departments that already have a saved schedule for this week (schedule
-  // row + at least one shift). Used to hide them from the dropdown.
-  const savedDeptsQ = useQuery({
-    queryKey: ["schedules-week-saved-depts", weekStart],
+  // All schedules + shifts for the selected week. Powers:
+  //  - `savedDeptSet`: departments with at least one saved shift (hidden from
+  //    the department dropdown so each dept has only one saved schedule/week).
+  //  - `dailyShiftSummary`: cross-branch daily counters — saved shifts from
+  //    OTHER departments + current unsaved edits from the selected dept.
+  //  - The "סידורי עבודה שמורים" card listing saved departments.
+  const weekSavedQ = useQuery({
+    queryKey: ["schedules-week-saved", weekStart],
     queryFn: async () => {
       const { data: scheds, error } = await supabase
         .from("schedules")
-        .select("id, department_id")
+        .select("id, department_id, status, published_at, updated_at")
         .eq("week_start", weekStart);
       if (error) throw error;
-      if (!scheds?.length) return [] as string[];
+      if (!scheds?.length)
+        return {
+          shifts: [] as { schedule_id: string; department_id: string; employee_id: string; day_date: string; shift: string }[],
+          deptIdsWithSaved: [] as string[],
+          savedList: [] as { schedule_id: string; department_id: string; status: string; published_at: string | null; updated_at: string | null }[],
+        };
       const ids = scheds.map((s: any) => s.id);
       const { data: shiftRows, error: e2 } = await supabase
         .from("schedule_shifts")
-        .select("schedule_id")
+        .select("schedule_id, employee_id, day_date, shift")
         .in("schedule_id", ids);
       if (e2) throw e2;
-      const withShifts = new Set((shiftRows ?? []).map((r: any) => r.schedule_id));
-      const deptIds = new Set<string>();
-      for (const s of scheds as any[]) if (withShifts.has(s.id)) deptIds.add(s.department_id);
-      return Array.from(deptIds);
+      const schedById = new Map<string, any>((scheds as any[]).map((s) => [s.id, s]));
+      const shifts = (shiftRows ?? []).map((r: any) => ({
+        ...r,
+        department_id: schedById.get(r.schedule_id)?.department_id as string,
+      }));
+      const withShiftsIds = new Set(shifts.map((r) => r.schedule_id));
+      const savedScheds = (scheds as any[]).filter((s) => withShiftsIds.has(s.id));
+      const deptIdsWithSaved = Array.from(new Set(savedScheds.map((s) => s.department_id)));
+      const savedList = savedScheds.map((s) => ({
+        schedule_id: s.id,
+        department_id: s.department_id,
+        status: s.status,
+        published_at: s.published_at ?? null,
+        updated_at: s.updated_at ?? null,
+      }));
+      return { shifts, deptIdsWithSaved, savedList };
     },
   });
-  const savedDeptSet = useMemo(() => new Set(savedDeptsQ.data ?? []), [savedDeptsQ.data]);
+  const savedDeptSet = useMemo(
+    () => new Set(weekSavedQ.data?.deptIdsWithSaved ?? []),
+    [weekSavedQ.data],
+  );
+
 
 
   // Default view for approvers = pending approvals list across all departments they can see.
