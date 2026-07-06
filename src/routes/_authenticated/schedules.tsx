@@ -665,6 +665,7 @@ function SchedulesPage() {
       qc.invalidateQueries({ queryKey: ["schedules-approved"] });
       qc.invalidateQueries({ queryKey: ["dashboard-schedules"] });
       qc.invalidateQueries({ queryKey: ["dashboard-approved-list"] });
+      qc.invalidateQueries({ queryKey: ["schedules-week-saved", weekStart] });
     },
     onError: (e: any) => toast.error(e?.message ?? "שגיאה"),
   });
@@ -686,6 +687,7 @@ function SchedulesPage() {
       qc.invalidateQueries({ queryKey: ["schedule-decision"] });
       qc.invalidateQueries({ queryKey: ["dashboard-schedules"] });
       qc.invalidateQueries({ queryKey: ["dashboard-approved-list"] });
+      qc.invalidateQueries({ queryKey: ["schedules-week-saved", weekStart] });
       qc.invalidateQueries({ queryKey: ["emp-dash-schedule"] });
     },
     onError: (e: any) => toast.error(e?.message ?? "שגיאה"),
@@ -704,6 +706,7 @@ function SchedulesPage() {
       qc.invalidateQueries({ queryKey: ["schedule-decision"] });
       qc.invalidateQueries({ queryKey: ["dashboard-schedules"] });
       qc.invalidateQueries({ queryKey: ["dashboard-approved-list"] });
+      qc.invalidateQueries({ queryKey: ["schedules-week-saved", weekStart] });
       qc.invalidateQueries({ queryKey: ["emp-dash-schedule"] });
     },
     onError: (e: any) => toast.error(e?.message ?? "שגיאה"),
