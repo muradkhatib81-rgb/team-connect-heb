@@ -828,15 +828,20 @@ export const getUnpublishedWeekSummary = createServerFn({ method: "POST" })
       excludedSet = new Set((excluded ?? []).map((p: any) => p.id));
     }
 
-    const totals: Record<string, number> = {};
+    // Count UNIQUE employees per shift code across the week — an employee
+    // working multiple days on the same shift is one person, not many.
+    const perShift: Record<string, Set<string>> = {};
     let counted = 0;
     for (const r of shiftRows ?? []) {
       const code = (r as any).shift as string | null;
-      if (!code) continue;
-      if (excludedSet.has((r as any).employee_id)) continue;
-      totals[code] = (totals[code] ?? 0) + 1;
+      const emp = (r as any).employee_id as string | null;
+      if (!code || !emp) continue;
+      if (excludedSet.has(emp)) continue;
+      (perShift[code] ??= new Set<string>()).add(emp);
       counted++;
     }
+    const totals: Record<string, number> = {};
+    for (const [code, set] of Object.entries(perShift)) totals[code] = set.size;
     return {
       week_start: start,
       totals,
@@ -844,3 +849,4 @@ export const getUnpublishedWeekSummary = createServerFn({ method: "POST" })
       total_assignments: counted,
     };
   });
+
