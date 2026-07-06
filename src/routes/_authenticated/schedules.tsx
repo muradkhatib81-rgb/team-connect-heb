@@ -998,7 +998,87 @@ function SchedulesPage() {
       )}
 
 
-      {canSeeScheduleQueues && view === "pending" ? (
+      {view === "saved" && !isEmployee ? (
+        <Card className="card-elevated p-0 overflow-hidden">
+          {weekSavedQ.isLoading ? (
+            <div className="flex justify-center py-12">
+              <Loader2 className="size-6 animate-spin text-primary" />
+            </div>
+          ) : !weekSavedQ.data || weekSavedQ.data.savedList.length === 0 ? (
+            <div className="p-8 text-center text-sm text-muted-foreground">
+              אין סידורי עבודה שמורים לשבוע זה.
+            </div>
+          ) : (
+            <table className="w-full text-sm">
+              <thead className="bg-muted/50">
+                <tr>
+                  <th className="text-right p-3">מחלקה</th>
+                  <th className="text-right p-3">טווח תאריכים</th>
+                  <th className="text-right p-3">סטטוס</th>
+                  <th className="text-right p-3">עודכן</th>
+                  <th className="text-right p-3" />
+                </tr>
+              </thead>
+              <tbody>
+                {weekSavedQ.data.savedList.map((s) => (
+                  <tr
+                    key={s.schedule_id}
+                    className="border-t hover:bg-muted/30 cursor-pointer"
+                    onClick={() =>
+                      openScheduleFromPending({
+                        department_id: s.department_id,
+                        week_start: weekStart,
+                      })
+                    }
+                  >
+                    <td className="p-3 font-medium">
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          openScheduleFromPending({
+                            department_id: s.department_id,
+                            week_start: weekStart,
+                          });
+                        }}
+                        className="text-primary hover:underline font-semibold"
+                      >
+                        {deptNameById[s.department_id] ?? "—"}
+                      </button>
+                    </td>
+                    <td className="p-3">
+                      {formatHeDate(weekStart)} – {formatHeDate(weekEnd)}
+                    </td>
+                    <td className="p-3">
+                      <Badge variant={STATUS_VARIANT[s.status]}>
+                        {STATUS_LABEL[s.status as keyof typeof STATUS_LABEL] ?? s.status}
+                      </Badge>
+                    </td>
+                    <td className="p-3 text-xs text-muted-foreground">
+                      {s.updated_at ? formatHeDateTime(s.updated_at) : "—"}
+                    </td>
+                    <td className="p-3 text-left">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() =>
+                          openScheduleFromPending({
+                            department_id: s.department_id,
+                            week_start: weekStart,
+                          })
+                        }
+                      >
+                        פתח לעריכה
+                      </Button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </Card>
+      ) : canSeeScheduleQueues && view === "pending" ? (
+
         <Card className="card-elevated p-0 overflow-hidden">
           {pendingQ.isLoading ? (
             <div className="flex justify-center py-12">
