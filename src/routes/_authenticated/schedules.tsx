@@ -837,13 +837,22 @@ function SchedulesPage() {
     return list;
   }
 
+  // Draft ownership lock: a Department Manager who did NOT create the draft
+  // cannot edit / delete / republish it. Only System Admin, Branch Manager,
+  // or the original creator retain control. Applies to both draft and rejected.
+  const isDraftLockedForMe =
+    !!visible &&
+    (visible.status === "draft" || visible.status === "rejected") &&
+    !isMainAdmin &&
+    !isBranchMgr &&
+    visible.created_by !== me?.id;
+
   const editable =
     !!visible &&
     !isEmployee &&
+    !isDraftLockedForMe &&
     (((visible.status === "draft" || visible.status === "rejected") &&
-      (isMainAdmin ||
-        (isDeptMgr && visible.department_id === myDeptId) ||
-        canCreate))
+      (isMainAdmin || isBranchMgr || visible.created_by === me?.id))
       || (visible.status === "approved" && (isMainAdmin || canPublishDirect))
       || (visible.status === "pending_approval" && (isMainAdmin || canApprove || canPublishDirect)));
 
