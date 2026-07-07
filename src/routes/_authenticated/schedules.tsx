@@ -1761,6 +1761,8 @@ function SchedulesPage() {
               </tbody>
             </table>
           </Card>
+            </>
+          )}
         </>
       )}
         </>
