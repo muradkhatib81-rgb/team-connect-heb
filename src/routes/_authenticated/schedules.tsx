@@ -790,11 +790,9 @@ function SchedulesPage() {
     !!visible &&
     !isEmployee &&
     (isMainAdmin ||
-      canApprove ||
-      canPublishDirect ||
-      (isDeptMgr &&
-        visible.department_id === myDeptId &&
-        (visible.status === "draft" || visible.status === "rejected")));
+      isBranchMgr ||
+      ((visible.status === "draft" || visible.status === "rejected") &&
+        visible.created_by === me?.id));
 
   function setShift(empId: string, day: string, shift: Shift) {
     setEdits((prev) => ({ ...prev, [empId]: { ...(prev[empId] ?? {}), [day]: shift } }));
