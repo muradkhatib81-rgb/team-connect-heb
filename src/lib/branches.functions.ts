@@ -124,13 +124,33 @@ export const createBranch = createServerFn({ method: "POST" })
     // reads to the caller's active branch.
     const supabase = createUnscopedClient();
 
+    if (data.copy_departments_from_branch_id) {
+      const { data: res, error } = await (supabase as any).rpc("create_branch_with_departments", {
+        _name: data.name,
+        _code: data.code,
+        _address: data.address ?? null,
+        _phone: data.phone ?? null,
+        _is_active: data.is_active ?? true,
+        _copy_from_branch_id: data.copy_departments_from_branch_id,
+      });
+      if (error) throw new Error(error.message);
+      const row = res as { id: string; departments_copied: number };
+      return { ok: true, id: row.id, departments_copied: row.departments_copied ?? 0 };
+    }
+
     const { data: existing } = await supabase
       .from("branches")
       .select("id")
       .eq("code", data.code)
       .maybeSingle();
     if (existing) throw new Error("קוד סניף כבר קיים במערכת");
+    console.log("NEW createBranch is running");
+    console.log("Input data:", data);
 
+console.log(
+  "copy_departments_from_branch_id:",
+  data.copy_departments_from_branch_id
+);
     const { data: inserted, error } = await supabase
       .from("branches")
       .insert({
@@ -144,43 +164,7 @@ export const createBranch = createServerFn({ method: "POST" })
       .single();
     if (error) throw new Error(error.message);
 
-    if (data.copy_departments_from_branch_id) {
-      // Read source departments with the unscoped client (source branch may
-      // differ from the caller's active branch).
-      const { data: srcDepts, error: dErr } = await supabase
-        .from("departments")
-        .select("name,code,is_active")
-        .eq("branch_id", data.copy_departments_from_branch_id);
-      if (dErr) throw new Error(dErr.message);
-      if (srcDepts && srcDepts.length) {
-        const suffix = Math.random().toString(36).slice(2, 6);
-        const rows = srcDepts.map((d: any) => ({
-          name: d.name,
-          code: `${d.code}_${suffix}`,
-          is_active: d.is_active,
-          branch_id: inserted.id,
-          manager_id: null,
-        }));
-        // Department INSERT policy requires branch_id = current_active_branch(),
-        // so send the NEW branch id as the active-branch header for this call.
-        const url = process.env.SUPABASE_URL!;
-        const key = process.env.SUPABASE_PUBLISHABLE_KEY!;
-        const auth = getRequest()?.headers.get("authorization") ?? "";
-        const targetScoped = createClient<Database>(url, key, {
-          global: {
-            headers: {
-              ...(auth ? { Authorization: auth } : {}),
-              "x-active-branch": inserted.id,
-            },
-          },
-          auth: { storage: undefined, persistSession: false, autoRefreshToken: false },
-        });
-        const { error: iErr } = await targetScoped.from("departments").insert(rows);
-        if (iErr) throw new Error(iErr.message);
-      }
-    }
-
-    return { ok: true, id: inserted.id };
+    return { ok: true, id: inserted.id, departments_copied: 0 };
   });
 
 

@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { Building2, Plus, Pencil, Trash2, UserCog, Search, Loader2 } from "lucide-react";
@@ -86,7 +86,6 @@ function BranchesPage() {
   const [editing, setEditing] = useState<Branch | null>(null);
   const [deleting, setDeleting] = useState<Branch | null>(null);
   const [managing, setManaging] = useState<Branch | null>(null);
-  const [copyPrompt, setCopyPrompt] = useState<{ newId: string } | null>(null);
 
   const branches = (branchesQ.data ?? []) as Branch[];
 
@@ -227,9 +226,11 @@ function BranchesPage() {
       <BranchFormDialog
         open={createOpen}
         onOpenChange={setCreateOpen}
-        onCreated={(id) => {
+        branches={branches}
+        onCreated={() => {
           qc.invalidateQueries({ queryKey: ["system", "branches"] });
-          setCopyPrompt({ newId: id });
+          qc.invalidateQueries({ queryKey: ["departments"] });
+          qc.invalidateQueries({ queryKey: ["departments-list"] });
         }}
       />
 
@@ -267,17 +268,6 @@ function BranchesPage() {
         />
       )}
 
-      {copyPrompt && (
-        <CopyDepartmentsDialog
-          newBranchId={copyPrompt.newId}
-          branches={branches.filter((b) => b.id !== copyPrompt.newId)}
-          onClose={() => setCopyPrompt(null)}
-          onDone={() => {
-            qc.invalidateQueries({ queryKey: ["system", "branches"] });
-            setCopyPrompt(null);
-          }}
-        />
-      )}
     </div>
   );
 }
@@ -286,13 +276,15 @@ function BranchFormDialog({
   open,
   onOpenChange,
   branch,
+  branches = [],
   onCreated,
   onUpdated,
 }: {
   open: boolean;
   onOpenChange: (o: boolean) => void;
   branch?: Branch;
-  onCreated?: (id: string) => void;
+  branches?: Branch[];
+  onCreated?: () => void;
   onUpdated?: () => void;
 }) {
   const isEdit = !!branch;
@@ -304,6 +296,19 @@ function BranchFormDialog({
   const [address, setAddress] = useState(branch?.address ?? "");
   const [phone, setPhone] = useState(branch?.phone ?? "");
   const [isActive, setIsActive] = useState(branch?.is_active ?? true);
+  const [copyMode, setCopyMode] = useState<"empty" | "copy">("empty");
+  const [sourceBranchId, setSourceBranchId] = useState<string>("");
+
+  useEffect(() => {
+    if (!open) return;
+    setName(branch?.name ?? "");
+    setCode(branch?.code ?? "");
+    setAddress(branch?.address ?? "");
+    setPhone(branch?.phone ?? "");
+    setIsActive(branch?.is_active ?? true);
+    setCopyMode("empty");
+    setSourceBranchId("");
+  }, [open, branch]);
 
   const m = useMutation({
     mutationFn: async () => {
@@ -326,13 +331,24 @@ function BranchFormDialog({
           address: address.trim() || null,
           phone: phone.trim() || null,
           is_active: isActive,
+          copy_departments_from_branch_id:
+            copyMode === "copy" && sourceBranchId ? sourceBranchId : null,
         },
       });
     },
     onSuccess: (res: any) => {
-      toast.success(isEdit ? "הסניף עודכן" : "הסניף נוצר");
-      if (isEdit) onUpdated?.();
-      else onCreated?.(res.id);
+      if (isEdit) {
+        toast.success("הסניף עודכן");
+        onUpdated?.();
+      } else {
+        const copied = res?.departments_copied ?? 0;
+        toast.success(
+          copied > 0
+            ? `הסניף נוצר והועתקו ${copied} מחלקות`
+            : "הסניף נוצר",
+        );
+        onCreated?.();
+      }
       onOpenChange(false);
     },
     onError: (e: any) => toast.error(e?.message ?? "שגיאה"),
@@ -369,113 +385,63 @@ function BranchFormDialog({
             </div>
             <Switch checked={isActive} onCheckedChange={setIsActive} />
           </div>
+          {!isEdit && (
+            <div className="space-y-3 rounded-lg border p-3">
+              <div className="font-medium">מבנה מחלקות</div>
+              <div className="flex flex-col gap-2">
+                <label className="flex items-center gap-2 text-sm cursor-pointer">
+                  <input
+                    type="radio"
+                    name="copyMode"
+                    checked={copyMode === "empty"}
+                    onChange={() => setCopyMode("empty")}
+                  />
+                  סניף ריק (ללא מחלקות)
+                </label>
+                <label className="flex items-center gap-2 text-sm cursor-pointer">
+                  <input
+                    type="radio"
+                    name="copyMode"
+                    checked={copyMode === "copy"}
+                    onChange={() => setCopyMode("copy")}
+                  />
+                  העתק מסניף קיים
+                </label>
+              </div>
+              {copyMode === "copy" && (
+                <Select value={sourceBranchId} onValueChange={setSourceBranchId}>
+                  <SelectTrigger><SelectValue placeholder="בחר סניף מקור" /></SelectTrigger>
+                  <SelectContent>
+                    {branches.map((b) => (
+                      <SelectItem key={b.id} value={b.id}>
+                        {b.name} ({b.departments_count} מחלקות)
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
+              {copyMode === "copy" && (
+                <p className="text-xs text-muted-foreground">
+                  יועתקו שמות, סטטוס פעיל/לא פעיל וסדר המחלקות. עובדים, סידורים ומשימות לא יועתקו.
+                </p>
+              )}
+            </div>
+          )}
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>ביטול</Button>
           <Button
             onClick={() => m.mutate()}
-            disabled={m.isPending || !name.trim() || !code.trim()}
+            disabled={
+              m.isPending ||
+              !name.trim() ||
+              !code.trim() ||
+              (!isEdit && copyMode === "copy" && !sourceBranchId)
+            }
           >
             {m.isPending && <Loader2 className="size-4 animate-spin" />}
             {isEdit ? "שמור שינויים" : "צור סניף"}
           </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  );
-}
-
-function CopyDepartmentsDialog({
-  newBranchId,
-  branches,
-  onClose,
-  onDone,
-}: {
-  newBranchId: string;
-  branches: Branch[];
-  onClose: () => void;
-  onDone: () => void;
-}) {
-  const [step, setStep] = useState<"ask" | "pick">("ask");
-  const [sourceId, setSourceId] = useState<string>("");
-  const updateB = useServerFn(updateBranch);
-  const create = useServerFn(createBranch);
-  // We can't re-call create. Instead we replay the copy by inserting departments
-  // via a dedicated path: simplest is to call createBranch is not possible.
-  // Use a small inline server call: reuse updateBranch is wrong. Add a server fn? -
-  // Simpler: call createBranch path was for first create. For copy after-the-fact
-  // we just call a small wrapper using updateBranch noop is wrong. We added copy
-  // inside createBranch; for the post-create flow do it through a fresh call:
-  // we'll reuse createBranch is not safe (creates new branch).
-  // Instead implement copy via direct supabase client (system_admin only is
-  // enforced by RLS on departments).
-  const m = useMutation({
-    mutationFn: async () => {
-      if (!sourceId) return { ok: true };
-      const { supabase } = await import("@/integrations/supabase/client");
-      const { data: srcDepts, error } = await supabase
-        .from("departments")
-        .select("name,code,is_active")
-        .eq("branch_id", sourceId);
-      if (error) throw new Error(error.message);
-      if (!srcDepts || srcDepts.length === 0) return { ok: true };
-      const suffix = Math.random().toString(36).slice(2, 6);
-      const rows = srcDepts.map((d: any) => ({
-        name: d.name,
-        code: `${d.code}_${suffix}`,
-        is_active: d.is_active,
-        branch_id: newBranchId,
-        manager_id: null,
-      }));
-      const { error: iErr } = await supabase.from("departments").insert(rows);
-      if (iErr) throw new Error(iErr.message);
-      return { ok: true };
-    },
-    onSuccess: () => {
-      toast.success("מבנה המחלקות הועתק");
-      onDone();
-    },
-    onError: (e: any) => toast.error(e?.message ?? "שגיאה בהעתקה"),
-  });
-  // Silence unused
-  void updateB; void create;
-
-  return (
-    <Dialog open onOpenChange={(o) => !o && onClose()}>
-      <DialogContent dir="rtl">
-        <DialogHeader>
-          <DialogTitle>העתקת מבנה מחלקות</DialogTitle>
-          <DialogDescription>
-            {step === "ask"
-              ? "האם ברצונך להעתיק את מבנה המחלקות מסניף קיים?"
-              : "בחר את הסניף שממנו יועתק מבנה המחלקות. עובדים, סידורים, משימות והודעות לא יועתקו."}
-          </DialogDescription>
-        </DialogHeader>
-        {step === "pick" && (
-          <Select value={sourceId} onValueChange={setSourceId}>
-            <SelectTrigger><SelectValue placeholder="בחר סניף מקור" /></SelectTrigger>
-            <SelectContent>
-              {branches.map((b) => (
-                <SelectItem key={b.id} value={b.id}>{b.name} ({b.departments_count} מחלקות)</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        )}
-        <DialogFooter>
-          {step === "ask" ? (
-            <>
-              <Button variant="outline" onClick={onDone}>לא, סניף ריק</Button>
-              <Button onClick={() => setStep("pick")}>כן, העתק מבנה</Button>
-            </>
-          ) : (
-            <>
-              <Button variant="outline" onClick={onDone}>דלג</Button>
-              <Button onClick={() => m.mutate()} disabled={!sourceId || m.isPending}>
-                {m.isPending && <Loader2 className="size-4 animate-spin" />}
-                העתק מחלקות
-              </Button>
-            </>
-          )}
         </DialogFooter>
       </DialogContent>
     </Dialog>

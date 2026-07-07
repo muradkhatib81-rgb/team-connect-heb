@@ -1,5 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
+import { useServerFn } from "@tanstack/react-start";
+import { publishAllWeekSchedules } from "@/lib/schedules.functions";
 import { useEffect, useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
@@ -955,7 +957,10 @@ function SchedulesStatsSection({ profile }: { profile: any }) {
   const qc = useQueryClient();
   const [approvedOpen, setApprovedOpen] = useState(false);
   const [notSubmittedOpen, setNotSubmittedOpen] = useState(false);
+  const [draftOpen, setDraftOpen] = useState(false);
+  const [publishedOpen, setPublishedOpen] = useState(false);
   const [shiftCell, setShiftCell] = useState<null | { day: string; shift: "morning" | "evening" | "off" }>(null);
+  const publishAllFn = useServerFn(publishAllWeekSchedules);
 
   const permsQ = useQuery({
     queryKey: ["my-perms", profile.id],
@@ -968,7 +973,9 @@ function SchedulesStatsSection({ profile }: { profile: any }) {
       return data ?? { can_create_schedule: false, can_approve_schedule: false, can_publish_schedule: false };
     },
   });
+  const isBranchManager = profile.roles.includes("branch_manager");
   const canApprove = isMainAdmin || !!permsQ.data?.can_approve_schedule;
+  const canPublishDirect = isMainAdmin || isBranchManager || !!permsQ.data?.can_publish_schedule;
   const canManagePrePublishSchedules =
     isMainAdmin ||
     isBranchMgr ||
@@ -992,6 +999,24 @@ function SchedulesStatsSection({ profile }: { profile: any }) {
     return { weekStart: start, weekDays: days };
   }, []);
   const weekEnd = weekDays[6];
+
+  const publishAllMut = useMutation({
+    mutationFn: () => publishAllFn({ data: { week_start: weekStart } }),
+    onSuccess: (res: any) => {
+      if (res?.published > 0) {
+        toast.success(`פורסמו ${res.published} סידורי עבודה`);
+      } else {
+        toast.info("אין סידורים לפרסום");
+      }
+      if (res?.errors?.length) {
+        toast.warning(`לא פורסמו ${res.errors.length} סידורים`);
+      }
+      qc.invalidateQueries({ queryKey: ["dashboard-schedules"] });
+      qc.invalidateQueries({ queryKey: ["emp-dash-schedule"] });
+      setDraftOpen(false);
+    },
+    onError: (e: any) => toast.error(e?.message ?? "שגיאה בפרסום"),
+  });
 
   const scopeFilter = canManagePrePublishSchedules ? null : profile.department_id ?? null;
 
@@ -1030,13 +1055,22 @@ function SchedulesStatsSection({ profile }: { profile: any }) {
       const pendingAll = pendingAllList.length;
       const pendingFirst = pendingAllList[0] ?? null;
 
-      // Departments without a submitted schedule for the current week
-      // (i.e., no schedule, or status is draft/rejected — not yet sent for approval).
+      // Three-state workflow for the current week (exact week_start match).
       const allDepts = (deptRows ?? []) as { id: string; name: string }[];
-      // Consider a department as "submitted" if it has any pending_approval/approved
-      // schedule whose date range OVERLAPS the current week — not strict equality on
-      // week_start (a schedule may legitimately start on a different Saturday and
-      // still cover the current week).
+      const weekSchedules = all.filter((s) => s.week_start === weekStart);
+      const schedByDept = new Map(weekSchedules.map((s) => [s.department_id, s]));
+
+      const noScheduleDepts = allDepts.filter((d) => !schedByDept.has(d.id));
+      const draftDepts = allDepts.filter((d) => {
+        const s = schedByDept.get(d.id);
+        return s && !(s.status === "approved" && !!s.published_at);
+      });
+      const publishedDepts = allDepts.filter((d) => {
+        const s = schedByDept.get(d.id);
+        return s && s.status === "approved" && !!s.published_at;
+      });
+
+      // Legacy: departments without submitted schedule (overlap-based, for backward compat)
       const submittedDeptIds = new Set(
         all
           .filter(
@@ -1099,6 +1133,12 @@ function SchedulesStatsSection({ profile }: { profile: any }) {
         modifiedCells,
         notSubmittedCount: notSubmittedDepts.length,
         notSubmittedDepts,
+        noScheduleCount: noScheduleDepts.length,
+        noScheduleDepts,
+        draftCount: draftDepts.length,
+        draftDepts,
+        publishedCount: publishedDepts.length,
+        publishedDepts,
       };
 
 
@@ -1113,6 +1153,8 @@ function SchedulesStatsSection({ profile }: { profile: any }) {
           qc.invalidateQueries({ queryKey: ["dashboard-schedules"] });
           qc.invalidateQueries({ queryKey: ["dashboard-approved-list"] });
           qc.invalidateQueries({ queryKey: ["emp-dash-schedule"] });
+          qc.invalidateQueries({ queryKey: ["week-schedules"] });
+          qc.invalidateQueries({ queryKey: ["departments-list"] });
         },
       )
       .on("postgres_changes", { event: "*", schema: "public", table: "schedule_shifts" }, () =>
@@ -1186,15 +1228,32 @@ function SchedulesStatsSection({ profile }: { profile: any }) {
             onClick={goPending}
           />
           <StatCard label="מאושרים" value={s.approved} icon={CheckCircle2} tone="success" onClick={() => setApprovedOpen(true)} />
-          {isMainAdmin && (
-            <StatCard
-              label="מחלקות שלא שלחו סידור"
-              value={s.notSubmittedCount}
-              icon={Building2}
-              tone="warning"
-              onClick={() => setNotSubmittedOpen(true)}
-            />
-          )}
+        </div>
+      )}
+
+      {canManagePrePublishSchedules && (
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <StatCard
+            label="מחלקות שטרם הוכן להן סידור עבודה"
+            value={s.noScheduleCount}
+            icon={Building2}
+            tone="warning"
+            onClick={() => setNotSubmittedOpen(true)}
+          />
+          <StatCard
+            label="מחלקות עם סידור עבודה שמור"
+            value={s.draftCount}
+            icon={CalendarDays}
+            tone="primary"
+            onClick={() => setDraftOpen(true)}
+          />
+          <StatCard
+            label="מחלקות עם סידור עבודה שפורסם"
+            value={s.publishedCount}
+            icon={CheckCircle2}
+            tone="success"
+            onClick={() => setPublishedOpen(true)}
+          />
         </div>
       )}
 
@@ -1274,15 +1333,15 @@ function SchedulesStatsSection({ profile }: { profile: any }) {
       <Dialog open={notSubmittedOpen} onOpenChange={setNotSubmittedOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>מחלקות שטרם שלחו סידור עבודה</DialogTitle>
+            <DialogTitle>מחלקות שטרם הוכן להן סידור עבודה</DialogTitle>
           </DialogHeader>
-          {s.notSubmittedDepts.length === 0 ? (
+          {s.noScheduleDepts.length === 0 ? (
             <p className="text-sm text-muted-foreground py-6 text-center">
-              כל המחלקות שלחו סידור לשבוע הנוכחי.
+              לכל המחלקות הוכן סידור עבודה לשבוע הנוכחי.
             </p>
           ) : (
             <ul className="divide-y max-h-[60vh] overflow-auto">
-              {s.notSubmittedDepts.map((d) => (
+              {s.noScheduleDepts.map((d) => (
                 <li key={d.id}>
                   <button
                     type="button"
@@ -1296,6 +1355,92 @@ function SchedulesStatsSection({ profile }: { profile: any }) {
                     className="w-full text-right py-3 px-2 hover:bg-accent/30 rounded-md flex items-center gap-2"
                   >
                     <Building2 className="size-4 text-amber-600" />
+                    <span className="font-medium">{d.name}</span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={draftOpen} onOpenChange={setDraftOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>מחלקות עם סידור עבודה שמור</DialogTitle>
+          </DialogHeader>
+          {s.draftDepts.length === 0 ? (
+            <p className="text-sm text-muted-foreground py-6 text-center">
+              אין סידורי עבודה שמורים לשבוע הנוכחי.
+            </p>
+          ) : (
+            <>
+              <ul className="divide-y max-h-[50vh] overflow-auto">
+                {s.draftDepts.map((d) => (
+                  <li key={d.id}>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setDraftOpen(false);
+                        navigate({
+                          to: "/schedules",
+                          search: { dept: d.id, week: weekStart, view: "editor" } as any,
+                        });
+                      }}
+                      className="w-full text-right py-3 px-2 hover:bg-accent/30 rounded-md flex items-center gap-2"
+                    >
+                      <CalendarDays className="size-4 text-primary" />
+                      <span className="font-medium">{d.name}</span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+              {canPublishDirect && s.draftCount > 0 && (
+                <div className="pt-4 border-t">
+                  <Button
+                    className="w-full"
+                    onClick={() => publishAllMut.mutate()}
+                    disabled={publishAllMut.isPending}
+                  >
+                    {publishAllMut.isPending ? (
+                      <Loader2 className="size-4 animate-spin" />
+                    ) : (
+                      <Send className="size-4" />
+                    )}
+                    📤 פרסם את כל סידורי העבודה
+                  </Button>
+                </div>
+              )}
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={publishedOpen} onOpenChange={setPublishedOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>מחלקות עם סידור עבודה שפורסם</DialogTitle>
+          </DialogHeader>
+          {s.publishedDepts.length === 0 ? (
+            <p className="text-sm text-muted-foreground py-6 text-center">
+              אין סידורי עבודה שפורסמו לשבוע הנוכחי.
+            </p>
+          ) : (
+            <ul className="divide-y max-h-[60vh] overflow-auto">
+              {s.publishedDepts.map((d) => (
+                <li key={d.id}>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setPublishedOpen(false);
+                      navigate({
+                        to: "/schedules",
+                        search: { dept: d.id, week: weekStart, view: "editor" } as any,
+                      });
+                    }}
+                    className="w-full text-right py-3 px-2 hover:bg-accent/30 rounded-md flex items-center gap-2"
+                  >
+                    <CheckCircle2 className="size-4 text-emerald-600" />
                     <span className="font-medium">{d.name}</span>
                   </button>
                 </li>

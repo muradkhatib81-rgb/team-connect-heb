@@ -70,6 +70,37 @@ function weekStartOf(dateStr: string): { start: string; end: string } {
   return { start: iso(start), end: iso(end) };
 }
 
+function isScheduleVisibleToCaps(schedule: any, caps: any) {
+  if (caps.isMainAdmin || caps.isBranchMgr) return true;
+  if (!caps.isDeptMgr) return true;
+  if (!["draft", "rejected"].includes(schedule?.status)) return true;
+  return schedule?.department_id === caps.departmentId;
+}
+
+// ---------- LIST schedules visible to the current user ----------
+export const getSchedulesForViewer = createServerFn({ method: "POST" })
+  .middleware([requireBranchContext])
+  .inputValidator((d: unknown) =>
+    z
+      .object({
+        week_start: z.string(),
+        department_id: z.string().uuid().optional(),
+      })
+      .parse(d),
+  )
+  .handler(async ({ data, context }) => {
+    const caps = await getCaps(context.supabase, context.userId);
+    let query = context.supabase
+      .from("schedules")
+      .select("*")
+      .eq("week_start", data.week_start);
+    if (data.department_id) query = query.eq("department_id", data.department_id);
+
+    const { data: rows, error } = await query;
+    if (error) throw new Error(error.message);
+    return (rows ?? []).filter((schedule: any) => isScheduleVisibleToCaps(schedule, caps));
+  });
+
 // ---------- CREATE / GET-OR-CREATE schedule ----------
 const upsertSchema = z.object({
   department_id: z.string().uuid(),
@@ -612,6 +643,210 @@ export const publishSchedule = createServerFn({ method: "POST" })
     return { ok: true };
   });
 
+async function snapshotPublishedShifts(supabase: any, scheduleId: string) {
+  const { data: cur } = await supabase
+    .from("schedule_shifts")
+    .select("id, shift")
+    .eq("schedule_id", scheduleId);
+  for (const row of cur ?? []) {
+    await supabase
+      .from("schedule_shifts")
+      .update({ published_shift: row.shift })
+      .eq("id", row.id);
+  }
+}
+
+async function notifySchedulePublished(
+  supabase: any,
+  scheduleId: string,
+  departmentId: string,
+  createdBy?: string | null,
+) {
+  const [{ data: emps }, { data: dept }] = await Promise.all([
+    supabase.from("profiles").select("id").eq("department_id", departmentId),
+    supabase.from("departments").select("manager_id").eq("id", departmentId).maybeSingle(),
+  ]);
+  const recipientIds = new Set<string>((emps ?? []).map((e: any) => e.id));
+  if (dept?.manager_id) recipientIds.add(dept.manager_id);
+  if (createdBy) recipientIds.add(createdBy);
+  if (recipientIds.size) {
+    await supabase.from("schedule_notifications").insert(
+      [...recipientIds].map((uid) => ({
+        schedule_id: scheduleId,
+        user_id: uid,
+        message: "סידור העבודה השבועי פורסם. נא לעיין בסידור המעודכן.",
+      })),
+    );
+  }
+}
+
+/** Publish one unpublished schedule using the existing per-status workflow. */
+async function publishOneUnpublishedSchedule(
+  supabase: any,
+  userId: string,
+  sched: any,
+  caps: Awaited<ReturnType<typeof getCaps>>,
+) {
+  const nowIso = new Date().toISOString();
+
+  if (sched.status === "approved" && !sched.published_at) {
+    const { error } = await supabase
+      .from("schedules")
+      .update({ status: "approved", published_at: nowIso })
+      .eq("id", sched.id);
+    if (error) throw new Error(error.message);
+    await snapshotPublishedShifts(supabase, sched.id);
+    await supabase
+      .from("schedule_audit_log")
+      .insert({ schedule_id: sched.id, actor_id: userId, action: "published" });
+    await notifySchedulePublished(supabase, sched.id, sched.department_id, sched.created_by);
+    return;
+  }
+
+  if (sched.status === "pending_approval") {
+    if (!caps.canApprove) throw new Error("אין הרשאה לאשר סידור");
+    if (sched.created_by === userId) throw new Error("יוצר הסידור אינו יכול לאשר אותו בעצמו");
+    const { error } = await supabase
+      .from("schedules")
+      .update({
+        status: "approved",
+        approved_by: userId,
+        approved_at: nowIso,
+        published_at: nowIso,
+      })
+      .eq("id", sched.id);
+    if (error) throw new Error(error.message);
+    await supabase
+      .from("schedule_audit_log")
+      .insert({ schedule_id: sched.id, actor_id: userId, action: "approved" });
+    await snapshotPublishedShifts(supabase, sched.id);
+    await supabase
+      .from("schedule_audit_log")
+      .insert({ schedule_id: sched.id, actor_id: userId, action: "published" });
+    await notifySchedulePublished(supabase, sched.id, sched.department_id, sched.created_by);
+    return;
+  }
+
+  if (!["draft", "rejected"].includes(sched.status)) {
+    throw new Error("לא ניתן לפרסם סידור בסטטוס זה");
+  }
+
+  // Draft / rejected → validate shifts then publish in one step (same as submitSchedule + canPublishDirect).
+  const [{ data: shifts }, deptEmployees] = await Promise.all([
+    supabase
+      .from("schedule_shifts")
+      .select("employee_id, day_date, shift")
+      .eq("schedule_id", sched.id),
+    getDepartmentScheduleEmployees(supabase, sched.department_id),
+  ]);
+  const errors: string[] = [];
+  const days: string[] = Array.from({ length: 7 }, (_, i) => {
+    const d = new Date(sched.week_start + "T00:00:00Z");
+    d.setUTCDate(d.getUTCDate() + i);
+    return d.toISOString().slice(0, 10);
+  });
+  const map = new Map<string, Map<string, string[]>>();
+  for (const s of shifts ?? []) {
+    if (!map.has(s.employee_id)) map.set(s.employee_id, new Map());
+    const m = map.get(s.employee_id)!;
+    if (!m.has(s.day_date)) m.set(s.day_date, []);
+    m.get(s.day_date)!.push(s.shift);
+  }
+  const autoFill: { schedule_id: string; employee_id: string; day_date: string; shift: "off" }[] = [];
+  for (const emp of deptEmployees ?? []) {
+    const m = map.get(emp.id) ?? new Map<string, string[]>();
+    for (const d of days) {
+      if (!m.has(d)) {
+        autoFill.push({ schedule_id: sched.id, employee_id: emp.id, day_date: d, shift: "off" });
+        m.set(d, ["off"]);
+      }
+    }
+    if (!map.has(emp.id)) map.set(emp.id, m);
+  }
+  if (autoFill.length) {
+    const { error: afErr } = await supabase.from("schedule_shifts").insert(autoFill);
+    if (afErr) throw new Error(afErr.message);
+  }
+  for (const [empId, dayMap] of map) {
+    const emp = (deptEmployees ?? []).find((e: any) => e.id === empId);
+    const name = emp?.full_name ?? "עובד";
+    for (const [day, list] of dayMap) {
+      if (list.length > 1) errors.push(`${name}: יותר ממשמרת אחת בתאריך ${day}`);
+      if (list.includes("off") && list.some((s) => s !== "off"))
+        errors.push(`${name}: חופש ומשמרת באותו יום (${day})`);
+    }
+  }
+  if (errors.length) {
+    throw new Error(errors.slice(0, 3).join(" · "));
+  }
+
+  const { error } = await supabase
+    .from("schedules")
+    .update({
+      status: "approved",
+      submitted_by: userId,
+      submitted_at: nowIso,
+      approved_by: userId,
+      approved_at: nowIso,
+      published_at: nowIso,
+      rejection_note: null,
+      rejected_at: null,
+      rejected_by: null,
+    })
+    .eq("id", sched.id);
+  if (error) throw new Error(error.message);
+  await supabase
+    .from("schedule_audit_log")
+    .insert({ schedule_id: sched.id, actor_id: userId, action: "approved" });
+  await snapshotPublishedShifts(supabase, sched.id);
+  await supabase
+    .from("schedule_audit_log")
+    .insert({ schedule_id: sched.id, actor_id: userId, action: "published" });
+  await notifySchedulePublished(supabase, sched.id, sched.department_id, sched.created_by);
+}
+
+// ---------- PUBLISH ALL (week) ----------
+export const publishAllWeekSchedules = createServerFn({ method: "POST" })
+  .middleware([requireBranchContext])
+  .inputValidator((d: unknown) => z.object({ week_start: z.string() }).parse(d))
+  .handler(async ({ data, context }) => {
+    const caps = await getCaps(context.supabase, context.userId);
+    if (!caps.canPublishDirect) throw new Error("אין הרשאה לפרסם סידורי עבודה");
+
+    const { start } = weekStartOf(data.week_start);
+    const { data: scheds, error } = await context.supabase
+      .from("schedules")
+      .select("*")
+      .eq("week_start", start);
+    if (error) throw new Error(error.message);
+
+    const unpublished = (scheds ?? []).filter(
+      (s: any) => !(s.status === "approved" && s.published_at),
+    );
+    if (!unpublished.length) return { ok: true, published: 0, failed: 0, errors: [] as string[] };
+
+    let published = 0;
+    const errors: string[] = [];
+    for (const sched of unpublished) {
+      try {
+        await publishOneUnpublishedSchedule(context.supabase, context.userId, sched, caps);
+        published++;
+      } catch (e: any) {
+        const { data: dept } = await context.supabase
+          .from("departments")
+          .select("name")
+          .eq("id", sched.department_id)
+          .maybeSingle();
+        errors.push(`${dept?.name ?? sched.department_id}: ${e?.message ?? "שגיאה"}`);
+      }
+    }
+
+    if (published === 0 && errors.length) {
+      throw new Error(errors.join("\n"));
+    }
+    return { ok: true, published, failed: errors.length, errors };
+  });
+
 // ---------- REJECT ----------
 export const rejectSchedule = createServerFn({ method: "POST" })
   .middleware([requireBranchContext])
@@ -803,11 +1038,16 @@ export const getUnpublishedWeekSummary = createServerFn({ method: "POST" })
         s.status === "pending_approval" ||
         (s.status === "approved" && !s.published_at),
     );
-    if (unpublished.length === 0) {
+    const visibleUnpublished = (caps.isDeptMgr && !caps.isMainAdmin && !caps.isBranchMgr
+      ? unpublished.filter(
+          (s: any) => !["draft", "rejected"].includes(s.status) || s.department_id === caps.departmentId,
+        )
+      : unpublished);
+    if (visibleUnpublished.length === 0) {
       return { week_start: start, totals: {} as Record<string, number>, departments: [] as { id: string; status: string }[], total_assignments: 0 };
     }
 
-    const schedIds = unpublished.map((s: any) => s.id);
+    const schedIds = visibleUnpublished.map((s: any) => s.id);
     const { data: shiftRows, error: shErr } = await context.supabase
       .from("schedule_shifts")
       .select("schedule_id, employee_id, day_date, shift")
@@ -845,7 +1085,7 @@ export const getUnpublishedWeekSummary = createServerFn({ method: "POST" })
     return {
       week_start: start,
       totals,
-      departments: unpublished.map((s: any) => ({ id: s.department_id, status: s.status })),
+      departments: visibleUnpublished.map((s: any) => ({ id: s.department_id, status: s.status })),
       total_assignments: counted,
     };
   });

@@ -53,7 +53,7 @@ import {
   submitSchedule,
   approveSchedule,
   publishSchedule,
-  
+  getSchedulesForViewer,
   copyPreviousWeek,
   deleteSchedule,
   getUnpublishedWeekSummary,
@@ -209,6 +209,7 @@ function SchedulesPage() {
       const { data, error } = await supabase
         .from("departments")
         .select("id, name, is_active")
+        .eq("is_active", true)
         .order("name");
       if (error) throw error;
       return data ?? [];
@@ -226,17 +227,44 @@ function SchedulesPage() {
 
   const myDeptId = me?.department_id ?? null;
   const [selectedDept, setSelectedDept] = useState<string | null>(search.dept ?? null);
+
+  const [weekStart, setWeekStart] = useState(() =>
+    search.week ? getWeekStart(new Date(search.week + "T00:00:00Z")) : getWeekStart(new Date()),
+  );
+
+  const getSchedulesFn = useServerFn(getSchedulesForViewer);
+  const weekSchedulesQ = useQuery({
+    enabled: !!me?.id,
+    queryKey: ["week-schedules", weekStart, me?.id],
+    queryFn: async () => {
+      const rows = await getSchedulesFn({ data: { week_start: weekStart } });
+      return (rows ?? []).map((row: any) => ({
+        id: row.id,
+        department_id: row.department_id,
+        status: row.status,
+        published_at: row.published_at,
+      }));
+    },
+  });
+
+  const deptsWithSchedule = useMemo(
+    () => new Set((weekSchedulesQ.data ?? []).map((s) => s.department_id)),
+    [weekSchedulesQ.data],
+  );
+
+  const deptsWithoutSchedule = useMemo(
+    () => (deptsQ.data ?? []).filter((d) => !deptsWithSchedule.has(d.id)),
+    [deptsQ.data, deptsWithSchedule],
+  );
+
   useEffect(() => {
     if (selectedDept) return;
     if (search.dept) setSelectedDept(search.dept);
     else if (isDeptMgr && !isMainAdmin && !isBranchMgr && myDeptId) setSelectedDept(myDeptId);
     else if (isEmployee && myDeptId) setSelectedDept(myDeptId);
+    else if (deptsWithoutSchedule.length) setSelectedDept(deptsWithoutSchedule[0].id);
     else if (deptsQ.data?.length) setSelectedDept(deptsQ.data[0].id);
-  }, [deptsQ.data, myDeptId, selectedDept, isDeptMgr, isMainAdmin, isBranchMgr, isEmployee, search.dept]);
-
-  const [weekStart, setWeekStart] = useState(() =>
-    search.week ? getWeekStart(new Date(search.week + "T00:00:00Z")) : getWeekStart(new Date()),
-  );
+  }, [deptsQ.data, deptsWithoutSchedule, myDeptId, selectedDept, isDeptMgr, isMainAdmin, isBranchMgr, isEmployee, search.dept]);
   const weekEnd = addDaysISO(weekStart, 6);
   const days = useMemo(
     () => Array.from({ length: 7 }, (_, i) => addDaysISO(weekStart, i)),
@@ -365,17 +393,13 @@ function SchedulesPage() {
 
   // Schedule for selected dept+week
   const schedQ = useQuery({
-    enabled: !!selectedDept,
-    queryKey: ["schedule", selectedDept, weekStart],
+    enabled: !!selectedDept && !!me?.id,
+    queryKey: ["schedule", selectedDept, weekStart, me?.id],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("schedules")
-        .select("*")
-        .eq("department_id", selectedDept!)
-        .eq("week_start", weekStart)
-        .maybeSingle();
-      if (error) throw error;
-      return data;
+      const rows = await getSchedulesFn({
+        data: { week_start: weekStart, department_id: selectedDept! },
+      });
+      return (rows ?? [])[0] ?? null;
     },
   });
 
@@ -603,6 +627,9 @@ function SchedulesPage() {
         qc.invalidateQueries({ queryKey: ["schedules-pending"] });
         qc.invalidateQueries({ queryKey: ["schedules-approved"] });
         qc.invalidateQueries({ queryKey: ["dashboard-schedules"] });
+      qc.invalidateQueries({ queryKey: ["week-schedules"] });
+        qc.invalidateQueries({ queryKey: ["week-schedules"] });
+        qc.invalidateQueries({ queryKey: ["departments-list"] });
       })
 
       .on(
@@ -630,6 +657,9 @@ function SchedulesPage() {
     onSuccess: () => {
       toast.success("נוצרה טיוטה");
       qc.invalidateQueries({ queryKey: ["schedule", selectedDept, weekStart] });
+      qc.invalidateQueries({ queryKey: ["week-schedules", weekStart] });
+      qc.invalidateQueries({ queryKey: ["dashboard-schedules"] });
+      qc.invalidateQueries({ queryKey: ["week-schedules"] });
     },
     onError: (e: any) => toast.error(e?.message ?? "שגיאה"),
   });
@@ -645,6 +675,7 @@ function SchedulesPage() {
       qc.invalidateQueries({ queryKey: ["schedule-decision"] });
       qc.invalidateQueries({ queryKey: ["dashboard-schedules"] });
       qc.invalidateQueries({ queryKey: ["schedules-week-saved", weekStart] });
+      qc.invalidateQueries({ queryKey: ["week-schedules"] });
     },
 
     onError: (e: any) => toast.error(e?.message ?? "שגיאה"),
@@ -664,6 +695,7 @@ function SchedulesPage() {
       qc.invalidateQueries({ queryKey: ["schedules-pending"] });
       qc.invalidateQueries({ queryKey: ["schedules-approved"] });
       qc.invalidateQueries({ queryKey: ["dashboard-schedules"] });
+      qc.invalidateQueries({ queryKey: ["week-schedules"] });
       qc.invalidateQueries({ queryKey: ["dashboard-approved-list"] });
       qc.invalidateQueries({ queryKey: ["schedules-week-saved", weekStart] });
     },
@@ -686,6 +718,7 @@ function SchedulesPage() {
       qc.invalidateQueries({ queryKey: ["schedules-approved"] });
       qc.invalidateQueries({ queryKey: ["schedule-decision"] });
       qc.invalidateQueries({ queryKey: ["dashboard-schedules"] });
+      qc.invalidateQueries({ queryKey: ["week-schedules"] });
       qc.invalidateQueries({ queryKey: ["dashboard-approved-list"] });
       qc.invalidateQueries({ queryKey: ["schedules-week-saved", weekStart] });
       qc.invalidateQueries({ queryKey: ["emp-dash-schedule"] });
@@ -705,6 +738,7 @@ function SchedulesPage() {
       qc.invalidateQueries({ queryKey: ["schedules-approved"] });
       qc.invalidateQueries({ queryKey: ["schedule-decision"] });
       qc.invalidateQueries({ queryKey: ["dashboard-schedules"] });
+      qc.invalidateQueries({ queryKey: ["week-schedules"] });
       qc.invalidateQueries({ queryKey: ["dashboard-approved-list"] });
       qc.invalidateQueries({ queryKey: ["schedules-week-saved", weekStart] });
       qc.invalidateQueries({ queryKey: ["emp-dash-schedule"] });
@@ -723,6 +757,7 @@ function SchedulesPage() {
       qc.invalidateQueries({ queryKey: ["schedule-decision"] });
       qc.invalidateQueries({ queryKey: ["dashboard-schedules"] });
       qc.invalidateQueries({ queryKey: ["schedules-week-saved", weekStart] });
+      qc.invalidateQueries({ queryKey: ["week-schedules"] });
     },
 
     onError: (e: any) => {
@@ -742,6 +777,7 @@ function SchedulesPage() {
       qc.invalidateQueries({ queryKey: ["schedules-pending"] });
       qc.invalidateQueries({ queryKey: ["dashboard-schedules"] });
       qc.invalidateQueries({ queryKey: ["schedules-week-saved", weekStart] });
+      qc.invalidateQueries({ queryKey: ["week-schedules"] });
     },
 
     onError: (e: any) => {
@@ -1284,6 +1320,10 @@ function SchedulesPage() {
             <div className="text-sm font-medium px-3 py-2 bg-muted rounded-md">
               {deptsQ.data?.find((d) => d.id === selectedDept)?.name ?? "—"}
             </div>
+          ) : schedQ.data ? (
+            <div className="text-sm font-medium px-3 py-2 bg-muted rounded-md">
+              {deptsQ.data?.find((d) => d.id === selectedDept)?.name ?? "—"}
+            </div>
           ) : (
             <Select
               value={selectedDept ?? undefined}
@@ -1294,13 +1334,15 @@ function SchedulesPage() {
               </SelectTrigger>
               <SelectContent>
                 {(deptsQ.data ?? [])
-                  .filter((d) => d.id === selectedDept || !savedDeptSet.has(d.id))
+                  .filter(
+                    (d) =>
+                      d.id === selectedDept || (!savedDeptSet.has(d.id) && !deptsWithSchedule.has(d.id)),
+                  )
                   .map((d) => (
                     <SelectItem key={d.id} value={d.id}>
                       {d.name}
                     </SelectItem>
                   ))}
-
               </SelectContent>
             </Select>
           )}
