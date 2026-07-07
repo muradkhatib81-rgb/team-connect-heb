@@ -790,11 +790,9 @@ function SchedulesPage() {
     !!visible &&
     !isEmployee &&
     (isMainAdmin ||
-      canApprove ||
-      canPublishDirect ||
-      (isDeptMgr &&
-        visible.department_id === myDeptId &&
-        (visible.status === "draft" || visible.status === "rejected")));
+      isBranchMgr ||
+      ((visible.status === "draft" || visible.status === "rejected") &&
+        visible.created_by === me?.id));
 
   function setShift(empId: string, day: string, shift: Shift) {
     setEdits((prev) => ({ ...prev, [empId]: { ...(prev[empId] ?? {}), [day]: shift } }));
@@ -839,13 +837,22 @@ function SchedulesPage() {
     return list;
   }
 
+  // Draft ownership lock: a Department Manager who did NOT create the draft
+  // cannot edit / delete / republish it. Only System Admin, Branch Manager,
+  // or the original creator retain control. Applies to both draft and rejected.
+  const isDraftLockedForMe =
+    !!visible &&
+    (visible.status === "draft" || visible.status === "rejected") &&
+    !isMainAdmin &&
+    !isBranchMgr &&
+    visible.created_by !== me?.id;
+
   const editable =
     !!visible &&
     !isEmployee &&
+    !isDraftLockedForMe &&
     (((visible.status === "draft" || visible.status === "rejected") &&
-      (isMainAdmin ||
-        (isDeptMgr && visible.department_id === myDeptId) ||
-        canCreate))
+      (isMainAdmin || isBranchMgr || visible.created_by === me?.id))
       || (visible.status === "approved" && (isMainAdmin || canPublishDirect))
       || (visible.status === "pending_approval" && (isMainAdmin || canApprove || canPublishDirect)));
 
@@ -1397,6 +1404,34 @@ function SchedulesPage() {
             />
           </Card>
 
+          {isDraftLockedForMe ? (
+            <Card className="card-elevated p-6 border-primary/30 bg-primary/5">
+              <div className="flex gap-3 items-start">
+                <AlertTriangle className="size-5 text-primary mt-0.5 shrink-0" />
+                <div className="space-y-1.5 text-sm">
+                  <p className="font-semibold text-base">
+                    כבר קיים סידור עבודה שמור למחלקה זו
+                  </p>
+                  <p>
+                    נשמר על־ידי:{" "}
+                    <span className="font-medium">
+                      {decisionPersonQ.data?.creator?.full_name ?? "לא ידוע"}
+                    </span>
+                  </p>
+                  <p>
+                    סטטוס:{" "}
+                    <span className="font-medium">
+                      {STATUS_LABEL[visible.status as keyof typeof STATUS_LABEL] ?? visible.status}
+                    </span>
+                  </p>
+                  <p className="text-muted-foreground">
+                    רק יוצר הטיוטה או בעל הרשאה מתאימה יכול לערוך או לפרסם אותה.
+                  </p>
+                </div>
+              </div>
+            </Card>
+          ) : (
+            <>
           {(visible.status === "rejected" || visible.status === "approved") && (
             <Card
               className={`card-elevated p-4 ${
@@ -1726,6 +1761,8 @@ function SchedulesPage() {
               </tbody>
             </table>
           </Card>
+            </>
+          )}
         </>
       )}
         </>

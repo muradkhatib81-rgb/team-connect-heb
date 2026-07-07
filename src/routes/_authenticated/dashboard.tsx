@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { publishAllWeekSchedules } from "@/lib/schedules.functions";
+import { publishAllWeekSchedules, getWeekDepartmentStates } from "@/lib/schedules.functions";
 import { useEffect, useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
@@ -1172,8 +1172,44 @@ function SchedulesStatsSection({ profile }: { profile: any }) {
     };
   }, [qc]);
 
+  // Authoritative dept state list (bypasses per-viewer RLS quirks): drafts and
+  // published schedules always come from the service-role admin path so a
+  // saved draft never leaks into "Departments without schedules".
+  const getWeekDeptStatesFn = useServerFn(getWeekDepartmentStates);
+  const deptStatesQ = useQuery({
+    enabled: canManagePrePublishSchedules,
+    queryKey: ["dashboard-dept-states", weekStart],
+    queryFn: () => getWeekDeptStatesFn({ data: { week_start: weekStart } }),
+  });
+  useEffect(() => {
+    if (!canManagePrePublishSchedules) return;
+    const ch = supabase
+      .channel(`dash-dept-states-${weekStart}`)
+      .on("postgres_changes", { event: "*", schema: "public", table: "schedules" }, () => {
+        qc.invalidateQueries({ queryKey: ["dashboard-dept-states", weekStart] });
+      })
+      .on("postgres_changes", { event: "*", schema: "public", table: "departments" }, () => {
+        qc.invalidateQueries({ queryKey: ["dashboard-dept-states", weekStart] });
+      })
+      .subscribe();
+    return () => {
+      supabase.removeChannel(ch);
+    };
+  }, [canManagePrePublishSchedules, weekStart, qc]);
+
   if (statsQ.isLoading || !statsQ.data) return null;
-  const s = statsQ.data;
+  const baseS = statsQ.data;
+  const s = deptStatesQ.data
+    ? {
+        ...baseS,
+        noScheduleDepts: deptStatesQ.data.noSchedule,
+        noScheduleCount: deptStatesQ.data.noSchedule.length,
+        draftDepts: deptStatesQ.data.draft,
+        draftCount: deptStatesQ.data.draft.length,
+        publishedDepts: deptStatesQ.data.published,
+        publishedCount: deptStatesQ.data.published.length,
+      }
+    : baseS;
   const goSchedules = () => navigate({ to: "/schedules" });
   const goPending = () => {
     // Approver shortcut: if exactly one pending schedule exists, open it directly
