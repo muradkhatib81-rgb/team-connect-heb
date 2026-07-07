@@ -1404,6 +1404,34 @@ function SchedulesPage() {
             />
           </Card>
 
+          {isDraftLockedForMe ? (
+            <Card className="card-elevated p-6 border-primary/30 bg-primary/5">
+              <div className="flex gap-3 items-start">
+                <AlertTriangle className="size-5 text-primary mt-0.5 shrink-0" />
+                <div className="space-y-1.5 text-sm">
+                  <p className="font-semibold text-base">
+                    כבר קיים סידור עבודה שמור למחלקה זו
+                  </p>
+                  <p>
+                    נשמר על־ידי:{" "}
+                    <span className="font-medium">
+                      {decisionPersonQ.data?.creator?.full_name ?? "לא ידוע"}
+                    </span>
+                  </p>
+                  <p>
+                    סטטוס:{" "}
+                    <span className="font-medium">
+                      {STATUS_LABEL[visible.status as keyof typeof STATUS_LABEL] ?? visible.status}
+                    </span>
+                  </p>
+                  <p className="text-muted-foreground">
+                    רק יוצר הטיוטה או בעל הרשאה מתאימה יכול לערוך או לפרסם אותה.
+                  </p>
+                </div>
+              </div>
+            </Card>
+          ) : (
+            <>
           {(visible.status === "rejected" || visible.status === "approved") && (
             <Card
               className={`card-elevated p-4 ${
