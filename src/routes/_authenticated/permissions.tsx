@@ -222,7 +222,7 @@ function buildEmptyPerms(): Record<string, boolean> {
   return o;
 }
 
-function PermissionsPage() {
+export function PermissionsPage() {
   const qc = useQueryClient();
   const { data: me } = useAuth();
   const isMainAdmin = !!me?.roles.includes("main_admin");

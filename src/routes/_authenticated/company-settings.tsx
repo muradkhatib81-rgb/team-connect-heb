@@ -30,7 +30,7 @@ function fileToDataUrl(file: File): Promise<string> {
   });
 }
 
-function CompanySettingsPage() {
+export function CompanySettingsPage() {
   const { data: profile, isLoading: profileLoading } = useAuth();
   const { data: company, isLoading } = useCompanySettings();
   const qc = useQueryClient();
