@@ -1090,3 +1090,71 @@ export const getUnpublishedWeekSummary = createServerFn({ method: "POST" })
     };
   });
 
+
+// ---------- Departments states for a week (RLS-independent enumeration) ----------
+// Returns, for the caller's active branch, which active departments have:
+//   - no schedule row at all for the exact week_start
+//   - a saved draft/pending/approved-but-unpublished schedule
+//   - an approved AND published schedule
+// Uses the service-role admin client so the counts are consistent for every
+// authorized viewer regardless of their per-status RLS visibility.
+export const getWeekDepartmentStates = createServerFn({ method: "POST" })
+  .middleware([requireBranchContext])
+  .inputValidator((d: unknown) => z.object({ week_start: z.string() }).parse(d))
+  .handler(async ({ data, context }) => {
+    const caps = await getCaps(context.supabase, context.userId);
+    if (
+      !(
+        caps.isMainAdmin ||
+        caps.isBranchMgr ||
+        caps.canCreate ||
+        caps.canApprove ||
+        caps.canPublishDirect
+      )
+    ) {
+      throw new Error("אין הרשאה");
+    }
+    const { start } = weekStartOf(data.week_start);
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+
+    let deptQ = supabaseAdmin
+      .from("departments")
+      .select("id, name, is_active, branch_id")
+      .eq("is_active", true)
+      .order("name");
+    if (context.branchId) deptQ = deptQ.eq("branch_id", context.branchId);
+    const { data: depts, error: dErr } = await deptQ;
+    if (dErr) throw new Error(dErr.message);
+    const activeDepts = ((depts ?? []) as any[]).map((d) => ({ id: d.id, name: d.name }));
+    if (activeDepts.length === 0) {
+      return {
+        noSchedule: [] as { id: string; name: string }[],
+        draft: [] as { id: string; name: string }[],
+        published: [] as { id: string; name: string }[],
+      };
+    }
+
+    const deptIds = activeDepts.map((d) => d.id);
+    const { data: scheds, error: sErr } = await supabaseAdmin
+      .from("schedules")
+      .select("department_id, status, published_at")
+      .eq("week_start", start)
+      .in("department_id", deptIds);
+    if (sErr) throw new Error(sErr.message);
+    const byDept = new Map<string, any>();
+    for (const s of (scheds ?? []) as any[]) byDept.set(s.department_id, s);
+
+    const noSchedule: { id: string; name: string }[] = [];
+    const draft: { id: string; name: string }[] = [];
+    const published: { id: string; name: string }[] = [];
+    for (const d of activeDepts) {
+      const s = byDept.get(d.id);
+      if (!s) {
+        noSchedule.push(d);
+        continue;
+      }
+      if (s.status === "approved" && s.published_at) published.push(d);
+      else draft.push(d);
+    }
+    return { noSchedule, draft, published };
+  });
