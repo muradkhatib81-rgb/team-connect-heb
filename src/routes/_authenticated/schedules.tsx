@@ -258,12 +258,26 @@ function SchedulesPage() {
   );
 
   useEffect(() => {
+    if (isDeptMgr && !isMainAdmin && !isBranchMgr) {
+      if (selectedDept !== myDeptId) setSelectedDept(myDeptId);
+      return;
+    }
     if (selectedDept) return;
-    if (search.dept) setSelectedDept(search.dept);
-    else if (isDeptMgr && !isMainAdmin && !isBranchMgr && myDeptId) setSelectedDept(myDeptId);
-    else if (isEmployee && myDeptId) setSelectedDept(myDeptId);
-    else if (deptsWithoutSchedule.length) setSelectedDept(deptsWithoutSchedule[0].id);
-    else if (deptsQ.data?.length) setSelectedDept(deptsQ.data[0].id);
+    if (search.dept) {
+      setSelectedDept(search.dept);
+      return;
+    }
+    if (isEmployee && myDeptId) {
+      setSelectedDept(myDeptId);
+      return;
+    }
+    if (deptsWithoutSchedule.length) {
+      setSelectedDept(deptsWithoutSchedule[0].id);
+      return;
+    }
+    if (deptsQ.data?.length) {
+      setSelectedDept(deptsQ.data[0].id);
+    }
   }, [deptsQ.data, deptsWithoutSchedule, myDeptId, selectedDept, isDeptMgr, isMainAdmin, isBranchMgr, isEmployee, search.dept]);
   const weekEnd = addDaysISO(weekStart, 6);
   const days = useMemo(
@@ -278,29 +292,27 @@ function SchedulesPage() {
   //    OTHER departments + current unsaved edits from the selected dept.
   //  - The "סידורי עבודה שמורים" card listing saved departments.
   const weekSavedQ = useQuery({
-    queryKey: ["schedules-week-saved", weekStart],
+    enabled: !!me?.id,
+    queryKey: ["schedules-week-saved", weekStart, me?.id],
     queryFn: async () => {
-      const { data: scheds, error } = await supabase
-        .from("schedules")
-        .select("id, department_id, status, published_at, updated_at")
-        .eq("week_start", weekStart);
-      if (error) throw error;
-      if (!scheds?.length)
+      const rows = await getSchedulesFn({ data: { week_start: weekStart } });
+      const scheds = (rows ?? []).filter((row: any) => !!row.id);
+      if (!scheds.length) {
         return {
           shifts: [] as { schedule_id: string; department_id: string; employee_id: string; day_date: string; shift: string }[],
           deptIdsWithSaved: [] as string[],
           savedList: [] as { schedule_id: string; department_id: string; status: string; published_at: string | null; updated_at: string | null }[],
         };
+      }
       const ids = scheds.map((s: any) => s.id);
       const { data: shiftRows, error: e2 } = await supabase
         .from("schedule_shifts")
         .select("schedule_id, employee_id, day_date, shift")
         .in("schedule_id", ids);
       if (e2) throw e2;
-      const schedById = new Map<string, any>((scheds as any[]).map((s) => [s.id, s]));
       const shifts = (shiftRows ?? []).map((r: any) => ({
         ...r,
-        department_id: schedById.get(r.schedule_id)?.department_id as string,
+        department_id: scheds.find((s: any) => s.id === r.schedule_id)?.department_id as string,
       }));
       const withShiftsIds = new Set(shifts.map((r) => r.schedule_id));
       const savedScheds = (scheds as any[]).filter((s) => withShiftsIds.has(s.id));
@@ -519,13 +531,16 @@ function SchedulesPage() {
   });
 
 
-  // For employees: only show schedule if approved
   const visible =
     isEmployee
       ? schedQ.data?.status === "approved" && !!(schedQ.data as any)?.published_at
         ? schedQ.data
         : null
       : schedQ.data;
+  const viewerAccess = useMemo(
+    () => (visible as any)?.viewer_access ?? { visible: true, canEdit: false, canManage: false, reason: "default" },
+    [visible],
+  );
 
   // Employees in this department.
   // Plain employees query a safe view that exposes only non-sensitive fields
@@ -792,9 +807,7 @@ function SchedulesPage() {
     (isMainAdmin ||
       canApprove ||
       canPublishDirect ||
-      (isDeptMgr &&
-        visible.department_id === myDeptId &&
-        (visible.status === "draft" || visible.status === "rejected")));
+      (isDeptMgr && viewerAccess.canManage));
 
   function setShift(empId: string, day: string, shift: Shift) {
     setEdits((prev) => ({ ...prev, [empId]: { ...(prev[empId] ?? {}), [day]: shift } }));
@@ -842,12 +855,19 @@ function SchedulesPage() {
   const editable =
     !!visible &&
     !isEmployee &&
+    viewerAccess.canEdit &&
     (((visible.status === "draft" || visible.status === "rejected") &&
       (isMainAdmin ||
         (isDeptMgr && visible.department_id === myDeptId) ||
         canCreate))
       || (visible.status === "approved" && (isMainAdmin || canPublishDirect))
       || (visible.status === "pending_approval" && (isMainAdmin || canApprove || canPublishDirect)));
+
+  const showRestrictedDraftNotice =
+    isDeptMgr && !isMainAdmin && !isBranchMgr && visible?.status === "draft" && !viewerAccess.canEdit;
+  const showPublishedOnlyView =
+    isDeptMgr && !isMainAdmin && !isBranchMgr && visible?.status === "approved" && !!visible?.published_at;
+  const showActionsBar = !isEmployee && (editable || canShowApprove || canShowPublish || canDelete);
 
 
   const canShowApprove =
@@ -1376,356 +1396,364 @@ function SchedulesPage() {
         </Card>
       ) : (
         <>
-          {/* Actor info: creator + editor + approver */}
-          <Card className="card-elevated p-4 space-y-2">
-            <SchedulePersonMetaRow
-              label="נוצר על ידי:"
-              person={decisionPersonQ.data?.creator ?? null}
-              fallback={decisionPersonQ.isLoading ? "נטען..." : "לא ידוע"}
-            />
-            <SchedulePersonMetaRow
-              label="נערך על ידי:"
-              person={decisionPersonQ.data?.editor ?? null}
-              className="text-amber-700 dark:text-amber-400"
-              fallback={decisionPersonQ.isLoading ? "נטען..." : "לא ידוע"}
-            />
-            <SchedulePersonMetaRow
-              label="אושר על ידי:"
-              person={decisionPersonQ.data?.approver ?? null}
-              className="text-emerald-700 dark:text-emerald-400"
-              fallback={visible.status === "approved" ? (decisionPersonQ.isLoading ? "נטען..." : "לא ידוע") : "טרם אושר"}
-            />
-          </Card>
+          {showRestrictedDraftNotice ? (
+            <Card className="card-elevated p-4 space-y-2 border-primary/30 bg-primary/5">
+              <h3 className="font-semibold text-sm">יש סידור עבודה שמור למחלקה שלך.</h3>
+              <p className="text-sm text-muted-foreground">הסידור נשמר על ידי:</p>
+              <p className="font-medium">{decisionPersonQ.data?.creator?.full_name ?? "—"}</p>
+              <p className="text-sm text-muted-foreground">יש להמתין עד לפרסום הסידור.</p>
+            </Card>
+          ) : (
+            <>
+              {!showPublishedOnlyView && (
+                <Card className="card-elevated p-4 space-y-2">
+                  <SchedulePersonMetaRow
+                    label="נוצר על ידי:"
+                    person={decisionPersonQ.data?.creator ?? null}
+                    fallback={decisionPersonQ.isLoading ? "נטען..." : "לא ידוע"}
+                  />
+                  <SchedulePersonMetaRow
+                    label="נערך על ידי:"
+                    person={decisionPersonQ.data?.editor ?? null}
+                    className="text-amber-700 dark:text-amber-400"
+                    fallback={decisionPersonQ.isLoading ? "נטען..." : "לא ידוע"}
+                  />
+                  <SchedulePersonMetaRow
+                    label="אושר על ידי:"
+                    person={decisionPersonQ.data?.approver ?? null}
+                    className="text-emerald-700 dark:text-emerald-400"
+                    fallback={visible.status === "approved" ? (decisionPersonQ.isLoading ? "נטען..." : "לא ידוע") : "טרם אושר"}
+                  />
+                </Card>
+              )}
 
-          {(visible.status === "rejected" || visible.status === "approved") && (
-            <Card
-              className={`card-elevated p-4 ${
-                visible.status === "rejected"
-                  ? "border-destructive/40 bg-destructive/5"
-                  : "border-emerald-500/40 bg-emerald-500/5"
-              }`}
-            >
-              <div className="flex gap-2 items-start">
-                {visible.status === "rejected" ? (
-                  <AlertTriangle className="size-4 text-destructive mt-0.5" />
-                ) : decisionPersonQ.data?.editedBeforeApproval ? (
-                  <span className="mt-0.5">✏️</span>
-                ) : (
-                  <CheckCircle2 className="size-4 text-emerald-600 mt-0.5" />
-                )}
-                <div className="flex-1 min-w-0">
-                  <p className="font-semibold text-sm">
-                    {visible.status === "rejected"
-                      ? "הסידור נדחה — נדרשים תיקונים"
-                      : !visible.published_at
-                        ? "הסידור אושר וממתין לפרסום"
-                        : decisionPersonQ.data?.editedBeforeApproval
-                          ? "הסידור נערך ואושר ופורסם"
-                          : "הסידור אושר ופורסם"}
-                  </p>
-                  <div className="text-xs text-muted-foreground mt-1 space-y-0.5">
-                    <p>
-                      {visible.status === "rejected"
-                        ? "❌ נדחה על ידי: "
-                        : decisionPersonQ.data?.editedBeforeApproval
-                          ? "✏️ נערך ואושר על ידי: "
-                          : "✅ אושר על ידי: "}
-                      <span className="font-medium text-foreground">
-                        👤 {decisionPersonQ.data?.full_name ?? "—"}
-                      </span>
-                      {decisionPersonQ.data?.role_label && (
-                        <span className="text-muted-foreground"> · 💼 {decisionPersonQ.data.role_label}</span>
+              {(visible.status === "rejected" || visible.status === "approved") && (
+                <Card
+                  className={`card-elevated p-4 ${
+                    visible.status === "rejected"
+                      ? "border-destructive/40 bg-destructive/5"
+                      : "border-emerald-500/40 bg-emerald-500/5"
+                  }`}
+                >
+                  <div className="flex gap-2 items-start">
+                    {visible.status === "rejected" ? (
+                      <AlertTriangle className="size-4 text-destructive mt-0.5" />
+                    ) : decisionPersonQ.data?.editedBeforeApproval ? (
+                      <span className="mt-0.5">✏️</span>
+                    ) : (
+                      <CheckCircle2 className="size-4 text-emerald-600 mt-0.5" />
+                    )}
+                    <div className="flex-1 min-w-0">
+                      <p className="font-semibold text-sm">
+                        {visible.status === "rejected"
+                          ? "הסידור נדחה — נדרשים תיקונים"
+                          : !visible.published_at
+                            ? "הסידור אושר וממתין לפרסום"
+                            : decisionPersonQ.data?.editedBeforeApproval
+                              ? "הסידור נערך ואושר ופורסם"
+                              : "הסידור אושר ופורסם"}
+                      </p>
+                      <div className="text-xs text-muted-foreground mt-1 space-y-0.5">
+                        <p>
+                          {visible.status === "rejected"
+                            ? "❌ נדחה על ידי: "
+                            : decisionPersonQ.data?.editedBeforeApproval
+                              ? "✏️ נערך ואושר על ידי: "
+                              : "✅ אושר על ידי: "}
+                          <span className="font-medium text-foreground">
+                            👤 {decisionPersonQ.data?.full_name ?? "—"}
+                          </span>
+                          {decisionPersonQ.data?.role_label && (
+                            <span className="text-muted-foreground"> · 💼 {decisionPersonQ.data.role_label}</span>
+                          )}
+                          {decisionPersonQ.data?.job_title && (
+                            <span className="text-muted-foreground"> ({decisionPersonQ.data.job_title})</span>
+                          )}
+                        </p>
+                        <p>
+                          📅🕒 תאריך ושעה:{" "}
+                          <span className="font-medium text-foreground">
+                            {decisionPersonQ.data?.at ? formatHeDateTime(decisionPersonQ.data.at) : "—"}
+                          </span>
+                        </p>
+                      </div>
+                      {visible.status === "rejected" && visible.rejection_note && (
+                        <p className="text-sm mt-2 p-2 rounded bg-background/60 border border-destructive/20">
+                          <span className="font-semibold">סיבת דחייה: </span>
+                          {visible.rejection_note}
+                        </p>
                       )}
-                      {decisionPersonQ.data?.job_title && (
-                        <span className="text-muted-foreground"> ({decisionPersonQ.data.job_title})</span>
-                      )}
-                    </p>
-                    <p>
-                      📅🕒 תאריך ושעה:{" "}
-                      <span className="font-medium text-foreground">
-                        {decisionPersonQ.data?.at ? formatHeDateTime(decisionPersonQ.data.at) : "—"}
-                      </span>
-                    </p>
+                    </div>
                   </div>
-                  {visible.status === "rejected" && visible.rejection_note && (
-                    <p className="text-sm mt-2 p-2 rounded bg-background/60 border border-destructive/20">
-                      <span className="font-semibold">סיבת דחייה: </span>
-                      {visible.rejection_note}
-                    </p>
+                </Card>
+              )}
+
+              {!showPublishedOnlyView && canViewPrePublishSummary && visible.status !== "rejected" && (visible.status !== "approved" || !visible.published_at) && (
+                <Card className="card-elevated p-4">
+                  <div className="flex items-center justify-between gap-3 flex-wrap mb-3">
+                    <div>
+                      <h3 className="font-semibold flex items-center gap-2">
+                        <CalendarDays className="size-4" />
+                        סיכום סידור — {visible.status === "approved" ? "מאושר וממתין לפרסום" : visible.status === "pending_approval" ? "ממתין לאישור" : "טיוטה"}
+                      </h3>
+                      <p className="text-xs text-muted-foreground mt-0.5">
+                        {visible.status === "approved"
+                          ? "בדוק את סיכום העובדים לפי יום ומשמרת לפני הפרסום. הסידור עדיין מוסתר מעובדים ואחראי מחלקות."
+                          : visible.status === "pending_approval"
+                            ? "בדוק את הסיכום לפני האישור. עובדים ואחראי מחלקות לא רואים את הסידור עד לפרסום."
+                            : canPublishDirect ? "הסידור שמור כטיוטה ומוסתר מעובדים ואחראי מחלקות. לחץ \"פרסם סידור עבודה\" כדי לאשר ולפרסם אותו בלחיצה אחת." : "הסידור שמור כטיוטה ומוסתר מעובדים ואחראי מחלקות. לחץ \"שלח לאישור\" בסיום."}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="space-y-3">
+                    {dailyShiftSummary.map((day) => (
+                      <div key={day.day} className="rounded-lg border bg-background/60 p-3">
+                        <div className="flex items-center justify-between gap-2 mb-2">
+                          <p className="font-semibold text-sm">יום {day.label}</p>
+                          <p className="text-xs text-muted-foreground">{formatHeDate(day.day)}</p>
+                        </div>
+                        <div className="flex flex-wrap gap-2">
+                          {day.counts.map((s) => (
+                            <span
+                              key={`${day.day}-${s.code}`}
+                              className="px-3 py-1.5 rounded-md text-sm font-medium border"
+                              style={shiftStyle(s.code)}
+                            >
+                              <span
+                                className="inline-block size-2 rounded-full me-2 align-middle"
+                                style={{ backgroundColor: s.color }}
+                              />
+                              {s.name}: <strong>{s.count}</strong> עובדים
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </Card>
+              )}
+
+              {showActionsBar && (
+                <div className="flex flex-wrap gap-2">
+                  {editable && (visible.status === "approved" || visible.status === "pending_approval") && (
+                    <Button onClick={() => saveMut.mutate()} disabled={saveMut.isPending} size="sm">
+                      {saveMut.isPending ? <Loader2 className="size-4 animate-spin" /> : <Save className="size-4" />}
+                      שמור שינויים
+                    </Button>
+                  )}
+                  {editable && visible.status !== "approved" && visible.status !== "pending_approval" && (
+                    <>
+                      <Button onClick={() => saveMut.mutate()} disabled={saveMut.isPending} size="sm">
+                        {saveMut.isPending ? <Loader2 className="size-4 animate-spin" /> : <Save className="size-4" />}
+                        שמור טיוטה
+                      </Button>
+                      <Button
+                        onClick={() => submitMut.mutate()}
+                        disabled={submitMut.isPending}
+                        size="sm"
+                        variant="default"
+                      >
+                        {submitMut.isPending ? <Loader2 className="size-4 animate-spin" /> : <Send className="size-4" />}
+                        {canPublishDirect ? "פרסם סידור עבודה" : "שלח לאישור"}
+                      </Button>
+
+                      <Button
+                        onClick={() => setCopyOpen(true)}
+                        size="sm"
+                        variant="outline"
+                      >
+                        <Copy className="size-4" />
+                        העתק מהשבוע הקודם
+                      </Button>
+                    </>
                   )}
 
+                  {canShowApprove && (
+                    <Button
+                      onClick={() => approveMut.mutate()}
+                      disabled={approveMut.isPending || saveMut.isPending}
+                      size="sm"
+                      variant="default"
+                    >
+                      {approveMut.isPending ? <Loader2 className="size-4 animate-spin" /> : canPublishDirect ? <Send className="size-4" /> : <CheckCircle2 className="size-4" />}
+                      {canPublishDirect ? "פרסם סידור עבודה" : "אשר סידור"}
+                    </Button>
+                  )}
+                  {canShowPublish && (
+                    <Button
+                      onClick={() => publishMut.mutate()}
+                      disabled={publishMut.isPending || saveMut.isPending}
+                      size="sm"
+                      variant="default"
+                    >
+                      {publishMut.isPending ? <Loader2 className="size-4 animate-spin" /> : <Send className="size-4" />}
+                      פרסם סידור עבודה
+                    </Button>
+                  )}
+                  {canDelete && (
+                    <Button
+                      onClick={() => setDeleteOpen(true)}
+                      size="sm"
+                      variant="destructive"
+                    >
+                      <Trash2 className="size-4" />
+                      מחק סידור
+                    </Button>
+                  )}
                 </div>
-              </div>
-            </Card>
-          )}
+              )}
 
-          {/* Draft / pre-publication summary for authorized managers only */}
-          {canViewPrePublishSummary && visible.status !== "rejected" && (visible.status !== "approved" || !visible.published_at) && (
-            <Card className="card-elevated p-4">
-              <div className="flex items-center justify-between gap-3 flex-wrap mb-3">
-                <div>
-                  <h3 className="font-semibold flex items-center gap-2">
-                    <CalendarDays className="size-4" />
-                    סיכום סידור — {visible.status === "approved" ? "מאושר וממתין לפרסום" : visible.status === "pending_approval" ? "ממתין לאישור" : "טיוטה"}
-                  </h3>
-                  <p className="text-xs text-muted-foreground mt-0.5">
-                    {visible.status === "approved"
-                      ? "בדוק את סיכום העובדים לפי יום ומשמרת לפני הפרסום. הסידור עדיין מוסתר מעובדים ואחראי מחלקות."
-                      : visible.status === "pending_approval"
-                        ? "בדוק את הסיכום לפני האישור. עובדים ואחראי מחלקות לא רואים את הסידור עד לפרסום."
-                        : canPublishDirect ? "הסידור שמור כטיוטה ומוסתר מעובדים ואחראי מחלקות. לחץ \"פרסם סידור עבודה\" כדי לאשר ולפרסם אותו בלחיצה אחת." : "הסידור שמור כטיוטה ומוסתר מעובדים ואחראי מחלקות. לחץ \"שלח לאישור\" בסיום."}
-                  </p>
-                </div>
-              </div>
-              <div className="space-y-3">
-                {dailyShiftSummary.map((day) => (
-                  <div key={day.day} className="rounded-lg border bg-background/60 p-3">
-                    <div className="flex items-center justify-between gap-2 mb-2">
-                      <p className="font-semibold text-sm">יום {day.label}</p>
-                      <p className="text-xs text-muted-foreground">{formatHeDate(day.day)}</p>
-                    </div>
-                    <div className="flex flex-wrap gap-2">
-                      {day.counts.map((s) => (
-                        <span
-                          key={`${day.day}-${s.code}`}
-                          className="px-3 py-1.5 rounded-md text-sm font-medium border"
-                          style={shiftStyle(s.code)}
-                        >
-                          <span
-                            className="inline-block size-2 rounded-full me-2 align-middle"
-                            style={{ backgroundColor: s.color }}
-                          />
-                          {s.name}: <strong>{s.count}</strong> עובדים
-                        </span>
-                      ))}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </Card>
-          )}
-
-          {/* Actions bar */}
-          <div className="flex flex-wrap gap-2">
-            {editable && (visible.status === "approved" || visible.status === "pending_approval") && (
-              <Button onClick={() => saveMut.mutate()} disabled={saveMut.isPending} size="sm">
-                {saveMut.isPending ? <Loader2 className="size-4 animate-spin" /> : <Save className="size-4" />}
-                שמור שינויים
-              </Button>
-            )}
-            {editable && visible.status !== "approved" && visible.status !== "pending_approval" && (
-              <>
-                <Button onClick={() => saveMut.mutate()} disabled={saveMut.isPending} size="sm">
-                  {saveMut.isPending ? <Loader2 className="size-4 animate-spin" /> : <Save className="size-4" />}
-                  שמור טיוטה
-                </Button>
-                <Button
-                  onClick={() => submitMut.mutate()}
-                  disabled={submitMut.isPending}
-                  size="sm"
-                  variant="default"
-                >
-                  {submitMut.isPending ? <Loader2 className="size-4 animate-spin" /> : <Send className="size-4" />}
-                  {canPublishDirect ? "פרסם סידור עבודה" : "שלח לאישור"}
-                </Button>
-
-                <Button
-                  onClick={() => setCopyOpen(true)}
-                  size="sm"
-                  variant="outline"
-                >
-                  <Copy className="size-4" />
-                  העתק מהשבוע הקודם
-                </Button>
-              </>
-            )}
-
-            {canShowApprove && (
-              <Button
-                onClick={() => approveMut.mutate()}
-                disabled={approveMut.isPending || saveMut.isPending}
-                size="sm"
-                variant="default"
-              >
-                {approveMut.isPending ? <Loader2 className="size-4 animate-spin" /> : canPublishDirect ? <Send className="size-4" /> : <CheckCircle2 className="size-4" />}
-                {canPublishDirect ? "פרסם סידור עבודה" : "אשר סידור"}
-              </Button>
-            )}
-            {canShowPublish && (
-              <Button
-                onClick={() => publishMut.mutate()}
-                disabled={publishMut.isPending || saveMut.isPending}
-                size="sm"
-                variant="default"
-              >
-                {publishMut.isPending ? <Loader2 className="size-4 animate-spin" /> : <Send className="size-4" />}
-                פרסם סידור עבודה
-              </Button>
-            )}
-            {canDelete && (
-              <Button
-                onClick={() => setDeleteOpen(true)}
-                size="sm"
-                variant="destructive"
-              >
-                <Trash2 className="size-4" />
-                מחק סידור
-              </Button>
-            )}
-          </div>
-
-          {/* Grid */}
-          <Card className="card-elevated p-0 overflow-auto">
-            <table className="w-full text-sm">
-              <thead className="bg-muted/50">
-                <tr>
-                  <th className="text-right p-3 sticky right-0 bg-muted/50 z-10 min-w-[160px]">
-                    עובד
-                  </th>
-                  {days.map((d, i) => {
-                    const dayCounts = dailyShiftSummary[i]?.counts ?? [];
-                    return (
-                      <th key={d} className="p-2 text-center min-w-[110px] align-top">
-                        <div className="font-semibold">{DAY_NAMES[i]}</div>
-                        <div className="text-xs text-muted-foreground">{formatHeDate(d)}</div>
-                        {dayCounts.length > 0 && (
-                          <div className="mt-1 flex flex-wrap gap-1 justify-center">
-                            {dayCounts.map((s) => (
-                              <span
-                                key={`hdr-${d}-${s.code}`}
-                                className="px-1.5 py-0.5 rounded text-[10px] font-medium border leading-none"
-                                style={shiftStyle(s.code)}
-                                title={`${s.name}: ${s.count}`}
-                              >
-                                {s.name} ({s.count})
-                              </span>
-                            ))}
-                          </div>
-                        )}
+              <Card className="card-elevated p-0 overflow-auto">
+                <table className="w-full text-sm">
+                  <thead className="bg-muted/50">
+                    <tr>
+                      <th className="text-right p-3 sticky right-0 bg-muted/50 z-10 min-w-[160px]">
+                        עובד
                       </th>
-                    );
-                  })}
-                </tr>
-              </thead>
-              <tbody>
-                {(empsQ.data ?? []).length === 0 && (
-                  <tr>
-                    <td colSpan={8} className="p-6 text-center text-muted-foreground">
-                      אין עובדים פעילים במחלקה זו.
-                    </td>
-                  </tr>
-                )}
-                {(empsQ.data ?? []).map((emp) => (
-                  <tr key={emp.id} className="border-t">
-                    <td className="p-3 sticky right-0 bg-card font-medium">{emp.full_name}</td>
-                    {days.map((day) => {
-                      const cur = edits[emp.id]?.[day];
-                      const pub = publishedMap[emp.id]?.[day] ?? null;
-                      const def = cur ? shiftDefsQ.map.get(cur) : undefined;
-                      const cellTimes = timeEdits[emp.id]?.[day];
-                      const effStart =
-                        cellTimes?.start ??
-                        (def?.start_time ? String(def.start_time).slice(0, 5) : null);
-                      const effEnd =
-                        cellTimes?.end ??
-                        (def?.end_time ? String(def.end_time).slice(0, 5) : null);
-                      // Mark as "modified after publish" only when the schedule is approved
-                      // and the current value differs from the published snapshot.
-                      const isModified =
-                        visible.status === "approved" &&
-                        (cur ?? null) !== pub;
-                      if (!editable) {
+                      {days.map((d, i) => {
+                        const dayCounts = dailyShiftSummary[i]?.counts ?? [];
                         return (
-                          <td key={day} className="p-2 text-center align-top">
-                            <div className="relative inline-block">
-                              {cur ? (
-                                <>
+                          <th key={d} className="p-2 text-center min-w-[110px] align-top">
+                            <div className="font-semibold">{DAY_NAMES[i]}</div>
+                            <div className="text-xs text-muted-foreground">{formatHeDate(d)}</div>
+                            {dayCounts.length > 0 && (
+                              <div className="mt-1 flex flex-wrap gap-1 justify-center">
+                                {dayCounts.map((s) => (
                                   <span
-                                    className={`inline-block px-2 py-1 rounded-md text-xs font-medium border ${
-                                      isModified ? "ring-2 ring-orange-500 border-orange-500" : ""
-                                    }`}
-                                    style={shiftStyle(cur)}
+                                    key={`hdr-${d}-${s.code}`}
+                                    className="px-1.5 py-0.5 rounded text-[10px] font-medium border leading-none"
+                                    style={shiftStyle(s.code)}
+                                    title={`${s.name}: ${s.count}`}
                                   >
-                                    {shiftLabel(cur)}
+                                    {s.name} ({s.count})
                                   </span>
-                                  {effStart && effEnd && (
-                                    <div className="text-[10px] text-muted-foreground mt-1 tabular-nums" dir="ltr">
-                                      {effStart}–{effEnd}
-                                    </div>
-                                  )}
-                                </>
-                              ) : (
-                                <span className="text-muted-foreground text-xs">—</span>
-                              )}
-                              {isModified && (
-                                <RefreshCw
-                                  className="size-3 text-orange-600 absolute -top-1 -left-1 bg-background rounded-full p-0.5 box-content border border-orange-500"
-                                  aria-label="עודכן לאחר פרסום"
-                                />
-                              )}
-                            </div>
-                          </td>
-                        );
-                      }
-                      return (
-                        <td key={day} className="p-2 align-top">
-                          <div className="relative space-y-1">
-                            <Select
-                              value={cur ?? ""}
-                              onValueChange={(v) => setShift(emp.id, day, v as Shift)}
-                            >
-                              <SelectTrigger
-                                className={`h-9 ${
-                                  isModified ? "ring-2 ring-orange-500 border-orange-500" : ""
-                                }`}
-                                style={cur ? shiftStyle(cur) : undefined}
-                              >
-                                <SelectValue placeholder="—" />
-                              </SelectTrigger>
-                              <SelectContent>
-                                {activeShifts.map((s) => (
-                                  <SelectItem key={s.code} value={s.code}>
-                                    <span
-                                      className="inline-block size-2 rounded-full me-2 align-middle"
-                                      style={{ backgroundColor: s.color }}
-                                    />
-                                    {s.name}
-                                  </SelectItem>
                                 ))}
-                              </SelectContent>
-                            </Select>
-                            {cur && def?.start_time && def?.end_time && (
-                              <div className="flex items-center gap-1" dir="ltr">
-                                <Time24Input
-                                  aria-label="שעת התחלה"
-                                  value={effStart ?? ""}
-                                  onChange={(v) => setCellTime(emp.id, day, "start", v)}
-                                  className="h-7 w-full min-w-0 rounded-md border border-input bg-background px-1 text-[11px] focus:outline-none focus:ring-1 focus:ring-ring"
-                                />
-                                <span className="text-[10px] text-muted-foreground">–</span>
-                                <Time24Input
-                                  aria-label="שעת סיום"
-                                  value={effEnd ?? ""}
-                                  onChange={(v) => setCellTime(emp.id, day, "end", v)}
-                                  className="h-7 w-full min-w-0 rounded-md border border-input bg-background px-1 text-[11px] focus:outline-none focus:ring-1 focus:ring-ring"
-                                />
                               </div>
                             )}
-                            {isModified && (
-                              <RefreshCw
-                                className="size-3 text-orange-600 absolute -top-1 -left-1 bg-background rounded-full p-0.5 box-content border border-orange-500"
-                                aria-label="עודכן לאחר פרסום"
-                              />
-                            )}
-                          </div>
+                          </th>
+                        );
+                      })}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(empsQ.data ?? []).length === 0 && (
+                      <tr>
+                        <td colSpan={8} className="p-6 text-center text-muted-foreground">
+                          אין עובדים פעילים במחלקה זו.
                         </td>
-                      );
-                    })}
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </Card>
+                      </tr>
+                    )}
+                    {(empsQ.data ?? []).map((emp) => (
+                      <tr key={emp.id} className="border-t">
+                        <td className="p-3 sticky right-0 bg-card font-medium">{emp.full_name}</td>
+                        {days.map((day) => {
+                          const cur = edits[emp.id]?.[day];
+                          const pub = publishedMap[emp.id]?.[day] ?? null;
+                          const def = cur ? shiftDefsQ.map.get(cur) : undefined;
+                          const cellTimes = timeEdits[emp.id]?.[day];
+                          const effStart =
+                            cellTimes?.start ??
+                            (def?.start_time ? String(def.start_time).slice(0, 5) : null);
+                          const effEnd =
+                            cellTimes?.end ??
+                            (def?.end_time ? String(def.end_time).slice(0, 5) : null);
+                          const isModified =
+                            visible.status === "approved" &&
+                            (cur ?? null) !== pub;
+                          if (!editable) {
+                            return (
+                              <td key={day} className="p-2 text-center align-top">
+                                <div className="relative inline-block">
+                                  {cur ? (
+                                    <>
+                                      <span
+                                        className={`inline-block px-2 py-1 rounded-md text-xs font-medium border ${
+                                          isModified ? "ring-2 ring-orange-500 border-orange-500" : ""
+                                        }`}
+                                        style={shiftStyle(cur)}
+                                      >
+                                        {shiftLabel(cur)}
+                                      </span>
+                                      {effStart && effEnd && (
+                                        <div className="text-[10px] text-muted-foreground mt-1 tabular-nums" dir="ltr">
+                                          {effStart}–{effEnd}
+                                        </div>
+                                      )}
+                                    </>
+                                  ) : (
+                                    <span className="text-muted-foreground text-xs">—</span>
+                                  )}
+                                  {isModified && (
+                                    <RefreshCw
+                                      className="size-3 text-orange-600 absolute -top-1 -left-1 bg-background rounded-full p-0.5 box-content border border-orange-500"
+                                      aria-label="עודכן לאחר פרסום"
+                                    />
+                                  )}
+                                </div>
+                              </td>
+                            );
+                          }
+                          return (
+                            <td key={day} className="p-2 align-top">
+                              <div className="relative space-y-1">
+                                <Select
+                                  value={cur ?? ""}
+                                  onValueChange={(v) => setShift(emp.id, day, v as Shift)}
+                                >
+                                  <SelectTrigger
+                                    className={`h-9 ${
+                                      isModified ? "ring-2 ring-orange-500 border-orange-500" : ""
+                                    }`}
+                                    style={cur ? shiftStyle(cur) : undefined}
+                                  >
+                                    <SelectValue placeholder="—" />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    {activeShifts.map((s) => (
+                                      <SelectItem key={s.code} value={s.code}>
+                                        <span
+                                          className="inline-block size-2 rounded-full me-2 align-middle"
+                                          style={{ backgroundColor: s.color }}
+                                        />
+                                        {s.name}
+                                      </SelectItem>
+                                    ))}
+                                  </SelectContent>
+                                </Select>
+                                {cur && def?.start_time && def?.end_time && (
+                                  <div className="flex items-center gap-1" dir="ltr">
+                                    <Time24Input
+                                      aria-label="שעת התחלה"
+                                      value={effStart ?? ""}
+                                      onChange={(v) => setCellTime(emp.id, day, "start", v)}
+                                      className="h-7 w-full min-w-0 rounded-md border border-input bg-background px-1 text-[11px] focus:outline-none focus:ring-1 focus:ring-ring"
+                                    />
+                                    <span className="text-[10px] text-muted-foreground">–</span>
+                                    <Time24Input
+                                      aria-label="שעת סיום"
+                                      value={effEnd ?? ""}
+                                      onChange={(v) => setCellTime(emp.id, day, "end", v)}
+                                      className="h-7 w-full min-w-0 rounded-md border border-input bg-background px-1 text-[11px] focus:outline-none focus:ring-1 focus:ring-ring"
+                                    />
+                                  </div>
+                                )}
+                                {isModified && (
+                                  <RefreshCw
+                                    className="size-3 text-orange-600 absolute -top-1 -left-1 bg-background rounded-full p-0.5 box-content border border-orange-500"
+                                    aria-label="עודכן לאחר פרסום"
+                                  />
+                                )}
+                              </div>
+                            </td>
+                          );
+                        })}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </Card>
+            </>
+          )}
         </>
       )}
         </>

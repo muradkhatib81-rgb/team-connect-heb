@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { publishAllWeekSchedules } from "@/lib/schedules.functions";
+import { publishAllWeekSchedules, getSchedulesForViewer } from "@/lib/schedules.functions";
 import { useEffect, useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
@@ -1019,16 +1019,17 @@ function SchedulesStatsSection({ profile }: { profile: any }) {
   });
 
   const scopeFilter = canManagePrePublishSchedules ? null : profile.department_id ?? null;
+  const viewerSchedulesFn = useServerFn(getSchedulesForViewer);
 
   const statsQ = useQuery({
     enabled: !!profile,
     queryKey: ["dashboard-schedules", profile.id, weekStart, canApprove, canManagePrePublishSchedules],
     queryFn: async () => {
-      const [{ data: scheds }, { data: deptRows }] = await Promise.all([
-        supabase.from("schedules").select("id, status, department_id, week_start, week_end, published_at, updated_at"),
+      const [{ data: deptRows }] = await Promise.all([
         supabase.from("departments").select("id, name, is_active").eq("is_active", true).order("name"),
       ]);
-      const all = (scheds ?? []) as {
+      const rows = await viewerSchedulesFn({ data: { week_start: weekStart } });
+      const all = (rows ?? []) as {
         id: string;
         status: string;
         department_id: string;
@@ -1056,7 +1057,9 @@ function SchedulesStatsSection({ profile }: { profile: any }) {
       const pendingFirst = pendingAllList[0] ?? null;
 
       // Three-state workflow for the current week (exact week_start match).
-      const allDepts = (deptRows ?? []) as { id: string; name: string }[];
+      const allDepts = ((deptRows ?? []) as { id: string; name: string }[]).filter((d) =>
+        isDeptMgr ? d.id === profile.department_id : true,
+      );
       const weekSchedules = all.filter((s) => s.week_start === weekStart);
       const schedByDept = new Map(weekSchedules.map((s) => [s.department_id, s]));
 

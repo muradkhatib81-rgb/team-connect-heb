@@ -70,11 +70,61 @@ function weekStartOf(dateStr: string): { start: string; end: string } {
   return { start: iso(start), end: iso(end) };
 }
 
-function isScheduleVisibleToCaps(schedule: any, caps: any) {
-  if (caps.isMainAdmin || caps.isBranchMgr) return true;
-  if (!caps.isDeptMgr) return true;
-  if (!["draft", "rejected"].includes(schedule?.status)) return true;
-  return schedule?.department_id === caps.departmentId;
+function getViewerAccessForSchedule(schedule: any, caps: any, viewerId: string) {
+  const isDeptMgr = !!caps.isDeptMgr && !caps.isMainAdmin && !caps.isBranchMgr;
+
+  if (caps.isMainAdmin || caps.isBranchMgr) {
+    return {
+      visible: true,
+      canEdit: true,
+      canManage: true,
+      isRestrictedOwnDraft: false,
+      reason: "manager",
+    };
+  }
+
+  if (!isDeptMgr) {
+    return {
+      visible: schedule?.status === "approved" && !!schedule?.published_at,
+      canEdit: false,
+      canManage: false,
+      isRestrictedOwnDraft: false,
+      reason: "employee",
+    };
+  }
+
+  if (schedule?.department_id !== caps.departmentId) {
+    return {
+      visible: false,
+      canEdit: false,
+      canManage: false,
+      isRestrictedOwnDraft: false,
+      reason: "other_department",
+    };
+  }
+
+  if (["draft", "rejected"].includes(schedule?.status)) {
+    const isOwnDraft = schedule?.created_by === viewerId;
+    return {
+      visible: true,
+      canEdit: isOwnDraft,
+      canManage: isOwnDraft,
+      isRestrictedOwnDraft: !isOwnDraft,
+      reason: isOwnDraft ? "own_draft" : "other_manager_draft",
+    };
+  }
+
+  return {
+    visible: true,
+    canEdit: false,
+    canManage: false,
+    isRestrictedOwnDraft: false,
+    reason: schedule?.status === "approved" ? "published" : "read_only",
+  };
+}
+
+function isScheduleVisibleToCaps(schedule: any, caps: any, viewerId: string) {
+  return getViewerAccessForSchedule(schedule, caps, viewerId).visible;
 }
 
 // ---------- LIST schedules visible to the current user ----------
@@ -98,7 +148,12 @@ export const getSchedulesForViewer = createServerFn({ method: "POST" })
 
     const { data: rows, error } = await query;
     if (error) throw new Error(error.message);
-    return (rows ?? []).filter((schedule: any) => isScheduleVisibleToCaps(schedule, caps));
+    return (rows ?? [])
+      .filter((schedule: any) => isScheduleVisibleToCaps(schedule, caps, context.userId))
+      .map((schedule: any) => ({
+        ...schedule,
+        viewer_access: getViewerAccessForSchedule(schedule, caps, context.userId),
+      }));
   });
 
 // ---------- CREATE / GET-OR-CREATE schedule ----------
@@ -125,7 +180,13 @@ export const createOrGetSchedule = createServerFn({ method: "POST" })
       .eq("department_id", data.department_id)
       .eq("week_start", start)
       .maybeSingle();
-    if (existing.data) return existing.data;
+    if (existing.data) {
+      const access = getViewerAccessForSchedule(existing.data, caps, context.userId);
+      if (caps.isDeptMgr && !caps.isMainAdmin && !caps.isBranchMgr && !access.canEdit && existing.data.status !== "approved") {
+        throw new Error("אין הרשאה לערוך סידור עבודה");
+      }
+      return existing.data;
+    }
     const { data: settings } = await context.supabase
       .from("company_settings")
       .select("schedule_type")
@@ -184,6 +245,8 @@ export const saveScheduleShifts = createServerFn({ method: "POST" })
       .single();
     if (se || !sched) throw new Error("סידור לא נמצא");
     const caps = await getCaps(context.supabase, context.userId);
+    const access = getViewerAccessForSchedule(sched, caps, context.userId);
+    if (!access.canEdit) throw new Error("אין הרשאה לערוך סידור עבודה");
     const isApproved = sched.status === "approved";
     const isPendingApproval = sched.status === "pending_approval";
     if (isApproved) {
@@ -307,6 +370,9 @@ export const submitSchedule = createServerFn({ method: "POST" })
       .eq("id", data.schedule_id)
       .single();
     if (!sched) throw new Error("סידור לא נמצא");
+    const caps = await getCaps(context.supabase, context.userId);
+    const access = getViewerAccessForSchedule(sched, caps, context.userId);
+    if (!access.canEdit) throw new Error("אין הרשאה לערוך סידור עבודה");
     if (!["draft", "rejected"].includes(sched.status)) throw new Error("לא ניתן לשלוח שוב");
 
     // Validate
@@ -369,6 +435,8 @@ export const submitSchedule = createServerFn({ method: "POST" })
     }
 
     const caps = await getCaps(context.supabase, context.userId);
+    const access = getViewerAccessForSchedule(sched, caps, context.userId);
+    if (!access.canEdit) throw new Error("אין הרשאה לערוך סידור עבודה");
     const nowIso = new Date().toISOString();
 
     if (caps.canPublishDirect) {
@@ -580,6 +648,9 @@ export const publishSchedule = createServerFn({ method: "POST" })
       .eq("id", data.schedule_id)
       .single();
     if (!sched) throw new Error("לא נמצא");
+    const caps = await getCaps(context.supabase, context.userId);
+    const access = getViewerAccessForSchedule(sched, caps, context.userId);
+    if (!access.canManage) throw new Error("אין הרשאה לפרסם סידור");
     if (sched.status !== "approved") throw new Error("ניתן לפרסם רק סידור מאושר");
 
     const now = new Date().toISOString();
@@ -929,6 +1000,9 @@ export const copyPreviousWeek = createServerFn({ method: "POST" })
       .eq("id", data.schedule_id)
       .single();
     if (!sched) throw new Error("לא נמצא");
+    const caps = await getCaps(context.supabase, context.userId);
+    const access = getViewerAccessForSchedule(sched, caps, context.userId);
+    if (!access.canEdit) throw new Error("אין הרשאה לערוך סידור עבודה");
     if (!["draft", "rejected"].includes(sched.status))
       throw new Error("ניתן להעתיק רק לטיוטה");
     const prevStart = new Date(sched.week_start + "T00:00:00Z");
@@ -981,12 +1055,8 @@ export const deleteSchedule = createServerFn({ method: "POST" })
       .maybeSingle();
     if (!sched) throw new Error("סידור לא נמצא");
 
-    const isOwnDeptMgrDraft =
-      caps.isDeptMgr &&
-      sched.department_id === caps.departmentId &&
-      (sched.status === "draft" || sched.status === "rejected");
-
-    if (!caps.isMainAdmin && !caps.canApprove && !caps.canPublishDirect && !isOwnDeptMgrDraft) {
+    const access = getViewerAccessForSchedule(sched, caps, context.userId);
+    if (!access.canManage) {
       throw new Error("אין הרשאה למחוק את סידור העבודה");
     }
 
@@ -1038,11 +1108,10 @@ export const getUnpublishedWeekSummary = createServerFn({ method: "POST" })
         s.status === "pending_approval" ||
         (s.status === "approved" && !s.published_at),
     );
-    const visibleUnpublished = (caps.isDeptMgr && !caps.isMainAdmin && !caps.isBranchMgr
-      ? unpublished.filter(
-          (s: any) => !["draft", "rejected"].includes(s.status) || s.department_id === caps.departmentId,
-        )
-      : unpublished);
+    const visibleUnpublished = unpublished.filter((s: any) => {
+      const access = getViewerAccessForSchedule(s, caps, context.userId);
+      return access.visible;
+    });
     if (visibleUnpublished.length === 0) {
       return { week_start: start, totals: {} as Record<string, number>, departments: [] as { id: string; status: string }[], total_assignments: 0 };
     }
