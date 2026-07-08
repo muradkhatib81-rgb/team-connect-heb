@@ -434,9 +434,6 @@ export const submitSchedule = createServerFn({ method: "POST" })
       throw err;
     }
 
-    const caps = await getCaps(context.supabase, context.userId);
-    const access = getViewerAccessForSchedule(sched, caps, context.userId);
-    if (!access.canEdit) throw new Error("אין הרשאה לערוך סידור עבודה");
     const nowIso = new Date().toISOString();
 
     if (caps.canPublishDirect) {
@@ -648,7 +645,6 @@ export const publishSchedule = createServerFn({ method: "POST" })
       .eq("id", data.schedule_id)
       .single();
     if (!sched) throw new Error("לא נמצא");
-    const caps = await getCaps(context.supabase, context.userId);
     const access = getViewerAccessForSchedule(sched, caps, context.userId);
     if (!access.canManage) throw new Error("אין הרשאה לפרסם סידור");
     if (sched.status !== "approved") throw new Error("ניתן לפרסם רק סידור מאושר");
