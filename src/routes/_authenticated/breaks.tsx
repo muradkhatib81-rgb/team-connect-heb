@@ -209,13 +209,27 @@ function BreaksPage() {
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "break_policy" },
-        () => qc.invalidateQueries({ queryKey: ["can-request-break"] }),
+        () => {
+          qc.invalidateQueries({ queryKey: ["can-request-break"] });
+          qc.invalidateQueries({ queryKey: ["break-policy-effective"] });
+        },
       )
       .subscribe();
     return () => {
       supabase.removeChannel(ch);
     };
   }, [qc]);
+
+  const policyQ = useQuery({
+    enabled: !!me?.id,
+    queryKey: ["break-policy-effective", me?.id],
+    queryFn: async () => {
+      const { data, error } = await (supabase as any).rpc("get_break_policy");
+      if (error) throw error;
+      return data as { requires_approval?: boolean } | null;
+    },
+  });
+  const requiresApproval = policyQ.data?.requires_approval !== false;
 
   // ---- Submit form
   const [settingId, setSettingId] = useState("");
@@ -243,19 +257,28 @@ function BreaksPage() {
       if ((existing ?? []).length > 0) {
         throw new Error("כבר שלחת בקשה עבור סוג הפסקה זה היום.");
       }
+      const requestedAt = isoFromLocalTime(timeStr);
+      const approvalPatch = requiresApproval
+        ? { status: "pending" }
+        : {
+            status: "approved",
+            approved_at_time: requestedAt,
+            approved_by: me!.id,
+            approval_decided_at: new Date().toISOString(),
+          };
       const { error } = await supabase.from("break_requests").insert({
         user_id: me!.id,
         department_id: me!.department_id ?? null,
         break_setting_id: settingId,
         duration_minutes: setting.duration_minutes,
-        requested_at: isoFromLocalTime(timeStr),
+        requested_at: requestedAt,
         note: note.trim() || null,
-        status: "pending",
+        ...approvalPatch,
       });
       if (error) throw error;
     },
     onSuccess: () => {
-      toast.success("בקשת ההפסקה נשלחה");
+      toast.success(requiresApproval ? "בקשת ההפסקה נשלחה" : "ההפסקה אושרה ללא צורך באישור מנהל");
       setSettingId("");
       setTimeStr("");
       setNote("");
@@ -279,7 +302,9 @@ function BreaksPage() {
         <div>
           <h1 className="text-2xl sm:text-3xl font-bold">הפסקה</h1>
           <p className="text-sm text-muted-foreground mt-1">
-            הגשת בקשת הפסקה וצפייה בסטטוס. השעה המאושרת היא הקובעת.
+            {requiresApproval
+              ? "הגשת בקשת הפסקה וצפייה בסטטוס. השעה המאושרת היא הקובעת."
+              : "הגשת הפסקה ללא צורך באישור מנהל. השעה שבחרת תאושר אוטומטית."}
           </p>
         </div>
       </header>
@@ -339,7 +364,7 @@ function BreaksPage() {
                 ) : (
                   <Send className="size-4" />
                 )}
-                שלח בקשה
+                {requiresApproval ? "שלח בקשה" : "התחל ללא אישור"}
               </Button>
             </Card>
           </TabsContent>
