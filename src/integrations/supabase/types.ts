@@ -322,6 +322,7 @@ export type Database = {
           branch_id: string | null
           break_setting_id: string
           completed_at: string | null
+          completed_by: string | null
           created_at: string
           department_id: string | null
           duration_minutes: number
@@ -344,6 +345,7 @@ export type Database = {
           branch_id?: string | null
           break_setting_id: string
           completed_at?: string | null
+          completed_by?: string | null
           created_at?: string
           department_id?: string | null
           duration_minutes: number
@@ -366,6 +368,7 @@ export type Database = {
           branch_id?: string | null
           break_setting_id?: string
           completed_at?: string | null
+          completed_by?: string | null
           created_at?: string
           department_id?: string | null
           duration_minutes?: number
@@ -2174,6 +2177,7 @@ export type Database = {
       }
       current_active_branch: { Args: never; Returns: string }
       delete_branch_cascade: { Args: { _branch_id: string }; Returns: Json }
+      end_break_by_manager: { Args: { _id: string }; Returns: undefined }
       end_my_break: { Args: { _id: string }; Returns: undefined }
       find_archived_by_id_number: {
         Args: { _id_number: string }

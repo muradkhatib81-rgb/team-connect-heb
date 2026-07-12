@@ -239,7 +239,7 @@ function BreaksPage() {
   const submitMut = useMutation({
     mutationFn: async () => {
       if (!settingId) throw new Error("יש לבחור סוג הפסקה");
-      if (!timeStr) throw new Error("יש לבחור שעה");
+      if (requiresApproval && !timeStr) throw new Error("יש לבחור שעה");
       const setting = settingsQ.data?.find((s) => s.id === settingId);
       if (!setting) throw new Error("סוג הפסקה לא קיים");
       const now = new Date();
@@ -257,14 +257,16 @@ function BreaksPage() {
       if ((existing ?? []).length > 0) {
         throw new Error("כבר שלחת בקשה עבור סוג הפסקה זה היום.");
       }
-      const requestedAt = isoFromLocalTime(timeStr);
+      const requestedAt = requiresApproval ? isoFromLocalTime(timeStr) : now.toISOString();
       const approvalPatch = requiresApproval
         ? { status: "pending" }
         : {
-            status: "approved",
+            status: "active",
             approved_at_time: requestedAt,
             approved_by: me!.id,
-            approval_decided_at: new Date().toISOString(),
+            approval_decided_at: now.toISOString(),
+            started_at: requestedAt,
+            ends_at: new Date(now.getTime() + setting.duration_minutes * 60_000).toISOString(),
           };
       const { error } = await supabase.from("break_requests").insert({
         user_id: me!.id,
@@ -278,7 +280,7 @@ function BreaksPage() {
       if (error) throw error;
     },
     onSuccess: () => {
-      toast.success(requiresApproval ? "בקשת ההפסקה נשלחה" : "ההפסקה אושרה ללא צורך באישור מנהל");
+      toast.success(requiresApproval ? "בקשת ההפסקה נשלחה" : "ההפסקה החלה");
       setSettingId("");
       setTimeStr("");
       setNote("");
@@ -334,15 +336,17 @@ function BreaksPage() {
                     </SelectContent>
                   </Select>
                 </div>
-                <div className="space-y-1.5">
-                  <Label htmlFor="brk-time">שעה מבוקשת</Label>
-                  <Input
-                    id="brk-time"
-                    type="time"
-                    value={timeStr}
-                    onChange={(e) => setTimeStr(e.target.value)}
-                  />
-                </div>
+                {requiresApproval && (
+                  <div className="space-y-1.5">
+                    <Label htmlFor="brk-time">שעה מבוקשת</Label>
+                    <Input
+                      id="brk-time"
+                      type="time"
+                      value={timeStr}
+                      onChange={(e) => setTimeStr(e.target.value)}
+                    />
+                  </div>
+                )}
               </div>
               <div className="space-y-1.5">
                 <Label htmlFor="brk-note">הערה (אופציונלי)</Label>
@@ -364,7 +368,7 @@ function BreaksPage() {
                 ) : (
                   <Send className="size-4" />
                 )}
-                {requiresApproval ? "שלח בקשה" : "התחל ללא אישור"}
+                {requiresApproval ? "שלח בקשה" : "יציאה להפסקה"}
               </Button>
             </Card>
           </TabsContent>
