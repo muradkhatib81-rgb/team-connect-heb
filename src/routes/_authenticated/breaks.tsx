@@ -368,7 +368,7 @@ function BreaksPage() {
                 ) : (
                   <Send className="size-4" />
                 )}
-                {requiresApproval ? "שלח בקשה" : "התחל ללא אישור"}
+                {requiresApproval ? "שלח בקשה" : "יציאה להפסקה"}
               </Button>
             </Card>
           </TabsContent>
