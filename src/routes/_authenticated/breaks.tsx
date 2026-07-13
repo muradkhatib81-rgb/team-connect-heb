@@ -229,7 +229,7 @@ function BreaksPage() {
       return data as { requires_approval?: boolean } | null;
     },
   });
-  const requiresApproval = policyQ.data?.requires_approval !== false;
+  const requiresApproval = policyQ.data?.requires_approval === true;
 
   // ---- Submit form
   const [settingId, setSettingId] = useState("");
@@ -239,9 +239,12 @@ function BreaksPage() {
   const submitMut = useMutation({
     mutationFn: async () => {
       if (!settingId) throw new Error("יש לבחור סוג הפסקה");
-      if (requiresApproval && !timeStr) throw new Error("יש לבחור שעה");
       const setting = settingsQ.data?.find((s) => s.id === settingId);
       if (!setting) throw new Error("סוג הפסקה לא קיים");
+      const { data: policy, error: policyErr } = await (supabase as any).rpc("get_break_policy");
+      if (policyErr) throw policyErr;
+      const effectiveRequiresApproval = policy?.requires_approval === true;
+      if (effectiveRequiresApproval && !timeStr) throw new Error("יש לבחור שעה");
       const now = new Date();
       const dayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
       const dayEnd = new Date(dayStart.getTime() + 24 * 60 * 60 * 1000);
@@ -257,8 +260,8 @@ function BreaksPage() {
       if ((existing ?? []).length > 0) {
         throw new Error("כבר שלחת בקשה עבור סוג הפסקה זה היום.");
       }
-      const requestedAt = requiresApproval ? isoFromLocalTime(timeStr) : now.toISOString();
-      const approvalPatch = requiresApproval
+      const requestedAt = effectiveRequiresApproval ? isoFromLocalTime(timeStr) : now.toISOString();
+      const approvalPatch = effectiveRequiresApproval
         ? { status: "pending" }
         : {
             status: "active",
@@ -278,9 +281,10 @@ function BreaksPage() {
         ...approvalPatch,
       });
       if (error) throw error;
+      return { requiresApproval: effectiveRequiresApproval };
     },
-    onSuccess: () => {
-      toast.success(requiresApproval ? "בקשת ההפסקה נשלחה" : "ההפסקה החלה");
+    onSuccess: (result) => {
+      toast.success(result.requiresApproval ? "בקשת ההפסקה נשלחה" : "ההפסקה החלה");
       setSettingId("");
       setTimeStr("");
       setNote("");
@@ -361,7 +365,7 @@ function BreaksPage() {
               <Button
                 className="gap-2"
                 onClick={() => submitMut.mutate()}
-                disabled={submitMut.isPending}
+                disabled={submitMut.isPending || policyQ.isLoading}
               >
                 {submitMut.isPending ? (
                   <Loader2 className="size-4 animate-spin" />
