@@ -230,6 +230,7 @@ function BreaksPage() {
     },
   });
   const requiresApproval = policyQ.data?.requires_approval === true;
+  const policyLoaded = !!policyQ.data && !policyQ.isLoading;
 
   // ---- Submit form
   const [settingId, setSettingId] = useState("");
@@ -308,7 +309,7 @@ function BreaksPage() {
         <div>
           <h1 className="text-2xl sm:text-3xl font-bold">הפסקה</h1>
           <p className="text-sm text-muted-foreground mt-1">
-            {requiresApproval
+            {policyLoaded && requiresApproval
               ? "הגשת בקשת הפסקה וצפייה בסטטוס. השעה המאושרת היא הקובעת."
               : "הגשת הפסקה ללא צורך באישור מנהל. השעה שבחרת תאושר אוטומטית."}
           </p>
@@ -365,7 +366,7 @@ function BreaksPage() {
               <Button
                 className="gap-2"
                 onClick={() => submitMut.mutate()}
-                disabled={submitMut.isPending || policyQ.isLoading}
+                disabled={submitMut.isPending || !policyLoaded}
               >
                 {submitMut.isPending ? (
                   <Loader2 className="size-4 animate-spin" />
