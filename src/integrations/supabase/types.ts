@@ -270,6 +270,54 @@ export type Database = {
           },
         ]
       }
+      break_audit_log: {
+        Row: {
+          action: string
+          actor_id: string | null
+          branch_id: string | null
+          break_request_id: string
+          id: string
+          occurred_at: string
+          payload: Json
+          target_user_id: string
+        }
+        Insert: {
+          action: string
+          actor_id?: string | null
+          branch_id?: string | null
+          break_request_id: string
+          id?: string
+          occurred_at?: string
+          payload?: Json
+          target_user_id: string
+        }
+        Update: {
+          action?: string
+          actor_id?: string | null
+          branch_id?: string | null
+          break_request_id?: string
+          id?: string
+          occurred_at?: string
+          payload?: Json
+          target_user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "break_audit_log_branch_id_fkey"
+            columns: ["branch_id"]
+            isOneToOne: false
+            referencedRelation: "branches"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "break_audit_log_break_request_id_fkey"
+            columns: ["break_request_id"]
+            isOneToOne: false
+            referencedRelation: "break_requests"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       break_policy: {
         Row: {
           approver_scope: string
@@ -2162,6 +2210,7 @@ export type Database = {
         Args: { _branch_id: string; _uid: string }
         Returns: boolean
       }
+      can_manually_end_break: { Args: { _user_id: string }; Returns: boolean }
       can_request_break_by_policy: {
         Args: { _user_id: string }
         Returns: boolean
@@ -2411,6 +2460,7 @@ export type Database = {
         Args: { _event: string; _payload?: Json; _target_user_id?: string }
         Returns: string
       }
+      manual_end_break: { Args: { _id: string }; Returns: undefined }
       notify_announcement_edited: {
         Args: { _ann_id: string; _title: string }
         Returns: undefined

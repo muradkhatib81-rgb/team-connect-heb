@@ -236,6 +236,7 @@ function BreaksPage() {
   const [settingId, setSettingId] = useState("");
   const [timeStr, setTimeStr] = useState("");
   const [note, setNote] = useState("");
+  const [timeDialogOpen, setTimeDialogOpen] = useState(false);
 
   const submitMut = useMutation({
     mutationFn: async () => {
@@ -245,7 +246,7 @@ function BreaksPage() {
       const { data: policy, error: policyErr } = await (supabase as any).rpc("get_break_policy");
       if (policyErr) throw policyErr;
       const effectiveRequiresApproval = policy?.requires_approval === true;
-      if (effectiveRequiresApproval && !timeStr) throw new Error("יש לבחור שעה");
+      if (!timeStr) throw new Error("יש לבחור שעה");
       const now = new Date();
       const dayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
       const dayEnd = new Date(dayStart.getTime() + 24 * 60 * 60 * 1000);
@@ -261,7 +262,8 @@ function BreaksPage() {
       if ((existing ?? []).length > 0) {
         throw new Error("כבר שלחת בקשה עבור סוג הפסקה זה היום.");
       }
-      const requestedAt = effectiveRequiresApproval ? isoFromLocalTime(timeStr) : now.toISOString();
+      const requestedAt = isoFromLocalTime(timeStr);
+      const requestedAtDate = new Date(requestedAt);
       const approvalPatch = effectiveRequiresApproval
         ? { status: "pending" }
         : {
@@ -270,7 +272,7 @@ function BreaksPage() {
             approved_by: me!.id,
             approval_decided_at: now.toISOString(),
             started_at: requestedAt,
-            ends_at: new Date(now.getTime() + setting.duration_minutes * 60_000).toISOString(),
+            ends_at: new Date(requestedAtDate.getTime() + setting.duration_minutes * 60_000).toISOString(),
           };
       const { error } = await supabase.from("break_requests").insert({
         user_id: me!.id,
@@ -286,6 +288,7 @@ function BreaksPage() {
     },
     onSuccess: (result) => {
       toast.success(result.requiresApproval ? "בקשת ההפסקה נשלחה" : "ההפסקה החלה");
+      setTimeDialogOpen(false);
       setSettingId("");
       setTimeStr("");
       setNote("");
@@ -293,6 +296,15 @@ function BreaksPage() {
     },
     onError: (e: any) => toast.error(e?.message ?? "שגיאה בשליחה"),
   });
+
+  function openTimeDialog() {
+    if (!settingId) {
+      toast.error("יש לבחור סוג הפסקה");
+      return;
+    }
+    if (!timeStr) setTimeStr(toLocalTime(new Date().toISOString()));
+    setTimeDialogOpen(true);
+  }
 
   if (!me) return null;
 
@@ -341,17 +353,6 @@ function BreaksPage() {
                     </SelectContent>
                   </Select>
                 </div>
-                {requiresApproval && (
-                  <div className="space-y-1.5">
-                    <Label htmlFor="brk-time">שעה מבוקשת</Label>
-                    <Input
-                      id="brk-time"
-                      type="time"
-                      value={timeStr}
-                      onChange={(e) => setTimeStr(e.target.value)}
-                    />
-                  </div>
-                )}
               </div>
               <div className="space-y-1.5">
                 <Label htmlFor="brk-note">הערה (אופציונלי)</Label>
@@ -365,7 +366,7 @@ function BreaksPage() {
               </div>
               <Button
                 className="gap-2"
-                onClick={() => submitMut.mutate()}
+                onClick={openTimeDialog}
                 disabled={submitMut.isPending || !policyLoaded}
               >
                 {submitMut.isPending ? (
@@ -378,6 +379,42 @@ function BreaksPage() {
             </Card>
           </TabsContent>
         )}
+
+        <Dialog open={timeDialogOpen} onOpenChange={setTimeDialogOpen}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>בחירת שעת יציאה להפסקה</DialogTitle>
+            </DialogHeader>
+            <div className="space-y-3">
+              <div className="space-y-1.5">
+                <Label htmlFor="brk-time-dialog">שעת יציאה להפסקה</Label>
+                <Input
+                  id="brk-time-dialog"
+                  type="time"
+                  value={timeStr}
+                  onChange={(e) => setTimeStr(e.target.value)}
+                />
+              </div>
+              <p className="text-xs text-muted-foreground">
+                השעה שנבחרה תישמר כשעת ההפסקה.
+              </p>
+            </div>
+            <DialogFooter>
+              <Button
+                className="gap-2"
+                onClick={() => submitMut.mutate()}
+                disabled={submitMut.isPending || !timeStr}
+              >
+                {submitMut.isPending ? (
+                  <Loader2 className="size-4 animate-spin" />
+                ) : (
+                  <Send className="size-4" />
+                )}
+                {requiresApproval ? "שלח בקשה" : "יציאה להפסקה"}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
 
         <TabsContent value="mine">
           {myReqQ.isLoading ? (
