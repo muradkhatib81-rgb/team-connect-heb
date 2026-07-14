@@ -245,7 +245,7 @@ function BreaksPage() {
       const { data: policy, error: policyErr } = await (supabase as any).rpc("get_break_policy");
       if (policyErr) throw policyErr;
       const effectiveRequiresApproval = policy?.requires_approval === true;
-      if (effectiveRequiresApproval && !timeStr) throw new Error("יש לבחור שעה");
+      if (!timeStr) throw new Error("יש לבחור שעה");
       const now = new Date();
       const dayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
       const dayEnd = new Date(dayStart.getTime() + 24 * 60 * 60 * 1000);
@@ -261,7 +261,8 @@ function BreaksPage() {
       if ((existing ?? []).length > 0) {
         throw new Error("כבר שלחת בקשה עבור סוג הפסקה זה היום.");
       }
-      const requestedAt = effectiveRequiresApproval ? isoFromLocalTime(timeStr) : now.toISOString();
+      const requestedAt = isoFromLocalTime(timeStr);
+      const requestedAtDate = new Date(requestedAt);
       const approvalPatch = effectiveRequiresApproval
         ? { status: "pending" }
         : {
@@ -270,7 +271,7 @@ function BreaksPage() {
             approved_by: me!.id,
             approval_decided_at: now.toISOString(),
             started_at: requestedAt,
-            ends_at: new Date(now.getTime() + setting.duration_minutes * 60_000).toISOString(),
+            ends_at: new Date(requestedAtDate.getTime() + setting.duration_minutes * 60_000).toISOString(),
           };
       const { error } = await supabase.from("break_requests").insert({
         user_id: me!.id,
@@ -341,17 +342,15 @@ function BreaksPage() {
                     </SelectContent>
                   </Select>
                 </div>
-                {requiresApproval && (
-                  <div className="space-y-1.5">
-                    <Label htmlFor="brk-time">שעה מבוקשת</Label>
-                    <Input
-                      id="brk-time"
-                      type="time"
-                      value={timeStr}
-                      onChange={(e) => setTimeStr(e.target.value)}
-                    />
-                  </div>
-                )}
+                <div className="space-y-1.5">
+                  <Label htmlFor="brk-time">שעה מבוקשת</Label>
+                  <Input
+                    id="brk-time"
+                    type="time"
+                    value={timeStr}
+                    onChange={(e) => setTimeStr(e.target.value)}
+                  />
+                </div>
               </div>
               <div className="space-y-1.5">
                 <Label htmlFor="brk-note">הערה (אופציונלי)</Label>
