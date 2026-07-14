@@ -950,7 +950,7 @@ function StatCard({
 
 function SchedulesStatsSection({ profile }: { profile: any }) {
   const navigate = useNavigate();
-  const isMainAdmin = profile.roles.includes("main_admin");
+  const isMainAdmin = profile.roles.includes("main_admin") || profile.roles.includes("system_admin");
   const isBranchMgr =
     profile.roles.includes("branch_manager") || profile.roles.includes("assistant_manager");
   const isDeptMgr = profile.roles.includes("department_manager");
@@ -2642,6 +2642,27 @@ function OnBreakSection({ profile }: { profile: any }) {
     },
   });
 
+  const manualEndMut = useMutation({
+    mutationFn: async (input: { id: string; userId: string }) => {
+      const { error } = await (supabase as any).rpc("manual_end_break", { _id: input.id });
+      if (error) throw error;
+      return input;
+    },
+    onSuccess: (input) => {
+      toast.success("ההפסקה הסתיימה");
+      qc.invalidateQueries({ queryKey: ["dashboard-on-break"] });
+      qc.invalidateQueries({ queryKey: ["dashboard-pending-breaks"] });
+      qc.invalidateQueries({ queryKey: ["dashboard-daily-breaks"] });
+      qc.invalidateQueries({ queryKey: ["dashboard", "stats"] });
+      qc.invalidateQueries({ queryKey: ["employees-page-active-breaks"] });
+      qc.invalidateQueries({ queryKey: ["all-break-requests"] });
+      qc.invalidateQueries({ queryKey: ["my-active-break", input.userId] });
+      qc.invalidateQueries({ queryKey: ["my-break-shortcut", input.userId] });
+      qc.invalidateQueries({ queryKey: ["my-break-requests", input.userId] });
+    },
+    onError: (e: any) => toast.error(e?.message ?? "שגיאה בסיום ההפסקה"),
+  });
+
 
 
   // Realtime + minute tick for countdown
@@ -3018,6 +3039,20 @@ function OnBreakSection({ profile }: { profile: any }) {
                       ) : (
                         <Badge variant="secondary">⏳ נותר {remMin} דק׳</Badge>
                       )}
+                      <Button
+                        size="sm"
+                        variant={overrunMs > 0 ? "destructive" : "outline"}
+                        className="gap-1"
+                        onClick={() => manualEndMut.mutate({ id: r.id, userId: r.userId })}
+                        disabled={manualEndMut.isPending}
+                      >
+                        {manualEndMut.isPending ? (
+                          <Loader2 className="size-4 animate-spin" />
+                        ) : (
+                          <CheckCircle2 className="size-4" />
+                        )}
+                        החזר מהפסקה
+                      </Button>
                     </div>
                   </li>
                 );
