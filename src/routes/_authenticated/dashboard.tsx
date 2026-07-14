@@ -2542,6 +2542,7 @@ function OnBreakSection({ profile }: { profile: any }) {
       const mMap = new Map((meta ?? []).map((m: any) => [m.id, m]));
       return rows.map((r) => ({
         id: r.id,
+        userId: r.user_id as string,
         name: (pMap.get(r.user_id) as any)?.full_name ?? "—",
         job_title:
           (mMap.get(r.user_id) as any)?.job_title ??
