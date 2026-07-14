@@ -236,6 +236,7 @@ function BreaksPage() {
   const [settingId, setSettingId] = useState("");
   const [timeStr, setTimeStr] = useState("");
   const [note, setNote] = useState("");
+  const [timeDialogOpen, setTimeDialogOpen] = useState(false);
 
   const submitMut = useMutation({
     mutationFn: async () => {
@@ -287,6 +288,7 @@ function BreaksPage() {
     },
     onSuccess: (result) => {
       toast.success(result.requiresApproval ? "בקשת ההפסקה נשלחה" : "ההפסקה החלה");
+      setTimeDialogOpen(false);
       setSettingId("");
       setTimeStr("");
       setNote("");
@@ -294,6 +296,15 @@ function BreaksPage() {
     },
     onError: (e: any) => toast.error(e?.message ?? "שגיאה בשליחה"),
   });
+
+  function openTimeDialog() {
+    if (!settingId) {
+      toast.error("יש לבחור סוג הפסקה");
+      return;
+    }
+    if (!timeStr) setTimeStr(toLocalTime(new Date().toISOString()));
+    setTimeDialogOpen(true);
+  }
 
   if (!me) return null;
 
@@ -342,15 +353,6 @@ function BreaksPage() {
                     </SelectContent>
                   </Select>
                 </div>
-                <div className="space-y-1.5">
-                  <Label htmlFor="brk-time">שעה מבוקשת</Label>
-                  <Input
-                    id="brk-time"
-                    type="time"
-                    value={timeStr}
-                    onChange={(e) => setTimeStr(e.target.value)}
-                  />
-                </div>
               </div>
               <div className="space-y-1.5">
                 <Label htmlFor="brk-note">הערה (אופציונלי)</Label>
@@ -364,7 +366,7 @@ function BreaksPage() {
               </div>
               <Button
                 className="gap-2"
-                onClick={() => submitMut.mutate()}
+                onClick={openTimeDialog}
                 disabled={submitMut.isPending || !policyLoaded}
               >
                 {submitMut.isPending ? (
@@ -377,6 +379,42 @@ function BreaksPage() {
             </Card>
           </TabsContent>
         )}
+
+        <Dialog open={timeDialogOpen} onOpenChange={setTimeDialogOpen}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>בחירת שעת יציאה להפסקה</DialogTitle>
+            </DialogHeader>
+            <div className="space-y-3">
+              <div className="space-y-1.5">
+                <Label htmlFor="brk-time-dialog">שעת יציאה להפסקה</Label>
+                <Input
+                  id="brk-time-dialog"
+                  type="time"
+                  value={timeStr}
+                  onChange={(e) => setTimeStr(e.target.value)}
+                />
+              </div>
+              <p className="text-xs text-muted-foreground">
+                השעה שנבחרה תישמר כשעת ההפסקה.
+              </p>
+            </div>
+            <DialogFooter>
+              <Button
+                className="gap-2"
+                onClick={() => submitMut.mutate()}
+                disabled={submitMut.isPending || !timeStr}
+              >
+                {submitMut.isPending ? (
+                  <Loader2 className="size-4 animate-spin" />
+                ) : (
+                  <Send className="size-4" />
+                )}
+                {requiresApproval ? "שלח בקשה" : "יציאה להפסקה"}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
 
         <TabsContent value="mine">
           {myReqQ.isLoading ? (
