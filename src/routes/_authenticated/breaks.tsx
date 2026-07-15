@@ -755,3 +755,39 @@ function EditTimeDialog({
     </DialogContent>
   );
 }
+
+/**
+ * Live countdown → count-up display for an active break.
+ * - Source of truth is `endsAt` set by the server (activate_due_break_requests).
+ * - When now < endsAt: shows remaining time counting down (MM:SS).
+ * - When now >= endsAt: switches to red count-up "חריגה MM:SS", meaning the
+ *   employee stayed past their allotted break. The break does NOT auto-end;
+ *   only the employee ("סיום הפסקה") or a manager ("החזר מהפסקה") ends it.
+ * The 1-second interval is a pure display ticker — it does not decide state.
+ */
+function BreakLiveTimer({ endsAt }: { endsAt: string }) {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const t = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(t);
+  }, []);
+  const endMs = new Date(endsAt).getTime();
+  const diffMs = endMs - now;
+  const abs = Math.max(0, Math.abs(diffMs));
+  const mm = String(Math.floor(abs / 60000)).padStart(2, "0");
+  const ss = String(Math.floor((abs % 60000) / 1000)).padStart(2, "0");
+  const overrun = diffMs <= 0;
+  return (
+    <p
+      className={
+        "mt-1 text-sm font-mono tabular-nums " +
+        (overrun ? "text-red-600 font-bold" : "text-foreground")
+      }
+      dir="ltr"
+      aria-live="polite"
+    >
+      {overrun ? "חריגה " : "נותר "}
+      {mm}:{ss}
+    </p>
+  );
+}
