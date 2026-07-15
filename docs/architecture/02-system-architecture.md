@@ -68,7 +68,7 @@ This document does not describe schema, tables, or SQL; those are covered in the
 
 ## 6. Authorization Layer
 
-**Current state.** Authorization is expressed through role-based checks that are enforced both in the database (through access-control policies and guard functions) and in server-side business logic (through explicit assertions before sensitive actions are performed). Authorization is scoped to the hierarchy: platform-level authority, company-level authority, branch-level authority, and department-level authority are treated as distinct concerns.
+**Current state.** Authorization is expressed through role-based checks that are enforced both in the database (through access-control policies and guard functions) and in server-side business logic (through explicit assertions before sensitive actions are performed). Authorization is scoped to the hierarchy: platform-level authority, company-level authority, branch-level authority, department-level authority, and employee-level authority are treated as distinct concerns.
 
 **Target state.** Authorization continues to be enforced redundantly at the database layer and the service layer, treating the database as the ultimate source of truth for "is this allowed" and the service layer as an additional, defense-in-depth check. The target state extends this model uniformly as new hierarchy levels or identity classes are introduced, per the Permission Philosophy document.
 

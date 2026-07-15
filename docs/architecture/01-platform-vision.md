@@ -144,7 +144,7 @@ At the Platform level, permissions exist to answer one question: *who is allowed
 Guiding principles:
 
 - **Platform-level authority is distinct from Company-level authority.** Those who administer the Platform itself operate above and outside the operational structure of any individual Company. Administering the Platform is not the same activity as operating within a Company.
-- **Scope is always explicit.** Every permission granted within the Platform is understood to apply at a specific level of the hierarchy — Platform, Company, Branch, or Department — and never bleeds upward or sideways beyond that scope.
+- **Scope is always explicit.** Every permission granted within the Platform is understood to apply at a specific level of the hierarchy — Platform, Company, Branch, Department, or Employee — and never bleeds upward or sideways beyond that scope.
 - **Least necessary authority.** Individuals and roles are granted only the authority required for their responsibilities at their level, whether that is platform-wide administration or a single Department's operations.
 - **Accountability follows authority.** Wherever the Platform grants the ability to act, it also expects that action to be traceable to the identity that performed it.
 
