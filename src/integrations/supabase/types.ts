@@ -270,6 +270,54 @@ export type Database = {
           },
         ]
       }
+      break_audit_log: {
+        Row: {
+          action: string
+          actor_id: string | null
+          branch_id: string | null
+          break_request_id: string
+          id: string
+          occurred_at: string
+          payload: Json
+          target_user_id: string
+        }
+        Insert: {
+          action: string
+          actor_id?: string | null
+          branch_id?: string | null
+          break_request_id: string
+          id?: string
+          occurred_at?: string
+          payload?: Json
+          target_user_id: string
+        }
+        Update: {
+          action?: string
+          actor_id?: string | null
+          branch_id?: string | null
+          break_request_id?: string
+          id?: string
+          occurred_at?: string
+          payload?: Json
+          target_user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "break_audit_log_branch_id_fkey"
+            columns: ["branch_id"]
+            isOneToOne: false
+            referencedRelation: "branches"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "break_audit_log_break_request_id_fkey"
+            columns: ["break_request_id"]
+            isOneToOne: false
+            referencedRelation: "break_requests"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       break_policy: {
         Row: {
           approver_scope: string
@@ -322,6 +370,7 @@ export type Database = {
           branch_id: string | null
           break_setting_id: string
           completed_at: string | null
+          completed_by: string | null
           created_at: string
           department_id: string | null
           duration_minutes: number
@@ -344,6 +393,7 @@ export type Database = {
           branch_id?: string | null
           break_setting_id: string
           completed_at?: string | null
+          completed_by?: string | null
           created_at?: string
           department_id?: string | null
           duration_minutes: number
@@ -366,6 +416,7 @@ export type Database = {
           branch_id?: string | null
           break_setting_id?: string
           completed_at?: string | null
+          completed_by?: string | null
           created_at?: string
           department_id?: string | null
           duration_minutes?: number
@@ -2139,6 +2190,7 @@ export type Database = {
       }
     }
     Functions: {
+      activate_due_break_requests: { Args: never; Returns: number }
       archive_employee: {
         Args: { _reason?: string; _user_id: string }
         Returns: string
@@ -2159,6 +2211,7 @@ export type Database = {
         Args: { _branch_id: string; _uid: string }
         Returns: boolean
       }
+      can_manually_end_break: { Args: { _user_id: string }; Returns: boolean }
       can_request_break_by_policy: {
         Args: { _user_id: string }
         Returns: boolean
@@ -2174,6 +2227,7 @@ export type Database = {
       }
       current_active_branch: { Args: never; Returns: string }
       delete_branch_cascade: { Args: { _branch_id: string }; Returns: Json }
+      end_break_by_manager: { Args: { _id: string }; Returns: undefined }
       end_my_break: { Args: { _id: string }; Returns: undefined }
       find_archived_by_id_number: {
         Args: { _id_number: string }
@@ -2407,6 +2461,7 @@ export type Database = {
         Args: { _event: string; _payload?: Json; _target_user_id?: string }
         Returns: string
       }
+      manual_end_break: { Args: { _id: string }; Returns: undefined }
       notify_announcement_edited: {
         Args: { _ann_id: string; _title: string }
         Returns: undefined
