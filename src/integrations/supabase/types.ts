@@ -2190,6 +2190,7 @@ export type Database = {
       }
     }
     Functions: {
+      activate_due_break_requests: { Args: never; Returns: number }
       archive_employee: {
         Args: { _reason?: string; _user_id: string }
         Returns: string

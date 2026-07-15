@@ -185,16 +185,36 @@ function BreaksPage() {
     },
   });
 
-  // Realtime — refresh own requests and active break settings
+  // Realtime — refresh own requests and active break settings.
+  // Also: toast the employee when one of their own requests transitions to 'active'
+  // (i.e. their break just started). Server-time driven — nothing local decides start.
   useEffect(() => {
+    if (!me?.id) return;
     const ch = supabase
       .channel("break-requests-self-rt")
       .on(
         "postgres_changes",
-        { event: "*", schema: "public", table: "break_requests" },
-        () => {
+        { event: "INSERT", schema: "public", table: "break_requests", filter: `user_id=eq.${me.id}` },
+        () => qc.invalidateQueries({ queryKey: ["my-break-requests"] }),
+      )
+      .on(
+        "postgres_changes",
+        { event: "UPDATE", schema: "public", table: "break_requests", filter: `user_id=eq.${me.id}` },
+        (payload: any) => {
+          const prev = payload.old?.status;
+          const next = payload.new?.status;
+          if (prev !== "active" && next === "active") {
+            toast.success("ההפסקה שלך התחילה");
+          } else if (prev !== "completed" && next === "completed") {
+            toast("ההפסקה הסתיימה");
+          }
           qc.invalidateQueries({ queryKey: ["my-break-requests"] });
         },
+      )
+      .on(
+        "postgres_changes",
+        { event: "DELETE", schema: "public", table: "break_requests", filter: `user_id=eq.${me.id}` },
+        () => qc.invalidateQueries({ queryKey: ["my-break-requests"] }),
       )
       .on(
         "postgres_changes",
@@ -218,7 +238,7 @@ function BreaksPage() {
     return () => {
       supabase.removeChannel(ch);
     };
-  }, [qc]);
+  }, [qc, me?.id]);
 
   const policyQ = useQuery({
     enabled: !!me?.id,
@@ -243,9 +263,6 @@ function BreaksPage() {
       if (!settingId) throw new Error("יש לבחור סוג הפסקה");
       const setting = settingsQ.data?.find((s) => s.id === settingId);
       if (!setting) throw new Error("סוג הפסקה לא קיים");
-      const { data: policy, error: policyErr } = await (supabase as any).rpc("get_break_policy");
-      if (policyErr) throw policyErr;
-      const effectiveRequiresApproval = policy?.requires_approval === true;
       if (!timeStr) throw new Error("יש לבחור שעה");
       const now = new Date();
       const dayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
@@ -263,17 +280,13 @@ function BreaksPage() {
         throw new Error("כבר שלחת בקשה עבור סוג הפסקה זה היום.");
       }
       const requestedAt = isoFromLocalTime(timeStr);
-      const requestedAtDate = new Date(requestedAt);
-      const approvalPatch = effectiveRequiresApproval
-        ? { status: "pending" }
-        : {
-            status: "active",
-            approved_at_time: requestedAt,
-            approved_by: me!.id,
-            approval_decided_at: now.toISOString(),
-            started_at: requestedAt,
-            ends_at: new Date(requestedAtDate.getTime() + setting.duration_minutes * 60_000).toISOString(),
-          };
+      const { data: policy } = await (supabase as any).rpc("get_break_policy");
+      const effectiveRequiresApproval = policy?.requires_approval === true;
+      // Do NOT send status / started_at / ends_at from the client.
+      // The BEFORE INSERT trigger `break_requests_apply_policy` sets
+      // status='pending' when approval is required, or auto-approves to
+      // 'approved' otherwise. The row becomes 'active' only when the
+      // chosen time arrives (activate_due_break_requests / pg_cron).
       const { error } = await supabase.from("break_requests").insert({
         user_id: me!.id,
         department_id: me!.department_id ?? null,
@@ -281,13 +294,16 @@ function BreaksPage() {
         duration_minutes: setting.duration_minutes,
         requested_at: requestedAt,
         note: note.trim() || null,
-        ...approvalPatch,
       });
       if (error) throw error;
       return { requiresApproval: effectiveRequiresApproval };
     },
     onSuccess: (result) => {
-      toast.success(result.requiresApproval ? "בקשת ההפסקה נשלחה" : "ההפסקה החלה");
+      toast.success(
+        result.requiresApproval
+          ? "בקשת ההפסקה נשלחה לאישור"
+          : "הבקשה נקלטה. ההפסקה תתחיל בשעה שנבחרה.",
+      );
       setTimeDialogOpen(false);
       setSettingId("");
       setTimeStr("");
@@ -442,6 +458,14 @@ function BreaksPage() {
                           <> · מסתיים ב־{fmtTime(r.ends_at)}</>
                         ) : null}
                       </p>
+                      {r.status === "active" && r.ends_at && (
+                        <BreakLiveTimer endsAt={r.ends_at} />
+                      )}
+                      {r.status === "approved" && !r.started_at && (
+                        <p className="text-xs text-muted-foreground mt-1">
+                          ההפסקה תתחיל אוטומטית בשעה שנבחרה. עד אז את/ה במצב "בעבודה".
+                        </p>
+                      )}
                       {r.note && (
                         <p className="text-xs text-muted-foreground mt-1">הערה: {r.note}</p>
                       )}
@@ -729,5 +753,41 @@ function EditTimeDialog({
         </Button>
       </DialogFooter>
     </DialogContent>
+  );
+}
+
+/**
+ * Live countdown → count-up display for an active break.
+ * - Source of truth is `endsAt` set by the server (activate_due_break_requests).
+ * - When now < endsAt: shows remaining time counting down (MM:SS).
+ * - When now >= endsAt: switches to red count-up "חריגה MM:SS", meaning the
+ *   employee stayed past their allotted break. The break does NOT auto-end;
+ *   only the employee ("סיום הפסקה") or a manager ("החזר מהפסקה") ends it.
+ * The 1-second interval is a pure display ticker — it does not decide state.
+ */
+function BreakLiveTimer({ endsAt }: { endsAt: string }) {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const t = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(t);
+  }, []);
+  const endMs = new Date(endsAt).getTime();
+  const diffMs = endMs - now;
+  const abs = Math.max(0, Math.abs(diffMs));
+  const mm = String(Math.floor(abs / 60000)).padStart(2, "0");
+  const ss = String(Math.floor((abs % 60000) / 1000)).padStart(2, "0");
+  const overrun = diffMs <= 0;
+  return (
+    <p
+      className={
+        "mt-1 text-sm font-mono tabular-nums " +
+        (overrun ? "text-red-600 font-bold" : "text-foreground")
+      }
+      dir="ltr"
+      aria-live="polite"
+    >
+      {overrun ? "חריגה " : "נותר "}
+      {mm}:{ss}
+    </p>
   );
 }
