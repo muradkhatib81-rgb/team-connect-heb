@@ -185,16 +185,36 @@ function BreaksPage() {
     },
   });
 
-  // Realtime — refresh own requests and active break settings
+  // Realtime — refresh own requests and active break settings.
+  // Also: toast the employee when one of their own requests transitions to 'active'
+  // (i.e. their break just started). Server-time driven — nothing local decides start.
   useEffect(() => {
+    if (!me?.id) return;
     const ch = supabase
       .channel("break-requests-self-rt")
       .on(
         "postgres_changes",
-        { event: "*", schema: "public", table: "break_requests" },
-        () => {
+        { event: "INSERT", schema: "public", table: "break_requests", filter: `user_id=eq.${me.id}` },
+        () => qc.invalidateQueries({ queryKey: ["my-break-requests"] }),
+      )
+      .on(
+        "postgres_changes",
+        { event: "UPDATE", schema: "public", table: "break_requests", filter: `user_id=eq.${me.id}` },
+        (payload: any) => {
+          const prev = payload.old?.status;
+          const next = payload.new?.status;
+          if (prev !== "active" && next === "active") {
+            toast.success("ההפסקה שלך התחילה");
+          } else if (prev !== "completed" && next === "completed") {
+            toast("ההפסקה הסתיימה");
+          }
           qc.invalidateQueries({ queryKey: ["my-break-requests"] });
         },
+      )
+      .on(
+        "postgres_changes",
+        { event: "DELETE", schema: "public", table: "break_requests", filter: `user_id=eq.${me.id}` },
+        () => qc.invalidateQueries({ queryKey: ["my-break-requests"] }),
       )
       .on(
         "postgres_changes",
@@ -218,7 +238,7 @@ function BreaksPage() {
     return () => {
       supabase.removeChannel(ch);
     };
-  }, [qc]);
+  }, [qc, me?.id]);
 
   const policyQ = useQuery({
     enabled: !!me?.id,
