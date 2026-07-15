@@ -458,6 +458,14 @@ function BreaksPage() {
                           <> · מסתיים ב־{fmtTime(r.ends_at)}</>
                         ) : null}
                       </p>
+                      {r.status === "active" && r.ends_at && (
+                        <BreakLiveTimer endsAt={r.ends_at} />
+                      )}
+                      {r.status === "approved" && !r.started_at && (
+                        <p className="text-xs text-muted-foreground mt-1">
+                          ההפסקה תתחיל אוטומטית בשעה שנבחרה. עד אז את/ה במצב "בעבודה".
+                        </p>
+                      )}
                       {r.note && (
                         <p className="text-xs text-muted-foreground mt-1">הערה: {r.note}</p>
                       )}
