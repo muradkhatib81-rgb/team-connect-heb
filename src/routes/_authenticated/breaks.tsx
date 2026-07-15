@@ -243,9 +243,6 @@ function BreaksPage() {
       if (!settingId) throw new Error("יש לבחור סוג הפסקה");
       const setting = settingsQ.data?.find((s) => s.id === settingId);
       if (!setting) throw new Error("סוג הפסקה לא קיים");
-      const { data: policy, error: policyErr } = await (supabase as any).rpc("get_break_policy");
-      if (policyErr) throw policyErr;
-      const effectiveRequiresApproval = policy?.requires_approval === true;
       if (!timeStr) throw new Error("יש לבחור שעה");
       const now = new Date();
       const dayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
@@ -263,17 +260,13 @@ function BreaksPage() {
         throw new Error("כבר שלחת בקשה עבור סוג הפסקה זה היום.");
       }
       const requestedAt = isoFromLocalTime(timeStr);
-      const requestedAtDate = new Date(requestedAt);
-      const approvalPatch = effectiveRequiresApproval
-        ? { status: "pending" }
-        : {
-            status: "active",
-            approved_at_time: requestedAt,
-            approved_by: me!.id,
-            approval_decided_at: now.toISOString(),
-            started_at: requestedAt,
-            ends_at: new Date(requestedAtDate.getTime() + setting.duration_minutes * 60_000).toISOString(),
-          };
+      const { data: policy } = await (supabase as any).rpc("get_break_policy");
+      const effectiveRequiresApproval = policy?.requires_approval === true;
+      // Do NOT send status / started_at / ends_at from the client.
+      // The BEFORE INSERT trigger `break_requests_apply_policy` sets
+      // status='pending' when approval is required, or auto-approves to
+      // 'approved' otherwise. The row becomes 'active' only when the
+      // chosen time arrives (activate_due_break_requests / pg_cron).
       const { error } = await supabase.from("break_requests").insert({
         user_id: me!.id,
         department_id: me!.department_id ?? null,
@@ -281,13 +274,16 @@ function BreaksPage() {
         duration_minutes: setting.duration_minutes,
         requested_at: requestedAt,
         note: note.trim() || null,
-        ...approvalPatch,
       });
       if (error) throw error;
       return { requiresApproval: effectiveRequiresApproval };
     },
     onSuccess: (result) => {
-      toast.success(result.requiresApproval ? "בקשת ההפסקה נשלחה" : "ההפסקה החלה");
+      toast.success(
+        result.requiresApproval
+          ? "בקשת ההפסקה נשלחה לאישור"
+          : "הבקשה נקלטה. ההפסקה תתחיל בשעה שנבחרה.",
+      );
       setTimeDialogOpen(false);
       setSettingId("");
       setTimeStr("");
