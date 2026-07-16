@@ -3000,7 +3000,16 @@ function OnBreakSection({ profile }: { profile: any }) {
                               <td className="p-2 whitespace-nowrap">{r.approverName}</td>
                               <td className="p-2 whitespace-nowrap">{fmtT(r.startedAt)}</td>
                               <td className="p-2 whitespace-nowrap">{fmtT(r.endsAt)}</td>
-                              <td className="p-2 whitespace-nowrap">{fmtT(r.completedAt)}</td>
+                              <td className="p-2 whitespace-nowrap">
+                                {fmtT(r.completedAt)}
+                                {r.manualReturn ? (
+                                  <div className="text-[11px] text-muted-foreground mt-0.5 whitespace-normal">
+                                    הוחזר מהפסקה על ידי: {r.manualReturn.by}
+                                    <br />
+                                    ({fmtT(r.manualReturn.at)})
+                                  </div>
+                                ) : null}
+                              </td>
                               <td className="p-2 whitespace-nowrap">
                                 {r.actualDurMin != null ? `${r.actualDurMin} דק׳` : "—"}
                               </td>
