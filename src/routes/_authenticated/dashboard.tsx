@@ -3092,7 +3092,7 @@ function OnBreakSection({ profile }: { profile: any }) {
                         size="sm"
                         variant={overrunMs > 0 ? "destructive" : "outline"}
                         className="gap-1"
-                        onClick={() => manualEndMut.mutate({ id: r.id, userId: r.userId })}
+                        onClick={() => setConfirmReturn({ id: r.id, userId: r.userId, name: r.name })}
                         disabled={manualEndMut.isPending}
                       >
                         {manualEndMut.isPending ? (
@@ -3110,6 +3110,35 @@ function OnBreakSection({ profile }: { profile: any }) {
           )}
         </DialogContent>
       </Dialog>
+
+      <AlertDialog
+        open={!!confirmReturn}
+        onOpenChange={(o) => { if (!o) setConfirmReturn(null); }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>כבר להחזיר את העובד מההפסקה?</AlertDialogTitle>
+            {confirmReturn?.name ? (
+              <AlertDialogDescription>
+                {confirmReturn.name}
+              </AlertDialogDescription>
+            ) : null}
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>ביטול</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                if (confirmReturn) {
+                  manualEndMut.mutate({ id: confirmReturn.id, userId: confirmReturn.userId });
+                }
+                setConfirmReturn(null);
+              }}
+            >
+              אישור
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </>
   );
 }
