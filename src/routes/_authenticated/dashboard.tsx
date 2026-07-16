@@ -2632,6 +2632,28 @@ function OnBreakSection({ profile }: { profile: any }) {
       const dMap = new Map((depts ?? []).map((d: any) => [d.id, d.name]));
       const sMap = new Map((settings ?? []).map((s: any) => [s.id, s.name]));
       const mMap = new Map((meta ?? []).map((m: any) => [m.id, m]));
+      const auditList = (audits ?? []) as any[];
+      const actorIds = Array.from(
+        new Set(auditList.map((a) => a.actor_id).filter((x) => x && !pMap.has(x))),
+      );
+      if (actorIds.length) {
+        const { data: actorProfs } = await supabase
+          .from("profiles")
+          .select("id, full_name")
+          .in("id", actorIds);
+        for (const a of actorProfs ?? []) pMap.set((a as any).id, a);
+      }
+      const auditByReq = new Map<string, { by: string; at: string }>();
+      for (const a of auditList) {
+        // keep earliest manual_end per break_request
+        const prev = auditByReq.get(a.break_request_id);
+        if (!prev || new Date(a.occurred_at) < new Date(prev.at)) {
+          auditByReq.set(a.break_request_id, {
+            by: (pMap.get(a.actor_id) as any)?.full_name ?? "מנהל",
+            at: a.occurred_at,
+          });
+        }
+      }
       return rows.map((r) => ({
         id: r.id,
         userId: r.user_id as string,
