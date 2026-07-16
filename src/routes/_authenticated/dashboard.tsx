@@ -14,6 +14,16 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/use-auth";
 import {
@@ -2494,6 +2504,7 @@ function OnBreakSection({ profile }: { profile: any }) {
   const [logTypeFilter, setLogTypeFilter] = useState<string>("__all");
   const [logStatusFilter, setLogStatusFilter] = useState<string>("__all");
   const [logSort, setLogSort] = useState<"created" | "overrun" | "return">("created");
+  const [confirmReturn, setConfirmReturn] = useState<{ id: string; userId: string; name: string } | null>(null);
 
   const permQ = useQuery({
     enabled: !!profile.id && !isMainAdmin,
@@ -2597,7 +2608,7 @@ function OnBreakSection({ profile }: { profile: any }) {
       );
       const dids = Array.from(new Set(rows.map((r) => r.department_id).filter(Boolean)));
       const sids = Array.from(new Set(rows.map((r) => r.break_setting_id).filter(Boolean)));
-      const [{ data: profs }, { data: depts }, { data: settings }, { data: meta }] =
+      const [{ data: profs }, { data: depts }, { data: settings }, { data: meta }, { data: audits }] =
         await Promise.all([
           uids.length
             ? supabase.from("profiles").select("id, full_name, job_title").in("id", uids)
@@ -2611,11 +2622,38 @@ function OnBreakSection({ profile }: { profile: any }) {
           uids.length
             ? (supabase as any).rpc("get_profiles_basic_info", { user_ids: uids })
             : Promise.resolve({ data: [] as any[] }),
+          (supabase as any)
+            .from("break_audit_log")
+            .select("break_request_id, actor_id, occurred_at, action")
+            .eq("action", "manual_end")
+            .in("break_request_id", rows.map((r) => r.id)),
         ]);
       const pMap = new Map((profs ?? []).map((p: any) => [p.id, p]));
       const dMap = new Map((depts ?? []).map((d: any) => [d.id, d.name]));
       const sMap = new Map((settings ?? []).map((s: any) => [s.id, s.name]));
       const mMap = new Map((meta ?? []).map((m: any) => [m.id, m]));
+      const auditList = (audits ?? []) as any[];
+      const actorIds = Array.from(
+        new Set(auditList.map((a) => a.actor_id).filter((x) => x && !pMap.has(x))),
+      );
+      if (actorIds.length) {
+        const { data: actorProfs } = await supabase
+          .from("profiles")
+          .select("id, full_name")
+          .in("id", actorIds);
+        for (const a of actorProfs ?? []) pMap.set((a as any).id, a);
+      }
+      const auditByReq = new Map<string, { by: string; at: string }>();
+      for (const a of auditList) {
+        // keep earliest manual_end per break_request
+        const prev = auditByReq.get(a.break_request_id);
+        if (!prev || new Date(a.occurred_at) < new Date(prev.at)) {
+          auditByReq.set(a.break_request_id, {
+            by: (pMap.get(a.actor_id) as any)?.full_name ?? "מנהל",
+            at: a.occurred_at,
+          });
+        }
+      }
       return rows.map((r) => ({
         id: r.id,
         userId: r.user_id as string,
@@ -2639,6 +2677,7 @@ function OnBreakSection({ profile }: { profile: any }) {
         completedAt: r.completed_at as string | null,
         status: r.status as string,
         approverName: r.approved_by ? (pMap.get(r.approved_by) as any)?.full_name ?? "—" : "—",
+        manualReturn: auditByReq.get(r.id) ?? null,
       }));
     },
   });
@@ -2961,7 +3000,16 @@ function OnBreakSection({ profile }: { profile: any }) {
                               <td className="p-2 whitespace-nowrap">{r.approverName}</td>
                               <td className="p-2 whitespace-nowrap">{fmtT(r.startedAt)}</td>
                               <td className="p-2 whitespace-nowrap">{fmtT(r.endsAt)}</td>
-                              <td className="p-2 whitespace-nowrap">{fmtT(r.completedAt)}</td>
+                              <td className="p-2 whitespace-nowrap">
+                                {fmtT(r.completedAt)}
+                                {r.manualReturn ? (
+                                  <div className="text-[11px] text-muted-foreground mt-0.5 whitespace-normal">
+                                    הוחזר מהפסקה על ידי: {r.manualReturn.by}
+                                    <br />
+                                    ({fmtT(r.manualReturn.at)})
+                                  </div>
+                                ) : null}
+                              </td>
                               <td className="p-2 whitespace-nowrap">
                                 {r.actualDurMin != null ? `${r.actualDurMin} דק׳` : "—"}
                               </td>
@@ -3044,7 +3092,7 @@ function OnBreakSection({ profile }: { profile: any }) {
                         size="sm"
                         variant={overrunMs > 0 ? "destructive" : "outline"}
                         className="gap-1"
-                        onClick={() => manualEndMut.mutate({ id: r.id, userId: r.userId })}
+                        onClick={() => setConfirmReturn({ id: r.id, userId: r.userId, name: r.name })}
                         disabled={manualEndMut.isPending}
                       >
                         {manualEndMut.isPending ? (
@@ -3062,6 +3110,35 @@ function OnBreakSection({ profile }: { profile: any }) {
           )}
         </DialogContent>
       </Dialog>
+
+      <AlertDialog
+        open={!!confirmReturn}
+        onOpenChange={(o) => { if (!o) setConfirmReturn(null); }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>כבר להחזיר את העובד מההפסקה?</AlertDialogTitle>
+            {confirmReturn?.name ? (
+              <AlertDialogDescription>
+                {confirmReturn.name}
+              </AlertDialogDescription>
+            ) : null}
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>ביטול</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                if (confirmReturn) {
+                  manualEndMut.mutate({ id: confirmReturn.id, userId: confirmReturn.userId });
+                }
+                setConfirmReturn(null);
+              }}
+            >
+              אישור
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </>
   );
 }
