@@ -2504,6 +2504,7 @@ function OnBreakSection({ profile }: { profile: any }) {
   const [logTypeFilter, setLogTypeFilter] = useState<string>("__all");
   const [logStatusFilter, setLogStatusFilter] = useState<string>("__all");
   const [logSort, setLogSort] = useState<"created" | "overrun" | "return">("created");
+  const [confirmReturn, setConfirmReturn] = useState<{ id: string; userId: string; name: string } | null>(null);
 
   const permQ = useQuery({
     enabled: !!profile.id && !isMainAdmin,
