@@ -2608,7 +2608,7 @@ function OnBreakSection({ profile }: { profile: any }) {
       );
       const dids = Array.from(new Set(rows.map((r) => r.department_id).filter(Boolean)));
       const sids = Array.from(new Set(rows.map((r) => r.break_setting_id).filter(Boolean)));
-      const [{ data: profs }, { data: depts }, { data: settings }, { data: meta }] =
+      const [{ data: profs }, { data: depts }, { data: settings }, { data: meta }, { data: audits }] =
         await Promise.all([
           uids.length
             ? supabase.from("profiles").select("id, full_name, job_title").in("id", uids)
@@ -2622,6 +2622,11 @@ function OnBreakSection({ profile }: { profile: any }) {
           uids.length
             ? (supabase as any).rpc("get_profiles_basic_info", { user_ids: uids })
             : Promise.resolve({ data: [] as any[] }),
+          (supabase as any)
+            .from("break_audit_log")
+            .select("break_request_id, actor_id, occurred_at, action")
+            .eq("action", "manual_end")
+            .in("break_request_id", rows.map((r) => r.id)),
         ]);
       const pMap = new Map((profs ?? []).map((p: any) => [p.id, p]));
       const dMap = new Map((depts ?? []).map((d: any) => [d.id, d.name]));
