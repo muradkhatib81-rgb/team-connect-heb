@@ -2677,6 +2677,7 @@ function OnBreakSection({ profile }: { profile: any }) {
         completedAt: r.completed_at as string | null,
         status: r.status as string,
         approverName: r.approved_by ? (pMap.get(r.approved_by) as any)?.full_name ?? "—" : "—",
+        manualReturn: auditByReq.get(r.id) ?? null,
       }));
     },
   });
