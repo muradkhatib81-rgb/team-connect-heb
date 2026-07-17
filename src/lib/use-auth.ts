@@ -1,6 +1,7 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { syncFoundationSession } from "@/core/bootstrap";
 import type { AppRole } from "./constants";
 
 export interface AuthProfile {
@@ -23,6 +24,11 @@ async function fetchSessionAndProfile(): Promise<AuthProfile | null> {
   const user = userData.user;
   if (!user) return null;
 
+  // Foundation Integration: best-effort session tracking via SessionManager
+  // (device sessions, 12h expiration, inactivity cleanup). Fire-and-forget;
+  // never affects the real Supabase-backed authentication outcome.
+  void syncFoundationSession(user.id);
+
   // The signed-in user's own profile must always be fetched without the
   // active-branch filter — a system administrator viewing another branch
   // would otherwise get `null` here and appear signed out.
@@ -38,7 +44,7 @@ async function fetchSessionAndProfile(): Promise<AuthProfile | null> {
   ]);
 
   const p: any = profile ?? {};
-  const contact: any = Array.isArray(contactRows) ? contactRows[0] ?? {} : contactRows ?? {};
+  const contact: any = Array.isArray(contactRows) ? (contactRows[0] ?? {}) : (contactRows ?? {});
   return {
     id: user.id,
     email: user.email ?? null,

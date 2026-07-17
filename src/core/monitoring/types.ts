@@ -14,7 +14,9 @@ export type HealthTarget =
   | "realtime"
   | "api"
   | "queue"
-  | "sync";
+  | "sync"
+  | "configuration"
+  | "managers";
 
 export type Severity = "info" | "warning" | "error" | "critical";
 
