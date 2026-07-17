@@ -1,7 +1,9 @@
 import { BaseRepository, type IDatabaseClient, type IRepository, type UUID } from "@/core";
 import type { Company } from "./company.model";
 
-export type ICompanyRepository = IRepository<Company>;
+export interface ICompanyRepository extends IRepository<Company> {
+  findByPlatform(platformId: UUID): Promise<Company[]>;
+}
 
 export class CompanyRepository extends BaseRepository<Company> implements ICompanyRepository {
   constructor(db: IDatabaseClient) {
@@ -9,8 +11,7 @@ export class CompanyRepository extends BaseRepository<Company> implements ICompa
   }
 
   /** All non-deleted Companies belonging to a given Platform. */
-  async findByPlatform(platformId: UUID): Promise<Company[]> {
-    const all = await this.findAll();
-    return all.filter((company) => company.platformId === platformId);
+  findByPlatform(platformId: UUID): Promise<Company[]> {
+    return this.db.findMany<Company>(this.tableName, { platformId, deletedAt: null });
   }
 }

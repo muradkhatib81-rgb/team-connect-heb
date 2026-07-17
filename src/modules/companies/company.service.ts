@@ -11,7 +11,7 @@
 
 import type { BaseEntity, UUID } from "@/core";
 import { getConfigurationManager, getDatabaseClient } from "@/core/bootstrap";
-import { CompanyRepository } from "./company.repository";
+import { CompanyRepository, type ICompanyRepository } from "./company.repository";
 import {
   DEFAULT_COMPANY_CURRENCY,
   DEFAULT_COMPANY_LANGUAGE,
@@ -55,8 +55,6 @@ export interface CompanyEditableFields {
 
 const MANAGERS_SETTING_KEY = "managers";
 
-const companyRepository = new CompanyRepository(getDatabaseClient());
-
 function normalizeOptionalText(value: string | null | undefined): string | null {
   if (value === undefined) return null;
   const trimmed = value?.trim() ?? "";
@@ -64,12 +62,16 @@ function normalizeOptionalText(value: string | null | undefined): string | null 
 }
 
 export class CompanyService {
+  constructor(
+    private readonly repository: ICompanyRepository = new CompanyRepository(getDatabaseClient()),
+  ) {}
+
   listCompanies(platformId: UUID): Promise<Company[]> {
-    return companyRepository.findByPlatform(platformId);
+    return this.repository.findByPlatform(platformId);
   }
 
   getCompany(id: UUID): Promise<Company | null> {
-    return companyRepository.findById(id);
+    return this.repository.findById(id);
   }
 
   createCompany(
@@ -80,7 +82,7 @@ export class CompanyService {
     if (!trimmed) {
       throw new Error("Company name is required.");
     }
-    return companyRepository.create({
+    return this.repository.create({
       platformId,
       name: trimmed,
       status: "active",
@@ -118,27 +120,27 @@ export class CompanyService {
       patch.language = data.language.trim() || DEFAULT_COMPANY_LANGUAGE;
     if (data.timeZone !== undefined)
       patch.timeZone = data.timeZone.trim() || DEFAULT_COMPANY_TIME_ZONE;
-    return companyRepository.update(id, patch);
+    return this.repository.update(id, patch);
   }
 
   setCompanyStatus(id: UUID, status: CompanyStatus): Promise<Company> {
-    return companyRepository.update(id, { status });
+    return this.repository.update(id, { status });
   }
 
   archiveCompany(id: UUID): Promise<Company> {
-    return companyRepository.update(id, { archivedAt: new Date() });
+    return this.repository.update(id, { archivedAt: new Date() });
   }
 
   unarchiveCompany(id: UUID): Promise<Company> {
-    return companyRepository.update(id, { archivedAt: null });
+    return this.repository.update(id, { archivedAt: null });
   }
 
   deleteCompany(id: UUID): Promise<void> {
-    return companyRepository.softDelete(id);
+    return this.repository.softDelete(id);
   }
 
   restoreCompany(id: UUID): Promise<void> {
-    return companyRepository.restore(id);
+    return this.repository.restore(id);
   }
 
   getCompanySetting<T>(companyId: UUID, key: string): T | undefined {
@@ -150,7 +152,7 @@ export class CompanyService {
   }
 
   async getCompanyStatistics(company: Company): Promise<CompanyStatistics> {
-    const siblings = await companyRepository.findByPlatform(company.platformId);
+    const siblings = await this.repository.findByPlatform(company.platformId);
     const ageInDays = Math.max(
       0,
       Math.floor((Date.now() - company.createdAt.getTime()) / (1000 * 60 * 60 * 24)),

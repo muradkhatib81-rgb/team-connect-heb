@@ -15,7 +15,7 @@
 
 import type { UUID } from "@/core";
 import { getConfigurationManager, getDatabaseClient } from "@/core/bootstrap";
-import { BranchRepository } from "./branch.repository";
+import { BranchRepository, type IBranchRepository } from "./branch.repository";
 import type { Branch } from "./branch.model";
 
 export interface BranchStatistics {
@@ -39,24 +39,26 @@ export interface RealBranchSnapshot {
   is_active?: boolean;
 }
 
-const branchRepository = new BranchRepository(getDatabaseClient());
-
 export class BranchService {
+  constructor(
+    private readonly repository: IBranchRepository = new BranchRepository(getDatabaseClient()),
+  ) {}
+
   listBranches(companyId: UUID): Promise<Branch[]> {
-    return branchRepository.findByCompany(companyId);
+    return this.repository.findByCompany(companyId);
   }
 
   /** Every non-deleted Branch assignment on the Platform, across every Company. */
   listAllBranches(): Promise<Branch[]> {
-    return branchRepository.findAll();
+    return this.repository.findAll();
   }
 
   getBranch(id: UUID): Promise<Branch | null> {
-    return branchRepository.findById(id);
+    return this.repository.findById(id);
   }
 
   findAssignmentForSourceBranch(sourceBranchId: string): Promise<Branch | null> {
-    return branchRepository.findBySourceBranchId(sourceBranchId);
+    return this.repository.findBySourceBranchId(sourceBranchId);
   }
 
   /**
@@ -69,11 +71,11 @@ export class BranchService {
     if (!trimmedName) {
       throw new Error("Branch name is required.");
     }
-    const existing = await branchRepository.findBySourceBranchId(source.id);
+    const existing = await this.repository.findBySourceBranchId(source.id);
     if (existing) {
       throw new Error("הסניף הזה משויך כבר לחברה אחרת בפלטפורמה.");
     }
-    return branchRepository.create({
+    return this.repository.create({
       companyId,
       sourceBranchId: source.id,
       name: trimmedName,
@@ -89,7 +91,7 @@ export class BranchService {
     if (!trimmedName) {
       throw new Error("Branch name is required.");
     }
-    return branchRepository.update(id, {
+    return this.repository.update(id, {
       name: trimmedName,
       code: source.code?.trim() || null,
       address: source.address?.trim() || null,
@@ -99,11 +101,11 @@ export class BranchService {
 
   /** Removes the Company <-> Branch assignment only. The real branch and every relationship it owns are untouched. */
   unassignBranch(id: UUID): Promise<void> {
-    return branchRepository.softDelete(id);
+    return this.repository.softDelete(id);
   }
 
   restoreBranch(id: UUID): Promise<void> {
-    return branchRepository.restore(id);
+    return this.repository.restore(id);
   }
 
   getBranchSetting<T>(branchId: UUID, key: string): T | undefined {
@@ -115,7 +117,7 @@ export class BranchService {
   }
 
   async getBranchStatistics(branch: Branch): Promise<BranchStatistics> {
-    const siblings = await branchRepository.findByCompany(branch.companyId);
+    const siblings = await this.repository.findByCompany(branch.companyId);
     const ageInDays = Math.max(
       0,
       Math.floor((Date.now() - branch.createdAt.getTime()) / (1000 * 60 * 60 * 24)),
