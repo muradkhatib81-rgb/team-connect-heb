@@ -1,4 +1,5 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { useQuery } from "@tanstack/react-query";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -12,6 +13,8 @@ import {
   Bot,
   Globe,
   Building2,
+  GitBranch,
+  Star,
   ArrowLeft,
   Loader2,
 } from "lucide-react";
@@ -22,7 +25,8 @@ import {
   usePlatformStats,
   PLATFORM_EVENT_LABELS,
 } from "@/lib/platform-owners.hooks";
-import { useCompanyContext } from "@/platform";
+import { useCompanyContext, useBranchContext } from "@/platform";
+import { branchService } from "@/modules/branches";
 
 export const Route = createFileRoute("/_authenticated/platform/")({
   component: PlatformDashboardPage,
@@ -39,8 +43,14 @@ function PlatformDashboardPage() {
   const stats = usePlatformStats();
   const owners = usePlatformOwnersQuery();
   const audit = usePlatformAuditQuery();
-  const { companies } = useCompanyContext();
+  const { companies, activeCompany } = useCompanyContext();
+  const { activeBranch } = useBranchContext();
   const navigate = useNavigate();
+
+  const allBranchesQuery = useQuery({
+    queryKey: ["platform-all-branches"],
+    queryFn: () => branchService.listAllBranches(),
+  });
 
   const ownersById = new Map((owners.data ?? []).map((o) => [o.user_id, o]));
 
@@ -106,6 +116,58 @@ function PlatformDashboardPage() {
         />
       </div>
 
+      {/* Multi-tenant hierarchy: Companies -> Branches */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+        <StatCard
+          label="חברות בפלטפורמה"
+          value={companies.length}
+          icon={Building2}
+          tone="emerald"
+          loading={false}
+          onClick={() => navigate({ to: "/platform/companies" })}
+        />
+        <StatCard
+          label="סניפים בפלטפורמה"
+          value={allBranchesQuery.data?.length ?? 0}
+          icon={GitBranch}
+          tone="sky"
+          loading={allBranchesQuery.isLoading}
+          onClick={() => navigate({ to: "/platform/branches" })}
+        />
+        <StatCard
+          label="חברה פעילה"
+          value={activeCompany?.name ?? "—"}
+          icon={Star}
+          tone="amber"
+          loading={false}
+          onClick={() => {
+            if (activeCompany) {
+              navigate({
+                to: "/platform/companies/$companyId",
+                params: { companyId: activeCompany.id },
+              });
+            }
+          }}
+          disabled={!activeCompany}
+        />
+        <StatCard
+          label="סניף פעיל"
+          value={activeBranch?.name ?? "—"}
+          icon={Star}
+          tone="rose"
+          loading={false}
+          onClick={() => {
+            if (activeBranch) {
+              navigate({
+                to: "/platform/branches/$branchId",
+                params: { branchId: activeBranch.id },
+              });
+            }
+          }}
+          disabled={!activeBranch}
+        />
+      </div>
+
       {/* Quick actions */}
       <Card className="card-elevated p-4">
         <div className="flex flex-wrap items-center gap-2">
@@ -125,6 +187,12 @@ function PlatformDashboardPage() {
             <Link to="/platform/companies">
               <Building2 className="size-4" />
               ניהול חברות
+            </Link>
+          </Button>
+          <Button asChild variant="outline" size="sm" className="gap-2">
+            <Link to="/platform/branches">
+              <GitBranch className="size-4" />
+              ניהול סניפים
             </Link>
           </Button>
         </div>
@@ -190,6 +258,23 @@ function PlatformDashboardPage() {
               <div className="min-w-0">
                 <p className="font-medium text-sm truncate">ניהול חברות</p>
                 <p className="text-xs text-muted-foreground">{companies.length} חברות</p>
+              </div>
+            </div>
+          </button>
+          <button
+            type="button"
+            onClick={() => navigate({ to: "/platform/branches" })}
+            className="text-right rounded-xl bg-card border card-elevated p-4 transition-colors hover:bg-accent/40 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            <div className="flex items-center gap-3">
+              <div className="size-9 shrink-0 rounded-lg bg-primary/10 text-primary flex items-center justify-center">
+                <GitBranch className="size-4" />
+              </div>
+              <div className="min-w-0">
+                <p className="font-medium text-sm truncate">ניהול סניפים</p>
+                <p className="text-xs text-muted-foreground">
+                  {allBranchesQuery.data?.length ?? 0} סניפים
+                </p>
               </div>
             </div>
           </button>

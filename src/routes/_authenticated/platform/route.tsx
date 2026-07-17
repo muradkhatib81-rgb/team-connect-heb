@@ -2,7 +2,7 @@ import { createFileRoute, Outlet, Navigate } from "@tanstack/react-router";
 import { Loader2 } from "lucide-react";
 import { useAuth } from "@/lib/use-auth";
 import { isPlatformOwner } from "@/lib/constants";
-import { CompanyProvider } from "@/platform";
+import { CompanyProvider, BranchProvider } from "@/platform";
 
 /**
  * Platform Management layout gate.
@@ -43,7 +43,9 @@ function PlatformLayout() {
 
   return (
     <CompanyProvider>
-      <Outlet />
+      <BranchProvider>
+        <Outlet />
+      </BranchProvider>
     </CompanyProvider>
   );
 }

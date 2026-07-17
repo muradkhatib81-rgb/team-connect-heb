@@ -37,10 +37,12 @@ import { Route as AuthenticatedSystemBranchesRouteImport } from './routes/_authe
 import { Route as AuthenticatedSystemBranchManagersRouteImport } from './routes/_authenticated/system.branch-managers'
 import { Route as AuthenticatedPlatformOwnersRouteImport } from './routes/_authenticated/platform/owners'
 import { Route as AuthenticatedPlatformCompaniesRouteImport } from './routes/_authenticated/platform/companies'
+import { Route as AuthenticatedPlatformBranchesRouteImport } from './routes/_authenticated/platform/branches'
 import { Route as AuthenticatedPlatformAuditLogRouteImport } from './routes/_authenticated/platform/audit-log'
 import { Route as ApiPublicHooksGenerateRecurringTasksRouteImport } from './routes/api/public/hooks/generate-recurring-tasks'
 import { Route as AuthenticatedPlatformOwnersUserIdRouteImport } from './routes/_authenticated/platform/owners.$userId'
 import { Route as AuthenticatedPlatformCompaniesCompanyIdRouteImport } from './routes/_authenticated/platform/companies.$companyId'
+import { Route as AuthenticatedPlatformBranchesBranchIdRouteImport } from './routes/_authenticated/platform/branches.$branchId'
 
 const AuthRoute = AuthRouteImport.update({
   id: '/auth',
@@ -198,6 +200,12 @@ const AuthenticatedPlatformCompaniesRoute =
     path: '/companies',
     getParentRoute: () => AuthenticatedPlatformRouteRoute,
   } as any)
+const AuthenticatedPlatformBranchesRoute =
+  AuthenticatedPlatformBranchesRouteImport.update({
+    id: '/branches',
+    path: '/branches',
+    getParentRoute: () => AuthenticatedPlatformRouteRoute,
+  } as any)
 const AuthenticatedPlatformAuditLogRoute =
   AuthenticatedPlatformAuditLogRouteImport.update({
     id: '/audit-log',
@@ -222,6 +230,12 @@ const AuthenticatedPlatformCompaniesCompanyIdRoute =
     path: '/$companyId',
     getParentRoute: () => AuthenticatedPlatformCompaniesRoute,
   } as any)
+const AuthenticatedPlatformBranchesBranchIdRoute =
+  AuthenticatedPlatformBranchesBranchIdRouteImport.update({
+    id: '/$branchId',
+    path: '/$branchId',
+    getParentRoute: () => AuthenticatedPlatformBranchesRoute,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -245,6 +259,7 @@ export interface FileRoutesByFullPath {
   '/system': typeof AuthenticatedSystemRouteWithChildren
   '/tasks': typeof AuthenticatedTasksRoute
   '/platform/audit-log': typeof AuthenticatedPlatformAuditLogRoute
+  '/platform/branches': typeof AuthenticatedPlatformBranchesRouteWithChildren
   '/platform/companies': typeof AuthenticatedPlatformCompaniesRouteWithChildren
   '/platform/owners': typeof AuthenticatedPlatformOwnersRouteWithChildren
   '/system/branch-managers': typeof AuthenticatedSystemBranchManagersRoute
@@ -252,6 +267,7 @@ export interface FileRoutesByFullPath {
   '/system/permissions': typeof AuthenticatedSystemPermissionsRoute
   '/system/settings': typeof AuthenticatedSystemSettingsRoute
   '/platform/': typeof AuthenticatedPlatformIndexRoute
+  '/platform/branches/$branchId': typeof AuthenticatedPlatformBranchesBranchIdRoute
   '/platform/companies/$companyId': typeof AuthenticatedPlatformCompaniesCompanyIdRoute
   '/platform/owners/$userId': typeof AuthenticatedPlatformOwnersUserIdRoute
   '/api/public/hooks/generate-recurring-tasks': typeof ApiPublicHooksGenerateRecurringTasksRoute
@@ -277,6 +293,7 @@ export interface FileRoutesByTo {
   '/system': typeof AuthenticatedSystemRouteWithChildren
   '/tasks': typeof AuthenticatedTasksRoute
   '/platform/audit-log': typeof AuthenticatedPlatformAuditLogRoute
+  '/platform/branches': typeof AuthenticatedPlatformBranchesRouteWithChildren
   '/platform/companies': typeof AuthenticatedPlatformCompaniesRouteWithChildren
   '/platform/owners': typeof AuthenticatedPlatformOwnersRouteWithChildren
   '/system/branch-managers': typeof AuthenticatedSystemBranchManagersRoute
@@ -284,6 +301,7 @@ export interface FileRoutesByTo {
   '/system/permissions': typeof AuthenticatedSystemPermissionsRoute
   '/system/settings': typeof AuthenticatedSystemSettingsRoute
   '/platform': typeof AuthenticatedPlatformIndexRoute
+  '/platform/branches/$branchId': typeof AuthenticatedPlatformBranchesBranchIdRoute
   '/platform/companies/$companyId': typeof AuthenticatedPlatformCompaniesCompanyIdRoute
   '/platform/owners/$userId': typeof AuthenticatedPlatformOwnersUserIdRoute
   '/api/public/hooks/generate-recurring-tasks': typeof ApiPublicHooksGenerateRecurringTasksRoute
@@ -312,6 +330,7 @@ export interface FileRoutesById {
   '/_authenticated/system': typeof AuthenticatedSystemRouteWithChildren
   '/_authenticated/tasks': typeof AuthenticatedTasksRoute
   '/_authenticated/platform/audit-log': typeof AuthenticatedPlatformAuditLogRoute
+  '/_authenticated/platform/branches': typeof AuthenticatedPlatformBranchesRouteWithChildren
   '/_authenticated/platform/companies': typeof AuthenticatedPlatformCompaniesRouteWithChildren
   '/_authenticated/platform/owners': typeof AuthenticatedPlatformOwnersRouteWithChildren
   '/_authenticated/system/branch-managers': typeof AuthenticatedSystemBranchManagersRoute
@@ -319,6 +338,7 @@ export interface FileRoutesById {
   '/_authenticated/system/permissions': typeof AuthenticatedSystemPermissionsRoute
   '/_authenticated/system/settings': typeof AuthenticatedSystemSettingsRoute
   '/_authenticated/platform/': typeof AuthenticatedPlatformIndexRoute
+  '/_authenticated/platform/branches/$branchId': typeof AuthenticatedPlatformBranchesBranchIdRoute
   '/_authenticated/platform/companies/$companyId': typeof AuthenticatedPlatformCompaniesCompanyIdRoute
   '/_authenticated/platform/owners/$userId': typeof AuthenticatedPlatformOwnersUserIdRoute
   '/api/public/hooks/generate-recurring-tasks': typeof ApiPublicHooksGenerateRecurringTasksRoute
@@ -347,6 +367,7 @@ export interface FileRouteTypes {
     | '/system'
     | '/tasks'
     | '/platform/audit-log'
+    | '/platform/branches'
     | '/platform/companies'
     | '/platform/owners'
     | '/system/branch-managers'
@@ -354,6 +375,7 @@ export interface FileRouteTypes {
     | '/system/permissions'
     | '/system/settings'
     | '/platform/'
+    | '/platform/branches/$branchId'
     | '/platform/companies/$companyId'
     | '/platform/owners/$userId'
     | '/api/public/hooks/generate-recurring-tasks'
@@ -379,6 +401,7 @@ export interface FileRouteTypes {
     | '/system'
     | '/tasks'
     | '/platform/audit-log'
+    | '/platform/branches'
     | '/platform/companies'
     | '/platform/owners'
     | '/system/branch-managers'
@@ -386,6 +409,7 @@ export interface FileRouteTypes {
     | '/system/permissions'
     | '/system/settings'
     | '/platform'
+    | '/platform/branches/$branchId'
     | '/platform/companies/$companyId'
     | '/platform/owners/$userId'
     | '/api/public/hooks/generate-recurring-tasks'
@@ -413,6 +437,7 @@ export interface FileRouteTypes {
     | '/_authenticated/system'
     | '/_authenticated/tasks'
     | '/_authenticated/platform/audit-log'
+    | '/_authenticated/platform/branches'
     | '/_authenticated/platform/companies'
     | '/_authenticated/platform/owners'
     | '/_authenticated/system/branch-managers'
@@ -420,6 +445,7 @@ export interface FileRouteTypes {
     | '/_authenticated/system/permissions'
     | '/_authenticated/system/settings'
     | '/_authenticated/platform/'
+    | '/_authenticated/platform/branches/$branchId'
     | '/_authenticated/platform/companies/$companyId'
     | '/_authenticated/platform/owners/$userId'
     | '/api/public/hooks/generate-recurring-tasks'
@@ -630,6 +656,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedPlatformCompaniesRouteImport
       parentRoute: typeof AuthenticatedPlatformRouteRoute
     }
+    '/_authenticated/platform/branches': {
+      id: '/_authenticated/platform/branches'
+      path: '/branches'
+      fullPath: '/platform/branches'
+      preLoaderRoute: typeof AuthenticatedPlatformBranchesRouteImport
+      parentRoute: typeof AuthenticatedPlatformRouteRoute
+    }
     '/_authenticated/platform/audit-log': {
       id: '/_authenticated/platform/audit-log'
       path: '/audit-log'
@@ -658,8 +691,30 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedPlatformCompaniesCompanyIdRouteImport
       parentRoute: typeof AuthenticatedPlatformCompaniesRoute
     }
+    '/_authenticated/platform/branches/$branchId': {
+      id: '/_authenticated/platform/branches/$branchId'
+      path: '/$branchId'
+      fullPath: '/platform/branches/$branchId'
+      preLoaderRoute: typeof AuthenticatedPlatformBranchesBranchIdRouteImport
+      parentRoute: typeof AuthenticatedPlatformBranchesRoute
+    }
   }
 }
+
+interface AuthenticatedPlatformBranchesRouteChildren {
+  AuthenticatedPlatformBranchesBranchIdRoute: typeof AuthenticatedPlatformBranchesBranchIdRoute
+}
+
+const AuthenticatedPlatformBranchesRouteChildren: AuthenticatedPlatformBranchesRouteChildren =
+  {
+    AuthenticatedPlatformBranchesBranchIdRoute:
+      AuthenticatedPlatformBranchesBranchIdRoute,
+  }
+
+const AuthenticatedPlatformBranchesRouteWithChildren =
+  AuthenticatedPlatformBranchesRoute._addFileChildren(
+    AuthenticatedPlatformBranchesRouteChildren,
+  )
 
 interface AuthenticatedPlatformCompaniesRouteChildren {
   AuthenticatedPlatformCompaniesCompanyIdRoute: typeof AuthenticatedPlatformCompaniesCompanyIdRoute
@@ -693,6 +748,7 @@ const AuthenticatedPlatformOwnersRouteWithChildren =
 
 interface AuthenticatedPlatformRouteRouteChildren {
   AuthenticatedPlatformAuditLogRoute: typeof AuthenticatedPlatformAuditLogRoute
+  AuthenticatedPlatformBranchesRoute: typeof AuthenticatedPlatformBranchesRouteWithChildren
   AuthenticatedPlatformCompaniesRoute: typeof AuthenticatedPlatformCompaniesRouteWithChildren
   AuthenticatedPlatformOwnersRoute: typeof AuthenticatedPlatformOwnersRouteWithChildren
   AuthenticatedPlatformIndexRoute: typeof AuthenticatedPlatformIndexRoute
@@ -701,6 +757,8 @@ interface AuthenticatedPlatformRouteRouteChildren {
 const AuthenticatedPlatformRouteRouteChildren: AuthenticatedPlatformRouteRouteChildren =
   {
     AuthenticatedPlatformAuditLogRoute: AuthenticatedPlatformAuditLogRoute,
+    AuthenticatedPlatformBranchesRoute:
+      AuthenticatedPlatformBranchesRouteWithChildren,
     AuthenticatedPlatformCompaniesRoute:
       AuthenticatedPlatformCompaniesRouteWithChildren,
     AuthenticatedPlatformOwnersRoute:

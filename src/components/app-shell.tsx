@@ -21,6 +21,7 @@ import {
   Crown,
   UserCog,
   Settings,
+  GitBranch,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
@@ -159,6 +160,7 @@ export function AppShell({ children }: { children: ReactNode }) {
     // ===== Platform Management (visible only to authoritative Platform Owners) =====
     { to: "/platform", label: "דשבורד", icon: LayoutDashboard, visible: isPlatformOwner, section: "ניהול פלטפורמה" },
     { to: "/platform/companies", label: "חברות", icon: Building2, visible: isPlatformOwner, section: "ניהול פלטפורמה" },
+    { to: "/platform/branches", label: "סניפי הפלטפורמה", icon: GitBranch, visible: isPlatformOwner, section: "ניהול פלטפורמה" },
     { to: "/platform/owners", label: "בעלי מערכת", icon: Crown, visible: isPlatformOwner, section: "ניהול פלטפורמה" },
     { to: "/platform/audit-log", label: "יומן פעילות פלטפורמה", icon: ShieldCheck, visible: isPlatformOwner, section: "ניהול פלטפורמה" },
 

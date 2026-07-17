@@ -8,14 +8,16 @@
  * FeatureFlagManager, BillingManager, Role/Permission Registries) — it
  * creates no new abstractions and no Supabase connection. Companies are
  * delegated to the Companies module's own `companyService` (see
- * ../modules/companies); Branch runtime remains a stub (see
- * branch-context) for a future phase.
+ * ../modules/companies); Branches are delegated to the Branches module's
+ * own `branchService` (see ../modules/branches).
  */
 
 import { generateUUID, type UUID } from "../core/types";
 import type { Platform } from "../modules/platform";
 import type { Company } from "../modules/companies";
 import { companyService } from "../modules/companies";
+import type { Branch } from "../modules/branches";
+import { branchService } from "../modules/branches";
 import type { HealthStatus } from "../core/monitoring/types";
 import type { Permission, Role } from "../core/authorization/types";
 import type { FeatureFlag } from "../core/config/types";
@@ -54,6 +56,7 @@ export const DEFAULT_PLATFORM: Platform = (() => {
 export interface PlatformDashboardSnapshot {
   platform: Platform;
   companiesCount: number;
+  branchesCount: number;
   activeUserCount: number;
   health: HealthStatus[];
 }
@@ -73,6 +76,11 @@ export class PlatformRuntimeService {
   /** Companies belonging to this Platform, via the Companies module's own service. */
   listCompanies(): Promise<Company[]> {
     return companyService.listCompanies(this.platform.id);
+  }
+
+  /** Every Branch on this Platform, across every Company, via the Branches module's own service. */
+  listAllBranches(): Promise<Branch[]> {
+    return branchService.listAllBranches();
   }
 
   getPlatformSetting<T>(key: string): T | undefined {
@@ -144,14 +152,16 @@ export class PlatformRuntimeService {
   }
 
   async getGlobalDashboard(): Promise<PlatformDashboardSnapshot> {
-    const [health, users, companies] = await Promise.all([
+    const [health, users, companies, branches] = await Promise.all([
       this.getGlobalMonitoring(),
       this.listGlobalUsers(),
       this.listCompanies(),
+      this.listAllBranches(),
     ]);
     return {
       platform: this.platform,
       companiesCount: companies.length,
+      branchesCount: branches.length,
       activeUserCount: users.length,
       health,
     };

@@ -10,7 +10,9 @@ import {
   GitBranch,
   LayoutDashboard,
   Loader2,
+  MoreHorizontal,
   Pencil,
+  Plus,
   Settings as SettingsIcon,
   Star,
   Trash2,
@@ -22,10 +24,22 @@ import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import type { UUID } from "@/core";
 import { companyService, type CompanyDashboardSnapshot } from "@/modules/companies";
-import { useCompanyContext } from "@/platform";
+import { branchService, type Branch } from "@/modules/branches";
+import { useCompanyContext, branchesQueryKey } from "@/platform";
 import { CompanyEditDialog, CompanyDeleteDialog } from "@/components/platform/company-dialogs";
+import {
+  BranchCreateDialog,
+  BranchEditDialog,
+  BranchDeleteDialog,
+} from "@/components/platform/branch-dialogs";
 
 export const Route = createFileRoute("/_authenticated/platform/companies/$companyId")({
   component: CompanyDetailsPage,
@@ -47,6 +61,12 @@ function CompanyDetailsPage() {
   const dashboardQuery = useQuery({
     queryKey: ["company-dashboard", companyId],
     queryFn: () => companyService.getCompanyDashboard(company as NonNullable<typeof company>),
+    enabled: !!company,
+  });
+
+  const branchesQuery = useQuery({
+    queryKey: branchesQueryKey(company?.id ?? null),
+    queryFn: () => branchService.listBranches(company?.id as UUID),
     enabled: !!company,
   });
 
@@ -141,6 +161,10 @@ function CompanyDetailsPage() {
             <BarChart3 className="size-4" />
             סטטיסטיקות
           </TabsTrigger>
+          <TabsTrigger value="branches" className="gap-2">
+            <GitBranch className="size-4" />
+            סניפים
+          </TabsTrigger>
           <TabsTrigger value="settings" className="gap-2">
             <SettingsIcon className="size-4" />
             הגדרות
@@ -151,6 +175,7 @@ function CompanyDetailsPage() {
           <CompanyDashboardTab
             snapshot={dashboardQuery.data}
             isLoading={dashboardQuery.isLoading}
+            branchesCount={branchesQuery.data?.length ?? 0}
           />
         </TabsContent>
 
@@ -158,6 +183,14 @@ function CompanyDetailsPage() {
           <CompanyStatisticsTab
             snapshot={dashboardQuery.data}
             isLoading={dashboardQuery.isLoading}
+          />
+        </TabsContent>
+
+        <TabsContent value="branches">
+          <CompanyBranchesTab
+            companyId={company.id}
+            branches={branchesQuery.data ?? []}
+            isLoading={branchesQuery.isLoading}
           />
         </TabsContent>
 
@@ -184,9 +217,11 @@ function CompanyDetailsPage() {
 function CompanyDashboardTab({
   snapshot,
   isLoading,
+  branchesCount,
 }: {
   snapshot?: CompanyDashboardSnapshot;
   isLoading: boolean;
+  branchesCount: number;
 }) {
   if (isLoading || !snapshot) {
     return (
@@ -204,12 +239,7 @@ function CompanyDashboardTab({
         value={snapshot.statistics.totalCompaniesOnPlatform}
       />
       <StatCard icon={Calendar} label="גיל החברה (ימים)" value={snapshot.statistics.ageInDays} />
-      <StatCard
-        icon={GitBranch}
-        label="סניפים משויכים"
-        value={0}
-        hint="שכבת הסניפים תיושם בשלב עתידי"
-      />
+      <StatCard icon={GitBranch} label="סניפים משויכים" value={branchesCount} />
     </div>
   );
 }
@@ -239,6 +269,99 @@ function CompanyStatisticsTab({
       <Row label="עודכנה לאחרונה" value={snapshot.statistics.updatedAt.toLocaleString("he-IL")} />
       <Row label="גיל החברה" value={`${snapshot.statistics.ageInDays} ימים`} />
     </Card>
+  );
+}
+
+function CompanyBranchesTab({
+  companyId,
+  branches,
+  isLoading,
+}: {
+  companyId: UUID;
+  branches: Branch[];
+  isLoading: boolean;
+}) {
+  const [openCreate, setOpenCreate] = useState(false);
+  const [editBranch, setEditBranch] = useState<Branch | null>(null);
+  const [deleteBranch, setDeleteBranch] = useState<Branch | null>(null);
+
+  return (
+    <div className="space-y-4">
+      <div className="flex justify-end">
+        <Button onClick={() => setOpenCreate(true)} size="sm" className="gap-2">
+          <Plus className="size-4" />
+          סניף חדש
+        </Button>
+      </div>
+
+      <Card className="card-elevated overflow-hidden">
+        {isLoading ? (
+          <div className="p-8 flex justify-center">
+            <Loader2 className="size-5 animate-spin text-primary" />
+          </div>
+        ) : branches.length === 0 ? (
+          <div className="p-8 text-sm text-muted-foreground text-center">
+            לחברה זו אין עדיין סניפים. ניתן ליצור סניף חדש מהכפתור מעלה.
+          </div>
+        ) : (
+          <ul className="divide-y">
+            {branches.map((branch) => (
+              <li key={branch.id} className="flex items-center gap-3 p-3 hover:bg-accent/30">
+                <GitBranch className="size-4 text-muted-foreground shrink-0" />
+                <Link
+                  to="/platform/branches/$branchId"
+                  params={{ branchId: branch.id }}
+                  className="min-w-0 flex-1 truncate text-sm font-medium hover:underline"
+                >
+                  {branch.name}
+                </Link>
+                <span className="text-xs text-muted-foreground tabular-nums shrink-0">
+                  {branch.createdAt.toLocaleDateString("he-IL")}
+                </span>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="ghost" size="icon" className="size-8 shrink-0">
+                      <MoreHorizontal className="size-4" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                    <DropdownMenuItem onClick={() => setEditBranch(branch)} className="gap-2">
+                      <Pencil className="size-4" />
+                      עריכה
+                    </DropdownMenuItem>
+                    <DropdownMenuItem
+                      onClick={() => setDeleteBranch(branch)}
+                      className="gap-2 text-destructive focus:text-destructive"
+                    >
+                      <Trash2 className="size-4" />
+                      מחיקה
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </li>
+            ))}
+          </ul>
+        )}
+      </Card>
+
+      {openCreate && (
+        <BranchCreateDialog open={openCreate} onOpenChange={setOpenCreate} companyId={companyId} />
+      )}
+      {editBranch && (
+        <BranchEditDialog
+          open={!!editBranch}
+          onOpenChange={(v) => !v && setEditBranch(null)}
+          branch={editBranch}
+        />
+      )}
+      {deleteBranch && (
+        <BranchDeleteDialog
+          open={!!deleteBranch}
+          onOpenChange={(v) => !v && setDeleteBranch(null)}
+          branch={deleteBranch}
+        />
+      )}
+    </div>
   );
 }
 
