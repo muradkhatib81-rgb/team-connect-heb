@@ -67,11 +67,15 @@ function BranchesPage() {
       </div>
       <div className="flex flex-wrap items-center gap-2">
         <CompanySwitcher />
-        <PlatformBranchSwitcher />
-        <Button onClick={() => setOpenCreate(true)} disabled={!activeCompanyId} className="gap-2">
-          <Plus className="size-4" />
-          שיוך סניף קיים
-        </Button>
+        {activeCompanyId && (
+          <>
+            <PlatformBranchSwitcher />
+            <Button onClick={() => setOpenCreate(true)} className="gap-2">
+              <Plus className="size-4" />
+              שיוך סניף קיים
+            </Button>
+          </>
+        )}
       </div>
     </header>
   );

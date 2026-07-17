@@ -5,8 +5,8 @@
  * see ../modules/branches), scoped to the active Company from
  * `CompanyContext`. Mirrors `CompanyContext` exactly, one level down the
  * multi-tenant hierarchy (Platform -> Companies -> Branches). Mounted
- * inside `CompanyProvider` (see routes/_authenticated/platform/route.tsx),
- * since Branches only make sense within an active Company.
+ * inside `CompanyProvider` around the authenticated shell; it remains empty
+ * until an active Company is selected.
  *
  * Bridges into the application's single Branch Mode gate
  * (`@/lib/use-active-branch`): activating a Platform Branch here also
@@ -14,7 +14,7 @@
  * here exits it — so "Branch Mode" (and every existing branch module it
  * gates: Dashboard, Employees, Departments, Schedules, Tasks, Messages,
  * Reports, Settings…) is one single, real state shared by both the
- * Platform's Company -> Branches flow and the header Branch switcher.
+ * Platform's Company -> Branches flow.
  */
 
 import {
@@ -23,6 +23,7 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from "react";
@@ -32,6 +33,8 @@ import type { UUID } from "../core/types";
 import type { Branch } from "../modules/branches";
 import { branchService } from "../modules/branches";
 import { useActiveBranch } from "../lib/use-active-branch";
+import { isPlatformOwner } from "../lib/constants";
+import { useAuth } from "../lib/use-auth";
 import { useCompanyContext } from "./company-context";
 
 const ACTIVE_BRANCH_STORAGE_KEY = "lov_active_platform_branch_id";
@@ -96,14 +99,17 @@ const EMPTY_BRANCHES: Branch[] = [];
 
 export function BranchProvider({ children }: { children: ReactNode }) {
   const { activeCompanyId, activeCompany } = useCompanyContext();
+  const { data: profile, isLoading: isAuthLoading } = useAuth();
   const queryClient = useQueryClient();
   const [activeBranchId, setActiveBranchIdState] = useState<UUID | null>(readStoredBranchId);
+  const previousCompanyId = useRef<UUID | null>(activeCompanyId);
   const realActiveBranch = useActiveBranch();
+  const canAccessBranches = isPlatformOwner(profile?.roles ?? []);
 
   const branchesQuery = useQuery({
     queryKey: branchesQueryKey(activeCompanyId),
     queryFn: () => branchService.listBranches(activeCompanyId as UUID),
-    enabled: !!activeCompanyId,
+    enabled: canAccessBranches && !!activeCompanyId,
   });
 
   const branches = branchesQuery.data ?? EMPTY_BRANCHES;
@@ -132,16 +138,33 @@ export function BranchProvider({ children }: { children: ReactNode }) {
     [realActiveBranch, activeCompany],
   );
 
+  // A Branch is always scoped to exactly one Company. Selecting a different
+  // Company (or clearing Company Mode) must therefore leave the previous
+  // Branch Mode immediately; it may never leak into the new Company section.
+  useEffect(() => {
+    if (previousCompanyId.current === activeCompanyId) return;
+    previousCompanyId.current = activeCompanyId;
+    setActiveBranchId(null);
+  }, [activeCompanyId, setActiveBranchId]);
+
   // Clear the active Branch if it no longer belongs to the active Company
   // (deleted, or the active Company itself just changed). No fallback to
   // "the first Branch of the Company": the Platform Owner must explicitly
-  // choose a Branch (via the Branch switcher) — never an automatic pick.
+  // choose a Branch from the selected Company's Branches — never an
+  // automatic pick.
   useEffect(() => {
-    if (branchesQuery.isLoading) return;
+    if (isAuthLoading || !canAccessBranches || branchesQuery.isLoading) return;
     if (activeBranchId && !branches.some((branch) => branch.id === activeBranchId)) {
       setActiveBranchId(null);
     }
-  }, [branches, activeBranchId, branchesQuery.isLoading, setActiveBranchId]);
+  }, [
+    activeBranchId,
+    branches,
+    branchesQuery.isLoading,
+    canAccessBranches,
+    isAuthLoading,
+    setActiveBranchId,
+  ]);
 
   const refresh = useCallback(async () => {
     await queryClient.invalidateQueries({ queryKey: branchesQueryKey(activeCompanyId) });
@@ -158,11 +181,20 @@ export function BranchProvider({ children }: { children: ReactNode }) {
       activeBranchId,
       activeBranch,
       branches,
-      isLoading: branchesQuery.isLoading,
+      isLoading: isAuthLoading || (canAccessBranches && branchesQuery.isLoading),
       setActiveBranchId,
       refresh,
     }),
-    [activeBranchId, activeBranch, branches, branchesQuery.isLoading, setActiveBranchId, refresh],
+    [
+      activeBranchId,
+      activeBranch,
+      branches,
+      branchesQuery.isLoading,
+      canAccessBranches,
+      isAuthLoading,
+      setActiveBranchId,
+      refresh,
+    ],
   );
 
   return <BranchContext.Provider value={value}>{children}</BranchContext.Provider>;

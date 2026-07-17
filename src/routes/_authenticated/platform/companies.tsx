@@ -127,6 +127,7 @@ function CompaniesPage() {
                         to="/platform/companies/$companyId"
                         params={{ companyId: company.id }}
                         search={{ tab: "dashboard" }}
+                        onClick={() => setActiveCompanyId(company.id)}
                         className="flex items-center gap-2 min-w-0 hover:underline font-medium"
                       >
                         {company.logoUrl ? (

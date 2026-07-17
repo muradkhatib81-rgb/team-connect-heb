@@ -48,6 +48,7 @@ import { cn } from "@/lib/utils";
 import { NotificationsBell } from "@/components/notifications-bell";
 import { useActiveBranch } from "@/lib/use-active-branch";
 import { AppFooter } from "@/components/app-footer";
+import { useBranchContext, useCompanyContext } from "@/platform";
 
 interface NavItem {
   to: string;
@@ -63,12 +64,18 @@ export function AppShell({ children }: { children: ReactNode }) {
   const navigate = useNavigate();
   const qc = useQueryClient();
   const pathname = useRouterState({ select: (s) => s.location.pathname });
+  const search = useRouterState({ select: (s) => s.location.search });
   // Provided by <ActiveBranchProvider/> wrapping this component (see
   // routes/_authenticated/route.tsx) — the single real Branch Mode gate,
   // shared with the Platform's Company -> Branches flow. Used below to
   // decide whether branch-module nav items should even be listed.
   const { activeBranchId } = useActiveBranch();
-  const inBranchMode = !!activeBranchId;
+  const { activeCompany, activeCompanyId, setActiveCompanyId } = useCompanyContext();
+  const { activeBranch, setActiveBranchId } = useBranchContext();
+  // The Platform Branch assignment is authoritative for navigation. The
+  // lower-level real branch id alone is insufficient while Company Mode is
+  // changing, because it can briefly represent the previous Company.
+  const inBranchMode = !!activeBranch && activeBranch.companyId === activeCompanyId;
 
   const isMainAdminEarly = !!profile?.roles?.includes("main_admin");
   // Reuses the same role model as every other admin gate in this file
@@ -137,7 +144,6 @@ export function AppShell({ children }: { children: ReactNode }) {
   // עובד רגיל = אין הרשאות ניהול ואינו אחראי מחלקה
   const isPlainEmployee = !admin && !isDeptManager;
   const isMainAdmin = isMainAdminEarly;
-  const isSysAdmin = profile.roles.includes("system_admin");
   const isBranchManager = profile.roles.includes("branch_manager");
 
   // Managers of breaks: main admin, branch manager, or any user with the explicit permission.
@@ -153,6 +159,8 @@ export function AppShell({ children }: { children: ReactNode }) {
     visible: boolean;
     badge?: number;
     section?: string;
+    active?: boolean;
+    onSelect?: () => void;
   };
 
   // Branch modules — only meaningful once an Active Branch exists. Regular
@@ -164,7 +172,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   // <BranchModeGuard/> below, which enforces the very same rule at the
   // routing level. Tagged with a section header only for Platform Owners,
   // so a regular employee's nav looks exactly like it always has.
-  const branchSection = isPlatformOwner ? "מודולי הסניף (במצב סניף)" : undefined;
+  const branchSection = isPlatformOwner ? activeBranch?.name : undefined;
   const branchItems: NavEntry[] = [
     {
       to: "/dashboard",
@@ -257,15 +265,8 @@ export function AppShell({ children }: { children: ReactNode }) {
     { to: "/profile", label: "הפרופיל שלי", icon: UserCircle, visible: isPlainEmployee },
   ];
 
-  // ===== Platform Management — the primary home for Platform Owners. =====
+  // ===== Platform Management — always distinct from Company and Branch mode. =====
   const platformItems: NavEntry[] = [
-    {
-      to: "/platform",
-      label: "דשבורד פלטפורמה",
-      icon: LayoutDashboard,
-      visible: isPlatformOwner,
-      section: "ניהול פלטפורמה",
-    },
     {
       to: "/platform/companies",
       label: "חברות",
@@ -345,37 +346,103 @@ export function AppShell({ children }: { children: ReactNode }) {
     },
   ];
 
-  // ===== System Administrator section (visible only to the singleton system_admin) =====
-  const systemItems: NavEntry[] = [
-    {
-      to: "/system/branches",
-      label: "סניפים",
-      icon: Building2,
-      visible: isSysAdmin,
-      section: "ניהול מערכת",
-    },
-    {
-      to: "/system/branch-managers",
-      label: "מנהלי סניפים",
-      icon: UserCog,
-      visible: isSysAdmin,
-      section: "ניהול מערכת",
-    },
-    {
-      to: "/system/permissions",
-      label: "הרשאות",
-      icon: ShieldCheck,
-      visible: isSysAdmin,
-      section: "ניהול מערכת",
-    },
-    {
-      to: "/system/settings",
-      label: "הגדרות מערכת",
-      icon: Settings,
-      visible: isSysAdmin,
-      section: "ניהול מערכת",
-    },
-  ];
+  // Company tools belong only to the selected Company's section. They reuse
+  // the existing Company dashboard tabs instead of creating parallel routes.
+  const companyItems: NavEntry[] =
+    isPlatformOwner && activeCompany
+      ? [
+          {
+            to: "/platform/companies/$companyId",
+            label: "דשבורד חברה",
+            icon: LayoutDashboard,
+            visible: true,
+            section: activeCompany.name,
+            active:
+              pathname === `/platform/companies/${activeCompany.id}` && search.tab === "dashboard",
+            onSelect: () =>
+              navigate({
+                to: "/platform/companies/$companyId",
+                params: { companyId: activeCompany.id },
+                search: { tab: "dashboard" },
+              }),
+          },
+          {
+            to: "/platform/companies/$companyId",
+            label: "סניפים",
+            icon: GitBranch,
+            visible: true,
+            section: activeCompany.name,
+            active:
+              pathname === `/platform/companies/${activeCompany.id}` && search.tab === "branches",
+            onSelect: () =>
+              navigate({
+                to: "/platform/companies/$companyId",
+                params: { companyId: activeCompany.id },
+                search: { tab: "branches" },
+              }),
+          },
+          {
+            to: "/platform/companies/$companyId",
+            label: "מנהלי החברה",
+            icon: UserCog,
+            visible: true,
+            section: activeCompany.name,
+            active:
+              pathname === `/platform/companies/${activeCompany.id}` && search.tab === "managers",
+            onSelect: () =>
+              navigate({
+                to: "/platform/companies/$companyId",
+                params: { companyId: activeCompany.id },
+                search: { tab: "managers" },
+              }),
+          },
+          {
+            to: "/platform/companies/$companyId",
+            label: "משתמשי החברה",
+            icon: Users,
+            visible: true,
+            section: activeCompany.name,
+            active:
+              pathname === `/platform/companies/${activeCompany.id}` && search.tab === "users",
+            onSelect: () =>
+              navigate({
+                to: "/platform/companies/$companyId",
+                params: { companyId: activeCompany.id },
+                search: { tab: "users" },
+              }),
+          },
+          {
+            to: "/platform/companies/$companyId",
+            label: "דוחות החברה",
+            icon: BarChart3,
+            visible: true,
+            section: activeCompany.name,
+            active:
+              pathname === `/platform/companies/${activeCompany.id}` && search.tab === "reports",
+            onSelect: () =>
+              navigate({
+                to: "/platform/companies/$companyId",
+                params: { companyId: activeCompany.id },
+                search: { tab: "reports" },
+              }),
+          },
+          {
+            to: "/platform/companies/$companyId",
+            label: "הגדרות החברה",
+            icon: Settings,
+            visible: true,
+            section: activeCompany.name,
+            active:
+              pathname === `/platform/companies/${activeCompany.id}` && search.tab === "settings",
+            onSelect: () =>
+              navigate({
+                to: "/platform/companies/$companyId",
+                params: { companyId: activeCompany.id },
+                search: { tab: "settings" },
+              }),
+          },
+        ]
+      : [];
 
   // A Platform Owner with no Active Branch has nothing to do in a Branch
   // module — hide the whole section instead of listing dead links (the
@@ -384,7 +451,10 @@ export function AppShell({ children }: { children: ReactNode }) {
   // only gates this list for owners.
   const branchModulesLocked = isPlatformOwner && !inBranchMode;
   const visibleBranchItems = branchItems.filter(
-    (item) => item.visible && !(branchModulesLocked && item.to !== "/profile"),
+    (item) =>
+      item.visible &&
+      !(branchModulesLocked && item.to !== "/profile") &&
+      !(isPlatformOwner && item.to === "/company-settings"),
   );
 
   // Platform is the primary entry point for a Platform Owner, so its
@@ -394,9 +464,18 @@ export function AppShell({ children }: { children: ReactNode }) {
   // their nav is unchanged.
   const nav: NavEntry[] = [
     ...platformItems.filter((n) => n.visible),
-    ...visibleBranchItems,
-    ...systemItems.filter((n) => n.visible),
+    ...companyItems,
+    ...visibleBranchItems.filter(
+      (item) => !isPlatformOwner || inBranchMode || item.to === "/profile",
+    ),
   ];
+
+  const handlePlatformHome = () => {
+    setActiveBranchId(null);
+    setActiveCompanyId(null);
+    setMobileOpen(false);
+    navigate({ to: "/platform" });
+  };
 
   async function handleSignOut() {
     await qc.cancelQueries();
@@ -429,36 +508,68 @@ export function AppShell({ children }: { children: ReactNode }) {
       </div>
 
       <nav className="flex-1 min-h-0 overflow-y-auto p-3 space-y-1">
+        {isPlatformOwner && (
+          <button
+            type="button"
+            onClick={handlePlatformHome}
+            className={cn(
+              "flex w-full items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors",
+              pathname === "/platform"
+                ? "bg-sidebar-accent text-sidebar-accent-foreground"
+                : "text-sidebar-foreground hover:bg-sidebar-accent/60",
+            )}
+          >
+            <LayoutDashboard className="size-4 shrink-0" />
+            <span className="flex-1 text-right">דשבורד ראשי</span>
+          </button>
+        )}
         {nav.map((item, idx) => {
-          const active = pathname === item.to || pathname.startsWith(item.to + "/");
+          const active =
+            item.active ?? (pathname === item.to || pathname.startsWith(item.to + "/"));
           const prev = idx > 0 ? nav[idx - 1] : null;
           const showSectionHeader = !!item.section && (!prev || prev.section !== item.section);
+          const className = cn(
+            "flex w-full items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors",
+            active
+              ? "bg-sidebar-accent text-sidebar-accent-foreground"
+              : "text-sidebar-foreground hover:bg-sidebar-accent/60",
+          );
           return (
-            <div key={item.to}>
+            <div key={`${item.to}-${item.label}`}>
               {showSectionHeader && (
                 <div className="mt-4 mb-1 px-3 flex items-center gap-2 text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
                   <Crown className="size-3" />
                   <span>{item.section}</span>
                 </div>
               )}
-              <Link
-                to={item.to}
-                onClick={() => setMobileOpen(false)}
-                className={cn(
-                  "flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors",
-                  active
-                    ? "bg-sidebar-accent text-sidebar-accent-foreground"
-                    : "text-sidebar-foreground hover:bg-sidebar-accent/60",
-                )}
-              >
-                <item.icon className="size-4 shrink-0" />
-                <span className="flex-1">{item.label}</span>
-                {!!item.badge && item.badge > 0 && (
-                  <span className="min-w-[20px] h-5 px-1.5 rounded-full bg-destructive text-destructive-foreground text-[11px] font-bold flex items-center justify-center">
-                    {item.badge > 99 ? "99+" : item.badge}
-                  </span>
-                )}
-              </Link>
+              {item.onSelect ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    item.onSelect?.();
+                    setMobileOpen(false);
+                  }}
+                  className={className}
+                >
+                  <item.icon className="size-4 shrink-0" />
+                  <span className="flex-1 text-right">{item.label}</span>
+                  {!!item.badge && item.badge > 0 && (
+                    <span className="min-w-[20px] h-5 px-1.5 rounded-full bg-destructive text-destructive-foreground text-[11px] font-bold flex items-center justify-center">
+                      {item.badge > 99 ? "99+" : item.badge}
+                    </span>
+                  )}
+                </button>
+              ) : (
+                <Link to={item.to} onClick={() => setMobileOpen(false)} className={className}>
+                  <item.icon className="size-4 shrink-0" />
+                  <span className="flex-1">{item.label}</span>
+                  {!!item.badge && item.badge > 0 && (
+                    <span className="min-w-[20px] h-5 px-1.5 rounded-full bg-destructive text-destructive-foreground text-[11px] font-bold flex items-center justify-center">
+                      {item.badge > 99 ? "99+" : item.badge}
+                    </span>
+                  )}
+                </Link>
+              )}
             </div>
           );
         })}

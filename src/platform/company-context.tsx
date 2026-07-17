@@ -3,9 +3,8 @@
  *
  * Reads Companies through the existing Companies module (`companyService`,
  * see ../modules/companies), scoped to the active Platform from
- * `PlatformContext`. Not mounted globally: it is scoped to the Platform
- * management area (see routes/_authenticated/platform/route.tsx), since
- * most of the application does not need multi-tenant Company data yet.
+ * `PlatformContext`. It wraps the authenticated shell so navigation and
+ * routed Platform content share one active Company selection.
  */
 
 import {
@@ -21,6 +20,8 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import type { UUID } from "../core/types";
 import type { Company } from "../modules/companies";
 import { companyService } from "../modules/companies";
+import { isPlatformOwner } from "../lib/constants";
+import { useAuth } from "../lib/use-auth";
 import { usePlatformContext } from "./platform-context";
 
 const ACTIVE_COMPANY_STORAGE_KEY = "lov_active_company_id";
@@ -69,12 +70,15 @@ const EMPTY_COMPANIES: Company[] = [];
 
 export function CompanyProvider({ children }: { children: ReactNode }) {
   const { platform } = usePlatformContext();
+  const { data: profile, isLoading: isAuthLoading } = useAuth();
   const queryClient = useQueryClient();
   const [activeCompanyId, setActiveCompanyIdState] = useState<UUID | null>(readStoredCompanyId);
+  const canAccessCompanies = isPlatformOwner(profile?.roles ?? []);
 
   const companiesQuery = useQuery({
     queryKey: companiesQueryKey(platform.id),
     queryFn: () => companyService.listCompanies(platform.id),
+    enabled: canAccessCompanies,
   });
 
   const companies = companiesQuery.data ?? EMPTY_COMPANIES;
@@ -89,11 +93,18 @@ export function CompanyProvider({ children }: { children: ReactNode }) {
   // Owner must explicitly choose a Company (via the Company switcher)
   // before its Branches become available — never an automatic pick.
   useEffect(() => {
-    if (companiesQuery.isLoading) return;
+    if (isAuthLoading || !canAccessCompanies || companiesQuery.isLoading) return;
     if (activeCompanyId && !companies.some((company) => company.id === activeCompanyId)) {
       setActiveCompanyId(null);
     }
-  }, [companies, activeCompanyId, companiesQuery.isLoading, setActiveCompanyId]);
+  }, [
+    activeCompanyId,
+    canAccessCompanies,
+    companies,
+    companiesQuery.isLoading,
+    isAuthLoading,
+    setActiveCompanyId,
+  ]);
 
   const refresh = useCallback(async () => {
     await queryClient.invalidateQueries({ queryKey: companiesQueryKey(platform.id) });
@@ -110,7 +121,7 @@ export function CompanyProvider({ children }: { children: ReactNode }) {
       activeCompanyId,
       activeCompany,
       companies,
-      isLoading: companiesQuery.isLoading,
+      isLoading: isAuthLoading || (canAccessCompanies && companiesQuery.isLoading),
       setActiveCompanyId,
       refresh,
     }),
@@ -118,7 +129,9 @@ export function CompanyProvider({ children }: { children: ReactNode }) {
       activeCompanyId,
       activeCompany,
       companies,
+      canAccessCompanies,
       companiesQuery.isLoading,
+      isAuthLoading,
       setActiveCompanyId,
       refresh,
     ],

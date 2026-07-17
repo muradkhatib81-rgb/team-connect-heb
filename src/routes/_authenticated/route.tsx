@@ -2,6 +2,7 @@ import { createFileRoute, Outlet, redirect } from "@tanstack/react-router";
 import { supabase } from "@/integrations/supabase/client";
 import { AppShell } from "@/components/app-shell";
 import { ActiveBranchProvider } from "@/lib/use-active-branch";
+import { BranchProvider, CompanyProvider } from "@/platform";
 
 export const Route = createFileRoute("/_authenticated")({
   beforeLoad: async ({ location }) => {
@@ -15,14 +16,17 @@ export const Route = createFileRoute("/_authenticated")({
 });
 
 function AuthenticatedLayout() {
-  // Wraps AppShell (not just its children) so the shell itself — sidebar
-  // navigation included — can read Branch Mode via useActiveBranch() to
-  // decide whether branch modules should even be listed. See AppShell.
+  // The shell is inside every hierarchy context so its navigation is driven
+  // by the same Platform -> Company -> Branch state as the routed content.
   return (
     <ActiveBranchProvider>
-      <AppShell>
-        <Outlet />
-      </AppShell>
+      <CompanyProvider>
+        <BranchProvider>
+          <AppShell>
+            <Outlet />
+          </AppShell>
+        </BranchProvider>
+      </CompanyProvider>
     </ActiveBranchProvider>
   );
 }
