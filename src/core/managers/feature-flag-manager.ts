@@ -17,4 +17,8 @@ export class FeatureFlagManager extends BaseManager {
   isEnabled(key: string): boolean {
     return this.flags.get(key)?.enabled ?? false;
   }
+
+  list(): FeatureFlag[] {
+    return [...this.flags.values()];
+  }
 }

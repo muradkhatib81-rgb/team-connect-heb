@@ -32,6 +32,8 @@ import type { DeviceInfo } from "./auth/types";
 import { RoleEngine } from "./authorization/role-engine";
 import { PermissionEngine } from "./authorization/permission-engine";
 import { PermissionResolver } from "./authorization/permission-resolver";
+import { PermissionRegistry } from "./authorization/permission-registry";
+import { RoleRegistry } from "./authorization/role-registry";
 
 import { CentralLogger } from "./logging/central-logger";
 import { AuditLogger } from "./logging/audit-logger";
@@ -64,6 +66,8 @@ const TOKENS = {
   roleEngine: "role-engine",
   permissionEngine: "permission-engine",
   permissionResolver: "permission-resolver",
+  permissionRegistry: "permission-registry",
+  roleRegistry: "role-registry",
   centralLogger: "central-logger",
   auditLogger: "audit-logger",
   securityLogger: "security-logger",
@@ -98,6 +102,8 @@ const permissionResolver = new PermissionResolver();
 container.register(TOKENS.permissionResolver, permissionResolver);
 container.register(TOKENS.roleEngine, new RoleEngine());
 container.register(TOKENS.permissionEngine, new PermissionEngine());
+container.register(TOKENS.permissionRegistry, new PermissionRegistry());
+container.register(TOKENS.roleRegistry, new RoleRegistry());
 
 const sessionManager = new SessionManager();
 container.register(TOKENS.sessionManager, sessionManager);
@@ -219,6 +225,18 @@ export function getMonitoringManager(): MonitoringManager {
 }
 export function getConfigurationManager(): ConfigurationManager {
   return container.resolve(TOKENS.configuration);
+}
+export function getFeatureFlagManager(): FeatureFlagManager {
+  return container.resolve(TOKENS.featureFlag);
+}
+export function getBillingManager(): BillingManager {
+  return container.resolve(TOKENS.billing);
+}
+export function getPermissionRegistry(): PermissionRegistry {
+  return container.resolve(TOKENS.permissionRegistry);
+}
+export function getRoleRegistry(): RoleRegistry {
+  return container.resolve(TOKENS.roleRegistry);
 }
 
 function buildDeviceInfo(): DeviceInfo {

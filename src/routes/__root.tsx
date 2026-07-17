@@ -13,6 +13,7 @@ import appCss from "../styles.css?url";
 import { reportLovableError } from "../lib/lovable-error-reporting";
 import { Toaster } from "@/components/ui/sonner";
 import { supabase } from "@/integrations/supabase/client";
+import { PlatformProvider } from "@/platform";
 
 function NotFoundComponent() {
   return (
@@ -46,9 +47,7 @@ function ErrorComponent({ error, reset }: { error: Error; reset: () => void }) {
   return (
     <div className="flex min-h-screen items-center justify-center bg-background px-4">
       <div className="max-w-md text-center">
-        <h1 className="text-xl font-semibold tracking-tight text-foreground">
-          העמוד לא נטען
-        </h1>
+        <h1 className="text-xl font-semibold tracking-tight text-foreground">העמוד לא נטען</h1>
         <p className="mt-2 text-sm text-muted-foreground">
           משהו השתבש. נסה לרענן או לחזור לדף הבית.
         </p>
@@ -84,10 +83,24 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       { name: "description", content: "מערכת ניהול עובדים לניהול צוות, מחלקות ותפקידים בסניף." },
       { property: "og:title", content: "מערכת ניהול עובדים" },
       { name: "twitter:title", content: "מערכת ניהול עובדים" },
-      { property: "og:description", content: "מערכת ניהול עובדים לניהול צוות, מחלקות ותפקידים בסניף." },
-      { name: "twitter:description", content: "מערכת ניהול עובדים לניהול צוות, מחלקות ותפקידים בסניף." },
-      { property: "og:image", content: "https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/1cb15dcf-5754-4f67-a008-a2d957fe4ee5/id-preview-c505c325--79a8729b-2939-401b-8703-2e45f7227352.lovable.app-1782178387382.png" },
-      { name: "twitter:image", content: "https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/1cb15dcf-5754-4f67-a008-a2d957fe4ee5/id-preview-c505c325--79a8729b-2939-401b-8703-2e45f7227352.lovable.app-1782178387382.png" },
+      {
+        property: "og:description",
+        content: "מערכת ניהול עובדים לניהול צוות, מחלקות ותפקידים בסניף.",
+      },
+      {
+        name: "twitter:description",
+        content: "מערכת ניהול עובדים לניהול צוות, מחלקות ותפקידים בסניף.",
+      },
+      {
+        property: "og:image",
+        content:
+          "https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/1cb15dcf-5754-4f67-a008-a2d957fe4ee5/id-preview-c505c325--79a8729b-2939-401b-8703-2e45f7227352.lovable.app-1782178387382.png",
+      },
+      {
+        name: "twitter:image",
+        content:
+          "https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/1cb15dcf-5754-4f67-a008-a2d957fe4ee5/id-preview-c505c325--79a8729b-2939-401b-8703-2e45f7227352.lovable.app-1782178387382.png",
+      },
       { name: "twitter:card", content: "summary_large_image" },
       { property: "og:type", content: "website" },
     ],
@@ -199,8 +212,10 @@ function RootComponent() {
 
   return (
     <QueryClientProvider client={queryClient}>
-      <Outlet />
-      <Toaster position="top-center" richColors closeButton />
+      <PlatformProvider>
+        <Outlet />
+        <Toaster position="top-center" richColors closeButton />
+      </PlatformProvider>
     </QueryClientProvider>
   );
 }

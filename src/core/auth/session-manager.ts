@@ -77,6 +77,12 @@ export class SessionManager {
     await this.storage.save(session);
   }
 
+  /** All sessions currently in "active" status, across every subject. */
+  async listActiveSessions(): Promise<Session[]> {
+    const sessions = await this.storage.list();
+    return sessions.filter((session) => session.status === "active");
+  }
+
   /** Automatic logout: expires any session older than SESSION_MAX_LIFETIME_MS. */
   async cleanupInactiveSessions(now: Date = new Date()): Promise<number> {
     const sessions = await this.storage.list();
