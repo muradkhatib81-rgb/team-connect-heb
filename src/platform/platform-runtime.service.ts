@@ -30,6 +30,8 @@ import {
   getBillingManager,
   getPermissionRegistry,
   getRoleRegistry,
+  getRealtimeManager,
+  getNotificationManager,
 } from "../core/bootstrap";
 
 /**
@@ -134,12 +136,48 @@ export class PlatformRuntimeService {
     return getFeatureFlagManager().isEnabled(key);
   }
 
+  /** Toggle an existing Platform-scoped Feature Flag. No-op if the key is unknown. */
+  setFeatureFlagEnabled(key: string, enabled: boolean): void {
+    const manager = getFeatureFlagManager();
+    const existing = manager.list().find((flag) => flag.key === key);
+    if (!existing) return;
+    manager.register({ ...existing, enabled, updatedAt: new Date() });
+  }
+
   getSubscriptionOverview(): SubscriptionOverview {
     return { plan: getBillingManager().getPlan(this.platform.id) };
   }
 
+  setSubscriptionPlan(plan: BillingPlan): void {
+    getBillingManager().setPlan(this.platform.id, plan);
+  }
+
   getLicensingOverview(): SubscriptionOverview {
     return this.getSubscriptionOverview();
+  }
+
+  /** Billing plan for a specific Company (delegates to the same BillingManager, keyed by Company id). */
+  getCompanyBillingPlan(companyId: UUID): BillingPlan {
+    return getBillingManager().getPlan(companyId);
+  }
+
+  setCompanyBillingPlan(companyId: UUID, plan: BillingPlan): void {
+    getBillingManager().setPlan(companyId, plan);
+  }
+
+  /** Names of every Realtime channel opened so far this session. Honest introspection, no fabrication. */
+  listRealtimeChannels(): string[] {
+    return getRealtimeManager().listChannelNames();
+  }
+
+  /** Opens (or reuses) a Realtime channel — proves the manager is live without connecting any provider. */
+  openRealtimeChannel(name: string): void {
+    getRealtimeManager().channel(name);
+  }
+
+  /** Best-effort in-app notification via the Notification Manager. No external provider connected. */
+  sendPlatformNotification(title: string, body: string, recipientId: UUID): Promise<void> {
+    return getNotificationManager().notify({ title, body, recipientId });
   }
 
   /**

@@ -26,6 +26,14 @@ export interface CompanyDashboardSnapshot {
   statistics: CompanyStatistics;
 }
 
+export interface CompanyManagerEntry {
+  id: UUID;
+  name: string;
+  email: string;
+}
+
+const MANAGERS_SETTING_KEY = "managers";
+
 const companyRepository = new CompanyRepository(getDatabaseClient());
 
 export class CompanyService {
@@ -86,6 +94,36 @@ export class CompanyService {
   async getCompanyDashboard(company: Company): Promise<CompanyDashboardSnapshot> {
     const statistics = await this.getCompanyStatistics(company);
     return { company, statistics };
+  }
+
+  /**
+   * Company Managers roster — a lightweight, honest list of names/emails
+   * kept via the same Company Settings mechanism as every other setting
+   * (see `getCompanySetting`/`setCompanySetting`). Not linked to any real
+   * account: there is no Company-scoped user directory yet (see
+   * `listCompanyUsers`'s doc comment).
+   */
+  listCompanyManagers(companyId: UUID): CompanyManagerEntry[] {
+    return this.getCompanySetting<CompanyManagerEntry[]>(companyId, MANAGERS_SETTING_KEY) ?? [];
+  }
+
+  addCompanyManager(companyId: UUID, name: string, email: string): CompanyManagerEntry[] {
+    const trimmedName = name.trim();
+    if (!trimmedName) {
+      throw new Error("Manager name is required.");
+    }
+    const next: CompanyManagerEntry[] = [
+      ...this.listCompanyManagers(companyId),
+      { id: crypto.randomUUID() as UUID, name: trimmedName, email: email.trim() },
+    ];
+    this.setCompanySetting(companyId, MANAGERS_SETTING_KEY, next);
+    return next;
+  }
+
+  removeCompanyManager(companyId: UUID, managerId: UUID): CompanyManagerEntry[] {
+    const next = this.listCompanyManagers(companyId).filter((m) => m.id !== managerId);
+    this.setCompanySetting(companyId, MANAGERS_SETTING_KEY, next);
+    return next;
   }
 }
 

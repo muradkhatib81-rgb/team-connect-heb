@@ -22,6 +22,12 @@ import {
   UserCog,
   Settings,
   GitBranch,
+  Activity,
+  Radio,
+  CreditCard,
+  Flag,
+  BarChart3,
+  Bell,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
@@ -40,7 +46,7 @@ import {
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { NotificationsBell } from "@/components/notifications-bell";
-import { ActiveBranchProvider, useActiveBranch } from "@/lib/use-active-branch";
+import { useActiveBranch } from "@/lib/use-active-branch";
 import { BranchSwitcher, ActiveBranchBadge } from "@/components/branch-switcher";
 import { AppFooter } from "@/components/app-footer";
 
@@ -58,6 +64,12 @@ export function AppShell({ children }: { children: ReactNode }) {
   const navigate = useNavigate();
   const qc = useQueryClient();
   const pathname = useRouterState({ select: (s) => s.location.pathname });
+  // Provided by <ActiveBranchProvider/> wrapping this component (see
+  // routes/_authenticated/route.tsx) — the single real Branch Mode gate,
+  // shared with the Platform's Company -> Branches flow. Used below to
+  // decide whether branch-module nav items should even be listed.
+  const { activeBranchId } = useActiveBranch();
+  const inBranchMode = !!activeBranchId;
 
   const isMainAdminEarly = !!profile?.roles?.includes("main_admin");
   // Reuses the same role model as every other admin gate in this file
@@ -100,22 +112,17 @@ export function AppShell({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (!profile) return;
-    if (
-      profile.must_change_password &&
-      pathname !== "/change-password"
-    ) {
+    if (profile.must_change_password && pathname !== "/change-password") {
       navigate({ to: "/change-password", replace: true });
       return;
     }
     // Plain employees may now access /dashboard directly (clean employee view).
   }, [profile?.must_change_password, profile, pathname, navigate]);
 
-  // Realtime bridge and the Branch Mode gate are mounted inside
-  // <ActiveBranchProvider/> below so they can read the active branch via
-  // the context. See <RealtimeBridge/> and <BranchModeGuard/>.
-
-
-
+  // Realtime bridge and the Branch Mode gate read the active branch via
+  // <ActiveBranchProvider/>, which now wraps this whole component (see
+  // routes/_authenticated/route.tsx). See <RealtimeBridge/> and
+  // <BranchModeGuard/> below.
 
   if (isLoading || !profile) {
     return (
@@ -140,39 +147,257 @@ export function AppShell({ children }: { children: ReactNode }) {
   const canRequestBreak = true;
   const canManageEom = isMainAdmin || isBranchManager || !!breakPermQ.data?.eom;
 
+  type NavEntry = {
+    to: string;
+    label: string;
+    icon: typeof LayoutDashboard;
+    visible: boolean;
+    badge?: number;
+    section?: string;
+  };
 
-  const nav: { to: string; label: string; icon: typeof LayoutDashboard; visible: boolean; badge?: number; section?: string }[] = [
-    { to: "/dashboard", label: "לוח ראשי", icon: LayoutDashboard, visible: true },
-    { to: "/tasks", label: "משימות", icon: ListTodo, visible: true },
-    { to: "/schedules", label: "סידורי עבודה", icon: CalendarDays, visible: true },
-    { to: "/communications", label: "מרכז תקשורת", icon: Megaphone, visible: true, badge: commUnreadQ.data ?? 0 },
-    { to: "/breaks", label: "הפסקה", icon: Coffee, visible: canRequestBreak },
-    { to: "/breaks-admin", label: "ניהול הפסקות", icon: Coffee, visible: isBreaksManager },
-    { to: "/employee-of-month", label: "עובד החודש", icon: Trophy, visible: canManageEom },
+  // Branch modules — only meaningful once an Active Branch exists. Regular
+  // employees/managers are always inside their own branch already (their
+  // `visible` flags are unchanged), so this list keeps working exactly as
+  // before for them. For a Platform Owner, every one of these (besides the
+  // personal profile) is unreachable until they explicitly enter Branch
+  // Mode from the Platform (Company -> Branches -> a Branch) — see
+  // <BranchModeGuard/> below, which enforces the very same rule at the
+  // routing level. Tagged with a section header only for Platform Owners,
+  // so a regular employee's nav looks exactly like it always has.
+  const branchSection = isPlatformOwner ? "מודולי הסניף (במצב סניף)" : undefined;
+  const branchItems: NavEntry[] = [
+    {
+      to: "/dashboard",
+      label: "לוח ראשי",
+      icon: LayoutDashboard,
+      visible: true,
+      section: branchSection,
+    },
+    { to: "/tasks", label: "משימות", icon: ListTodo, visible: true, section: branchSection },
+    {
+      to: "/schedules",
+      label: "סידורי עבודה",
+      icon: CalendarDays,
+      visible: true,
+      section: branchSection,
+    },
+    {
+      to: "/communications",
+      label: "מרכז תקשורת",
+      icon: Megaphone,
+      visible: true,
+      badge: commUnreadQ.data ?? 0,
+      section: branchSection,
+    },
+    {
+      to: "/breaks",
+      label: "הפסקה",
+      icon: Coffee,
+      visible: canRequestBreak,
+      section: branchSection,
+    },
+    {
+      to: "/breaks-admin",
+      label: "ניהול הפסקות",
+      icon: Coffee,
+      visible: isBreaksManager,
+      section: branchSection,
+    },
+    {
+      to: "/employee-of-month",
+      label: "עובד החודש",
+      icon: Trophy,
+      visible: canManageEom,
+      section: branchSection,
+    },
 
-    { to: "/employees", label: "ניהול עובדים", icon: Users, visible: admin },
-    { to: "/departments", label: "מחלקות", icon: Building2, visible: admin },
-    { to: "/permissions", label: "הרשאות", icon: ShieldCheck, visible: canManageUsers(profile.roles) },
-    { to: "/shift-settings", label: "הגדרות משמרות", icon: CalendarDays, visible: admin },
-    { to: "/job-titles", label: "תפקידים", icon: Briefcase, visible: isMainAdmin },
-    { to: "/company-settings", label: "הגדרות חברה", icon: Building, visible: isMainAdmin },
+    {
+      to: "/employees",
+      label: "ניהול עובדים",
+      icon: Users,
+      visible: admin,
+      section: branchSection,
+    },
+    {
+      to: "/departments",
+      label: "מחלקות",
+      icon: Building2,
+      visible: admin,
+      section: branchSection,
+    },
+    {
+      to: "/permissions",
+      label: "הרשאות",
+      icon: ShieldCheck,
+      visible: canManageUsers(profile.roles),
+      section: branchSection,
+    },
+    {
+      to: "/shift-settings",
+      label: "הגדרות משמרות",
+      icon: CalendarDays,
+      visible: admin,
+      section: branchSection,
+    },
+    {
+      to: "/job-titles",
+      label: "תפקידים",
+      icon: Briefcase,
+      visible: isMainAdmin,
+      section: branchSection,
+    },
+    {
+      to: "/company-settings",
+      label: "הגדרות חברה",
+      icon: Building,
+      visible: isMainAdmin,
+      section: branchSection,
+    },
+    // Personal profile stays reachable regardless of Branch Mode.
     { to: "/profile", label: "הפרופיל שלי", icon: UserCircle, visible: isPlainEmployee },
+  ];
 
-    // ===== Platform Management (visible only to authoritative Platform Owners) =====
-    { to: "/platform", label: "דשבורד", icon: LayoutDashboard, visible: isPlatformOwner, section: "ניהול פלטפורמה" },
-    { to: "/platform/companies", label: "חברות", icon: Building2, visible: isPlatformOwner, section: "ניהול פלטפורמה" },
-    { to: "/platform/branches", label: "סניפי הפלטפורמה", icon: GitBranch, visible: isPlatformOwner, section: "ניהול פלטפורמה" },
-    { to: "/platform/owners", label: "בעלי מערכת", icon: Crown, visible: isPlatformOwner, section: "ניהול פלטפורמה" },
-    { to: "/platform/audit-log", label: "יומן פעילות פלטפורמה", icon: ShieldCheck, visible: isPlatformOwner, section: "ניהול פלטפורמה" },
+  // ===== Platform Management — the primary home for Platform Owners. =====
+  const platformItems: NavEntry[] = [
+    {
+      to: "/platform",
+      label: "דשבורד פלטפורמה",
+      icon: LayoutDashboard,
+      visible: isPlatformOwner,
+      section: "ניהול פלטפורמה",
+    },
+    {
+      to: "/platform/companies",
+      label: "חברות",
+      icon: Building2,
+      visible: isPlatformOwner,
+      section: "ניהול פלטפורמה",
+    },
+    {
+      to: "/platform/branches",
+      label: "סניפי הפלטפורמה",
+      icon: GitBranch,
+      visible: isPlatformOwner,
+      section: "ניהול פלטפורמה",
+    },
+    {
+      to: "/platform/monitoring",
+      label: "ניטור וזמינות",
+      icon: Activity,
+      visible: isPlatformOwner,
+      section: "ניהול פלטפורמה",
+    },
+    {
+      to: "/platform/realtime",
+      label: "ניהול Real-Time",
+      icon: Radio,
+      visible: isPlatformOwner,
+      section: "ניהול פלטפורמה",
+    },
+    {
+      to: "/platform/billing",
+      label: "חיוב ומנויים",
+      icon: CreditCard,
+      visible: isPlatformOwner,
+      section: "ניהול פלטפורמה",
+    },
+    {
+      to: "/platform/feature-flags",
+      label: "דגלי פיצ'רים",
+      icon: Flag,
+      visible: isPlatformOwner,
+      section: "ניהול פלטפורמה",
+    },
+    {
+      to: "/platform/analytics",
+      label: "אנליטיקס גלובלי",
+      icon: BarChart3,
+      visible: isPlatformOwner,
+      section: "ניהול פלטפורמה",
+    },
+    {
+      to: "/platform/owners",
+      label: "בעלי מערכת",
+      icon: Crown,
+      visible: isPlatformOwner,
+      section: "ניהול פלטפורמה",
+    },
+    {
+      to: "/platform/audit-log",
+      label: "יומן פעילות פלטפורמה",
+      icon: ShieldCheck,
+      visible: isPlatformOwner,
+      section: "ניהול פלטפורמה",
+    },
+    {
+      to: "/platform/notifications",
+      label: "התראות פלטפורמה",
+      icon: Bell,
+      visible: isPlatformOwner,
+      section: "ניהול פלטפורמה",
+    },
+    {
+      to: "/platform/settings",
+      label: "הגדרות פלטפורמה",
+      icon: Settings,
+      visible: isPlatformOwner,
+      section: "ניהול פלטפורמה",
+    },
+  ];
 
-    // ===== System Administrator section (visible only to the singleton system_admin) =====
-    { to: "/system/branches", label: "סניפים", icon: Building2, visible: isSysAdmin, section: "ניהול מערכת" },
-    { to: "/system/branch-managers", label: "מנהלי סניפים", icon: UserCog, visible: isSysAdmin, section: "ניהול מערכת" },
-    { to: "/system/permissions", label: "הרשאות", icon: ShieldCheck, visible: isSysAdmin, section: "ניהול מערכת" },
-    { to: "/system/settings", label: "הגדרות מערכת", icon: Settings, visible: isSysAdmin, section: "ניהול מערכת" },
-  ].filter((n) => n.visible);
+  // ===== System Administrator section (visible only to the singleton system_admin) =====
+  const systemItems: NavEntry[] = [
+    {
+      to: "/system/branches",
+      label: "סניפים",
+      icon: Building2,
+      visible: isSysAdmin,
+      section: "ניהול מערכת",
+    },
+    {
+      to: "/system/branch-managers",
+      label: "מנהלי סניפים",
+      icon: UserCog,
+      visible: isSysAdmin,
+      section: "ניהול מערכת",
+    },
+    {
+      to: "/system/permissions",
+      label: "הרשאות",
+      icon: ShieldCheck,
+      visible: isSysAdmin,
+      section: "ניהול מערכת",
+    },
+    {
+      to: "/system/settings",
+      label: "הגדרות מערכת",
+      icon: Settings,
+      visible: isSysAdmin,
+      section: "ניהול מערכת",
+    },
+  ];
 
+  // A Platform Owner with no Active Branch has nothing to do in a Branch
+  // module — hide the whole section instead of listing dead links (the
+  // personal profile link is exempt, see `branchItems` above). Regular
+  // employees/managers (never Platform Owners) are unaffected: `inBranchMode`
+  // only gates this list for owners.
+  const branchModulesLocked = isPlatformOwner && !inBranchMode;
+  const visibleBranchItems = branchItems.filter(
+    (item) => item.visible && !(branchModulesLocked && item.to !== "/profile"),
+  );
 
+  // Platform is the primary entry point for a Platform Owner, so its
+  // section always renders first; Branch modules are secondary and only
+  // appear once Branch Mode is actually entered. Regular employees never
+  // see `platformItems`/`systemItems` (all `visible: false` for them), so
+  // their nav is unchanged.
+  const nav: NavEntry[] = [
+    ...platformItems.filter((n) => n.visible),
+    ...visibleBranchItems,
+    ...systemItems.filter((n) => n.visible),
+  ];
 
   async function handleSignOut() {
     await qc.cancelQueries();
@@ -188,7 +413,11 @@ export function AppShell({ children }: { children: ReactNode }) {
         <div className="flex items-center gap-3">
           <div className="size-10 rounded-xl gradient-brand flex items-center justify-center shadow-soft shrink-0 overflow-hidden">
             {company?.logo_url ? (
-              <img src={company.logo_url} alt={company.company_name} className="size-full object-contain bg-white" />
+              <img
+                src={company.logo_url}
+                alt={company.company_name}
+                className="size-full object-contain bg-white"
+              />
             ) : (
               <Store className="size-5 text-primary-foreground" />
             )}
@@ -244,12 +473,19 @@ export function AppShell({ children }: { children: ReactNode }) {
           <div className="min-w-0 flex-1">
             <p className="text-sm font-medium truncate">{profile.full_name}</p>
             <p className="text-xs text-muted-foreground truncate">
-              {top ? ROLE_LABELS[top] : "—"}{profile.department_name ? ` · ${profile.department_name}` : ""}
+              {top ? ROLE_LABELS[top] : "—"}
+              {profile.department_name ? ` · ${profile.department_name}` : ""}
             </p>
           </div>
         </div>
         <div className="grid grid-cols-2 gap-2">
-          <Button asChild variant="outline" size="sm" className="gap-2" onClick={() => setMobileOpen(false)}>
+          <Button
+            asChild
+            variant="outline"
+            size="sm"
+            className="gap-2"
+            onClick={() => setMobileOpen(false)}
+          >
             <Link to="/profile">
               <UserCircle className="size-4" />
               פרופיל
@@ -260,17 +496,15 @@ export function AppShell({ children }: { children: ReactNode }) {
             התנתקות
           </Button>
         </div>
-
       </div>
     </div>
   );
 
   return (
-    <ActiveBranchProvider>
+    <>
       <RealtimeBridge uid={profile.id} />
       <BranchModeGuard isPlatformOwner={isPlatformOwner} />
       <div className="flex flex-col min-h-screen bg-background">
-
         {/* Desktop sidebar (RTL: stick to right) */}
         <aside className="hidden lg:block fixed inset-y-0 right-0 w-64 border-l border-sidebar-border">
           {SidebarContent}
@@ -290,7 +524,11 @@ export function AppShell({ children }: { children: ReactNode }) {
           </Sheet>
           <div className="flex items-center gap-2 min-w-0 flex-1">
             {company?.logo_url ? (
-              <img src={company.logo_url} alt={company?.company_name ?? APP_NAME} className="size-6 rounded object-contain shrink-0" />
+              <img
+                src={company.logo_url}
+                alt={company?.company_name ?? APP_NAME}
+                className="size-6 rounded object-contain shrink-0"
+              />
             ) : (
               <Store className="size-5 text-primary shrink-0" />
             )}
@@ -323,12 +561,13 @@ export function AppShell({ children }: { children: ReactNode }) {
           <AppFooter />
         </main>
       </div>
-    </ActiveBranchProvider>
+    </>
   );
 }
 
 /**
- * Mounted inside <ActiveBranchProvider/> so it can read the active branch
+ * Rendered inside <AppShell/>, itself wrapped by <ActiveBranchProvider/>
+ * (see routes/_authenticated/route.tsx), so it can read the active branch
  * via the context. Subscribes to every cross-cutting table once per
  * (user, active branch) pair and tears the channel down + rebuilds when
  * the sysadmin switches branches, so realtime stops emitting events
@@ -340,33 +579,45 @@ function RealtimeBridge({ uid }: { uid: string }) {
   useEffect(() => {
     const ch = supabase
       .channel(`global-realtime-${uid}-${activeBranchId ?? "all"}`)
-      .on("postgres_changes", { event: "*", schema: "public", table: "user_roles" }, (payload: any) => {
-        qc.invalidateQueries({ queryKey: ["all-roles"] });
-        qc.invalidateQueries({ queryKey: ["permissions-list"] });
-        const affected = payload?.new?.user_id ?? payload?.old?.user_id;
-        if (!affected || affected === uid) {
-          qc.invalidateQueries({ queryKey: ["auth", "me"] });
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "user_roles" },
+        (payload: any) => {
+          qc.invalidateQueries({ queryKey: ["all-roles"] });
+          qc.invalidateQueries({ queryKey: ["permissions-list"] });
+          const affected = payload?.new?.user_id ?? payload?.old?.user_id;
+          if (!affected || affected === uid) {
+            qc.invalidateQueries({ queryKey: ["auth", "me"] });
+            qc.invalidateQueries({ queryKey: ["task-perm"] });
+            qc.invalidateQueries({ queryKey: ["shell-can-manage-breaks"] });
+          }
+          qc.invalidateQueries({ queryKey: ["user-perms"] });
+        },
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "user_task_permissions" },
+        (payload: any) => {
+          qc.invalidateQueries({ queryKey: ["permissions-list"] });
+          qc.invalidateQueries({ queryKey: ["user-perms"] });
           qc.invalidateQueries({ queryKey: ["task-perm"] });
-          qc.invalidateQueries({ queryKey: ["shell-can-manage-breaks"] });
-        }
-        qc.invalidateQueries({ queryKey: ["user-perms"] });
-      })
-      .on("postgres_changes", { event: "*", schema: "public", table: "user_task_permissions" }, (payload: any) => {
-        qc.invalidateQueries({ queryKey: ["permissions-list"] });
-        qc.invalidateQueries({ queryKey: ["user-perms"] });
-        qc.invalidateQueries({ queryKey: ["task-perm"] });
-        const affected = payload?.new?.user_id ?? payload?.old?.user_id;
-        if (!affected || affected === uid) {
-          qc.invalidateQueries({ queryKey: ["auth", "me"] });
-          qc.invalidateQueries({ queryKey: ["shell-can-manage-breaks", uid] });
-        }
-      })
-      .on("postgres_changes", { event: "*", schema: "public", table: "profiles" }, (payload: any) => {
-        const affected = payload?.new?.id ?? payload?.old?.id;
-        if (!affected || affected === uid) qc.invalidateQueries({ queryKey: ["auth", "me"] });
-        qc.invalidateQueries({ queryKey: ["employees"] });
-        qc.invalidateQueries({ queryKey: ["departments"] });
-      })
+          const affected = payload?.new?.user_id ?? payload?.old?.user_id;
+          if (!affected || affected === uid) {
+            qc.invalidateQueries({ queryKey: ["auth", "me"] });
+            qc.invalidateQueries({ queryKey: ["shell-can-manage-breaks", uid] });
+          }
+        },
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "profiles" },
+        (payload: any) => {
+          const affected = payload?.new?.id ?? payload?.old?.id;
+          if (!affected || affected === uid) qc.invalidateQueries({ queryKey: ["auth", "me"] });
+          qc.invalidateQueries({ queryKey: ["employees"] });
+          qc.invalidateQueries({ queryKey: ["departments"] });
+        },
+      )
       .on("postgres_changes", { event: "*", schema: "public", table: "departments" }, () => {
         qc.invalidateQueries({ queryKey: ["auth", "me"] });
         qc.invalidateQueries({ queryKey: ["departments"] });
@@ -377,13 +628,17 @@ function RealtimeBridge({ uid }: { uid: string }) {
         qc.invalidateQueries({ queryKey: ["dashboard", "stats"] });
       })
       .on("postgres_changes", { event: "*", schema: "public", table: "task_assignees" }, () =>
-        qc.invalidateQueries({ queryKey: ["tasks"] }))
+        qc.invalidateQueries({ queryKey: ["tasks"] }),
+      )
       .on("postgres_changes", { event: "*", schema: "public", table: "task_departments" }, () =>
-        qc.invalidateQueries({ queryKey: ["tasks"] }))
+        qc.invalidateQueries({ queryKey: ["tasks"] }),
+      )
       .on("postgres_changes", { event: "*", schema: "public", table: "task_comments" }, () =>
-        qc.invalidateQueries({ queryKey: ["task-activity"] }))
+        qc.invalidateQueries({ queryKey: ["task-activity"] }),
+      )
       .on("postgres_changes", { event: "*", schema: "public", table: "task_activity_log" }, () =>
-        qc.invalidateQueries({ queryKey: ["task-activity"] }))
+        qc.invalidateQueries({ queryKey: ["task-activity"] }),
+      )
       .on("postgres_changes", { event: "*", schema: "public", table: "schedules" }, () => {
         qc.invalidateQueries({ queryKey: ["schedule"] });
         qc.invalidateQueries({ queryKey: ["schedules-pending"] });
@@ -407,7 +662,8 @@ function RealtimeBridge({ uid }: { uid: string }) {
         qc.invalidateQueries({ queryKey: ["break-stats"] });
       })
       .on("postgres_changes", { event: "*", schema: "public", table: "break_settings" }, () =>
-        qc.invalidateQueries({ queryKey: ["break-settings"] }))
+        qc.invalidateQueries({ queryKey: ["break-settings"] }),
+      )
       .on("postgres_changes", { event: "*", schema: "public", table: "messages" }, () => {
         qc.invalidateQueries({ queryKey: ["communications"] });
         qc.invalidateQueries({ queryKey: ["shell-comm-unread", uid] });
@@ -417,9 +673,11 @@ function RealtimeBridge({ uid }: { uid: string }) {
         qc.invalidateQueries({ queryKey: ["shell-comm-unread", uid] });
       })
       .on("postgres_changes", { event: "*", schema: "public", table: "company_settings" }, () =>
-        qc.invalidateQueries({ queryKey: ["company-settings"] }))
+        qc.invalidateQueries({ queryKey: ["company-settings"] }),
+      )
       .on("postgres_changes", { event: "*", schema: "public", table: "employee_of_month" }, () =>
-        qc.invalidateQueries({ queryKey: ["employee-of-month"] }))
+        qc.invalidateQueries({ queryKey: ["employee-of-month"] }),
+      )
       .subscribe();
     return () => {
       supabase.removeChannel(ch);
@@ -441,11 +699,12 @@ function isBranchModuleRoute(pathname: string): boolean {
 }
 
 /**
- * Mounted inside <ActiveBranchProvider/> so it can read the active branch.
- * Platform Owners (system_admin / main_admin) must never be dropped into a
- * Branch automatically (see use-active-branch.tsx) — this guard makes sure
- * every branch-module route stays unreachable for them until they
- * explicitly enter Branch Mode via the Branch switcher, bouncing any
+ * Rendered inside <AppShell/>, itself wrapped by <ActiveBranchProvider/>,
+ * so it can read the active branch. Platform Owners (system_admin /
+ * main_admin) must never be dropped into a Branch automatically (see
+ * use-active-branch.tsx) — this guard makes sure every branch-module route
+ * stays unreachable for them until they explicitly enter Branch Mode
+ * (Branch switcher, or Company -> Branches -> a Branch), bouncing any
  * direct navigation attempt back to the Platform Dashboard.
  */
 function BranchModeGuard({ isPlatformOwner }: { isPlatformOwner: boolean }) {
@@ -472,5 +731,3 @@ function BranchSubtitle() {
   const label = name.startsWith("סניף") ? name : `סניף ${name}`;
   return <p className="text-xs text-muted-foreground truncate">{label}</p>;
 }
-
-

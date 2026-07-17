@@ -35,10 +35,17 @@ import { Route as AuthenticatedSystemSettingsRouteImport } from './routes/_authe
 import { Route as AuthenticatedSystemPermissionsRouteImport } from './routes/_authenticated/system.permissions'
 import { Route as AuthenticatedSystemBranchesRouteImport } from './routes/_authenticated/system.branches'
 import { Route as AuthenticatedSystemBranchManagersRouteImport } from './routes/_authenticated/system.branch-managers'
+import { Route as AuthenticatedPlatformSettingsRouteImport } from './routes/_authenticated/platform/settings'
+import { Route as AuthenticatedPlatformRealtimeRouteImport } from './routes/_authenticated/platform/realtime'
 import { Route as AuthenticatedPlatformOwnersRouteImport } from './routes/_authenticated/platform/owners'
+import { Route as AuthenticatedPlatformNotificationsRouteImport } from './routes/_authenticated/platform/notifications'
+import { Route as AuthenticatedPlatformMonitoringRouteImport } from './routes/_authenticated/platform/monitoring'
+import { Route as AuthenticatedPlatformFeatureFlagsRouteImport } from './routes/_authenticated/platform/feature-flags'
 import { Route as AuthenticatedPlatformCompaniesRouteImport } from './routes/_authenticated/platform/companies'
 import { Route as AuthenticatedPlatformBranchesRouteImport } from './routes/_authenticated/platform/branches'
+import { Route as AuthenticatedPlatformBillingRouteImport } from './routes/_authenticated/platform/billing'
 import { Route as AuthenticatedPlatformAuditLogRouteImport } from './routes/_authenticated/platform/audit-log'
+import { Route as AuthenticatedPlatformAnalyticsRouteImport } from './routes/_authenticated/platform/analytics'
 import { Route as ApiPublicHooksGenerateRecurringTasksRouteImport } from './routes/api/public/hooks/generate-recurring-tasks'
 import { Route as AuthenticatedPlatformOwnersUserIdRouteImport } from './routes/_authenticated/platform/owners.$userId'
 import { Route as AuthenticatedPlatformCompaniesCompanyIdRouteImport } from './routes/_authenticated/platform/companies.$companyId'
@@ -188,10 +195,40 @@ const AuthenticatedSystemBranchManagersRoute =
     path: '/branch-managers',
     getParentRoute: () => AuthenticatedSystemRoute,
   } as any)
+const AuthenticatedPlatformSettingsRoute =
+  AuthenticatedPlatformSettingsRouteImport.update({
+    id: '/settings',
+    path: '/settings',
+    getParentRoute: () => AuthenticatedPlatformRouteRoute,
+  } as any)
+const AuthenticatedPlatformRealtimeRoute =
+  AuthenticatedPlatformRealtimeRouteImport.update({
+    id: '/realtime',
+    path: '/realtime',
+    getParentRoute: () => AuthenticatedPlatformRouteRoute,
+  } as any)
 const AuthenticatedPlatformOwnersRoute =
   AuthenticatedPlatformOwnersRouteImport.update({
     id: '/owners',
     path: '/owners',
+    getParentRoute: () => AuthenticatedPlatformRouteRoute,
+  } as any)
+const AuthenticatedPlatformNotificationsRoute =
+  AuthenticatedPlatformNotificationsRouteImport.update({
+    id: '/notifications',
+    path: '/notifications',
+    getParentRoute: () => AuthenticatedPlatformRouteRoute,
+  } as any)
+const AuthenticatedPlatformMonitoringRoute =
+  AuthenticatedPlatformMonitoringRouteImport.update({
+    id: '/monitoring',
+    path: '/monitoring',
+    getParentRoute: () => AuthenticatedPlatformRouteRoute,
+  } as any)
+const AuthenticatedPlatformFeatureFlagsRoute =
+  AuthenticatedPlatformFeatureFlagsRouteImport.update({
+    id: '/feature-flags',
+    path: '/feature-flags',
     getParentRoute: () => AuthenticatedPlatformRouteRoute,
   } as any)
 const AuthenticatedPlatformCompaniesRoute =
@@ -206,10 +243,22 @@ const AuthenticatedPlatformBranchesRoute =
     path: '/branches',
     getParentRoute: () => AuthenticatedPlatformRouteRoute,
   } as any)
+const AuthenticatedPlatformBillingRoute =
+  AuthenticatedPlatformBillingRouteImport.update({
+    id: '/billing',
+    path: '/billing',
+    getParentRoute: () => AuthenticatedPlatformRouteRoute,
+  } as any)
 const AuthenticatedPlatformAuditLogRoute =
   AuthenticatedPlatformAuditLogRouteImport.update({
     id: '/audit-log',
     path: '/audit-log',
+    getParentRoute: () => AuthenticatedPlatformRouteRoute,
+  } as any)
+const AuthenticatedPlatformAnalyticsRoute =
+  AuthenticatedPlatformAnalyticsRouteImport.update({
+    id: '/analytics',
+    path: '/analytics',
     getParentRoute: () => AuthenticatedPlatformRouteRoute,
   } as any)
 const ApiPublicHooksGenerateRecurringTasksRoute =
@@ -258,10 +307,17 @@ export interface FileRoutesByFullPath {
   '/shift-settings': typeof AuthenticatedShiftSettingsRoute
   '/system': typeof AuthenticatedSystemRouteWithChildren
   '/tasks': typeof AuthenticatedTasksRoute
+  '/platform/analytics': typeof AuthenticatedPlatformAnalyticsRoute
   '/platform/audit-log': typeof AuthenticatedPlatformAuditLogRoute
+  '/platform/billing': typeof AuthenticatedPlatformBillingRoute
   '/platform/branches': typeof AuthenticatedPlatformBranchesRouteWithChildren
   '/platform/companies': typeof AuthenticatedPlatformCompaniesRouteWithChildren
+  '/platform/feature-flags': typeof AuthenticatedPlatformFeatureFlagsRoute
+  '/platform/monitoring': typeof AuthenticatedPlatformMonitoringRoute
+  '/platform/notifications': typeof AuthenticatedPlatformNotificationsRoute
   '/platform/owners': typeof AuthenticatedPlatformOwnersRouteWithChildren
+  '/platform/realtime': typeof AuthenticatedPlatformRealtimeRoute
+  '/platform/settings': typeof AuthenticatedPlatformSettingsRoute
   '/system/branch-managers': typeof AuthenticatedSystemBranchManagersRoute
   '/system/branches': typeof AuthenticatedSystemBranchesRoute
   '/system/permissions': typeof AuthenticatedSystemPermissionsRoute
@@ -292,10 +348,17 @@ export interface FileRoutesByTo {
   '/shift-settings': typeof AuthenticatedShiftSettingsRoute
   '/system': typeof AuthenticatedSystemRouteWithChildren
   '/tasks': typeof AuthenticatedTasksRoute
+  '/platform/analytics': typeof AuthenticatedPlatformAnalyticsRoute
   '/platform/audit-log': typeof AuthenticatedPlatformAuditLogRoute
+  '/platform/billing': typeof AuthenticatedPlatformBillingRoute
   '/platform/branches': typeof AuthenticatedPlatformBranchesRouteWithChildren
   '/platform/companies': typeof AuthenticatedPlatformCompaniesRouteWithChildren
+  '/platform/feature-flags': typeof AuthenticatedPlatformFeatureFlagsRoute
+  '/platform/monitoring': typeof AuthenticatedPlatformMonitoringRoute
+  '/platform/notifications': typeof AuthenticatedPlatformNotificationsRoute
   '/platform/owners': typeof AuthenticatedPlatformOwnersRouteWithChildren
+  '/platform/realtime': typeof AuthenticatedPlatformRealtimeRoute
+  '/platform/settings': typeof AuthenticatedPlatformSettingsRoute
   '/system/branch-managers': typeof AuthenticatedSystemBranchManagersRoute
   '/system/branches': typeof AuthenticatedSystemBranchesRoute
   '/system/permissions': typeof AuthenticatedSystemPermissionsRoute
@@ -329,10 +392,17 @@ export interface FileRoutesById {
   '/_authenticated/shift-settings': typeof AuthenticatedShiftSettingsRoute
   '/_authenticated/system': typeof AuthenticatedSystemRouteWithChildren
   '/_authenticated/tasks': typeof AuthenticatedTasksRoute
+  '/_authenticated/platform/analytics': typeof AuthenticatedPlatformAnalyticsRoute
   '/_authenticated/platform/audit-log': typeof AuthenticatedPlatformAuditLogRoute
+  '/_authenticated/platform/billing': typeof AuthenticatedPlatformBillingRoute
   '/_authenticated/platform/branches': typeof AuthenticatedPlatformBranchesRouteWithChildren
   '/_authenticated/platform/companies': typeof AuthenticatedPlatformCompaniesRouteWithChildren
+  '/_authenticated/platform/feature-flags': typeof AuthenticatedPlatformFeatureFlagsRoute
+  '/_authenticated/platform/monitoring': typeof AuthenticatedPlatformMonitoringRoute
+  '/_authenticated/platform/notifications': typeof AuthenticatedPlatformNotificationsRoute
   '/_authenticated/platform/owners': typeof AuthenticatedPlatformOwnersRouteWithChildren
+  '/_authenticated/platform/realtime': typeof AuthenticatedPlatformRealtimeRoute
+  '/_authenticated/platform/settings': typeof AuthenticatedPlatformSettingsRoute
   '/_authenticated/system/branch-managers': typeof AuthenticatedSystemBranchManagersRoute
   '/_authenticated/system/branches': typeof AuthenticatedSystemBranchesRoute
   '/_authenticated/system/permissions': typeof AuthenticatedSystemPermissionsRoute
@@ -366,10 +436,17 @@ export interface FileRouteTypes {
     | '/shift-settings'
     | '/system'
     | '/tasks'
+    | '/platform/analytics'
     | '/platform/audit-log'
+    | '/platform/billing'
     | '/platform/branches'
     | '/platform/companies'
+    | '/platform/feature-flags'
+    | '/platform/monitoring'
+    | '/platform/notifications'
     | '/platform/owners'
+    | '/platform/realtime'
+    | '/platform/settings'
     | '/system/branch-managers'
     | '/system/branches'
     | '/system/permissions'
@@ -400,10 +477,17 @@ export interface FileRouteTypes {
     | '/shift-settings'
     | '/system'
     | '/tasks'
+    | '/platform/analytics'
     | '/platform/audit-log'
+    | '/platform/billing'
     | '/platform/branches'
     | '/platform/companies'
+    | '/platform/feature-flags'
+    | '/platform/monitoring'
+    | '/platform/notifications'
     | '/platform/owners'
+    | '/platform/realtime'
+    | '/platform/settings'
     | '/system/branch-managers'
     | '/system/branches'
     | '/system/permissions'
@@ -436,10 +520,17 @@ export interface FileRouteTypes {
     | '/_authenticated/shift-settings'
     | '/_authenticated/system'
     | '/_authenticated/tasks'
+    | '/_authenticated/platform/analytics'
     | '/_authenticated/platform/audit-log'
+    | '/_authenticated/platform/billing'
     | '/_authenticated/platform/branches'
     | '/_authenticated/platform/companies'
+    | '/_authenticated/platform/feature-flags'
+    | '/_authenticated/platform/monitoring'
+    | '/_authenticated/platform/notifications'
     | '/_authenticated/platform/owners'
+    | '/_authenticated/platform/realtime'
+    | '/_authenticated/platform/settings'
     | '/_authenticated/system/branch-managers'
     | '/_authenticated/system/branches'
     | '/_authenticated/system/permissions'
@@ -642,11 +733,46 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedSystemBranchManagersRouteImport
       parentRoute: typeof AuthenticatedSystemRoute
     }
+    '/_authenticated/platform/settings': {
+      id: '/_authenticated/platform/settings'
+      path: '/settings'
+      fullPath: '/platform/settings'
+      preLoaderRoute: typeof AuthenticatedPlatformSettingsRouteImport
+      parentRoute: typeof AuthenticatedPlatformRouteRoute
+    }
+    '/_authenticated/platform/realtime': {
+      id: '/_authenticated/platform/realtime'
+      path: '/realtime'
+      fullPath: '/platform/realtime'
+      preLoaderRoute: typeof AuthenticatedPlatformRealtimeRouteImport
+      parentRoute: typeof AuthenticatedPlatformRouteRoute
+    }
     '/_authenticated/platform/owners': {
       id: '/_authenticated/platform/owners'
       path: '/owners'
       fullPath: '/platform/owners'
       preLoaderRoute: typeof AuthenticatedPlatformOwnersRouteImport
+      parentRoute: typeof AuthenticatedPlatformRouteRoute
+    }
+    '/_authenticated/platform/notifications': {
+      id: '/_authenticated/platform/notifications'
+      path: '/notifications'
+      fullPath: '/platform/notifications'
+      preLoaderRoute: typeof AuthenticatedPlatformNotificationsRouteImport
+      parentRoute: typeof AuthenticatedPlatformRouteRoute
+    }
+    '/_authenticated/platform/monitoring': {
+      id: '/_authenticated/platform/monitoring'
+      path: '/monitoring'
+      fullPath: '/platform/monitoring'
+      preLoaderRoute: typeof AuthenticatedPlatformMonitoringRouteImport
+      parentRoute: typeof AuthenticatedPlatformRouteRoute
+    }
+    '/_authenticated/platform/feature-flags': {
+      id: '/_authenticated/platform/feature-flags'
+      path: '/feature-flags'
+      fullPath: '/platform/feature-flags'
+      preLoaderRoute: typeof AuthenticatedPlatformFeatureFlagsRouteImport
       parentRoute: typeof AuthenticatedPlatformRouteRoute
     }
     '/_authenticated/platform/companies': {
@@ -663,11 +789,25 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedPlatformBranchesRouteImport
       parentRoute: typeof AuthenticatedPlatformRouteRoute
     }
+    '/_authenticated/platform/billing': {
+      id: '/_authenticated/platform/billing'
+      path: '/billing'
+      fullPath: '/platform/billing'
+      preLoaderRoute: typeof AuthenticatedPlatformBillingRouteImport
+      parentRoute: typeof AuthenticatedPlatformRouteRoute
+    }
     '/_authenticated/platform/audit-log': {
       id: '/_authenticated/platform/audit-log'
       path: '/audit-log'
       fullPath: '/platform/audit-log'
       preLoaderRoute: typeof AuthenticatedPlatformAuditLogRouteImport
+      parentRoute: typeof AuthenticatedPlatformRouteRoute
+    }
+    '/_authenticated/platform/analytics': {
+      id: '/_authenticated/platform/analytics'
+      path: '/analytics'
+      fullPath: '/platform/analytics'
+      preLoaderRoute: typeof AuthenticatedPlatformAnalyticsRouteImport
       parentRoute: typeof AuthenticatedPlatformRouteRoute
     }
     '/api/public/hooks/generate-recurring-tasks': {
@@ -747,22 +887,38 @@ const AuthenticatedPlatformOwnersRouteWithChildren =
   )
 
 interface AuthenticatedPlatformRouteRouteChildren {
+  AuthenticatedPlatformAnalyticsRoute: typeof AuthenticatedPlatformAnalyticsRoute
   AuthenticatedPlatformAuditLogRoute: typeof AuthenticatedPlatformAuditLogRoute
+  AuthenticatedPlatformBillingRoute: typeof AuthenticatedPlatformBillingRoute
   AuthenticatedPlatformBranchesRoute: typeof AuthenticatedPlatformBranchesRouteWithChildren
   AuthenticatedPlatformCompaniesRoute: typeof AuthenticatedPlatformCompaniesRouteWithChildren
+  AuthenticatedPlatformFeatureFlagsRoute: typeof AuthenticatedPlatformFeatureFlagsRoute
+  AuthenticatedPlatformMonitoringRoute: typeof AuthenticatedPlatformMonitoringRoute
+  AuthenticatedPlatformNotificationsRoute: typeof AuthenticatedPlatformNotificationsRoute
   AuthenticatedPlatformOwnersRoute: typeof AuthenticatedPlatformOwnersRouteWithChildren
+  AuthenticatedPlatformRealtimeRoute: typeof AuthenticatedPlatformRealtimeRoute
+  AuthenticatedPlatformSettingsRoute: typeof AuthenticatedPlatformSettingsRoute
   AuthenticatedPlatformIndexRoute: typeof AuthenticatedPlatformIndexRoute
 }
 
 const AuthenticatedPlatformRouteRouteChildren: AuthenticatedPlatformRouteRouteChildren =
   {
+    AuthenticatedPlatformAnalyticsRoute: AuthenticatedPlatformAnalyticsRoute,
     AuthenticatedPlatformAuditLogRoute: AuthenticatedPlatformAuditLogRoute,
+    AuthenticatedPlatformBillingRoute: AuthenticatedPlatformBillingRoute,
     AuthenticatedPlatformBranchesRoute:
       AuthenticatedPlatformBranchesRouteWithChildren,
     AuthenticatedPlatformCompaniesRoute:
       AuthenticatedPlatformCompaniesRouteWithChildren,
+    AuthenticatedPlatformFeatureFlagsRoute:
+      AuthenticatedPlatformFeatureFlagsRoute,
+    AuthenticatedPlatformMonitoringRoute: AuthenticatedPlatformMonitoringRoute,
+    AuthenticatedPlatformNotificationsRoute:
+      AuthenticatedPlatformNotificationsRoute,
     AuthenticatedPlatformOwnersRoute:
       AuthenticatedPlatformOwnersRouteWithChildren,
+    AuthenticatedPlatformRealtimeRoute: AuthenticatedPlatformRealtimeRoute,
+    AuthenticatedPlatformSettingsRoute: AuthenticatedPlatformSettingsRoute,
     AuthenticatedPlatformIndexRoute: AuthenticatedPlatformIndexRoute,
   }
 

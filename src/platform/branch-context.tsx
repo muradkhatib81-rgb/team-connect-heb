@@ -6,9 +6,15 @@
  * `CompanyContext`. Mirrors `CompanyContext` exactly, one level down the
  * multi-tenant hierarchy (Platform -> Companies -> Branches). Mounted
  * inside `CompanyProvider` (see routes/_authenticated/platform/route.tsx),
- * since Branches only make sense within an active Company. Unrelated to
- * the existing application's single-tenant branch logic
- * (`@/lib/use-active-branch`), which is untouched.
+ * since Branches only make sense within an active Company.
+ *
+ * Bridges into the application's single Branch Mode gate
+ * (`@/lib/use-active-branch`): activating a Platform Branch here also
+ * flips that same real `activeBranchId`, and clearing/switching Company
+ * here exits it — so "Branch Mode" (and every existing branch module it
+ * gates: Dashboard, Employees, Departments, Schedules, Tasks, Messages,
+ * Reports, Settings…) is one single, real state shared by both the
+ * Platform's Company -> Branches flow and the header Branch switcher.
  */
 
 import {
@@ -24,6 +30,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import type { UUID } from "../core/types";
 import type { Branch } from "../modules/branches";
 import { branchService } from "../modules/branches";
+import { useActiveBranch } from "../lib/use-active-branch";
 import { useCompanyContext } from "./company-context";
 
 const ACTIVE_BRANCH_STORAGE_KEY = "lov_active_platform_branch_id";
@@ -80,6 +87,7 @@ export function BranchProvider({ children }: { children: ReactNode }) {
   const { activeCompanyId } = useCompanyContext();
   const queryClient = useQueryClient();
   const [activeBranchId, setActiveBranchIdState] = useState<UUID | null>(readStoredBranchId);
+  const realActiveBranch = useActiveBranch();
 
   const branchesQuery = useQuery({
     queryKey: branchesQueryKey(activeCompanyId),
@@ -89,10 +97,16 @@ export function BranchProvider({ children }: { children: ReactNode }) {
 
   const branches = branchesQuery.data ?? EMPTY_BRANCHES;
 
-  const setActiveBranchId = useCallback((id: UUID | null) => {
-    setActiveBranchIdState(id);
-    writeStoredBranchId(id);
-  }, []);
+  const setActiveBranchId = useCallback(
+    (id: UUID | null) => {
+      setActiveBranchIdState(id);
+      writeStoredBranchId(id);
+      // Enter/exit the application's real Branch Mode gate along with the
+      // Platform's own selection — see the module doc comment above.
+      realActiveBranch.setActiveBranchId(id);
+    },
+    [realActiveBranch],
+  );
 
   // Clear the active Branch if it no longer belongs to the active Company
   // (deleted, or the active Company itself just changed). No fallback to

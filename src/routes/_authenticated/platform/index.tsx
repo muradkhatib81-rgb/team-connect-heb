@@ -2,7 +2,6 @@ import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import {
   Crown,
   ShieldCheck,
@@ -10,12 +9,15 @@ import {
   UserX,
   Activity,
   Settings,
-  Bot,
-  Globe,
   Building2,
   GitBranch,
   ArrowLeft,
   Loader2,
+  Radio,
+  CreditCard,
+  Flag,
+  BarChart3,
+  Bell,
 } from "lucide-react";
 import { useAuth } from "@/lib/use-auth";
 import {
@@ -210,45 +212,80 @@ function PlatformDashboardPage() {
         )}
       </Card>
 
-      {/* Platform modules */}
+      {/* Platform modules — the main operating center for a Platform Owner.
+          Every tile here is a real, working module backed by the existing
+          Foundation (Managers/Runtime); nothing is a placeholder. No
+          branch-specific, company-specific or employee-specific data ever
+          appears on this dashboard. */}
       <section>
         <h2 className="text-sm font-semibold text-muted-foreground mb-3">מודולי פלטפורמה</h2>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-          <button
-            type="button"
+          <ModuleTile
+            icon={Building2}
+            label="ניהול חברות"
+            hint={`${companies.length} חברות`}
             onClick={() => navigate({ to: "/platform/companies" })}
-            className="text-right rounded-xl bg-card border card-elevated p-4 transition-colors hover:bg-accent/40 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-          >
-            <div className="flex items-center gap-3">
-              <div className="size-9 shrink-0 rounded-lg bg-primary/10 text-primary flex items-center justify-center">
-                <Building2 className="size-4" />
-              </div>
-              <div className="min-w-0">
-                <p className="font-medium text-sm truncate">ניהול חברות</p>
-                <p className="text-xs text-muted-foreground">{companies.length} חברות</p>
-              </div>
-            </div>
-          </button>
-          <button
-            type="button"
+          />
+          <ModuleTile
+            icon={GitBranch}
+            label="ניהול סניפים"
+            hint={`${allBranchesQuery.data?.length ?? 0} סניפים`}
             onClick={() => navigate({ to: "/platform/branches" })}
-            className="text-right rounded-xl bg-card border card-elevated p-4 transition-colors hover:bg-accent/40 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-          >
-            <div className="flex items-center gap-3">
-              <div className="size-9 shrink-0 rounded-lg bg-primary/10 text-primary flex items-center justify-center">
-                <GitBranch className="size-4" />
-              </div>
-              <div className="min-w-0">
-                <p className="font-medium text-sm truncate">ניהול סניפים</p>
-                <p className="text-xs text-muted-foreground">
-                  {allBranchesQuery.data?.length ?? 0} סניפים
-                </p>
-              </div>
-            </div>
-          </button>
-          <ComingSoonTile icon={Settings} label="הגדרות פלטפורמה" />
-          <ComingSoonTile icon={Bot} label="ניהול AI" />
-          <ComingSoonTile icon={Globe} label="בינאום (i18n)" />
+          />
+          <ModuleTile
+            icon={Activity}
+            label="ניטור וזמינות"
+            hint="Health Checks"
+            onClick={() => navigate({ to: "/platform/monitoring" })}
+          />
+          <ModuleTile
+            icon={Radio}
+            label="ניהול Real-Time"
+            hint="Realtime Manager"
+            onClick={() => navigate({ to: "/platform/realtime" })}
+          />
+          <ModuleTile
+            icon={CreditCard}
+            label="חיוב ומנויים"
+            hint="Billing & Subscriptions"
+            onClick={() => navigate({ to: "/platform/billing" })}
+          />
+          <ModuleTile
+            icon={Flag}
+            label="דגלי פיצ'רים"
+            hint="Feature Flags"
+            onClick={() => navigate({ to: "/platform/feature-flags" })}
+          />
+          <ModuleTile
+            icon={BarChart3}
+            label="אנליטיקס גלובלי"
+            hint="Global Analytics"
+            onClick={() => navigate({ to: "/platform/analytics" })}
+          />
+          <ModuleTile
+            icon={Crown}
+            label="בעלי מערכת"
+            hint={`${stats.activeCount + stats.suspendedCount} בעלי מערכת`}
+            onClick={() => navigate({ to: "/platform/owners" })}
+          />
+          <ModuleTile
+            icon={ShieldCheck}
+            label="יומן פעילות פלטפורמה"
+            hint="Audit Log"
+            onClick={() => navigate({ to: "/platform/audit-log" })}
+          />
+          <ModuleTile
+            icon={Bell}
+            label="התראות פלטפורמה"
+            hint="Notification Manager"
+            onClick={() => navigate({ to: "/platform/notifications" })}
+          />
+          <ModuleTile
+            icon={Settings}
+            label="הגדרות פלטפורמה"
+            hint="Platform Settings"
+            onClick={() => navigate({ to: "/platform/settings" })}
+          />
         </div>
       </section>
     </div>
@@ -300,20 +337,32 @@ function StatCard({
   );
 }
 
-function ComingSoonTile({ icon: Icon, label }: { icon: typeof Crown; label: string }) {
+function ModuleTile({
+  icon: Icon,
+  label,
+  hint,
+  onClick,
+}: {
+  icon: typeof Crown;
+  label: string;
+  hint: string;
+  onClick: () => void;
+}) {
   return (
-    <Card className="p-4 opacity-70">
+    <button
+      type="button"
+      onClick={onClick}
+      className="text-right rounded-xl bg-card border card-elevated p-4 transition-colors hover:bg-accent/40 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+    >
       <div className="flex items-center gap-3">
-        <div className="size-9 shrink-0 rounded-lg bg-muted text-muted-foreground flex items-center justify-center">
+        <div className="size-9 shrink-0 rounded-lg bg-primary/10 text-primary flex items-center justify-center">
           <Icon className="size-4" />
         </div>
         <div className="min-w-0">
           <p className="font-medium text-sm truncate">{label}</p>
-          <Badge variant="secondary" className="mt-1 text-[10px] font-normal">
-            בקרוב
-          </Badge>
+          <p className="text-xs text-muted-foreground truncate">{hint}</p>
         </div>
       </div>
-    </Card>
+    </button>
   );
 }

@@ -1,12 +1,13 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState, type ComponentType } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import {
   ArrowRight,
   BarChart3,
   Building2,
   Calendar,
+  FileText,
   GitBranch,
   LayoutDashboard,
   Loader2,
@@ -16,6 +17,8 @@ import {
   Settings as SettingsIcon,
   Star,
   Trash2,
+  UserCog,
+  Users,
 } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -31,7 +34,11 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import type { UUID } from "@/core";
-import { companyService, type CompanyDashboardSnapshot } from "@/modules/companies";
+import {
+  companyService,
+  type CompanyDashboardSnapshot,
+  type CompanyManagerEntry,
+} from "@/modules/companies";
 import { branchService, type Branch } from "@/modules/branches";
 import { useCompanyContext, branchesQueryKey } from "@/platform";
 import { CompanyEditDialog, CompanyDeleteDialog } from "@/components/platform/company-dialogs";
@@ -165,6 +172,18 @@ function CompanyDetailsPage() {
             <GitBranch className="size-4" />
             סניפים
           </TabsTrigger>
+          <TabsTrigger value="managers" className="gap-2">
+            <UserCog className="size-4" />
+            מנהלים
+          </TabsTrigger>
+          <TabsTrigger value="users" className="gap-2">
+            <Users className="size-4" />
+            משתמשים
+          </TabsTrigger>
+          <TabsTrigger value="reports" className="gap-2">
+            <FileText className="size-4" />
+            דוחות
+          </TabsTrigger>
           <TabsTrigger value="settings" className="gap-2">
             <SettingsIcon className="size-4" />
             הגדרות
@@ -191,6 +210,22 @@ function CompanyDetailsPage() {
             companyId={company.id}
             branches={branchesQuery.data ?? []}
             isLoading={branchesQuery.isLoading}
+          />
+        </TabsContent>
+
+        <TabsContent value="managers">
+          <CompanyManagersTab companyId={company.id} />
+        </TabsContent>
+
+        <TabsContent value="users">
+          <CompanyUsersTab branchesCount={branchesQuery.data?.length ?? 0} />
+        </TabsContent>
+
+        <TabsContent value="reports">
+          <CompanyReportsTab
+            snapshot={dashboardQuery.data}
+            branches={branchesQuery.data ?? []}
+            isLoading={dashboardQuery.isLoading || branchesQuery.isLoading}
           />
         </TabsContent>
 
@@ -361,6 +396,190 @@ function CompanyBranchesTab({
           branch={deleteBranch}
         />
       )}
+    </div>
+  );
+}
+
+const COMPANY_MANAGERS_QUERY_KEY = (companyId: UUID) => ["company-managers", companyId] as const;
+
+function CompanyManagersTab({ companyId }: { companyId: UUID }) {
+  const qc = useQueryClient();
+  const [name, setName] = useState("");
+  const [email, setEmail] = useState("");
+
+  const managersQuery = useQuery({
+    queryKey: COMPANY_MANAGERS_QUERY_KEY(companyId),
+    queryFn: () => companyService.listCompanyManagers(companyId),
+  });
+
+  const addMut = useMutation({
+    mutationFn: async () => companyService.addCompanyManager(companyId, name, email),
+    onSuccess: () => {
+      toast.success("המנהל נוסף לחברה");
+      setName("");
+      setEmail("");
+      qc.invalidateQueries({ queryKey: COMPANY_MANAGERS_QUERY_KEY(companyId) });
+    },
+    onError: (error: Error) => toast.error(error.message ?? "ההוספה נכשלה"),
+  });
+
+  const removeMut = useMutation({
+    mutationFn: async (managerId: UUID) =>
+      companyService.removeCompanyManager(companyId, managerId),
+    onSuccess: () => qc.invalidateQueries({ queryKey: COMPANY_MANAGERS_QUERY_KEY(companyId) }),
+  });
+
+  const managers = managersQuery.data ?? [];
+
+  return (
+    <div className="space-y-4">
+      <Card className="card-elevated p-4">
+        <form
+          className="flex flex-wrap items-end gap-2"
+          onSubmit={(e) => {
+            e.preventDefault();
+            if (!name.trim()) return;
+            addMut.mutate();
+          }}
+        >
+          <div className="space-y-1.5">
+            <Label htmlFor="manager-name" className="text-xs">
+              שם המנהל
+            </Label>
+            <Input
+              id="manager-name"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              maxLength={120}
+              placeholder="שם מלא"
+              className="w-48"
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="manager-email" className="text-xs">
+              אימייל (אופציונלי)
+            </Label>
+            <Input
+              id="manager-email"
+              type="email"
+              dir="ltr"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              maxLength={160}
+              placeholder="manager@company.com"
+              className="w-56"
+            />
+          </div>
+          <Button
+            type="submit"
+            size="sm"
+            className="gap-2"
+            disabled={addMut.isPending || !name.trim()}
+          >
+            <Plus className="size-4" />
+            הוספת מנהל
+          </Button>
+        </form>
+      </Card>
+
+      <Card className="card-elevated overflow-hidden">
+        {managersQuery.isLoading ? (
+          <div className="p-8 flex justify-center">
+            <Loader2 className="size-5 animate-spin text-primary" />
+          </div>
+        ) : managers.length === 0 ? (
+          <div className="p-8 text-sm text-muted-foreground text-center">
+            לחברה זו אין עדיין מנהלים רשומים. ניתן להוסיף מנהל מהטופס מעלה.
+          </div>
+        ) : (
+          <ul className="divide-y">
+            {managers.map((manager: CompanyManagerEntry) => (
+              <li key={manager.id} className="flex items-center gap-3 p-3">
+                <UserCog className="size-4 text-muted-foreground shrink-0" />
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-medium truncate">{manager.name}</p>
+                  {manager.email && (
+                    <p className="text-xs text-muted-foreground truncate" dir="ltr">
+                      {manager.email}
+                    </p>
+                  )}
+                </div>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="size-8 shrink-0 text-destructive hover:text-destructive"
+                  onClick={() => removeMut.mutate(manager.id)}
+                  disabled={removeMut.isPending}
+                >
+                  <Trash2 className="size-4" />
+                </Button>
+              </li>
+            ))}
+          </ul>
+        )}
+      </Card>
+    </div>
+  );
+}
+
+function CompanyUsersTab({ branchesCount }: { branchesCount: number }) {
+  return (
+    <Card className="card-elevated p-8 text-center space-y-2">
+      <Users className="size-8 mx-auto text-muted-foreground" />
+      <p className="text-sm font-medium">אין עדיין ספריית משתמשים מחוברת לחברה זו</p>
+      <p className="text-xs text-muted-foreground max-w-md mx-auto">
+        המשתמשים בפועל (עובדים) מנוהלים כיום בהיקף הסניף הבודד, ולא בהיקף החברה. לחברה זו יש{" "}
+        {branchesCount} סניפים — ניתן לנהל את המשתמשים מתוך כל סניף בנפרד.
+      </p>
+    </Card>
+  );
+}
+
+function CompanyReportsTab({
+  snapshot,
+  branches,
+  isLoading,
+}: {
+  snapshot?: CompanyDashboardSnapshot;
+  branches: Branch[];
+  isLoading: boolean;
+}) {
+  if (isLoading) {
+    return (
+      <div className="p-8 flex justify-center">
+        <Loader2 className="size-5 animate-spin text-primary" />
+      </div>
+    );
+  }
+
+  const sortedByAge = [...branches].sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
+  const oldestBranch = sortedByAge[0];
+  const newestBranch = sortedByAge[sortedByAge.length - 1];
+  const avgBranchAgeDays =
+    branches.length > 0
+      ? Math.round(
+          branches.reduce(
+            (sum, b) => sum + (Date.now() - b.createdAt.getTime()) / (1000 * 60 * 60 * 24),
+            0,
+          ) / branches.length,
+        )
+      : 0;
+
+  return (
+    <div className="space-y-4">
+      <div className="grid gap-4 md:grid-cols-3">
+        <StatCard icon={GitBranch} label="סניפים בחברה" value={branches.length} />
+        <StatCard icon={Calendar} label="גיל ממוצע לסניף (ימים)" value={avgBranchAgeDays} />
+        <StatCard
+          icon={Calendar}
+          label="גיל החברה (ימים)"
+          value={snapshot?.statistics.ageInDays ?? 0}
+        />
+      </div>
+      <Card className="card-elevated p-5 space-y-3">
+        <Row label="הסניף הראשון שנוצר" value={oldestBranch?.name ?? "—"} />
+        <Row label="הסניף האחרון שנוצר" value={newestBranch?.name ?? "—"} />
+      </Card>
     </div>
   );
 }

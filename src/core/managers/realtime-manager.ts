@@ -33,4 +33,9 @@ export class RealtimeManager extends BaseManager {
     if (!this.channels.has(name)) this.channels.set(name, new InMemoryRealtimeChannel());
     return this.channels.get(name)!;
   }
+
+  /** Names of every channel opened so far this session. Read-only introspection. */
+  listChannelNames(): string[] {
+    return [...this.channels.keys()];
+  }
 }

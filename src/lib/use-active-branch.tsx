@@ -9,10 +9,7 @@ import {
 } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import {
-  installBranchScope,
-  setActiveBranchScope,
-} from "@/integrations/supabase/branch-scope";
+import { installBranchScope, setActiveBranchScope } from "@/integrations/supabase/branch-scope";
 import { useAuth } from "@/lib/use-auth";
 import { isPlatformOwner } from "@/lib/constants";
 
@@ -28,8 +25,12 @@ installBranchScope();
  *   the header, but are NEVER dropped into one automatically: there is no
  *   restored selection and no "first branch" fallback. Branch Mode only
  *   starts once they explicitly call `setActiveBranchId` during the
- *   current session (e.g. via the Branch switcher). A fresh load/login
- *   always starts with no active Branch, landing on the Platform Dashboard.
+ *   current session (e.g. via the Branch switcher, or by entering a Branch
+ *   from the Platform's Company → Branches flow — see
+ *   `platform/branch-context.tsx`, which bridges into this same gate so
+ *   "Branch Mode" is one single, real state shared by both entry points).
+ *   A fresh load/login always starts with no active Branch, landing on the
+ *   Platform Dashboard.
  * - Every other role is locked to the branch attached to their profile;
  *   the switcher is hidden for them (unchanged).
  * - Switching the active branch clears the React Query cache so every
@@ -56,7 +57,7 @@ type Ctx = {
   branches: BranchOption[];
   canSwitch: boolean;
   isLoading: boolean;
-  setActiveBranchId: (id: string) => void;
+  setActiveBranchId: (id: string | null) => void;
 };
 
 const ActiveBranchContext = createContext<Ctx | null>(null);
@@ -120,15 +121,14 @@ export function ActiveBranchProvider({ children }: { children: ReactNode }) {
     }
     // Platform Owners must never be dropped into a Branch automatically:
     // no restored selection, no "first branch" fallback. `activeBranchId`
-    // only ever changes via an explicit `setActiveBranchId` call below —
-    // here we merely drop a stale selection if that Branch no longer
-    // exists, instead of silently substituting another one.
-    if (branchesQ.isLoading) return;
-    if (activeBranchId && !branches.some((b) => b.id === activeBranchId)) {
-      setActiveBranchIdState(null);
-      writeStored(null);
-    }
-  }, [profile, isOwner, ownBranchId, branches, branchesQ.isLoading, activeBranchId]);
+    // only ever changes via an explicit `setActiveBranchId` call — nothing
+    // to reconcile here. Note this intentionally does NOT clear an active
+    // id that isn't in the (single-tenant) Supabase `branches` list: Branch
+    // Mode can also be entered via the Platform's Company → Branches flow
+    // (see `platform/branch-context.tsx`), whose Branch ids live in a
+    // separate, in-memory multi-tenant store. Clearing on "not found" would
+    // fight that bridge every time it sets a Platform Branch as active.
+  }, [profile, isOwner, ownBranchId, activeBranchId]);
 
   // Keep the supabase scope in lockstep with the React state. Doing this
   // synchronously during render means the very next supabase.from(...)
@@ -137,14 +137,15 @@ export function ActiveBranchProvider({ children }: { children: ReactNode }) {
   if (activeBranchId) setActiveBranchScope(activeBranchId);
 
   const setActiveBranchId = useCallback(
-    (id: string) => {
+    (id: string | null) => {
       if (!isOwner) return; // locked
       if (id === activeBranchId) return;
       writeStored(id);
       setActiveBranchScope(id);
       setActiveBranchIdState(id);
       // Cancel inflight requests bound to the old branch and force every
-      // data-bearing query to refetch under the new branch.
+      // data-bearing query to refetch under the new branch (or, when
+      // clearing, back to Branch Mode being off).
       qc.cancelQueries();
       qc.invalidateQueries();
     },

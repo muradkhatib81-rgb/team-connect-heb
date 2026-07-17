@@ -139,6 +139,31 @@ container.register(TOKENS.errorLogger, new ErrorLogger());
 
 configurationManager.set("environment", getEnvironment());
 
+// Part 3 — Feature Flags: seed a small set of real, platform-scoped flags
+// so the Feature Flag Manager has something genuine to list/toggle from
+// the Platform UI. Nothing here gates behavior yet — flipping a flag only
+// changes what `featureFlagManager.isEnabled(key)` reports, honestly.
+const featureFlagManager = container.resolve<FeatureFlagManager>(TOKENS.featureFlag);
+for (const flag of [
+  { key: "platform.maintenance_mode", enabled: false },
+  { key: "platform.global_analytics", enabled: true },
+  { key: "platform.beta_billing", enabled: false },
+] as const) {
+  featureFlagManager.register({
+    id: generateUUID(),
+    key: flag.key,
+    enabled: flag.enabled,
+    scope: "platform",
+    scopeTargetId: null,
+    createdAt: new Date(),
+    updatedAt: new Date(),
+    createdBy: null,
+    updatedBy: null,
+    deletedAt: null,
+    deletedBy: null,
+  });
+}
+
 // Part 4 — Monitoring Integration: register health checks for every
 // requested target. Storage reports "unknown" honestly because no provider
 // is connected yet; nothing here fabricates a connection. Database now
@@ -240,6 +265,15 @@ export function getFeatureFlagManager(): FeatureFlagManager {
 }
 export function getBillingManager(): BillingManager {
   return container.resolve(TOKENS.billing);
+}
+export function getRealtimeManager(): RealtimeManager {
+  return container.resolve(TOKENS.realtime);
+}
+export function getNotificationManager(): NotificationManager {
+  return container.resolve(TOKENS.notification);
+}
+export function getAuditManager(): AuditManager {
+  return container.resolve(TOKENS.audit);
 }
 export function getPermissionRegistry(): PermissionRegistry {
   return container.resolve(TOKENS.permissionRegistry);
