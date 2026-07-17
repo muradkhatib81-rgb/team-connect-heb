@@ -26,8 +26,12 @@ export interface BranchSettings extends BaseEntity {
 }
 
 export interface FeatureFlag extends BaseEntity {
+  displayName: string;
   key: string;
+  description: string;
   enabled: boolean;
   scope: "platform" | "company" | "branch" | "department" | "employee";
   scopeTargetId: UUID | null;
+  notes: string | null;
+  archivedAt: Date | null;
 }

@@ -151,10 +151,14 @@ for (const flag of [
 ] as const) {
   featureFlagManager.register({
     id: generateUUID(),
+    displayName: flag.key,
     key: flag.key,
+    description: "",
     enabled: flag.enabled,
     scope: "platform",
     scopeTargetId: null,
+    notes: null,
+    archivedAt: null,
     createdAt: new Date(),
     updatedAt: new Date(),
     createdBy: null,

@@ -37,7 +37,9 @@ import {
   getRoleRegistry,
   getRealtimeManager,
   getNotificationManager,
+  getAuditManager,
 } from "../core/bootstrap";
+import type { AuditRecord } from "../core/managers/audit-manager";
 
 /**
  * Default active Platform. Stands in until a real Platform record can be
@@ -138,7 +140,10 @@ export class PlatformRuntimeService {
   }
 
   registerFeatureFlag(
-    input: Pick<FeatureFlag, "key" | "enabled" | "scope" | "scopeTargetId">,
+    input: Pick<
+      FeatureFlag,
+      "displayName" | "key" | "description" | "enabled" | "scope" | "scopeTargetId" | "notes"
+    >,
   ): FeatureFlag {
     const key = input.key.trim();
     if (!key) throw new Error("Feature flag key is required.");
@@ -157,6 +162,7 @@ export class PlatformRuntimeService {
       updatedBy: null,
       deletedAt: null,
       deletedBy: null,
+      archivedAt: null,
     };
     manager.register(flag);
     return flag;
@@ -171,7 +177,42 @@ export class PlatformRuntimeService {
     const manager = getFeatureFlagManager();
     const existing = manager.list().find((flag) => flag.key === key);
     if (!existing) return;
-    manager.register({ ...existing, enabled, updatedAt: new Date() });
+    manager.update(key, { enabled });
+  }
+
+  updateFeatureFlag(
+    key: string,
+    patch: Pick<FeatureFlag, "displayName" | "description" | "scope" | "scopeTargetId" | "notes">,
+  ): FeatureFlag {
+    return getFeatureFlagManager().update(key, patch);
+  }
+
+  archiveFeatureFlag(key: string): FeatureFlag {
+    return getFeatureFlagManager().update(key, { archivedAt: new Date(), enabled: false });
+  }
+
+  restoreFeatureFlag(key: string): FeatureFlag {
+    return getFeatureFlagManager().update(key, { archivedAt: null });
+  }
+
+  deleteFeatureFlag(key: string): void {
+    getFeatureFlagManager().remove(key);
+  }
+
+  recordFeatureFlagAudit(
+    action: string,
+    userId: UUID,
+    key: string,
+    previousValue: unknown,
+    newValue: unknown,
+  ): void {
+    getAuditManager().record(action, { userId, key, previousValue, newValue });
+  }
+
+  listFeatureFlagAudit(): AuditRecord[] {
+    return getAuditManager()
+      .list()
+      .filter((record) => record.action.startsWith("feature-flag."));
   }
 
   getSubscriptionOverview(): SubscriptionOverview {
