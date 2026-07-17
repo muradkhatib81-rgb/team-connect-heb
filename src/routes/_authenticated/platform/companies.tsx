@@ -1,33 +1,57 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useState } from "react";
-import { Building2, Loader2, MoreHorizontal, Pencil, Plus, Star, Trash2 } from "lucide-react";
+import { useMemo, useState } from "react";
+import { Archive, Building2, Loader2, Plus, ShieldAlert, Star } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+import { Switch } from "@/components/ui/switch";
+import { Label } from "@/components/ui/label";
 import type { Company } from "@/modules/companies";
 import { useCompanyContext } from "@/platform";
 import { CompanySwitcher } from "@/components/platform/company-switcher";
-import {
-  CompanyCreateDialog,
-  CompanyEditDialog,
-  CompanyDeleteDialog,
-} from "@/components/platform/company-dialogs";
+import { CompanyActionsMenu } from "@/components/platform/company-actions-menu";
+import { CompanyCreateDialog } from "@/components/platform/company-dialogs";
 
 export const Route = createFileRoute("/_authenticated/platform/companies")({
   component: CompaniesPage,
 });
 
+const STATUS_LABELS: Record<Company["status"], string> = {
+  active: "פעילה",
+  inactive: "לא פעילה",
+  suspended: "מושהית",
+};
+
+function StatusBadge({ company }: { company: Company }) {
+  if (company.status === "active") {
+    return (
+      <Badge className="gap-1 bg-emerald-100 text-emerald-800 hover:bg-emerald-100 dark:bg-emerald-950/30 dark:text-emerald-400">
+        <Star className="size-3" />
+        פעילה
+      </Badge>
+    );
+  }
+  return (
+    <Badge
+      variant="outline"
+      className="gap-1 border-amber-300 text-amber-800 dark:border-amber-800 dark:text-amber-400"
+    >
+      <ShieldAlert className="size-3" />
+      {STATUS_LABELS[company.status]}
+    </Badge>
+  );
+}
+
 function CompaniesPage() {
   const { companies, activeCompanyId, setActiveCompanyId, isLoading } = useCompanyContext();
   const [openCreate, setOpenCreate] = useState(false);
-  const [editCompany, setEditCompany] = useState<Company | null>(null);
-  const [deleteCompany, setDeleteCompany] = useState<Company | null>(null);
+  const [showArchived, setShowArchived] = useState(false);
+
+  const visibleCompanies = useMemo(
+    () => companies.filter((c) => showArchived || !c.archivedAt),
+    [companies, showArchived],
+  );
+  const archivedCount = useMemo(() => companies.filter((c) => c.archivedAt).length, [companies]);
 
   return (
     <div className="space-y-6">
@@ -52,14 +76,33 @@ function CompaniesPage() {
         </div>
       </header>
 
+      {archivedCount > 0 && (
+        <div className="flex items-center gap-2 justify-end">
+          <Label
+            htmlFor="show-archived-companies"
+            className="text-sm text-muted-foreground gap-2 flex items-center"
+          >
+            <Archive className="size-3.5" />
+            הצג חברות בארכיון ({archivedCount})
+          </Label>
+          <Switch
+            id="show-archived-companies"
+            checked={showArchived}
+            onCheckedChange={setShowArchived}
+          />
+        </div>
+      )}
+
       <Card className="card-elevated overflow-hidden">
         {isLoading ? (
           <div className="p-8 flex justify-center">
             <Loader2 className="size-5 animate-spin text-primary" />
           </div>
-        ) : companies.length === 0 ? (
+        ) : visibleCompanies.length === 0 ? (
           <div className="p-8 text-sm text-muted-foreground text-center">
-            אין עדיין חברות בפלטפורמה. ניתן ליצור חברה חדשה מהכפתור מעלה.
+            {companies.length === 0
+              ? "אין עדיין חברות בפלטפורמה. ניתן ליצור חברה חדשה מהכפתור מעלה."
+              : "אין חברות להצגה עם הסינון הנוכחי."}
           </div>
         ) : (
           <div className="overflow-x-auto">
@@ -74,15 +117,27 @@ function CompaniesPage() {
                 </tr>
               </thead>
               <tbody>
-                {companies.map((company) => (
-                  <tr key={company.id} className="border-t hover:bg-accent/30">
+                {visibleCompanies.map((company) => (
+                  <tr
+                    key={company.id}
+                    className={`border-t hover:bg-accent/30 ${company.archivedAt ? "opacity-60" : ""}`}
+                  >
                     <td className="p-3">
                       <Link
                         to="/platform/companies/$companyId"
                         params={{ companyId: company.id }}
+                        search={{ tab: "dashboard" }}
                         className="flex items-center gap-2 min-w-0 hover:underline font-medium"
                       >
-                        <Building2 className="size-4 text-muted-foreground shrink-0" />
+                        {company.logoUrl ? (
+                          <img
+                            src={company.logoUrl}
+                            alt={company.name}
+                            className="size-4 rounded object-contain shrink-0"
+                          />
+                        ) : (
+                          <Building2 className="size-4 text-muted-foreground shrink-0" />
+                        )}
                         <span className="truncate">{company.name}</span>
                       </Link>
                     </td>
@@ -96,48 +151,37 @@ function CompaniesPage() {
                       {company.createdAt.toLocaleDateString("he-IL")}
                     </td>
                     <td className="p-3">
-                      {company.id === activeCompanyId ? (
-                        <Badge className="gap-1 bg-emerald-100 text-emerald-800 hover:bg-emerald-100 dark:bg-emerald-950/30 dark:text-emerald-400">
-                          <Star className="size-3" />
-                          פעילה
-                        </Badge>
-                      ) : (
-                        <Badge variant="outline">לא פעילה</Badge>
-                      )}
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        {company.id === activeCompanyId && (
+                          <Badge className="gap-1 bg-primary/10 text-primary hover:bg-primary/10">
+                            <Star className="size-3" />
+                            פעילה בפלטפורמה
+                          </Badge>
+                        )}
+                        <StatusBadge company={company} />
+                        {company.archivedAt && (
+                          <Badge variant="secondary" className="gap-1">
+                            <Archive className="size-3" />
+                            בארכיון
+                          </Badge>
+                        )}
+                      </div>
                     </td>
                     <td className="p-3">
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Button variant="ghost" size="icon" className="size-8">
-                            <MoreHorizontal className="size-4" />
+                      <div className="flex items-center gap-1 justify-end">
+                        {company.id !== activeCompanyId && (
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="size-8"
+                            title="הפוך לפעילה"
+                            onClick={() => setActiveCompanyId(company.id)}
+                          >
+                            <Star className="size-4" />
                           </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end">
-                          {company.id !== activeCompanyId && (
-                            <DropdownMenuItem
-                              onClick={() => setActiveCompanyId(company.id)}
-                              className="gap-2"
-                            >
-                              <Star className="size-4" />
-                              הפוך לפעילה
-                            </DropdownMenuItem>
-                          )}
-                          <DropdownMenuItem
-                            onClick={() => setEditCompany(company)}
-                            className="gap-2"
-                          >
-                            <Pencil className="size-4" />
-                            עריכה
-                          </DropdownMenuItem>
-                          <DropdownMenuItem
-                            onClick={() => setDeleteCompany(company)}
-                            className="gap-2 text-destructive focus:text-destructive"
-                          >
-                            <Trash2 className="size-4" />
-                            מחיקה
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
+                        )}
+                        <CompanyActionsMenu company={company} />
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -148,20 +192,6 @@ function CompaniesPage() {
       </Card>
 
       {openCreate && <CompanyCreateDialog open={openCreate} onOpenChange={setOpenCreate} />}
-      {editCompany && (
-        <CompanyEditDialog
-          open={!!editCompany}
-          onOpenChange={(v) => !v && setEditCompany(null)}
-          company={editCompany}
-        />
-      )}
-      {deleteCompany && (
-        <CompanyDeleteDialog
-          open={!!deleteCompany}
-          onOpenChange={(v) => !v && setDeleteCompany(null)}
-          company={deleteCompany}
-        />
-      )}
     </div>
   );
 }

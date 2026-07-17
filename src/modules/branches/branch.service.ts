@@ -6,7 +6,11 @@
  * persistence (in-memory today, Supabase-ready by contract) and
  * `getConfigurationManager()` for Branch Settings, namespaced exactly like
  * `CompanyService.getCompanySetting`. No Supabase reference, no new
- * abstraction.
+ * abstraction — this service never reads or writes the real `branches`
+ * table itself; it only records which real branch (`sourceBranchId`) is
+ * assigned to which Company. The real branch data (and every relationship
+ * hanging off it) is read directly by the UI layer, exactly like the
+ * existing `useActiveBranch` hook already does (see `branch-dialogs.tsx`).
  */
 
 import type { UUID } from "@/core";
@@ -26,6 +30,15 @@ export interface BranchDashboardSnapshot {
   statistics: BranchStatistics;
 }
 
+/** Snapshot of the real branch at assignment/refresh time — see the module doc comment. */
+export interface RealBranchSnapshot {
+  id: string;
+  name: string;
+  code?: string | null;
+  address?: string | null;
+  is_active?: boolean;
+}
+
 const branchRepository = new BranchRepository(getDatabaseClient());
 
 export class BranchService {
@@ -33,7 +46,7 @@ export class BranchService {
     return branchRepository.findByCompany(companyId);
   }
 
-  /** Every non-deleted Branch on the Platform, across every Company. */
+  /** Every non-deleted Branch assignment on the Platform, across every Company. */
   listAllBranches(): Promise<Branch[]> {
     return branchRepository.findAll();
   }
@@ -42,23 +55,50 @@ export class BranchService {
     return branchRepository.findById(id);
   }
 
-  createBranch(companyId: UUID, name: string): Promise<Branch> {
-    const trimmed = name.trim();
-    if (!trimmed) {
-      throw new Error("Branch name is required.");
-    }
-    return branchRepository.create({ companyId, name: trimmed });
+  findAssignmentForSourceBranch(sourceBranchId: string): Promise<Branch | null> {
+    return branchRepository.findBySourceBranchId(sourceBranchId);
   }
 
-  updateBranch(id: UUID, data: { name: string }): Promise<Branch> {
-    const trimmed = data.name.trim();
-    if (!trimmed) {
+  /**
+   * Assigns an existing, real branch to a Company. Never creates a new real
+   * branch and never duplicates an existing assignment — throws if the
+   * source branch is already assigned to any Company (including this one).
+   */
+  async assignBranch(companyId: UUID, source: RealBranchSnapshot): Promise<Branch> {
+    const trimmedName = source.name.trim();
+    if (!trimmedName) {
       throw new Error("Branch name is required.");
     }
-    return branchRepository.update(id, { name: trimmed });
+    const existing = await branchRepository.findBySourceBranchId(source.id);
+    if (existing) {
+      throw new Error("הסניף הזה משויך כבר לחברה אחרת בפלטפורמה.");
+    }
+    return branchRepository.create({
+      companyId,
+      sourceBranchId: source.id,
+      name: trimmedName,
+      code: source.code?.trim() || null,
+      address: source.address?.trim() || null,
+      isActive: source.is_active ?? true,
+    });
   }
 
-  deleteBranch(id: UUID): Promise<void> {
+  /** Refreshes the denormalized snapshot (name/code/address/isActive) from the real branch. */
+  refreshBranchSnapshot(id: UUID, source: RealBranchSnapshot): Promise<Branch> {
+    const trimmedName = source.name.trim();
+    if (!trimmedName) {
+      throw new Error("Branch name is required.");
+    }
+    return branchRepository.update(id, {
+      name: trimmedName,
+      code: source.code?.trim() || null,
+      address: source.address?.trim() || null,
+      isActive: source.is_active ?? true,
+    });
+  }
+
+  /** Removes the Company <-> Branch assignment only. The real branch and every relationship it owns are untouched. */
+  unassignBranch(id: UUID): Promise<void> {
     return branchRepository.softDelete(id);
   }
 

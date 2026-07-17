@@ -1,7 +1,7 @@
-import { useState } from "react";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMemo, useState } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { Loader2 } from "lucide-react";
+import { Loader2, RefreshCw } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -21,13 +21,23 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import type { UUID } from "@/core";
 import { branchService, type Branch } from "@/modules/branches";
-import { branchesQueryKey } from "@/platform";
+import { branchesQueryKey, ALL_BRANCH_ASSIGNMENTS_QUERY_KEY } from "@/platform";
+import { listRealBranches, REAL_BRANCHES_QUERY_KEY } from "@/lib/real-branches-directory";
 
-// -------------------- Create --------------------
+// -------------------- Assign existing branch --------------------
+// Deliberately not a "create" flow: Part 2 requires assigning an EXISTING
+// real (single-tenant) branch to a Company, never recreating/duplicating
+// one. Component name kept as `BranchCreateDialog` to avoid unrelated
+// churn at every call site — see `modules/branches/branch.model.ts`.
 
 export function BranchCreateDialog({
   open,
@@ -41,61 +51,105 @@ export function BranchCreateDialog({
   onCreated?: (branch: Branch) => void;
 }) {
   const queryClient = useQueryClient();
-  const [name, setName] = useState("");
+  const [selectedId, setSelectedId] = useState("");
+
+  const realBranchesQuery = useQuery({
+    queryKey: REAL_BRANCHES_QUERY_KEY,
+    queryFn: listRealBranches,
+    enabled: open,
+  });
+  const assignmentsQuery = useQuery({
+    queryKey: ALL_BRANCH_ASSIGNMENTS_QUERY_KEY,
+    queryFn: () => branchService.listAllBranches(),
+    enabled: open,
+  });
+
+  const assignedSourceIds = useMemo(
+    () => new Set((assignmentsQuery.data ?? []).map((b) => b.sourceBranchId)),
+    [assignmentsQuery.data],
+  );
+  const available = useMemo(
+    () => (realBranchesQuery.data ?? []).filter((b) => !assignedSourceIds.has(b.id)),
+    [realBranchesQuery.data, assignedSourceIds],
+  );
 
   const mut = useMutation({
-    mutationFn: () => branchService.createBranch(companyId, name),
+    mutationFn: () => {
+      const picked = available.find((b) => b.id === selectedId);
+      if (!picked) throw new Error("יש לבחור סניף קיים לשיוך.");
+      return branchService.assignBranch(companyId, picked);
+    },
     onSuccess: async (branch) => {
-      toast.success("הסניף נוצר בהצלחה");
-      await queryClient.invalidateQueries({ queryKey: branchesQueryKey(companyId) });
+      toast.success("הסניף שויך לחברה בהצלחה");
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: branchesQueryKey(companyId) }),
+        queryClient.invalidateQueries({ queryKey: ALL_BRANCH_ASSIGNMENTS_QUERY_KEY }),
+      ]);
       onOpenChange(false);
-      setName("");
+      setSelectedId("");
       onCreated?.(branch);
     },
-    onError: (e: Error) => toast.error(e.message ?? "יצירת הסניף נכשלה"),
+    onError: (e: Error) => toast.error(e.message ?? "שיוך הסניף נכשל"),
   });
+
+  const isLoading = realBranchesQuery.isLoading || assignmentsQuery.isLoading;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>סניף חדש</DialogTitle>
-          <DialogDescription>יצירת סניף חדש עבור החברה.</DialogDescription>
+          <DialogTitle>שיוך סניף קיים</DialogTitle>
+          <DialogDescription>
+            שיוך סניף קיים במערכת לחברה זו. הסניף ונתוניו (עובדים, מחלקות, סידורי עבודה וכו׳) נשארים
+            ללא שינוי — נוצר קישור בלבד בין החברה לסניף.
+          </DialogDescription>
         </DialogHeader>
-        <form
-          onSubmit={(e) => {
-            e.preventDefault();
-            mut.mutate();
-          }}
-          className="space-y-3"
-        >
-          <div className="space-y-1">
-            <Label htmlFor="branch-create-name">שם הסניף *</Label>
-            <Input
-              id="branch-create-name"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              maxLength={120}
-              required
-              autoFocus
-            />
+        {isLoading ? (
+          <div className="p-6 flex justify-center">
+            <Loader2 className="size-5 animate-spin text-primary" />
           </div>
-          <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
-              ביטול
-            </Button>
-            <Button type="submit" disabled={mut.isPending || !name.trim()} className="gap-2">
-              {mut.isPending && <Loader2 className="size-4 animate-spin" />}
-              יצירה
-            </Button>
-          </DialogFooter>
-        </form>
+        ) : available.length === 0 ? (
+          <p className="text-sm text-muted-foreground py-4">
+            כל הסניפים הקיימים במערכת משויכים כבר לחברות בפלטפורמה. ניתן ליצור סניף חדש דרך ניהול
+            סניפי המערכת.
+          </p>
+        ) : (
+          <Select value={selectedId} onValueChange={setSelectedId}>
+            <SelectTrigger>
+              <SelectValue placeholder="בחר סניף לשיוך" />
+            </SelectTrigger>
+            <SelectContent>
+              {available.map((b) => (
+                <SelectItem key={b.id} value={b.id}>
+                  {b.name}
+                  {b.code ? ` (${b.code})` : ""}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        )}
+        <DialogFooter>
+          <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+            ביטול
+          </Button>
+          <Button
+            onClick={() => mut.mutate()}
+            disabled={mut.isPending || !selectedId || available.length === 0}
+            className="gap-2"
+          >
+            {mut.isPending && <Loader2 className="size-4 animate-spin" />}
+            שיוך הסניף
+          </Button>
+        </DialogFooter>
       </DialogContent>
     </Dialog>
   );
 }
 
-// -------------------- Edit --------------------
+// -------------------- View / Sync --------------------
+// A Platform Branch is only an assignment (see the model's doc comment);
+// there is no independent "name" to rename here. This shows the live real
+// branch details and lets the Platform Owner refresh the local snapshot.
 
 export function BranchEditDialog({
   open,
@@ -107,46 +161,76 @@ export function BranchEditDialog({
   branch: Branch;
 }) {
   const queryClient = useQueryClient();
-  const [name, setName] = useState(branch.name);
 
-  const mut = useMutation({
-    mutationFn: () => branchService.updateBranch(branch.id, { name }),
+  const realBranchesQuery = useQuery({
+    queryKey: REAL_BRANCHES_QUERY_KEY,
+    queryFn: listRealBranches,
+    enabled: open,
+  });
+  const source = realBranchesQuery.data?.find((b) => b.id === branch.sourceBranchId) ?? null;
+
+  const syncMut = useMutation({
+    mutationFn: () => {
+      if (!source) throw new Error("לא ניתן לטעון את פרטי הסניף המקורי כעת.");
+      return branchService.refreshBranchSnapshot(branch.id, source);
+    },
     onSuccess: async () => {
-      toast.success("הסניף עודכן");
+      toast.success("פרטי הסניף סונכרנו");
       await queryClient.invalidateQueries({ queryKey: branchesQueryKey(branch.companyId) });
       onOpenChange(false);
     },
-    onError: (e: Error) => toast.error(e.message ?? "העדכון נכשל"),
+    onError: (e: Error) => toast.error(e.message ?? "הסנכרון נכשל"),
   });
+
+  const display = source ?? {
+    name: branch.name,
+    code: branch.code ?? "",
+    address: branch.address,
+    is_active: branch.isActive,
+  };
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>עריכת סניף</DialogTitle>
-          <DialogDescription>עדכון שם הסניף.</DialogDescription>
+          <DialogTitle>פרטי סניף — {branch.name}</DialogTitle>
+          <DialogDescription>
+            פרטי הסניף המלאים (כולל עובדים, מחלקות וסידורי עבודה) מנוהלים בניהול סניפי המערכת. כאן
+            ניתן לצפות בתמונת המצב וּלסנכרן אותה מהמידע האמיתי העדכני ביותר.
+          </DialogDescription>
         </DialogHeader>
-        <div className="space-y-1">
-          <Label htmlFor="branch-edit-name">שם הסניף *</Label>
-          <Input
-            id="branch-edit-name"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            maxLength={120}
-            required
-          />
-        </div>
+        {realBranchesQuery.isLoading ? (
+          <div className="p-6 flex justify-center">
+            <Loader2 className="size-5 animate-spin text-primary" />
+          </div>
+        ) : (
+          <div className="space-y-0.5 text-sm rounded-lg border p-3">
+            <InfoRow label="שם" value={display.name} />
+            <InfoRow label="קוד" value={display.code || "—"} />
+            <InfoRow label="כתובת" value={display.address || "—"} />
+            <InfoRow label="סטטוס" value={display.is_active ? "פעיל" : "לא פעיל"} />
+            {!source && (
+              <p className="text-xs text-destructive pt-2">
+                לא נמצא הסניף המקורי במערכת (ייתכן שנמחק). מוצגת תמונת המצב האחרונה שנשמרה.
+              </p>
+            )}
+          </div>
+        )}
         <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>
-            ביטול
+          <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+            סגירה
           </Button>
           <Button
-            onClick={() => mut.mutate()}
-            disabled={mut.isPending || !name.trim()}
+            onClick={() => syncMut.mutate()}
+            disabled={syncMut.isPending || !source}
             className="gap-2"
           >
-            {mut.isPending && <Loader2 className="size-4 animate-spin" />}
-            שמירה
+            {syncMut.isPending ? (
+              <Loader2 className="size-4 animate-spin" />
+            ) : (
+              <RefreshCw className="size-4" />
+            )}
+            סנכרון מהסניף האמיתי
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -154,7 +238,16 @@ export function BranchEditDialog({
   );
 }
 
-// -------------------- Delete --------------------
+function InfoRow({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex items-center justify-between gap-3 py-1.5 border-b last:border-b-0 border-border/60">
+      <span className="text-muted-foreground">{label}</span>
+      <span className="font-medium truncate max-w-[220px]">{value}</span>
+    </div>
+  );
+}
+
+// -------------------- Unassign --------------------
 
 export function BranchDeleteDialog({
   open,
@@ -170,23 +263,28 @@ export function BranchDeleteDialog({
   const queryClient = useQueryClient();
 
   const mut = useMutation({
-    mutationFn: () => branchService.deleteBranch(branch.id),
+    mutationFn: () => branchService.unassignBranch(branch.id),
     onSuccess: async () => {
-      toast.success("הסניף נמחק");
-      await queryClient.invalidateQueries({ queryKey: branchesQueryKey(branch.companyId) });
+      toast.success("שיוך הסניף לחברה הוסר");
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: branchesQueryKey(branch.companyId) }),
+        queryClient.invalidateQueries({ queryKey: ALL_BRANCH_ASSIGNMENTS_QUERY_KEY }),
+      ]);
       onOpenChange(false);
       onDeleted?.();
     },
-    onError: (e: Error) => toast.error(e.message ?? "המחיקה נכשלה"),
+    onError: (e: Error) => toast.error(e.message ?? "הפעולה נכשלה"),
   });
 
   return (
     <AlertDialog open={open} onOpenChange={onOpenChange}>
       <AlertDialogContent>
         <AlertDialogHeader>
-          <AlertDialogTitle>מחיקת סניף</AlertDialogTitle>
+          <AlertDialogTitle>הסרת שיוך סניף</AlertDialogTitle>
           <AlertDialogDescription>
-            האם למחוק את הסניף &quot;{branch.name}&quot;? זו מחיקה רכה — ניתן לשחזר בעתיד.
+            האם להסיר את השיוך של הסניף &quot;{branch.name}&quot; לחברה? הפעולה מסירה רק את הקישור
+            בין החברה לסניף — הסניף עצמו וכל הנתונים שבו (עובדים, מחלקות, סידורי עבודה וכו׳) יישארו
+            קיימים במערכת ללא שינוי, וניתן לשייך אותו מחדש בכל עת.
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
@@ -200,7 +298,7 @@ export function BranchDeleteDialog({
             className="bg-destructive text-destructive-foreground hover:bg-destructive/90 gap-2"
           >
             {mut.isPending && <Loader2 className="size-4 animate-spin" />}
-            מחיקה
+            הסרת שיוך
           </AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>

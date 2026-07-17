@@ -110,6 +110,7 @@ function BranchDetailsPage() {
               <Link
                 to="/platform/companies/$companyId"
                 params={{ companyId: company.id }}
+                search={{ tab: "dashboard" }}
                 className="mt-1 inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground hover:underline"
               >
                 <Building2 className="size-3.5" />
@@ -126,8 +127,12 @@ function BranchDetailsPage() {
                 variant="outline"
                 size="sm"
                 onClick={() => {
+                  if (company && company.status !== "active") {
+                    toast.error("לא ניתן להיכנס למצב סניף עבור חברה לא פעילה או מושהית.");
+                    return;
+                  }
                   setActiveCompanyId(branch.companyId);
-                  setActiveBranchId(branch.id);
+                  setActiveBranchId(branch);
                 }}
                 className="gap-2"
               >
@@ -137,7 +142,7 @@ function BranchDetailsPage() {
             )}
             <Button variant="outline" size="sm" onClick={() => setEditOpen(true)} className="gap-2">
               <Pencil className="size-4" />
-              עריכה
+              פרטים / סנכרון
             </Button>
             <Button
               variant="outline"
@@ -146,7 +151,7 @@ function BranchDetailsPage() {
               className="gap-2 text-destructive hover:text-destructive"
             >
               <Trash2 className="size-4" />
-              מחיקה
+              הסרת שיוך
             </Button>
           </div>
         </div>

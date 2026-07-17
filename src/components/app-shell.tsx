@@ -47,7 +47,6 @@ import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { NotificationsBell } from "@/components/notifications-bell";
 import { useActiveBranch } from "@/lib/use-active-branch";
-import { BranchSwitcher, ActiveBranchBadge } from "@/components/branch-switcher";
 import { AppFooter } from "@/components/app-footer";
 
 interface NavItem {
@@ -538,26 +537,19 @@ export function AppShell({ children }: { children: ReactNode }) {
             </div>
           </div>
           <div className="flex items-center gap-1 shrink-0">
-            <BranchSwitcher />
             <NotificationsBell />
           </div>
         </header>
 
         {/* Floating header — desktop only */}
         <div className="hidden lg:flex fixed top-4 left-4 z-40 items-center gap-2">
-          <BranchSwitcher className="bg-background/95 backdrop-blur shadow-soft" />
           <div className="bg-background/95 backdrop-blur border rounded-full shadow-soft">
             <NotificationsBell />
           </div>
         </div>
 
         <main className="lg:mr-64 flex-1">
-          <div className="mx-auto max-w-6xl px-4 sm:px-6 py-6 lg:py-10">
-            <div className="mb-4 flex justify-end">
-              <ActiveBranchBadge />
-            </div>
-            {children}
-          </div>
+          <div className="mx-auto max-w-6xl px-4 sm:px-6 py-6 lg:py-10">{children}</div>
           <AppFooter />
         </main>
       </div>
@@ -703,9 +695,9 @@ function isBranchModuleRoute(pathname: string): boolean {
  * so it can read the active branch. Platform Owners (system_admin /
  * main_admin) must never be dropped into a Branch automatically (see
  * use-active-branch.tsx) — this guard makes sure every branch-module route
- * stays unreachable for them until they explicitly enter Branch Mode
- * (Branch switcher, or Company -> Branches -> a Branch), bouncing any
- * direct navigation attempt back to the Platform Dashboard.
+ * stays unreachable for them until they explicitly enter Branch Mode via
+ * Company -> Branches -> a Branch (there is no global Branch switcher),
+ * bouncing any direct navigation attempt back to the Platform Dashboard.
  */
 function BranchModeGuard({ isPlatformOwner }: { isPlatformOwner: boolean }) {
   const { activeBranchId, isLoading } = useActiveBranch();

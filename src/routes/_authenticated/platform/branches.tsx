@@ -70,7 +70,7 @@ function BranchesPage() {
         <PlatformBranchSwitcher />
         <Button onClick={() => setOpenCreate(true)} disabled={!activeCompanyId} className="gap-2">
           <Plus className="size-4" />
-          סניף חדש
+          שיוך סניף קיים
         </Button>
       </div>
     </header>
@@ -108,7 +108,7 @@ function BranchesPage() {
           </div>
         ) : branches.length === 0 ? (
           <div className="p-8 text-sm text-muted-foreground text-center">
-            אין עדיין סניפים לחברה הפעילה. ניתן ליצור סניף חדש מהכפתור מעלה.
+            אין עדיין סניפים משויכים לחברה הפעילה. ניתן לשייך סניף קיים מהכפתור מעלה.
           </div>
         ) : (
           <div className="overflow-x-auto">
@@ -164,7 +164,7 @@ function BranchesPage() {
                         <DropdownMenuContent align="end">
                           {branch.id !== activeBranchId && (
                             <DropdownMenuItem
-                              onClick={() => setActiveBranchId(branch.id)}
+                              onClick={() => setActiveBranchId(branch)}
                               className="gap-2"
                             >
                               <Star className="size-4" />
@@ -173,14 +173,14 @@ function BranchesPage() {
                           )}
                           <DropdownMenuItem onClick={() => setEditBranch(branch)} className="gap-2">
                             <Pencil className="size-4" />
-                            עריכה
+                            פרטים / סנכרון
                           </DropdownMenuItem>
                           <DropdownMenuItem
                             onClick={() => setDeleteBranch(branch)}
                             className="gap-2 text-destructive focus:text-destructive"
                           >
                             <Trash2 className="size-4" />
-                            מחיקה
+                            הסרת שיוך
                           </DropdownMenuItem>
                         </DropdownMenuContent>
                       </DropdownMenu>
@@ -198,7 +198,7 @@ function BranchesPage() {
           open={openCreate}
           onOpenChange={setOpenCreate}
           companyId={activeCompanyId}
-          onCreated={(branch) => setActiveBranchId(branch.id)}
+          onCreated={(branch) => setActiveBranchId(branch)}
         />
       )}
       {editBranch && (

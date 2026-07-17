@@ -6,7 +6,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import type { UUID } from "@/core";
 import { useBranchContext } from "@/platform";
 
 /**
@@ -22,7 +21,13 @@ export function PlatformBranchSwitcher() {
   if (isLoading || branches.length === 0) return null;
 
   return (
-    <Select value={activeBranchId ?? undefined} onValueChange={(v) => setActiveBranchId(v as UUID)}>
+    <Select
+      value={activeBranchId ?? undefined}
+      onValueChange={(v) => {
+        const branch = branches.find((b) => b.id === v);
+        if (branch) setActiveBranchId(branch);
+      }}
+    >
       <SelectTrigger className="w-full sm:w-64 gap-2">
         <GitBranch className="size-4 text-muted-foreground shrink-0" />
         <SelectValue placeholder="בחירת סניף פעיל" />

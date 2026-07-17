@@ -1,8 +1,9 @@
-import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useState, type ComponentType } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import {
+  Archive,
   ArrowRight,
   BarChart3,
   Building2,
@@ -15,6 +16,7 @@ import {
   Pencil,
   Plus,
   Settings as SettingsIcon,
+  ShieldAlert,
   Star,
   Trash2,
   UserCog,
@@ -36,34 +38,78 @@ import {
 import type { UUID } from "@/core";
 import {
   companyService,
+  type Company,
   type CompanyDashboardSnapshot,
   type CompanyManagerEntry,
 } from "@/modules/companies";
 import { branchService, type Branch } from "@/modules/branches";
 import { useCompanyContext, branchesQueryKey } from "@/platform";
-import { CompanyEditDialog, CompanyDeleteDialog } from "@/components/platform/company-dialogs";
+import { CompanyActionsMenu } from "@/components/platform/company-actions-menu";
 import {
   BranchCreateDialog,
   BranchEditDialog,
   BranchDeleteDialog,
 } from "@/components/platform/branch-dialogs";
 
+const VALID_TABS = [
+  "dashboard",
+  "statistics",
+  "branches",
+  "managers",
+  "users",
+  "reports",
+  "settings",
+] as const;
+type CompanyDetailsTab = (typeof VALID_TABS)[number];
+
 export const Route = createFileRoute("/_authenticated/platform/companies/$companyId")({
   component: CompanyDetailsPage,
   notFoundComponent: () => <div className="p-6 text-sm text-muted-foreground">החברה לא נמצאה</div>,
+  validateSearch: (search: Record<string, unknown>): { tab: CompanyDetailsTab } => {
+    const raw = typeof search.tab === "string" ? search.tab : "dashboard";
+    return {
+      tab: (VALID_TABS as readonly string[]).includes(raw)
+        ? (raw as CompanyDetailsTab)
+        : "dashboard",
+    };
+  },
 });
 
 const CONTACT_EMAIL_KEY = "contactEmail";
 const BILLING_ENABLED_KEY = "billingEnabled";
 
+const STATUS_LABELS: Record<Company["status"], string> = {
+  active: "פעילה",
+  inactive: "לא פעילה",
+  suspended: "מושהית",
+};
+
+function StatusBadge({ company }: { company: Company }) {
+  if (company.status === "active") {
+    return (
+      <Badge className="gap-1 bg-emerald-100 text-emerald-800 hover:bg-emerald-100 dark:bg-emerald-950/30 dark:text-emerald-400">
+        <Star className="size-3" />
+        פעילה
+      </Badge>
+    );
+  }
+  return (
+    <Badge
+      variant="outline"
+      className="gap-1 border-amber-300 text-amber-800 dark:border-amber-800 dark:text-amber-400"
+    >
+      <ShieldAlert className="size-3" />
+      {STATUS_LABELS[company.status]}
+    </Badge>
+  );
+}
+
 function CompanyDetailsPage() {
   const { companyId } = Route.useParams();
-  const navigate = useNavigate();
+  const { tab } = Route.useSearch();
+  const navigate = Route.useNavigate();
   const { companies, activeCompanyId, setActiveCompanyId, isLoading } = useCompanyContext();
   const company = companies.find((c) => c.id === companyId) ?? null;
-
-  const [editOpen, setEditOpen] = useState(false);
-  const [deleteOpen, setDeleteOpen] = useState(false);
 
   const dashboardQuery = useQuery({
     queryKey: ["company-dashboard", companyId],
@@ -112,20 +158,34 @@ function CompanyDetailsPage() {
 
       <Card className="card-elevated p-5">
         <div className="flex flex-wrap items-start gap-4">
-          <div className="size-14 shrink-0 rounded-xl bg-primary/10 text-primary flex items-center justify-center">
-            <Building2 className="size-7" />
+          <div className="size-14 shrink-0 rounded-xl bg-primary/10 text-primary flex items-center justify-center overflow-hidden">
+            {company.logoUrl ? (
+              <img src={company.logoUrl} alt={company.name} className="size-full object-contain" />
+            ) : (
+              <Building2 className="size-7" />
+            )}
           </div>
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-2 flex-wrap">
               <h1 className="text-2xl font-bold truncate">{company.name}</h1>
               {isActive && (
-                <Badge className="gap-1 bg-emerald-100 text-emerald-800 hover:bg-emerald-100 dark:bg-emerald-950/30 dark:text-emerald-400">
+                <Badge className="gap-1 bg-primary/10 text-primary hover:bg-primary/10">
                   <Star className="size-3" />
-                  חברה פעילה
+                  חברה פעילה בפלטפורמה
+                </Badge>
+              )}
+              <StatusBadge company={company} />
+              {company.archivedAt && (
+                <Badge variant="secondary" className="gap-1">
+                  <Archive className="size-3" />
+                  בארכיון
                 </Badge>
               )}
             </div>
-            <p className="text-sm text-muted-foreground mt-1 font-mono" dir="ltr">
+            {company.legalName && (
+              <p className="text-sm text-muted-foreground mt-1">{company.legalName}</p>
+            )}
+            <p className="text-xs text-muted-foreground mt-1 font-mono" dir="ltr">
               {company.id}
             </p>
           </div>
@@ -141,24 +201,19 @@ function CompanyDetailsPage() {
                 הפוך לפעילה
               </Button>
             )}
-            <Button variant="outline" size="sm" onClick={() => setEditOpen(true)} className="gap-2">
-              <Pencil className="size-4" />
-              עריכה
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setDeleteOpen(true)}
-              className="gap-2 text-destructive hover:text-destructive"
-            >
-              <Trash2 className="size-4" />
-              מחיקה
-            </Button>
+            <CompanyActionsMenu
+              company={company}
+              onDeleted={() => navigate({ to: "/platform/companies" })}
+            />
           </div>
         </div>
       </Card>
 
-      <Tabs defaultValue="dashboard" className="space-y-4">
+      <Tabs
+        value={tab}
+        onValueChange={(v) => navigate({ search: { tab: v as CompanyDetailsTab } })}
+        className="space-y-4"
+      >
         <TabsList>
           <TabsTrigger value="dashboard" className="gap-2">
             <LayoutDashboard className="size-4" />
@@ -233,18 +288,6 @@ function CompanyDetailsPage() {
           <CompanySettingsTab companyId={company.id} />
         </TabsContent>
       </Tabs>
-
-      {editOpen && (
-        <CompanyEditDialog open={editOpen} onOpenChange={setEditOpen} company={company} />
-      )}
-      {deleteOpen && (
-        <CompanyDeleteDialog
-          open={deleteOpen}
-          onOpenChange={setDeleteOpen}
-          company={company}
-          onDeleted={() => navigate({ to: "/platform/companies" })}
-        />
-      )}
     </div>
   );
 }
@@ -325,7 +368,7 @@ function CompanyBranchesTab({
       <div className="flex justify-end">
         <Button onClick={() => setOpenCreate(true)} size="sm" className="gap-2">
           <Plus className="size-4" />
-          סניף חדש
+          שיוך סניף קיים
         </Button>
       </div>
 
@@ -336,7 +379,7 @@ function CompanyBranchesTab({
           </div>
         ) : branches.length === 0 ? (
           <div className="p-8 text-sm text-muted-foreground text-center">
-            לחברה זו אין עדיין סניפים. ניתן ליצור סניף חדש מהכפתור מעלה.
+            לחברה זו אין עדיין סניפים משויכים. ניתן לשייך סניף קיים מהכפתור מעלה.
           </div>
         ) : (
           <ul className="divide-y">
@@ -362,14 +405,14 @@ function CompanyBranchesTab({
                   <DropdownMenuContent align="end">
                     <DropdownMenuItem onClick={() => setEditBranch(branch)} className="gap-2">
                       <Pencil className="size-4" />
-                      עריכה
+                      פרטים / סנכרון
                     </DropdownMenuItem>
                     <DropdownMenuItem
                       onClick={() => setDeleteBranch(branch)}
                       className="gap-2 text-destructive focus:text-destructive"
                     >
                       <Trash2 className="size-4" />
-                      מחיקה
+                      הסרת שיוך
                     </DropdownMenuItem>
                   </DropdownMenuContent>
                 </DropdownMenu>

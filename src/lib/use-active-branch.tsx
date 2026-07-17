@@ -12,6 +12,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { installBranchScope, setActiveBranchScope } from "@/integrations/supabase/branch-scope";
 import { useAuth } from "@/lib/use-auth";
 import { isPlatformOwner } from "@/lib/constants";
+import { listRealBranches } from "@/lib/real-branches-directory";
 
 // Install the supabase.from(...) proxy once at module load so every
 // branch-scoped table is automatically filtered to the active branch.
@@ -84,12 +85,7 @@ export function ActiveBranchProvider({ children }: { children: ReactNode }) {
     queryKey: ["active-branch", "list", isOwner, (profile as any)?.branch_id],
     queryFn: async (): Promise<BranchOption[]> => {
       if (isOwner) {
-        const { data, error } = await supabase
-          .from("branches")
-          .select("id, name, code, address, is_active")
-          .order("name", { ascending: true });
-        if (error) throw error;
-        return (data ?? []) as BranchOption[];
+        return listRealBranches();
       }
       const ownId = (profile as any)?.branch_id ?? null;
       if (!ownId) return [];

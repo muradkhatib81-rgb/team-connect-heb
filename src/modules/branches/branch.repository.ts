@@ -13,4 +13,10 @@ export class BranchRepository extends BaseRepository<Branch> implements IBranchR
     const all = await this.findAll();
     return all.filter((branch) => branch.companyId === companyId);
   }
+
+  /** The assignment (if any) pointing at a given real Supabase branch id, across every Company. */
+  async findBySourceBranchId(sourceBranchId: string): Promise<Branch | null> {
+    const all = await this.findAll();
+    return all.find((branch) => branch.sourceBranchId === sourceBranchId) ?? null;
+  }
 }

@@ -9,10 +9,16 @@
  * abstraction.
  */
 
-import type { UUID } from "@/core";
+import type { BaseEntity, UUID } from "@/core";
 import { getConfigurationManager, getDatabaseClient } from "@/core/bootstrap";
 import { CompanyRepository } from "./company.repository";
-import type { Company } from "./company.model";
+import {
+  DEFAULT_COMPANY_CURRENCY,
+  DEFAULT_COMPANY_LANGUAGE,
+  DEFAULT_COMPANY_TIME_ZONE,
+  type Company,
+  type CompanyStatus,
+} from "./company.model";
 
 export interface CompanyStatistics {
   totalCompaniesOnPlatform: number;
@@ -32,9 +38,30 @@ export interface CompanyManagerEntry {
   email: string;
 }
 
+/** Editable Company fields — every field from Part 1's spec, all optional so partial edits/creates work. */
+export interface CompanyEditableFields {
+  name?: string;
+  logoUrl?: string | null;
+  companyCode?: string | null;
+  legalName?: string | null;
+  taxNumber?: string | null;
+  phone?: string | null;
+  email?: string | null;
+  address?: string | null;
+  currency?: string;
+  language?: string;
+  timeZone?: string;
+}
+
 const MANAGERS_SETTING_KEY = "managers";
 
 const companyRepository = new CompanyRepository(getDatabaseClient());
+
+function normalizeOptionalText(value: string | null | undefined): string | null {
+  if (value === undefined) return null;
+  const trimmed = value?.trim() ?? "";
+  return trimmed ? trimmed : null;
+}
 
 export class CompanyService {
   listCompanies(platformId: UUID): Promise<Company[]> {
@@ -45,20 +72,65 @@ export class CompanyService {
     return companyRepository.findById(id);
   }
 
-  createCompany(platformId: UUID, name: string): Promise<Company> {
-    const trimmed = name.trim();
-    if (!trimmed) {
-      throw new Error("Company name is required.");
-    }
-    return companyRepository.create({ platformId, name: trimmed });
-  }
-
-  updateCompany(id: UUID, data: { name: string }): Promise<Company> {
+  createCompany(
+    platformId: UUID,
+    data: CompanyEditableFields & { name: string },
+  ): Promise<Company> {
     const trimmed = data.name.trim();
     if (!trimmed) {
       throw new Error("Company name is required.");
     }
-    return companyRepository.update(id, { name: trimmed });
+    return companyRepository.create({
+      platformId,
+      name: trimmed,
+      status: "active",
+      archivedAt: null,
+      logoUrl: normalizeOptionalText(data.logoUrl),
+      companyCode: normalizeOptionalText(data.companyCode),
+      legalName: normalizeOptionalText(data.legalName),
+      taxNumber: normalizeOptionalText(data.taxNumber),
+      phone: normalizeOptionalText(data.phone),
+      email: normalizeOptionalText(data.email),
+      address: normalizeOptionalText(data.address),
+      currency: data.currency?.trim() || DEFAULT_COMPANY_CURRENCY,
+      language: data.language?.trim() || DEFAULT_COMPANY_LANGUAGE,
+      timeZone: data.timeZone?.trim() || DEFAULT_COMPANY_TIME_ZONE,
+    });
+  }
+
+  updateCompany(id: UUID, data: CompanyEditableFields): Promise<Company> {
+    const patch: Partial<Omit<Company, keyof BaseEntity>> = {};
+    if (data.name !== undefined) {
+      const trimmed = data.name.trim();
+      if (!trimmed) throw new Error("Company name is required.");
+      patch.name = trimmed;
+    }
+    if (data.logoUrl !== undefined) patch.logoUrl = normalizeOptionalText(data.logoUrl);
+    if (data.companyCode !== undefined) patch.companyCode = normalizeOptionalText(data.companyCode);
+    if (data.legalName !== undefined) patch.legalName = normalizeOptionalText(data.legalName);
+    if (data.taxNumber !== undefined) patch.taxNumber = normalizeOptionalText(data.taxNumber);
+    if (data.phone !== undefined) patch.phone = normalizeOptionalText(data.phone);
+    if (data.email !== undefined) patch.email = normalizeOptionalText(data.email);
+    if (data.address !== undefined) patch.address = normalizeOptionalText(data.address);
+    if (data.currency !== undefined)
+      patch.currency = data.currency.trim() || DEFAULT_COMPANY_CURRENCY;
+    if (data.language !== undefined)
+      patch.language = data.language.trim() || DEFAULT_COMPANY_LANGUAGE;
+    if (data.timeZone !== undefined)
+      patch.timeZone = data.timeZone.trim() || DEFAULT_COMPANY_TIME_ZONE;
+    return companyRepository.update(id, patch);
+  }
+
+  setCompanyStatus(id: UUID, status: CompanyStatus): Promise<Company> {
+    return companyRepository.update(id, { status });
+  }
+
+  archiveCompany(id: UUID): Promise<Company> {
+    return companyRepository.update(id, { archivedAt: new Date() });
+  }
+
+  unarchiveCompany(id: UUID): Promise<Company> {
+    return companyRepository.update(id, { archivedAt: null });
   }
 
   deleteCompany(id: UUID): Promise<void> {

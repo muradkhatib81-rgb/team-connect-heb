@@ -22,6 +22,11 @@ import type { HealthStatus } from "../core/monitoring/types";
 import type { Permission, Role } from "../core/authorization/types";
 import type { FeatureFlag } from "../core/config/types";
 import type { BillingPlan } from "../core/managers/billing-manager";
+import type {
+  ChannelSnapshot,
+  OpenChannelInput,
+  UpdateChannelInput,
+} from "../core/managers/realtime-manager";
 import {
   getConfigurationManager,
   getMonitoringManager,
@@ -165,14 +170,26 @@ export class PlatformRuntimeService {
     getBillingManager().setPlan(companyId, plan);
   }
 
-  /** Names of every Realtime channel opened so far this session. Honest introspection, no fabrication. */
-  listRealtimeChannels(): string[] {
-    return getRealtimeManager().listChannelNames();
+  /** Every Realtime channel opened so far this session, with real (derived, not fabricated) stats. */
+  listRealtimeChannels(): ChannelSnapshot[] {
+    return getRealtimeManager().listChannels();
   }
 
-  /** Opens (or reuses) a Realtime channel — proves the manager is live without connecting any provider. */
-  openRealtimeChannel(name: string): void {
-    getRealtimeManager().channel(name);
+  /** Opens a new Realtime channel (or reopens a closed one) — persisted for the session via the RealtimeManager singleton. */
+  openRealtimeChannel(input: OpenChannelInput): ChannelSnapshot {
+    return getRealtimeManager().openChannel(input);
+  }
+
+  updateRealtimeChannel(name: string, input: UpdateChannelInput): ChannelSnapshot {
+    return getRealtimeManager().updateChannel(name, input);
+  }
+
+  closeRealtimeChannel(name: string): ChannelSnapshot {
+    return getRealtimeManager().closeChannel(name);
+  }
+
+  deleteRealtimeChannel(name: string): void {
+    getRealtimeManager().deleteChannel(name);
   }
 
   /** Best-effort in-app notification via the Notification Manager. No external provider connected. */
