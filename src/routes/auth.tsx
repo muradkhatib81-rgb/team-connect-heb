@@ -8,6 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Card } from "@/components/ui/card";
 import { toast } from "sonner";
 import { APP_NAME } from "@/lib/constants";
+import { resolveLandingPath } from "@/lib/use-auth";
 import { useCompanySettings } from "@/lib/use-company-settings";
 import { Store, Loader2 } from "lucide-react";
 
@@ -38,7 +39,8 @@ function AuthPage() {
       const { data } = await supabase.auth.getSession();
       if (cancelled) return;
       if (data.session) {
-        const target = (search.redirect as string) || "/dashboard";
+        const explicit = search.redirect as string | undefined;
+        const target = explicit || (await resolveLandingPath(data.session.user.id));
         router.history.replace(target.startsWith("/") ? target : "/dashboard");
         return;
       }
@@ -76,8 +78,8 @@ function AuthPage() {
       email: idEmail(idNumber),
       password,
     });
-    setLoading(false);
     if (error) {
+      setLoading(false);
       toast.error(
         error.message === "Invalid login credentials"
           ? "מספר זהות או סיסמה שגויים"
@@ -86,7 +88,11 @@ function AuthPage() {
       return;
     }
     toast.success("התחברת בהצלחה");
-    const target = (search.redirect as string) || "/dashboard";
+    const { data: userData } = await supabase.auth.getUser();
+    setLoading(false);
+    const explicit = search.redirect as string | undefined;
+    const target =
+      explicit || (userData.user ? await resolveLandingPath(userData.user.id) : "/dashboard");
     router.history.replace(target.startsWith("/") ? target : "/dashboard");
   }
 
@@ -135,7 +141,9 @@ function AuthPage() {
       return;
     }
     toast.success("נוצר בעל המערכת הראשי. ברוך הבא!");
-    navigate({ to: "/dashboard", replace: true });
+    // The bootstrap flow always creates the first main_admin — always a
+    // Platform Owner — so it always lands on the Platform Dashboard.
+    navigate({ to: "/platform", replace: true });
   }
 
   if (checking) {

@@ -94,13 +94,15 @@ export function BranchProvider({ children }: { children: ReactNode }) {
     writeStoredBranchId(id);
   }, []);
 
-  // Keep the active Branch valid: fall back to the first Branch of the
-  // active Company whenever the stored selection doesn't belong to it
-  // (deleted, never set, or the active Company itself just changed).
+  // Clear the active Branch if it no longer belongs to the active Company
+  // (deleted, or the active Company itself just changed). No fallback to
+  // "the first Branch of the Company": the Platform Owner must explicitly
+  // choose a Branch (via the Branch switcher) — never an automatic pick.
   useEffect(() => {
     if (branchesQuery.isLoading) return;
-    if (activeBranchId && branches.some((branch) => branch.id === activeBranchId)) return;
-    setActiveBranchId(branches[0]?.id ?? null);
+    if (activeBranchId && !branches.some((branch) => branch.id === activeBranchId)) {
+      setActiveBranchId(null);
+    }
   }, [branches, activeBranchId, branchesQuery.isLoading, setActiveBranchId]);
 
   const refresh = useCallback(async () => {

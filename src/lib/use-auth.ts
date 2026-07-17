@@ -2,7 +2,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { syncFoundationSession } from "@/core/bootstrap";
-import type { AppRole } from "./constants";
+import { isPlatformOwner, type AppRole } from "./constants";
 
 export interface AuthProfile {
   id: string;
@@ -59,6 +59,19 @@ async function fetchSessionAndProfile(): Promise<AuthProfile | null> {
     roles: (roles ?? []).map((r) => r.role as AppRole),
     branch_id: p.branch_id ?? null,
   };
+}
+
+/**
+ * Where a signed-in user must land: the Platform Dashboard for Platform
+ * Owners (system_admin / main_admin — they must never be dropped into a
+ * Branch automatically, see use-active-branch.tsx), `/dashboard` for
+ * everyone else. Used by `/auth` and the `/` root redirect so every entry
+ * point into the app agrees on the same landing rule.
+ */
+export async function resolveLandingPath(userId: string): Promise<"/platform" | "/dashboard"> {
+  const { data } = await supabase.from("user_roles").select("role").eq("user_id", userId);
+  const roles = (data ?? []).map((r) => r.role as AppRole);
+  return isPlatformOwner(roles) ? "/platform" : "/dashboard";
 }
 
 export function useAuth() {

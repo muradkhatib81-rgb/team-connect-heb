@@ -8,11 +8,12 @@ import { useActiveBranch } from "@/lib/use-active-branch";
 /**
  * Active-branch badge with switcher behaviour.
  *
- * - System administrators see a clickable badge that opens a searchable
- *   dropdown of every branch (name, code, address, current indicator).
- * - When only a single active branch exists, the badge renders in its
- *   read-only style with no dropdown affordance.
- * - Non-sysadmins (branch managers, employees…) always see the read-only
+ * - Platform Owners (system_admin / main_admin) see a clickable badge that
+ *   opens a searchable dropdown of every Branch (name, code, address,
+ *   current indicator). Since Platform Owners are never dropped into a
+ *   Branch automatically, the badge renders even with no Branch selected
+ *   yet — it is the explicit action that enters Branch Mode.
+ * - Non-owners (branch managers, employees…) always see the read-only
  *   badge — they are locked to their assigned branch.
  *
  * Selecting a branch updates the active id (persisted in localStorage by
@@ -82,10 +83,9 @@ export function BranchSwitcher({ className }: { className?: string }) {
     );
   }, [branches, query, activeBranchId]);
 
-  if (!activeBranch) return null;
-
-  // Read-only badge (non-sysadmin, or sysadmin with a single branch).
+  // Read-only badge (non-owner, locked to their own branch).
   if (!canSwitch) {
+    if (!activeBranch) return null;
     return (
       <BadgeShell className={className}>
         <BadgeContent name={activeBranch.name} />
@@ -93,11 +93,13 @@ export function BranchSwitcher({ className }: { className?: string }) {
     );
   }
 
+  // Platform Owner: always render the picker, even with no Branch selected
+  // yet — this badge is the explicit action that enters Branch Mode.
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
         <BadgeShell asButton aria-label="בחר סניף פעיל" className={className}>
-          <BadgeContent name={activeBranch.name} />
+          <BadgeContent name={activeBranch?.name ?? "בחירת סניף"} />
           <ChevronDown
             className={cn(
               "size-3.5 opacity-70 shrink-0 transition-transform duration-200",
@@ -125,9 +127,7 @@ export function BranchSwitcher({ className }: { className?: string }) {
         </div>
         <div className="max-h-80 overflow-y-auto py-1">
           {filtered.length === 0 ? (
-            <p className="px-3 py-8 text-center text-sm text-muted-foreground">
-              לא נמצאו סניפים
-            </p>
+            <p className="px-3 py-8 text-center text-sm text-muted-foreground">לא נמצאו סניפים</p>
           ) : (
             filtered.map((b) => {
               const active = b.id === activeBranchId;
@@ -174,9 +174,7 @@ export function BranchSwitcher({ className }: { className?: string }) {
                       </div>
                     )}
                   </div>
-                  {active && (
-                    <Check className="size-4 text-primary shrink-0 mt-0.5" />
-                  )}
+                  {active && <Check className="size-4 text-primary shrink-0 mt-0.5" />}
                 </button>
               );
             })

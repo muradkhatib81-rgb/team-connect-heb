@@ -102,6 +102,10 @@ function BranchesPage() {
           <div className="p-8 flex justify-center">
             <Loader2 className="size-5 animate-spin text-primary" />
           </div>
+        ) : !activeCompanyId ? (
+          <div className="p-8 text-sm text-muted-foreground text-center">
+            יש לבחור חברה פעילה (מהבורר מעלה) כדי לראות ולנהל את הסניפים שלה.
+          </div>
         ) : branches.length === 0 ? (
           <div className="p-8 text-sm text-muted-foreground text-center">
             אין עדיין סניפים לחברה הפעילה. ניתן ליצור סניף חדש מהכפתור מעלה.

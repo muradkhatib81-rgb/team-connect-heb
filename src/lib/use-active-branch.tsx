@@ -14,6 +14,7 @@ import {
   setActiveBranchScope,
 } from "@/integrations/supabase/branch-scope";
 import { useAuth } from "@/lib/use-auth";
+import { isPlatformOwner } from "@/lib/constants";
 
 // Install the supabase.from(...) proxy once at module load so every
 // branch-scoped table is automatically filtered to the active branch.
@@ -22,10 +23,15 @@ installBranchScope();
 /**
  * Active Branch layer.
  *
- * - System administrators may switch the active branch from the header.
- *   The selection persists in localStorage.
+ * - Platform Owners (system_admin / main_admin — see `isPlatformOwner`) may
+ *   browse every Branch on the Platform and switch the active Branch from
+ *   the header, but are NEVER dropped into one automatically: there is no
+ *   restored selection and no "first branch" fallback. Branch Mode only
+ *   starts once they explicitly call `setActiveBranchId` during the
+ *   current session (e.g. via the Branch switcher). A fresh load/login
+ *   always starts with no active Branch, landing on the Platform Dashboard.
  * - Every other role is locked to the branch attached to their profile;
- *   the switcher is hidden for them.
+ *   the switcher is hidden for them (unchanged).
  * - Switching the active branch clears the React Query cache so every
  *   page refetches against the new branch context.
  *
@@ -55,15 +61,6 @@ type Ctx = {
 
 const ActiveBranchContext = createContext<Ctx | null>(null);
 
-function readStored(): string | null {
-  if (typeof window === "undefined") return null;
-  try {
-    return window.localStorage.getItem(STORAGE_KEY);
-  } catch {
-    return null;
-  }
-}
-
 function writeStored(id: string | null) {
   if (typeof window === "undefined") return;
   try {
@@ -77,14 +74,15 @@ function writeStored(id: string | null) {
 export function ActiveBranchProvider({ children }: { children: ReactNode }) {
   const { data: profile } = useAuth();
   const qc = useQueryClient();
-  const isSysAdmin = !!profile?.roles?.includes("system_admin");
+  const isOwner = isPlatformOwner(profile?.roles ?? []);
 
-  // System admin sees all branches. Others only need their own.
+  // Platform Owners (system_admin / main_admin) may browse every Branch on
+  // the Platform. Others only need their own.
   const branchesQ = useQuery({
     enabled: !!profile?.id,
-    queryKey: ["active-branch", "list", isSysAdmin, (profile as any)?.branch_id],
+    queryKey: ["active-branch", "list", isOwner, (profile as any)?.branch_id],
     queryFn: async (): Promise<BranchOption[]> => {
-      if (isSysAdmin) {
+      if (isOwner) {
         const { data, error } = await supabase
           .from("branches")
           .select("id, name, code, address, is_active")
@@ -112,23 +110,25 @@ export function ActiveBranchProvider({ children }: { children: ReactNode }) {
   // Resolve initial / corrected active branch whenever inputs change.
   useEffect(() => {
     if (!profile) return;
-    if (!isSysAdmin) {
-      // Non-sysadmins: locked to their own branch.
+    if (!isOwner) {
+      // Every other role stays locked to their own branch (unchanged).
       if (activeBranchId !== ownBranchId) {
         setActiveBranchIdState(ownBranchId);
         writeStored(ownBranchId);
       }
       return;
     }
-    if (branches.length === 0) return;
-    const stored = readStored();
-    const valid = stored && branches.some((b) => b.id === stored) ? stored : null;
-    const next = valid ?? ownBranchId ?? branches[0]?.id ?? null;
-    if (next !== activeBranchId) {
-      setActiveBranchIdState(next);
-      writeStored(next);
+    // Platform Owners must never be dropped into a Branch automatically:
+    // no restored selection, no "first branch" fallback. `activeBranchId`
+    // only ever changes via an explicit `setActiveBranchId` call below —
+    // here we merely drop a stale selection if that Branch no longer
+    // exists, instead of silently substituting another one.
+    if (branchesQ.isLoading) return;
+    if (activeBranchId && !branches.some((b) => b.id === activeBranchId)) {
+      setActiveBranchIdState(null);
+      writeStored(null);
     }
-  }, [profile, isSysAdmin, ownBranchId, branches, activeBranchId]);
+  }, [profile, isOwner, ownBranchId, branches, branchesQ.isLoading, activeBranchId]);
 
   // Keep the supabase scope in lockstep with the React state. Doing this
   // synchronously during render means the very next supabase.from(...)
@@ -138,7 +138,7 @@ export function ActiveBranchProvider({ children }: { children: ReactNode }) {
 
   const setActiveBranchId = useCallback(
     (id: string) => {
-      if (!isSysAdmin) return; // locked
+      if (!isOwner) return; // locked
       if (id === activeBranchId) return;
       writeStored(id);
       setActiveBranchScope(id);
@@ -148,7 +148,7 @@ export function ActiveBranchProvider({ children }: { children: ReactNode }) {
       qc.cancelQueries();
       qc.invalidateQueries();
     },
-    [isSysAdmin, activeBranchId, qc],
+    [isOwner, activeBranchId, qc],
   );
 
   const activeBranch = useMemo(
@@ -161,11 +161,11 @@ export function ActiveBranchProvider({ children }: { children: ReactNode }) {
       activeBranchId,
       activeBranch,
       branches,
-      canSwitch: isSysAdmin && branches.length > 1,
+      canSwitch: isOwner && branches.length > 0,
       isLoading: branchesQ.isLoading,
       setActiveBranchId,
     }),
-    [activeBranchId, activeBranch, branches, isSysAdmin, branchesQ.isLoading, setActiveBranchId],
+    [activeBranchId, activeBranch, branches, isOwner, branchesQ.isLoading, setActiveBranchId],
   );
 
   return (

@@ -84,12 +84,15 @@ export function CompanyProvider({ children }: { children: ReactNode }) {
     writeStoredCompanyId(id);
   }, []);
 
-  // Keep the active Company valid: fall back to the first available Company
-  // whenever the stored selection no longer exists (deleted, or never set).
+  // Clear the active Company if the stored selection no longer exists
+  // (deleted). No fallback to "the first available Company": the Platform
+  // Owner must explicitly choose a Company (via the Company switcher)
+  // before its Branches become available — never an automatic pick.
   useEffect(() => {
     if (companiesQuery.isLoading) return;
-    if (activeCompanyId && companies.some((company) => company.id === activeCompanyId)) return;
-    setActiveCompanyId(companies[0]?.id ?? null);
+    if (activeCompanyId && !companies.some((company) => company.id === activeCompanyId)) {
+      setActiveCompanyId(null);
+    }
   }, [companies, activeCompanyId, companiesQuery.isLoading, setActiveCompanyId]);
 
   const refresh = useCallback(async () => {

@@ -110,8 +110,9 @@ export function AppShell({ children }: { children: ReactNode }) {
     // Plain employees may now access /dashboard directly (clean employee view).
   }, [profile?.must_change_password, profile, pathname, navigate]);
 
-  // Realtime bridge is mounted inside <ActiveBranchProvider/> below so
-  // it can read the active branch via the context. See <RealtimeBridge/>.
+  // Realtime bridge and the Branch Mode gate are mounted inside
+  // <ActiveBranchProvider/> below so they can read the active branch via
+  // the context. See <RealtimeBridge/> and <BranchModeGuard/>.
 
 
 
@@ -267,6 +268,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   return (
     <ActiveBranchProvider>
       <RealtimeBridge uid={profile.id} />
+      <BranchModeGuard isPlatformOwner={isPlatformOwner} />
       <div className="flex flex-col min-h-screen bg-background">
 
         {/* Desktop sidebar (RTL: stick to right) */}
@@ -423,6 +425,41 @@ function RealtimeBridge({ uid }: { uid: string }) {
       supabase.removeChannel(ch);
     };
   }, [uid, qc, activeBranchId]);
+  return null;
+}
+
+// Branch modules (Dashboard, Employees, Departments, Schedule, Tasks,
+// Messages, Settings, etc.) require an explicitly-selected active Branch.
+// Everything under /platform, /system, /profile and /change-password is
+// Platform/neutral territory and stays reachable without one.
+const BRANCH_MODE_EXEMPT_PREFIXES = ["/platform", "/system", "/profile", "/change-password"];
+
+function isBranchModuleRoute(pathname: string): boolean {
+  return !BRANCH_MODE_EXEMPT_PREFIXES.some(
+    (prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`),
+  );
+}
+
+/**
+ * Mounted inside <ActiveBranchProvider/> so it can read the active branch.
+ * Platform Owners (system_admin / main_admin) must never be dropped into a
+ * Branch automatically (see use-active-branch.tsx) — this guard makes sure
+ * every branch-module route stays unreachable for them until they
+ * explicitly enter Branch Mode via the Branch switcher, bouncing any
+ * direct navigation attempt back to the Platform Dashboard.
+ */
+function BranchModeGuard({ isPlatformOwner }: { isPlatformOwner: boolean }) {
+  const { activeBranchId, isLoading } = useActiveBranch();
+  const pathname = useRouterState({ select: (s) => s.location.pathname });
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    if (!isPlatformOwner || isLoading || activeBranchId) return;
+    if (!isBranchModuleRoute(pathname)) return;
+    toast.info("יש לבחור סניף פעיל כדי להיכנס למודולים של הסניף");
+    navigate({ to: "/platform", replace: true });
+  }, [isPlatformOwner, isLoading, activeBranchId, pathname, navigate]);
+
   return null;
 }
 

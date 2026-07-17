@@ -14,7 +14,6 @@ import {
   Globe,
   Building2,
   GitBranch,
-  Star,
   ArrowLeft,
   Loader2,
 } from "lucide-react";
@@ -25,7 +24,7 @@ import {
   usePlatformStats,
   PLATFORM_EVENT_LABELS,
 } from "@/lib/platform-owners.hooks";
-import { useCompanyContext, useBranchContext } from "@/platform";
+import { useCompanyContext } from "@/platform";
 import { branchService } from "@/modules/branches";
 
 export const Route = createFileRoute("/_authenticated/platform/")({
@@ -43,8 +42,7 @@ function PlatformDashboardPage() {
   const stats = usePlatformStats();
   const owners = usePlatformOwnersQuery();
   const audit = usePlatformAuditQuery();
-  const { companies, activeCompany } = useCompanyContext();
-  const { activeBranch } = useBranchContext();
+  const { companies } = useCompanyContext();
   const navigate = useNavigate();
 
   const allBranchesQuery = useQuery({
@@ -116,8 +114,10 @@ function PlatformDashboardPage() {
         />
       </div>
 
-      {/* Multi-tenant hierarchy: Companies -> Branches */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+      {/* Global Platform totals — never a specific Company/Branch's data.
+          The Platform Dashboard is the root of the app; it never activates
+          or reflects any single Branch (see requirements in this phase). */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
         <StatCard
           label="חברות בפלטפורמה"
           value={companies.length}
@@ -133,38 +133,6 @@ function PlatformDashboardPage() {
           tone="sky"
           loading={allBranchesQuery.isLoading}
           onClick={() => navigate({ to: "/platform/branches" })}
-        />
-        <StatCard
-          label="חברה פעילה"
-          value={activeCompany?.name ?? "—"}
-          icon={Star}
-          tone="amber"
-          loading={false}
-          onClick={() => {
-            if (activeCompany) {
-              navigate({
-                to: "/platform/companies/$companyId",
-                params: { companyId: activeCompany.id },
-              });
-            }
-          }}
-          disabled={!activeCompany}
-        />
-        <StatCard
-          label="סניף פעיל"
-          value={activeBranch?.name ?? "—"}
-          icon={Star}
-          tone="rose"
-          loading={false}
-          onClick={() => {
-            if (activeBranch) {
-              navigate({
-                to: "/platform/branches/$branchId",
-                params: { branchId: activeBranch.id },
-              });
-            }
-          }}
-          disabled={!activeBranch}
         />
       </div>
 
