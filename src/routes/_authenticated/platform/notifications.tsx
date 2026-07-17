@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { Bell, Send } from "lucide-react";
 import { Card } from "@/components/ui/card";
@@ -18,6 +18,7 @@ export const Route = createFileRoute("/_authenticated/platform/notifications")({
 function PlatformNotificationsPage() {
   const { runtime } = usePlatformContext();
   const { data: profile } = useAuth();
+  const queryClient = useQueryClient();
   const [title, setTitle] = useState("");
   const [body, setBody] = useState("");
 
@@ -30,8 +31,13 @@ function PlatformNotificationsPage() {
       toast.success("ההתראה נשלחה (Notification Manager)");
       setTitle("");
       setBody("");
+      queryClient.invalidateQueries({ queryKey: ["platform-sent-notifications"] });
     },
     onError: (error: Error) => toast.error(error.message ?? "השליחה נכשלה"),
+  });
+  const sentQuery = useQuery({
+    queryKey: ["platform-sent-notifications"],
+    queryFn: () => runtime.listSentPlatformNotifications(),
   });
 
   return (
@@ -43,8 +49,7 @@ function PlatformNotificationsPage() {
         <div className="min-w-0">
           <h1 className="truncate text-2xl sm:text-3xl font-bold">התראות פלטפורמה</h1>
           <p className="text-sm text-muted-foreground mt-1">
-            שכבת ה-Notification Manager הקיימת. ללא ספק התראות חיצוני (Push/Email/SMS) מחובר בשלב זה
-            — שליחה כאן מוכיחה שהמנהל פעיל, בלי לזייף היסטוריה.
+            שליחה וניהול של התראות פלטפורמה דרך ה-Notification Manager הקיים.
           </p>
         </div>
       </header>
@@ -81,6 +86,28 @@ function PlatformNotificationsPage() {
             שליחת התראת בדיקה
           </Button>
         </div>
+      </Card>
+      <Card className="card-elevated overflow-hidden">
+        <div className="border-b p-4 text-sm font-semibold">התראות שנשלחו בסשן הנוכחי</div>
+        {sentQuery.data?.length ? (
+          <ul className="divide-y">
+            {sentQuery.data.map((notification) => (
+              <li key={notification.id} className="p-4">
+                <div className="flex items-center justify-between gap-3">
+                  <p className="font-medium">{notification.title}</p>
+                  <time className="text-xs text-muted-foreground">
+                    {notification.sentAt.toLocaleString("he-IL")}
+                  </time>
+                </div>
+                <p className="mt-1 text-sm text-muted-foreground">{notification.body}</p>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className="p-8 text-center text-sm text-muted-foreground">
+            עדיין לא נשלחו התראות בסשן הנוכחי.
+          </p>
+        )}
       </Card>
     </div>
   );

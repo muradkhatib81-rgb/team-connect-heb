@@ -8,6 +8,11 @@ export interface NotificationPayload {
   recipientId: string;
 }
 
+export interface SentNotification extends NotificationPayload {
+  id: string;
+  sentAt: Date;
+}
+
 export interface INotificationChannel {
   send(payload: NotificationPayload): Promise<void>;
 }
@@ -17,11 +22,19 @@ export class NoopNotificationChannel implements INotificationChannel {
 }
 
 export class NotificationManager extends BaseManager {
+  private readonly sent: SentNotification[] = [];
+
   constructor(private readonly channel: INotificationChannel = new NoopNotificationChannel()) {
     super("notification-manager");
   }
 
   async notify(payload: NotificationPayload): Promise<void> {
     await this.channel.send(payload);
+    this.sent.unshift({ ...payload, id: crypto.randomUUID(), sentAt: new Date() });
+  }
+
+  /** Notifications successfully handed to the configured channel this session. */
+  listSent(): SentNotification[] {
+    return [...this.sent];
   }
 }

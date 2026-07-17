@@ -110,6 +110,16 @@ function PlatformRealtimePage() {
     onError: (e: Error) => toast.error(e.message ?? "הפעולה נכשלה"),
   });
 
+  const publishMut = useMutation({
+    mutationFn: async (name: string) =>
+      runtime.publishRealtimeEvent(name, { type: "platform.test-event", sentAt: new Date().toISOString() }),
+    onSuccess: () => {
+      toast.success("אירוע בדיקה נשלח");
+      qc.invalidateQueries({ queryKey: CHANNELS_QUERY_KEY });
+    },
+    onError: (e: Error) => toast.error(e.message ?? "הפעולה נכשלה"),
+  });
+
   const channels = channelsQuery.data ?? [];
   const openCount = channels.filter((c) => !c.closedAt).length;
 
@@ -184,6 +194,18 @@ function PlatformRealtimePage() {
                     >
                       <Pencil className="size-4" />
                     </Button>
+                      {!channel.closedAt && (
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="size-8"
+                          title="שליחת אירוע בדיקה"
+                          onClick={() => publishMut.mutate(channel.name)}
+                          disabled={publishMut.isPending}
+                        >
+                          <Zap className="size-4" />
+                        </Button>
+                      )}
                     {channel.closedAt ? (
                       <Button
                         variant="outline"

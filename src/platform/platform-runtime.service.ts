@@ -137,6 +137,31 @@ export class PlatformRuntimeService {
     return getFeatureFlagManager().list();
   }
 
+  registerFeatureFlag(
+    input: Pick<FeatureFlag, "key" | "enabled" | "scope" | "scopeTargetId">,
+  ): FeatureFlag {
+    const key = input.key.trim();
+    if (!key) throw new Error("Feature flag key is required.");
+    const manager = getFeatureFlagManager();
+    if (manager.list().some((flag) => flag.key === key)) {
+      throw new Error("A feature flag with this key already exists.");
+    }
+    const now = new Date();
+    const flag: FeatureFlag = {
+      ...input,
+      key,
+      id: generateUUID(),
+      createdAt: now,
+      updatedAt: now,
+      createdBy: null,
+      updatedBy: null,
+      deletedAt: null,
+      deletedBy: null,
+    };
+    manager.register(flag);
+    return flag;
+  }
+
   isFeatureEnabled(key: string): boolean {
     return getFeatureFlagManager().isEnabled(key);
   }
@@ -192,9 +217,21 @@ export class PlatformRuntimeService {
     getRealtimeManager().deleteChannel(name);
   }
 
+  publishRealtimeEvent(name: string, payload: unknown): void {
+    const channel = getRealtimeManager().getSnapshot(name);
+    if (!channel || channel.closedAt) {
+      throw new Error("The channel must be open before publishing an event.");
+    }
+    getRealtimeManager().channel(name).publish(payload);
+  }
+
   /** Best-effort in-app notification via the Notification Manager. No external provider connected. */
   sendPlatformNotification(title: string, body: string, recipientId: UUID): Promise<void> {
     return getNotificationManager().notify({ title, body, recipientId });
+  }
+
+  listSentPlatformNotifications() {
+    return getNotificationManager().listSent();
   }
 
   /**
