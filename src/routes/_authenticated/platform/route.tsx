@@ -1,16 +1,20 @@
 import { createFileRoute, Outlet, Navigate } from "@tanstack/react-router";
 import { Loader2 } from "lucide-react";
-import { usePlatformOwnerStatus } from "@/lib/platform-owners.hooks";
+import { useAuth } from "@/lib/use-auth";
+import { isPlatformOwner } from "@/lib/constants";
 import { CompanyProvider } from "@/platform";
 
 /**
  * Platform Management layout gate.
  *
- * Access is derived from the authoritative server-side Platform Owner
- * check (getPlatformOwnerStatus → same source used by
- * assertCallerIsPlatformOwner), not from client-side role labels.
- * Destructive actions are additionally re-checked server-side by
- * assertCallerIsPrimary / assertCallerIsPlatformOwner inside each mutation.
+ * Access is derived from the same client-side role model used by every
+ * other admin gate in this app (profile.roles, via useAuth — see
+ * src/lib/constants.ts#isPlatformOwner), not from the separate
+ * Supabase-backed Platform Owner server check. That dedicated check
+ * (getPlatformOwnerStatus / assertCallerIsPlatformOwner) is unchanged and
+ * still the source of truth for the actual Platform Owner management
+ * mutations (create/suspend/delete/transfer), which re-verify server-side
+ * regardless of this client gate.
  */
 export const Route = createFileRoute("/_authenticated/platform")({
   component: PlatformLayout,
@@ -23,9 +27,9 @@ export const Route = createFileRoute("/_authenticated/platform")({
 });
 
 function PlatformLayout() {
-  const { data, isLoading } = usePlatformOwnerStatus();
+  const { data: profile, isLoading } = useAuth();
 
-  if (isLoading || !data) {
+  if (isLoading || !profile) {
     return (
       <div className="flex min-h-[40vh] items-center justify-center">
         <Loader2 className="size-6 animate-spin text-primary" />
@@ -33,7 +37,7 @@ function PlatformLayout() {
     );
   }
 
-  if (!data.isOwner) {
+  if (!isPlatformOwner(profile.roles)) {
     return <Navigate to="/dashboard" replace />;
   }
 

@@ -34,6 +34,7 @@ import {
   isAdmin,
   canManageUsers,
   highestRole,
+  isPlatformOwner as isPlatformOwnerRole,
 } from "@/lib/constants";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -41,7 +42,6 @@ import { NotificationsBell } from "@/components/notifications-bell";
 import { ActiveBranchProvider, useActiveBranch } from "@/lib/use-active-branch";
 import { BranchSwitcher, ActiveBranchBadge } from "@/components/branch-switcher";
 import { AppFooter } from "@/components/app-footer";
-import { usePlatformOwnerStatus } from "@/lib/platform-owners.hooks";
 
 interface NavItem {
   to: string;
@@ -59,8 +59,10 @@ export function AppShell({ children }: { children: ReactNode }) {
   const pathname = useRouterState({ select: (s) => s.location.pathname });
 
   const isMainAdminEarly = !!profile?.roles?.includes("main_admin");
-  const platformStatusQ = usePlatformOwnerStatus();
-  const isPlatformOwner = !!platformStatusQ.data?.isOwner;
+  // Reuses the same role model as every other admin gate in this file
+  // (profile.roles, via useAuth) instead of the separate Supabase-backed
+  // Platform Owner server check — see src/lib/constants.ts.
+  const isPlatformOwner = isPlatformOwnerRole(profile?.roles ?? []);
 
   const breakPermQ = useQuery({
     enabled: !!profile?.id && !isMainAdminEarly,
@@ -156,6 +158,7 @@ export function AppShell({ children }: { children: ReactNode }) {
 
     // ===== Platform Management (visible only to authoritative Platform Owners) =====
     { to: "/platform", label: "דשבורד", icon: LayoutDashboard, visible: isPlatformOwner, section: "ניהול פלטפורמה" },
+    { to: "/platform/companies", label: "חברות", icon: Building2, visible: isPlatformOwner, section: "ניהול פלטפורמה" },
     { to: "/platform/owners", label: "בעלי מערכת", icon: Crown, visible: isPlatformOwner, section: "ניהול פלטפורמה" },
     { to: "/platform/audit-log", label: "יומן פעילות פלטפורמה", icon: ShieldCheck, visible: isPlatformOwner, section: "ניהול פלטפורמה" },
 
