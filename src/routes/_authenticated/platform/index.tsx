@@ -22,6 +22,7 @@ import {
   usePlatformStats,
   PLATFORM_EVENT_LABELS,
 } from "@/lib/platform-owners.hooks";
+import { useCompanyContext } from "@/platform";
 
 export const Route = createFileRoute("/_authenticated/platform/")({
   component: PlatformDashboardPage,
@@ -30,9 +31,7 @@ export const Route = createFileRoute("/_authenticated/platform/")({
       {(error as Error)?.message ?? "שגיאה"}
     </div>
   ),
-  notFoundComponent: () => (
-    <div className="p-6 text-sm text-muted-foreground">הדף לא נמצא</div>
-  ),
+  notFoundComponent: () => <div className="p-6 text-sm text-muted-foreground">הדף לא נמצא</div>,
 });
 
 function PlatformDashboardPage() {
@@ -40,6 +39,7 @@ function PlatformDashboardPage() {
   const stats = usePlatformStats();
   const owners = usePlatformOwnersQuery();
   const audit = usePlatformAuditQuery();
+  const { companies } = useCompanyContext();
   const navigate = useNavigate();
 
   const ownersById = new Map((owners.data ?? []).map((o) => [o.user_id, o]));
@@ -70,9 +70,7 @@ function PlatformDashboardPage() {
           icon={UserCheck}
           tone="emerald"
           loading={stats.isLoading}
-          onClick={() =>
-            navigate({ to: "/platform/owners", search: { status: "active" } })
-          }
+          onClick={() => navigate({ to: "/platform/owners", search: { status: "active" } })}
         />
         <StatCard
           label="מושעים"
@@ -80,9 +78,7 @@ function PlatformDashboardPage() {
           icon={UserX}
           tone="rose"
           loading={stats.isLoading}
-          onClick={() =>
-            navigate({ to: "/platform/owners", search: { status: "suspended" } })
-          }
+          onClick={() => navigate({ to: "/platform/owners", search: { status: "suspended" } })}
         />
         <StatCard
           label="בעל מערכת ראשי"
@@ -125,6 +121,12 @@ function PlatformDashboardPage() {
               יומן פעילות פלטפורמה
             </Link>
           </Button>
+          <Button asChild variant="outline" size="sm" className="gap-2">
+            <Link to="/platform/companies">
+              <Building2 className="size-4" />
+              ניהול חברות
+            </Link>
+          </Button>
         </div>
       </Card>
 
@@ -147,9 +149,7 @@ function PlatformDashboardPage() {
             <Loader2 className="size-5 animate-spin text-primary" />
           </div>
         ) : latestEvents.length === 0 ? (
-          <div className="p-6 text-sm text-muted-foreground text-center">
-            אין פעילות אחרונה
-          </div>
+          <div className="p-6 text-sm text-muted-foreground text-center">אין פעילות אחרונה</div>
         ) : (
           <ul className="divide-y">
             {latestEvents.map((ev) => {
@@ -162,9 +162,7 @@ function PlatformDashboardPage() {
                   <span className="text-xs text-muted-foreground tabular-nums shrink-0 w-32">
                     {new Date(ev.created_at).toLocaleString("he-IL")}
                   </span>
-                  <span className="font-medium">
-                    {PLATFORM_EVENT_LABELS[ev.event] ?? ev.event}
-                  </span>
+                  <span className="font-medium">{PLATFORM_EVENT_LABELS[ev.event] ?? ev.event}</span>
                   <span className="text-xs text-muted-foreground truncate">
                     {actor ? `מבצע: ${actor}` : ""}
                     {target ? ` · יעד: ${target}` : ""}
@@ -176,16 +174,28 @@ function PlatformDashboardPage() {
         )}
       </Card>
 
-      {/* Coming soon — future platform modules */}
+      {/* Platform modules */}
       <section>
-        <h2 className="text-sm font-semibold text-muted-foreground mb-3">
-          יכולות עתידיות
-        </h2>
+        <h2 className="text-sm font-semibold text-muted-foreground mb-3">מודולי פלטפורמה</h2>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+          <button
+            type="button"
+            onClick={() => navigate({ to: "/platform/companies" })}
+            className="text-right rounded-xl bg-card border card-elevated p-4 transition-colors hover:bg-accent/40 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            <div className="flex items-center gap-3">
+              <div className="size-9 shrink-0 rounded-lg bg-primary/10 text-primary flex items-center justify-center">
+                <Building2 className="size-4" />
+              </div>
+              <div className="min-w-0">
+                <p className="font-medium text-sm truncate">ניהול חברות</p>
+                <p className="text-xs text-muted-foreground">{companies.length} חברות</p>
+              </div>
+            </div>
+          </button>
           <ComingSoonTile icon={Settings} label="הגדרות פלטפורמה" />
           <ComingSoonTile icon={Bot} label="ניהול AI" />
           <ComingSoonTile icon={Globe} label="בינאום (i18n)" />
-          <ComingSoonTile icon={Building2} label="מודולים ארגוניים" />
         </div>
       </section>
     </div>
@@ -225,11 +235,11 @@ function StatCard({
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <p className="text-xs text-muted-foreground">{label}</p>
-          <p className="text-xl sm:text-2xl font-bold truncate mt-1">
-            {loading ? "…" : value}
-          </p>
+          <p className="text-xl sm:text-2xl font-bold truncate mt-1">{loading ? "…" : value}</p>
         </div>
-        <div className={`size-9 shrink-0 rounded-lg flex items-center justify-center ${tones[tone]}`}>
+        <div
+          className={`size-9 shrink-0 rounded-lg flex items-center justify-center ${tones[tone]}`}
+        >
           <Icon className="size-4" />
         </div>
       </div>
@@ -237,13 +247,7 @@ function StatCard({
   );
 }
 
-function ComingSoonTile({
-  icon: Icon,
-  label,
-}: {
-  icon: typeof Crown;
-  label: string;
-}) {
+function ComingSoonTile({ icon: Icon, label }: { icon: typeof Crown; label: string }) {
   return (
     <Card className="p-4 opacity-70">
       <div className="flex items-center gap-3">

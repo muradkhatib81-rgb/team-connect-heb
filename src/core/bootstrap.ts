@@ -10,6 +10,7 @@
  */
 
 import { generateUUID, isUUID, type UUID } from "./types";
+import { createDatabaseClient, type IDatabaseClient } from "./database";
 import { ManagerContainer } from "./managers/container";
 import type { IManager } from "./managers/manager.interface";
 import { RealtimeManager } from "./managers/realtime-manager";
@@ -48,6 +49,7 @@ import type { IHealthCheck } from "./monitoring/health-check.interface";
 import type { HealthState, HealthTarget } from "./monitoring/types";
 
 const TOKENS = {
+  databaseClient: "database-client",
   realtime: "realtime-manager",
   offline: "offline-manager",
   notification: "notification-manager",
@@ -88,6 +90,7 @@ class SimpleHealthCheck implements IHealthCheck {
 }
 
 const container = new ManagerContainer();
+container.register(TOKENS.databaseClient, createDatabaseClient());
 const runtimeManagers: IManager[] = [];
 let initialized = false;
 let inactivitySweepHandle: ReturnType<typeof setInterval> | undefined;
@@ -137,12 +140,14 @@ container.register(TOKENS.errorLogger, new ErrorLogger());
 configurationManager.set("environment", getEnvironment());
 
 // Part 4 — Monitoring Integration: register health checks for every
-// requested target. Database/Storage report "unknown" honestly because no
-// provider is connected yet; nothing here fabricates a connection.
+// requested target. Storage reports "unknown" honestly because no provider
+// is connected yet; nothing here fabricates a connection. Database now
+// reports "healthy" because the in-memory IDatabaseClient is real and
+// operational (see ./database) — it is simply not persisted or Supabase.
 monitoringManager.registerCheck(new SimpleHealthCheck("platform", () => "healthy"));
 monitoringManager.registerCheck(new SimpleHealthCheck("api", () => "healthy"));
 monitoringManager.registerCheck(new SimpleHealthCheck("configuration", () => "healthy"));
-monitoringManager.registerCheck(new SimpleHealthCheck("database", () => "unknown"));
+monitoringManager.registerCheck(new SimpleHealthCheck("database", () => "healthy"));
 monitoringManager.registerCheck(new SimpleHealthCheck("storage", () => "unknown"));
 monitoringManager.registerCheck(new SimpleHealthCheck("realtime", () => "healthy"));
 monitoringManager.registerCheck(new SimpleHealthCheck("queue", () => "unknown"));
@@ -187,6 +192,10 @@ export async function shutdownFoundation(): Promise<void> {
 
 export function getManagerContainer(): ManagerContainer {
   return container;
+}
+
+export function getDatabaseClient(): IDatabaseClient {
+  return container.resolve(TOKENS.databaseClient);
 }
 
 export function getCentralLogger(): CentralLogger {

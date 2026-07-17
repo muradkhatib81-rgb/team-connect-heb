@@ -1,6 +1,7 @@
 import { createFileRoute, Outlet, Navigate } from "@tanstack/react-router";
 import { Loader2 } from "lucide-react";
 import { usePlatformOwnerStatus } from "@/lib/platform-owners.hooks";
+import { CompanyProvider } from "@/platform";
 
 /**
  * Platform Management layout gate.
@@ -18,9 +19,7 @@ export const Route = createFileRoute("/_authenticated/platform")({
       {(error as Error)?.message ?? "שגיאה"}
     </div>
   ),
-  notFoundComponent: () => (
-    <div className="p-6 text-sm text-muted-foreground">הדף לא נמצא</div>
-  ),
+  notFoundComponent: () => <div className="p-6 text-sm text-muted-foreground">הדף לא נמצא</div>,
 });
 
 function PlatformLayout() {
@@ -38,6 +37,9 @@ function PlatformLayout() {
     return <Navigate to="/dashboard" replace />;
   }
 
-  return <Outlet />;
+  return (
+    <CompanyProvider>
+      <Outlet />
+    </CompanyProvider>
+  );
 }
-

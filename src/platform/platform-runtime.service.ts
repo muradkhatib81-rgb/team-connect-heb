@@ -6,13 +6,16 @@
  * Enterprise Foundation exclusively (ManagerContainer, ConfigurationManager,
  * MonitoringManager, AuthorizationManager, SessionManager,
  * FeatureFlagManager, BillingManager, Role/Permission Registries) — it
- * creates no new abstractions, no Supabase connection, and no Company or
- * Branch runtime. Those are prepared as stubs only (see company-context /
+ * creates no new abstractions and no Supabase connection. Companies are
+ * delegated to the Companies module's own `companyService` (see
+ * ../modules/companies); Branch runtime remains a stub (see
  * branch-context) for a future phase.
  */
 
 import { generateUUID, type UUID } from "../core/types";
 import type { Platform } from "../modules/platform";
+import type { Company } from "../modules/companies";
+import { companyService } from "../modules/companies";
 import type { HealthStatus } from "../core/monitoring/types";
 import type { Permission, Role } from "../core/authorization/types";
 import type { FeatureFlag } from "../core/config/types";
@@ -67,9 +70,9 @@ export class PlatformRuntimeService {
     return this.platform;
   }
 
-  /** Companies runtime is not implemented yet — prepared for a future phase. */
-  listCompanies(): [] {
-    return [];
+  /** Companies belonging to this Platform, via the Companies module's own service. */
+  listCompanies(): Promise<Company[]> {
+    return companyService.listCompanies(this.platform.id);
   }
 
   getPlatformSetting<T>(key: string): T | undefined {
@@ -141,10 +144,14 @@ export class PlatformRuntimeService {
   }
 
   async getGlobalDashboard(): Promise<PlatformDashboardSnapshot> {
-    const [health, users] = await Promise.all([this.getGlobalMonitoring(), this.listGlobalUsers()]);
+    const [health, users, companies] = await Promise.all([
+      this.getGlobalMonitoring(),
+      this.listGlobalUsers(),
+      this.listCompanies(),
+    ]);
     return {
       platform: this.platform,
-      companiesCount: this.listCompanies().length,
+      companiesCount: companies.length,
       activeUserCount: users.length,
       health,
     };
