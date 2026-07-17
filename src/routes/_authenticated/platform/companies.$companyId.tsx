@@ -1,4 +1,4 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState, type ComponentType } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -43,7 +43,7 @@ import {
   type CompanyManagerEntry,
 } from "@/modules/companies";
 import { branchService, type Branch } from "@/modules/branches";
-import { useCompanyContext, branchesQueryKey } from "@/platform";
+import { useBranchContext, useCompanyContext, branchesQueryKey } from "@/platform";
 import { CompanyActionsMenu } from "@/components/platform/company-actions-menu";
 import {
   BranchCreateDialog,
@@ -122,6 +122,14 @@ function CompanyDetailsPage() {
     queryFn: () => branchService.listBranches(company?.id as UUID),
     enabled: !!company,
   });
+
+  // Entering a Company dashboard is the explicit Company Mode transition,
+  // including direct navigation from a Company action or deep link.
+  useEffect(() => {
+    if (company && activeCompanyId !== company.id) {
+      setActiveCompanyId(company.id);
+    }
+  }, [activeCompanyId, company, setActiveCompanyId]);
 
   if (isLoading) {
     return (
@@ -359,9 +367,21 @@ function CompanyBranchesTab({
   branches: Branch[];
   isLoading: boolean;
 }) {
+  const navigate = useNavigate();
+  const { setActiveCompanyId } = useCompanyContext();
+  const { setActiveBranchId } = useBranchContext();
   const [openCreate, setOpenCreate] = useState(false);
   const [editBranch, setEditBranch] = useState<Branch | null>(null);
   const [deleteBranch, setDeleteBranch] = useState<Branch | null>(null);
+
+  const enterBranchMode = (branch: Branch) => {
+    // The parent dashboard establishes Company Mode. Reasserting it here
+    // also makes a direct Branch selection deterministic before entering
+    // the existing Branch application.
+    setActiveCompanyId(companyId);
+    setActiveBranchId(branch);
+    navigate({ to: "/dashboard" });
+  };
 
   return (
     <div className="space-y-4">
@@ -386,13 +406,13 @@ function CompanyBranchesTab({
             {branches.map((branch) => (
               <li key={branch.id} className="flex items-center gap-3 p-3 hover:bg-accent/30">
                 <GitBranch className="size-4 text-muted-foreground shrink-0" />
-                <Link
-                  to="/platform/branches/$branchId"
-                  params={{ branchId: branch.id }}
-                  className="min-w-0 flex-1 truncate text-sm font-medium hover:underline"
+                <button
+                  type="button"
+                  onClick={() => enterBranchMode(branch)}
+                  className="min-w-0 flex-1 truncate text-right text-sm font-medium hover:underline"
                 >
                   {branch.name}
-                </Link>
+                </button>
                 <span className="text-xs text-muted-foreground tabular-nums shrink-0">
                   {branch.createdAt.toLocaleDateString("he-IL")}
                 </span>

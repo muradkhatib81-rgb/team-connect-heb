@@ -265,7 +265,7 @@ export function AppShell({ children }: { children: ReactNode }) {
     { to: "/profile", label: "הפרופיל שלי", icon: UserCircle, visible: isPlainEmployee },
   ];
 
-  // ===== Platform Management — always distinct from Company and Branch mode. =====
+  // ===== Platform Management — hidden only while actively operating a Branch. =====
   const platformItems: NavEntry[] = [
     {
       to: "/platform/companies",
@@ -349,7 +349,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   // Company tools belong only to the selected Company's section. They reuse
   // the existing Company dashboard tabs instead of creating parallel routes.
   const companyItems: NavEntry[] =
-    isPlatformOwner && activeCompany
+    isPlatformOwner && activeCompany && !inBranchMode
       ? [
           {
             to: "/platform/companies/$companyId",
@@ -463,7 +463,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   // see `platformItems`/`systemItems` (all `visible: false` for them), so
   // their nav is unchanged.
   const nav: NavEntry[] = [
-    ...platformItems.filter((n) => n.visible),
+    ...platformItems.filter((n) => n.visible && !inBranchMode),
     ...companyItems,
     ...visibleBranchItems.filter(
       (item) => !isPlatformOwner || inBranchMode || item.to === "/profile",
@@ -522,6 +522,12 @@ export function AppShell({ children }: { children: ReactNode }) {
             <LayoutDashboard className="size-4 shrink-0" />
             <span className="flex-1 text-right">דשבורד ראשי</span>
           </button>
+        )}
+        {isPlatformOwner && inBranchMode && activeCompany && (
+          <div className="mt-4 mb-1 px-3 flex items-center gap-2 text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
+            <Building2 className="size-3" />
+            <span>{activeCompany.name}</span>
+          </div>
         )}
         {nav.map((item, idx) => {
           const active =
@@ -825,12 +831,14 @@ function BranchModeGuard({ isPlatformOwner }: { isPlatformOwner: boolean }) {
   return null;
 }
 
-// Displays the currently active branch name (dynamic per logged-in user /
-// sysadmin selection). Never displays a hardcoded company name.
+// Displays only the Platform hierarchy currently selected in the contexts.
+// It intentionally does not read `useActiveBranch`: leaving Platform Branch
+// Mode must remove the indicator synchronously with the Platform selection.
 function BranchSubtitle() {
-  const { activeBranch } = useActiveBranch();
-  const name = activeBranch?.name?.trim();
+  const { activeCompany } = useCompanyContext();
+  const { activeBranch } = useBranchContext();
+  const name = activeBranch?.name?.trim() ?? activeCompany?.name?.trim();
   if (!name) return null;
-  const label = name.startsWith("סניף") ? name : `סניף ${name}`;
+  const label = activeBranch ? (name.startsWith("סניף") ? name : `סניף ${name}`) : name;
   return <p className="text-xs text-muted-foreground truncate">{label}</p>;
 }
