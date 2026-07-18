@@ -443,7 +443,12 @@ function CompanyBranchesTab({
       </Card>
 
       {openCreate && (
-        <BranchCreateDialog open={openCreate} onOpenChange={setOpenCreate} companyId={companyId} />
+        <BranchCreateDialog
+          open={openCreate}
+          onOpenChange={setOpenCreate}
+          companyId={companyId}
+          onCreated={(branch) => setActiveBranchId(branch)}
+        />
       )}
       {editBranch && (
         <BranchEditDialog

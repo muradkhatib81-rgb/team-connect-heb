@@ -14,6 +14,8 @@ import {
   getBranchDeleteBlockers,
   assignBranchManager,
 } from "@/lib/branches.functions";
+import { useActiveBranch } from "@/lib/use-active-branch";
+import { useCompanyContext } from "@/platform";
 
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -72,6 +74,8 @@ export const Route = createFileRoute("/_authenticated/system/branches")({
 function BranchesPage() {
   const qc = useQueryClient();
   const list = useServerFn(listBranchesWithStats);
+  const { setActiveBranchId } = useActiveBranch();
+  const { activeCompany } = useCompanyContext();
 
   const branchesQ = useQuery({
     queryKey: ["system", "branches"],
@@ -227,10 +231,14 @@ function BranchesPage() {
         open={createOpen}
         onOpenChange={setCreateOpen}
         branches={branches}
-        onCreated={() => {
+        companyName={activeCompany?.name ?? null}
+        onCreated={(branchId) => {
+          setActiveBranchId(branchId);
           qc.invalidateQueries({ queryKey: ["system", "branches"] });
+          qc.invalidateQueries({ queryKey: ["active-branch"] });
           qc.invalidateQueries({ queryKey: ["departments"] });
           qc.invalidateQueries({ queryKey: ["departments-list"] });
+          qc.invalidateQueries({ queryKey: ["company-settings"] });
         }}
       />
 
@@ -277,6 +285,7 @@ function BranchFormDialog({
   onOpenChange,
   branch,
   branches = [],
+  companyName = null,
   onCreated,
   onUpdated,
 }: {
@@ -284,7 +293,9 @@ function BranchFormDialog({
   onOpenChange: (o: boolean) => void;
   branch?: Branch;
   branches?: Branch[];
-  onCreated?: () => void;
+  /** Platform company name → company_settings.company_name (never the branch name). */
+  companyName?: string | null;
+  onCreated?: (branchId: string) => void;
   onUpdated?: () => void;
 }) {
   const isEdit = !!branch;
@@ -333,6 +344,7 @@ function BranchFormDialog({
           is_active: isActive,
           copy_departments_from_branch_id:
             copyMode === "copy" && sourceBranchId ? sourceBranchId : null,
+          company_name: companyName?.trim() || null,
         },
       });
     },
@@ -347,7 +359,7 @@ function BranchFormDialog({
             ? `הסניף נוצר והועתקו ${copied} מחלקות`
             : "הסניף נוצר",
         );
-        onCreated?.();
+        if (res?.id) onCreated?.(res.id as string);
       }
       onOpenChange(false);
     },

@@ -29,7 +29,7 @@ function AuthPage() {
   const navigate = useNavigate();
   const router = useRouter();
   const search = useSearch({ from: "/auth" });
-  const { data: company } = useCompanySettings();
+  const { data: company } = useCompanySettings({ allowUnscoped: true });
   const [loading, setLoading] = useState(false);
   const [checking, setChecking] = useState(true);
   const [hasUsers, setHasUsers] = useState<boolean | null>(null);

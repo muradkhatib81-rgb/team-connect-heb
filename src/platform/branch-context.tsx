@@ -113,6 +113,7 @@ export function BranchProvider({ children }: { children: ReactNode }) {
   });
 
   const branches = branchesQuery.data ?? EMPTY_BRANCHES;
+  const bridgedFromStorage = useRef(false);
 
   const setActiveBranchId = useCallback(
     (branch: Branch | null) => {
@@ -144,6 +145,7 @@ export function BranchProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (previousCompanyId.current === activeCompanyId) return;
     previousCompanyId.current = activeCompanyId;
+    bridgedFromStorage.current = false;
     setActiveBranchId(null);
   }, [activeCompanyId, setActiveBranchId]);
 
@@ -164,6 +166,27 @@ export function BranchProvider({ children }: { children: ReactNode }) {
     canAccessBranches,
     isAuthLoading,
     setActiveBranchId,
+  ]);
+
+  // After login/reload the Platform branch id is restored from localStorage,
+  // but the real Branch Mode gate (`useActiveBranch`) must be re-bridged via
+  // `sourceBranchId` or store-scoped data keeps pointing at the previous /
+  // default warehouse.
+  useEffect(() => {
+    if (bridgedFromStorage.current) return;
+    if (isAuthLoading || !canAccessBranches || branchesQuery.isLoading) return;
+    if (!activeBranchId) return;
+    const branch = branches.find((b) => b.id === activeBranchId);
+    if (!branch) return;
+    bridgedFromStorage.current = true;
+    realActiveBranch.setActiveBranchId(branch.sourceBranchId);
+  }, [
+    activeBranchId,
+    branches,
+    branchesQuery.isLoading,
+    canAccessBranches,
+    isAuthLoading,
+    realActiveBranch,
   ]);
 
   const refresh = useCallback(async () => {

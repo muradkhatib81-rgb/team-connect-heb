@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
+import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
 import { Building2, Loader2 } from "lucide-react";
 import {
@@ -33,6 +34,7 @@ import {
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { companyService, type Company, type CompanyStatus } from "@/modules/companies";
 import { branchService } from "@/modules/branches";
+import { syncBranchCompanyName } from "@/lib/branches.functions";
 import { usePlatformContext, useCompanyContext } from "@/platform";
 
 const CURRENCIES = ["ILS", "USD", "EUR", "GBP"] as const;
@@ -327,12 +329,26 @@ export function CompanyEditDialog({
   const { refresh } = useCompanyContext();
   const [form, setForm] = useState<CompanyFormState>(() => formFromCompany(company));
   const [status, setStatus] = useState<CompanyStatus>(company.status);
+  const syncCompanyName = useServerFn(syncBranchCompanyName);
 
   const mut = useMutation({
     mutationFn: async () => {
       const updated = await companyService.updateCompany(company.id, form);
       if (status !== company.status) {
-        return companyService.setCompanyStatus(company.id, status);
+        await companyService.setCompanyStatus(company.id, status);
+      }
+      // Keep branch-scoped company_settings.company_name aligned with the
+      // Platform company name (never the branch/store name).
+      const assignments = await branchService.listBranches(company.id);
+      const name = form.name.trim();
+      if (name) {
+        await Promise.all(
+          assignments.map((b) =>
+            syncCompanyName({
+              data: { branch_id: b.sourceBranchId, company_name: name },
+            }),
+          ),
+        );
       }
       return updated;
     },

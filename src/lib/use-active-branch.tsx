@@ -23,15 +23,12 @@ installBranchScope();
  *
  * - Platform Owners (system_admin / main_admin — see `isPlatformOwner`) may
  *   browse every Branch on the Platform and switch the active Branch from
- *   the header, but are NEVER dropped into one automatically: there is no
- *   restored selection and no "first branch" fallback. Branch Mode only
- *   starts once they explicitly call `setActiveBranchId` during the
- *   current session (e.g. via the Branch switcher, or by entering a Branch
- *   from the Platform's Company → Branches flow — see
- *   `platform/branch-context.tsx`, which bridges into this same gate so
- *   "Branch Mode" is one single, real state shared by both entry points).
- *   A fresh load/login always starts with no active Branch, landing on the
- *   Platform Dashboard.
+ *   the header. Their last explicit selection is restored from
+ *   `lov_active_branch_id` after login/reload so company / branch /
+ *   warehouse (store) scope stay aligned. There is still no automatic
+ *   "first branch" fallback when nothing was stored.
+ *   Branch Mode is also entered via `setActiveBranchId` (switcher, create
+ *   flow, or Platform Company → Branches — see `platform/branch-context.tsx`).
  * - Every other role is locked to the branch attached to their profile;
  *   the switcher is hidden for them (unchanged).
  * - Switching the active branch clears the React Query cache so every
@@ -43,6 +40,18 @@ installBranchScope();
  */
 
 const STORAGE_KEY = "lov_active_branch_id";
+const UUID_RE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+function readStored(): string | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const v = window.localStorage.getItem(STORAGE_KEY);
+    return v && UUID_RE.test(v) ? v : null;
+  } catch {
+    return null;
+  }
+}
 
 export type BranchOption = {
   id: string;
@@ -103,6 +112,7 @@ export function ActiveBranchProvider({ children }: { children: ReactNode }) {
   const ownBranchId = (profile as any)?.branch_id ?? null;
 
   const [activeBranchId, setActiveBranchIdState] = useState<string | null>(null);
+  const [ownerHydrated, setOwnerHydrated] = useState(false);
 
   // Resolve initial / corrected active branch whenever inputs change.
   useEffect(() => {
@@ -112,19 +122,36 @@ export function ActiveBranchProvider({ children }: { children: ReactNode }) {
       if (activeBranchId !== ownBranchId) {
         setActiveBranchIdState(ownBranchId);
         writeStored(ownBranchId);
+        setActiveBranchScope(ownBranchId);
       }
       return;
     }
-    // Platform Owners must never be dropped into a Branch automatically:
-    // no restored selection, no "first branch" fallback. `activeBranchId`
-    // only ever changes via an explicit `setActiveBranchId` call — nothing
-    // to reconcile here. Note this intentionally does NOT clear an active
-    // id that isn't in the (single-tenant) Supabase `branches` list: Branch
-    // Mode can also be entered via the Platform's Company → Branches flow
-    // (see `platform/branch-context.tsx`), whose Branch ids live in a
-    // separate, in-memory multi-tenant store. Clearing on "not found" would
-    // fight that bridge every time it sets a Platform Branch as active.
-  }, [profile, isOwner, ownBranchId, activeBranchId]);
+    // Restore the owner's last explicit selection once the branch list is
+    // ready. Do not invent a "first branch" when nothing was stored.
+    // Note: we intentionally do NOT clear an in-session id that isn't in
+    // `branches` yet — Branch Mode can also be entered via the Platform
+    // bridge before the real-branches query refreshes.
+    if (ownerHydrated || branchesQ.isLoading) return;
+    const stored = readStored();
+    if (stored && branches.some((b) => b.id === stored)) {
+      setActiveBranchIdState(stored);
+      setActiveBranchScope(stored);
+    } else if (stored && branches.length > 0 && !branches.some((b) => b.id === stored)) {
+      // Stale id from a deleted branch — drop it so server headers don't
+      // keep scoping to a missing store.
+      writeStored(null);
+      setActiveBranchScope(null);
+    }
+    setOwnerHydrated(true);
+  }, [
+    profile,
+    isOwner,
+    ownBranchId,
+    activeBranchId,
+    ownerHydrated,
+    branches,
+    branchesQ.isLoading,
+  ]);
 
   // Keep the supabase scope in lockstep with the React state. Doing this
   // synchronously during render means the very next supabase.from(...)

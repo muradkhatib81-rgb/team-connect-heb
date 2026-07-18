@@ -112,7 +112,65 @@ const createSchema = z.object({
   phone: z.string().trim().max(40).optional().nullable(),
   is_active: z.boolean().optional(),
   copy_departments_from_branch_id: z.string().uuid().optional().nullable(),
+  /**
+   * Platform company display name. Stored on `company_settings.company_name`
+   * for the new branch — never the branch name. Required to override the
+   * legacy DB default that reused a store/branch string.
+   */
+  company_name: z.string().trim().max(200).optional().nullable(),
 });
+
+/**
+ * Ensure the new branch has its own company_settings row whose
+ * `company_name` is the Platform company name (not `branches.name`).
+ * Always passes company_name explicitly so the legacy column DEFAULT
+ * ('רמי לוי שער בנימין') cannot leak into new branches.
+ */
+async function seedCompanySettingsForBranch(
+  supabase: ReturnType<typeof createUnscopedClient>,
+  branchId: string,
+  companyName: string | null | undefined,
+) {
+  const name = (companyName ?? "").trim();
+  const { data: existing } = await supabase
+    .from("company_settings")
+    .select("id")
+    .eq("branch_id", branchId)
+    .eq("is_active", true)
+    .maybeSingle();
+  if (existing?.id) {
+    if (name) {
+      const { error } = await supabase
+        .from("company_settings")
+        .update({ company_name: name })
+        .eq("id", existing.id);
+      if (error) throw new Error(error.message);
+    }
+    return;
+  }
+  const { error } = await supabase.from("company_settings").insert({
+    branch_id: branchId,
+    company_name: name,
+    is_active: true,
+  });
+  if (error) throw new Error(error.message);
+}
+
+const syncCompanyNameSchema = z.object({
+  branch_id: z.string().uuid(),
+  company_name: z.string().trim().min(1).max(200),
+});
+
+/** Upsert `company_settings.company_name` for an existing real branch (e.g. after Platform assign). */
+export const syncBranchCompanyName = createServerFn({ method: "POST" })
+  .middleware([requireBranchContext])
+  .inputValidator((data: unknown) => syncCompanyNameSchema.parse(data))
+  .handler(async ({ data, context }) => {
+    await assertSystemAdmin(context.supabase, context.userId);
+    const supabase = createUnscopedClient();
+    await seedCompanySettingsForBranch(supabase, data.branch_id, data.company_name);
+    return { ok: true };
+  });
 
 export const createBranch = createServerFn({ method: "POST" })
   .middleware([requireBranchContext])
@@ -135,6 +193,7 @@ export const createBranch = createServerFn({ method: "POST" })
       });
       if (error) throw new Error(error.message);
       const row = res as { id: string; departments_copied: number };
+      await seedCompanySettingsForBranch(supabase, row.id, data.company_name);
       return { ok: true, id: row.id, departments_copied: row.departments_copied ?? 0 };
     }
 
@@ -144,13 +203,6 @@ export const createBranch = createServerFn({ method: "POST" })
       .eq("code", data.code)
       .maybeSingle();
     if (existing) throw new Error("קוד סניף כבר קיים במערכת");
-    console.log("NEW createBranch is running");
-    console.log("Input data:", data);
-
-console.log(
-  "copy_departments_from_branch_id:",
-  data.copy_departments_from_branch_id
-);
     const { data: inserted, error } = await supabase
       .from("branches")
       .insert({
@@ -164,6 +216,7 @@ console.log(
       .single();
     if (error) throw new Error(error.message);
 
+    await seedCompanySettingsForBranch(supabase, inserted.id, data.company_name);
     return { ok: true, id: inserted.id, departments_copied: 0 };
   });
 

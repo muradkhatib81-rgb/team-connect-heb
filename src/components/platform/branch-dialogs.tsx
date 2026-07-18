@@ -30,8 +30,11 @@ import {
 } from "@/components/ui/select";
 import type { UUID } from "@/core";
 import { branchService, type Branch } from "@/modules/branches";
+import { companyService } from "@/modules/companies";
 import { branchesQueryKey, ALL_BRANCH_ASSIGNMENTS_QUERY_KEY } from "@/platform";
 import { listRealBranches, REAL_BRANCHES_QUERY_KEY } from "@/lib/real-branches-directory";
+import { syncBranchCompanyName } from "@/lib/branches.functions";
+import { useServerFn } from "@tanstack/react-start";
 
 // -------------------- Assign existing branch --------------------
 // Deliberately not a "create" flow: Part 2 requires assigning an EXISTING
@@ -52,6 +55,7 @@ export function BranchCreateDialog({
 }) {
   const queryClient = useQueryClient();
   const [selectedId, setSelectedId] = useState("");
+  const syncCompanyName = useServerFn(syncBranchCompanyName);
 
   const realBranchesQuery = useQuery({
     queryKey: REAL_BRANCHES_QUERY_KEY,
@@ -74,16 +78,24 @@ export function BranchCreateDialog({
   );
 
   const mut = useMutation({
-    mutationFn: () => {
+    mutationFn: async () => {
       const picked = available.find((b) => b.id === selectedId);
       if (!picked) throw new Error("יש לבחור סניף קיים לשיוך.");
-      return branchService.assignBranch(companyId, picked);
+      const assigned = await branchService.assignBranch(companyId, picked);
+      const company = await companyService.getCompany(companyId);
+      if (company?.name?.trim()) {
+        await syncCompanyName({
+          data: { branch_id: picked.id, company_name: company.name.trim() },
+        });
+      }
+      return assigned;
     },
     onSuccess: async (branch) => {
       toast.success("הסניף שויך לחברה בהצלחה");
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: branchesQueryKey(companyId) }),
         queryClient.invalidateQueries({ queryKey: ALL_BRANCH_ASSIGNMENTS_QUERY_KEY }),
+        queryClient.invalidateQueries({ queryKey: ["company-settings"] }),
       ]);
       onOpenChange(false);
       setSelectedId("");

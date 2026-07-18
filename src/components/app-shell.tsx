@@ -72,6 +72,10 @@ export function AppShell({ children }: { children: ReactNode }) {
   const { activeBranchId } = useActiveBranch();
   const { activeCompany, activeCompanyId, setActiveCompanyId } = useCompanyContext();
   const { activeBranch, setActiveBranchId } = useBranchContext();
+  // Prefer the Platform company name over branch-scoped company_settings so
+  // branding never shows a store/branch string as the company.
+  const brandName =
+    activeCompany?.name?.trim() || company?.company_name?.trim() || APP_NAME;
   // The Platform Branch assignment is authoritative for navigation. The
   // lower-level real branch id alone is insufficient while Company Mode is
   // changing, because it can briefly represent the previous Company.
@@ -493,7 +497,7 @@ export function AppShell({ children }: { children: ReactNode }) {
             {company?.logo_url ? (
               <img
                 src={company.logo_url}
-                alt={company.company_name}
+                alt={brandName}
                 className="size-full object-contain bg-white"
               />
             ) : (
@@ -642,7 +646,7 @@ export function AppShell({ children }: { children: ReactNode }) {
             {company?.logo_url ? (
               <img
                 src={company.logo_url}
-                alt={company?.company_name ?? APP_NAME}
+                alt={brandName}
                 className="size-6 rounded object-contain shrink-0"
               />
             ) : (

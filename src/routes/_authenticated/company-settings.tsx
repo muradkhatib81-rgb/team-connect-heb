@@ -2,7 +2,9 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { getActiveBranchScope } from "@/integrations/supabase/branch-scope";
 import { useAuth } from "@/lib/use-auth";
+import { useActiveBranch } from "@/lib/use-active-branch";
 import { useCompanySettings, type ScheduleType } from "@/lib/use-company-settings";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -32,6 +34,7 @@ function fileToDataUrl(file: File): Promise<string> {
 
 export function CompanySettingsPage() {
   const { data: profile, isLoading: profileLoading } = useAuth();
+  const { activeBranchId } = useActiveBranch();
   const { data: company, isLoading } = useCompanySettings();
   const qc = useQueryClient();
   const fileRef = useRef<HTMLInputElement>(null);
@@ -75,11 +78,25 @@ export function CompanySettingsPage() {
         schedule_type: company.schedule_type ?? "weekly",
       });
     }
-  }, [company?.id, company?.schedule_type]);
+  }, [
+    company?.id,
+    company?.company_name,
+    company?.address,
+    company?.phone,
+    company?.email,
+    company?.primary_color,
+    company?.logo_url,
+    company?.schedule_type,
+  ]);
 
   const saveMut = useMutation({
     mutationFn: async () => {
       if (!form.company_name.trim()) throw new Error("שם החברה הוא שדה חובה");
+      // Saves must be branch-scoped so we never overwrite another store's
+      // company_settings (or the legacy seed row) while Branch Mode is off.
+      if (!getActiveBranchScope() && !activeBranchId) {
+        throw new Error("יש לבחור סניף פעיל לפני שמירת הגדרות החברה");
+      }
       const payload: Record<string, unknown> = {
         company_name: form.company_name.trim(),
         address: form.address.trim() || null,
@@ -94,6 +111,7 @@ export function CompanySettingsPage() {
 
       // Always resolve the current active row id directly from the DB,
       // so saves never create duplicate rows due to a stale client id.
+      // With an active branch, branch-scope filters this to that store.
       const { data: existing, error: fetchErr } = await supabase
         .from("company_settings" as any)
         .select("id")

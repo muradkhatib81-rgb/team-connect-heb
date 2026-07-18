@@ -1,6 +1,8 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { getActiveBranchScope } from "@/integrations/supabase/branch-scope";
+import { useActiveBranch } from "@/lib/use-active-branch";
 import { BRANCH_NAME } from "@/lib/constants";
 
 export type ScheduleType = "weekly" | "monthly" | "custom";
@@ -27,7 +29,18 @@ const DEFAULTS: CompanySettings = {
   schedule_type: "weekly",
 };
 
-async function fetchCompanySettings(): Promise<CompanySettings> {
+async function fetchCompanySettings(opts: {
+  /** When true (auth / public), allow reading the oldest active row without a branch scope. */
+  allowUnscoped: boolean;
+}): Promise<CompanySettings> {
+  const scope = getActiveBranchScope();
+  // Inside the authenticated shell, never leak the legacy/default store's
+  // branding when Branch Mode is off — that row's company_name historically
+  // matched a branch name, which looked like "company name = branch name".
+  if (!scope && !opts.allowUnscoped) {
+    return DEFAULTS;
+  }
+
   const { data } = await supabase
     .from("company_settings" as any)
     .select("id, company_name, logo_url, address, phone, email, primary_color, schedule_type")
@@ -44,11 +57,13 @@ async function fetchCompanySettings(): Promise<CompanySettings> {
   };
 }
 
-export function useCompanySettings() {
+export function useCompanySettings(opts?: { allowUnscoped?: boolean }) {
   const qc = useQueryClient();
+  const { activeBranchId } = useActiveBranch();
+  const allowUnscoped = opts?.allowUnscoped ?? false;
   const query = useQuery({
-    queryKey: ["company-settings"],
-    queryFn: fetchCompanySettings,
+    queryKey: ["company-settings", activeBranchId ?? "none", allowUnscoped],
+    queryFn: () => fetchCompanySettings({ allowUnscoped }),
     staleTime: 1000 * 60,
     initialData: DEFAULTS,
   });
