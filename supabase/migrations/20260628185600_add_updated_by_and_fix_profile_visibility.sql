@@ -11,11 +11,11 @@ RETURNS TABLE (
 LANGUAGE sql
 STABLE SECURITY DEFINER
 SET search_path = public
-AS 1446
+AS $$
   SELECT p.id, p.full_name, p.job_title
   FROM public.profiles p
   WHERE p.id = ANY(user_ids);
-1446;
+$$;
 
 REVOKE EXECUTE ON FUNCTION public.get_profiles_basic_info(uuid[]) FROM PUBLIC, anon;
 GRANT EXECUTE ON FUNCTION public.get_profiles_basic_info(uuid[]) TO authenticated;

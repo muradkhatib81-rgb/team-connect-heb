@@ -5,21 +5,21 @@
 -- Company Manager remains optional and is intentionally not persisted until
 -- the Platform Company -> Branch relationship moves to Supabase.
 
-CREATE OR REPLACE FUNCTION public.has_manage_employee_of_month_perm(_user_id uuid)
+CREATE OR REPLACE FUNCTION public.has_manage_employee_of_month_perm(_uid uuid)
 RETURNS boolean
 LANGUAGE sql
 STABLE
 SECURITY DEFINER
 SET search_path = public
 AS $$
-  SELECT public.is_platform_owner(_user_id)
-      OR public.has_role(_user_id, 'branch_manager'::public.app_role)
+  SELECT public.is_platform_owner(_uid)
+      OR public.has_role(_uid, 'branch_manager'::public.app_role)
       OR (
-        public.has_role(_user_id, 'assistant_manager'::public.app_role)
+        public.has_role(_uid, 'assistant_manager'::public.app_role)
         AND EXISTS (
           SELECT 1
           FROM public.user_task_permissions permission
-          WHERE permission.user_id = _user_id
+          WHERE permission.user_id = _uid
             AND permission.can_manage_employee_of_month = true
         )
       );
