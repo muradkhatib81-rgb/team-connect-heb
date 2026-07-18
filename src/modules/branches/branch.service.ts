@@ -3,14 +3,14 @@
  *
  * Sits above `BranchRepository` (Repository Layer) and below the UI. Uses
  * the existing Foundation exclusively: `getDatabaseClient()` for
- * persistence (in-memory today, Supabase-ready by contract) and
+ * persistence (Supabase-backed `company_branch_assignments`) and
  * `getConfigurationManager()` for Branch Settings, namespaced exactly like
- * `CompanyService.getCompanySetting`. No Supabase reference, no new
- * abstraction — this service never reads or writes the real `branches`
- * table itself; it only records which real branch (`sourceBranchId`) is
- * assigned to which Company. The real branch data (and every relationship
- * hanging off it) is read directly by the UI layer, exactly like the
- * existing `useActiveBranch` hook already does (see `branch-dialogs.tsx`).
+ * `CompanyService.getCompanySetting`. This service never reads or writes
+ * operational `public.branches` itself; it only records which real branch
+ * (`sourceBranchId`) is assigned to which Company. The real branch data
+ * (and every relationship hanging off it) is read directly by the UI
+ * layer, exactly like the existing `useActiveBranch` hook already does
+ * (see `branch-dialogs.tsx`).
  */
 
 import type { UUID } from "@/core";

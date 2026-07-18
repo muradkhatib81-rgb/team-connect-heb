@@ -12,7 +12,7 @@
  * own `branchService` (see ../modules/branches).
  */
 
-import { generateUUID, type UUID } from "../core/types";
+import { generateUUID, toUUID, type UUID } from "../core/types";
 import type { Platform } from "../modules/platform";
 import type { Company } from "../modules/companies";
 import { companyService } from "../modules/companies";
@@ -42,16 +42,22 @@ import {
 import type { AuditRecord } from "../core/managers/audit-manager";
 
 /**
+ * Stable Platform id. Must NOT be generated per page load — Company
+ * snapshots persisted in `company_settings.extra` are keyed by platformId,
+ * so a regenerating id made hydrated companies unreachable after reload.
+ */
+export const DEFAULT_PLATFORM_ID = toUUID("00000000-0000-4000-8000-000000000001");
+
+/**
  * Default active Platform. Stands in until a real Platform record can be
  * loaded from a connected database (Phase 4+); intentionally not read
  * through PlatformRepository here, since the repository's underlying
- * NotConnectedDatabaseClient throws by design and the active Platform must
- * always be available.
+ * client was historically unconnected / in-memory-only.
  */
 export const DEFAULT_PLATFORM: Platform = (() => {
   const now = new Date();
   return {
-    id: generateUUID(),
+    id: DEFAULT_PLATFORM_ID,
     name: "Default Platform",
     createdAt: now,
     updatedAt: now,

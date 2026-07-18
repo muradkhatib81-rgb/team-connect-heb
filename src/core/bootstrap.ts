@@ -5,8 +5,9 @@
  * monitoring, logging, config) together behind the ManagerContainer, and
  * exposes lifecycle + accessor functions for the application to depend on.
  *
- * This module creates instances; it never connects to Supabase and never
- * duplicates any Foundation abstraction.
+ * This module creates instances and wires the Foundation database client
+ * (Supabase-backed for Platform → Company → Branch). It does not duplicate
+ * operational Supabase access used by Departments/Employees/etc.
  */
 
 import { generateUUID, isUUID, type UUID } from "./types";
@@ -171,8 +172,8 @@ for (const flag of [
 // Part 4 — Monitoring Integration: register health checks for every
 // requested target. Storage reports "unknown" honestly because no provider
 // is connected yet; nothing here fabricates a connection. Database now
-// reports "healthy" because the in-memory IDatabaseClient is real and
-// operational (see ./database) — it is simply not persisted or Supabase.
+// reports "healthy" because the Foundation IDatabaseClient is wired
+// (Supabase-backed when env is present; see ./database).
 monitoringManager.registerCheck(new SimpleHealthCheck("platform", () => "healthy"));
 monitoringManager.registerCheck(new SimpleHealthCheck("api", () => "healthy"));
 monitoringManager.registerCheck(new SimpleHealthCheck("configuration", () => "healthy"));

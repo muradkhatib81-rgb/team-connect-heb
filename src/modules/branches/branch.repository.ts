@@ -8,6 +8,9 @@ export interface IBranchRepository extends IRepository<Branch> {
 
 export class BranchRepository extends BaseRepository<Branch> implements IBranchRepository {
   constructor(db: IDatabaseClient) {
+    // Physical table: public.company_branch_assignments (mapped in SupabaseDatabaseClient).
+    // Logical name stays "branches" so Foundation Branch assignments never collide with
+    // operational public.branches.
     super(db, "branches");
   }
 

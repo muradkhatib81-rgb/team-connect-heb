@@ -1,17 +1,22 @@
+import { supabase } from "@/integrations/supabase/client";
 import { InMemoryDatabaseClient, type IDatabaseClient } from "./database-client";
+import { SupabaseDatabaseClient } from "./supabase-database-client";
 
 export * from "./database-client";
+export * from "./supabase-database-client";
 
 /**
- * Returns the database client for the current environment.
+ * Returns the database client for the Platform Foundation layer.
  *
- * Today this resolves to `InMemoryDatabaseClient` — a real, working
- * implementation with no external dependency, so modules can perform
- * genuine CRUD from the UI. Data is process-local and non-persistent.
- * When Supabase integration is introduced, this factory becomes the single
- * place where a real client is wired in, without touching the Repository
- * Layer or any Model.
+ * When Supabase env is present (normal app runtime), this returns a
+ * `SupabaseDatabaseClient` that persists platforms / companies /
+ * company_branch_assignments. Falls back to in-memory only when env is
+ * missing (e.g. isolated unit tests without Supabase).
  */
 export function createDatabaseClient(): IDatabaseClient {
-  return new InMemoryDatabaseClient();
+  try {
+    return new SupabaseDatabaseClient(supabase);
+  } catch {
+    return new InMemoryDatabaseClient();
+  }
 }

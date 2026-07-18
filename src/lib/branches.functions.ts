@@ -5,14 +5,16 @@ import { requireBranchContext } from "@/integrations/supabase/active-branch";
 import type { Database } from "@/integrations/supabase/types";
 import { z } from "zod";
 
+/** Platform Owner gate: main_admin OR system_admin (matches branches RLS). */
 async function assertSystemAdmin(supabase: any, userId: string) {
   const { data, error } = await supabase
     .from("user_roles")
     .select("role")
     .eq("user_id", userId)
-    .eq("role", "system_admin")
-    .maybeSingle();
-  if (error || !data) throw new Error("רק בעל המערכת הראשי יכול לבצע פעולה זו");
+    .in("role", ["system_admin", "main_admin"]);
+  if (error || !data?.length) {
+    throw new Error("רק בעל המערכת הראשי יכול לבצע פעולה זו");
+  }
 }
 
 /**
@@ -182,27 +184,16 @@ export const createBranch = createServerFn({ method: "POST" })
     // reads to the caller's active branch.
     const supabase = createUnscopedClient();
 
-    if (data.copy_departments_from_branch_id) {
-      const { data: res, error } = await (supabase as any).rpc("create_branch_with_departments", {
-        _name: data.name,
-        _code: data.code,
-        _address: data.address ?? null,
-        _phone: data.phone ?? null,
-        _is_active: data.is_active ?? true,
-        _copy_from_branch_id: data.copy_departments_from_branch_id,
-      });
-      if (error) throw new Error(error.message);
-      const row = res as { id: string; departments_copied: number };
-      await seedCompanySettingsForBranch(supabase, row.id, data.company_name);
-      return { ok: true, id: row.id, departments_copied: row.departments_copied ?? 0 };
-    }
-
     const { data: existing } = await supabase
       .from("branches")
       .select("id")
       .eq("code", data.code)
       .maybeSingle();
     if (existing) throw new Error("קוד סניף כבר קיים במערכת");
+
+    // Prefer a direct insert (RLS allows main_admin). The RPC
+    // create_branch_with_departments requires system_admin only, which the
+    // bootstrapped Platform Owner may not hold yet — so copy departments here.
     const { data: inserted, error } = await supabase
       .from("branches")
       .insert({
@@ -216,8 +207,33 @@ export const createBranch = createServerFn({ method: "POST" })
       .single();
     if (error) throw new Error(error.message);
 
+    let departmentsCopied = 0;
+    const sourceId = data.copy_departments_from_branch_id;
+    if (sourceId) {
+      const { data: sourceDepts, error: srcErr } = await supabase
+        .from("departments")
+        .select("name, code, is_active")
+        .eq("branch_id", sourceId)
+        .order("created_at", { ascending: true });
+      if (srcErr) throw new Error(srcErr.message);
+      if (!sourceDepts?.length) {
+        throw new Error("לסניף המקור אין מחלקות להעתקה");
+      }
+      const suffix = Math.random().toString(16).slice(2, 6);
+      const rows = sourceDepts.map((d: { name: string; code: string; is_active: boolean }) => ({
+        name: d.name,
+        code: `${d.code}_${suffix}`,
+        is_active: d.is_active,
+        branch_id: inserted.id,
+        manager_id: null,
+      }));
+      const { error: copyErr } = await supabase.from("departments").insert(rows);
+      if (copyErr) throw new Error(copyErr.message);
+      departmentsCopied = rows.length;
+    }
+
     await seedCompanySettingsForBranch(supabase, inserted.id, data.company_name);
-    return { ok: true, id: inserted.id, departments_copied: 0 };
+    return { ok: true, id: inserted.id, departments_copied: departmentsCopied };
   });
 
 

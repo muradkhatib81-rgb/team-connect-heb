@@ -2,11 +2,10 @@
  * Company Service — business operations for the Companies module.
  *
  * Sits above `CompanyRepository` (Repository Layer) and below the UI. Uses
- * the existing Foundation exclusively: `getDatabaseClient()` for
- * persistence (in-memory today, Supabase-ready by contract) and
- * `getConfigurationManager()` for Company Settings, namespaced exactly like
- * `PlatformRuntimeService.getPlatformSetting`. No Supabase reference, no new
- * abstraction.
+ * the Foundation `IDatabaseClient` (Supabase-backed when configured) for
+ * persistence. Company is a first-class entity in `public.companies`.
+ * Store branding stays in branch-scoped `company_settings` and is not
+ * managed here.
  */
 
 import type { BaseEntity, UUID } from "@/core";
@@ -170,13 +169,6 @@ export class CompanyService {
     return { company, statistics };
   }
 
-  /**
-   * Company Managers roster — a lightweight, honest list of names/emails
-   * kept via the same Company Settings mechanism as every other setting
-   * (see `getCompanySetting`/`setCompanySetting`). Not linked to any real
-   * account: there is no Company-scoped user directory yet (see
-   * `listCompanyUsers`'s doc comment).
-   */
   listCompanyManagers(companyId: UUID): CompanyManagerEntry[] {
     return this.getCompanySetting<CompanyManagerEntry[]>(companyId, MANAGERS_SETTING_KEY) ?? [];
   }

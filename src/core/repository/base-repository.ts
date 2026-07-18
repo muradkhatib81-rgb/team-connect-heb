@@ -4,8 +4,8 @@
  * Concrete repositories (PlatformRepository, CompanyRepository,
  * BranchRepository, DepartmentRepository, EmployeeRepository, ...) extend
  * this class, supplying their table name and entity type. All persistence
- * calls go through the injected `IDatabaseClient`, which today is always the
- * unconnected placeholder client.
+ * calls go through the injected `IDatabaseClient` (Supabase-backed for the
+ * Platform Foundation tables).
  */
 
 import type { BaseEntity, UUID } from "../types";
