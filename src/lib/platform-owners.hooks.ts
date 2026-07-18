@@ -85,6 +85,7 @@ export function usePlatformStats() {
       activeCount,
       suspendedCount,
       primary,
+      primaryCount: primary ? 1 : 0,
       events30d,
     };
   }, [owners.data, owners.isLoading, audit.data, audit.isLoading]);

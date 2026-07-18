@@ -34,6 +34,46 @@ export interface PlatformOwnerRow {
   last_sign_in_at: string | null;
 }
 
+type OwnerRolesByUser = Map<string, Set<string>>;
+
+function buildOwnerRolesByUser(
+  rows: { user_id: string; role: string }[],
+): OwnerRolesByUser {
+  const byUser: OwnerRolesByUser = new Map();
+  for (const r of rows) {
+    const set = byUser.get(r.user_id) ?? new Set<string>();
+    set.add(r.role);
+    byUser.set(r.user_id, set);
+  }
+  return byUser;
+}
+
+/**
+ * Primary Platform Owner resolution:
+ * - `system_admin` marks the Primary owner when present.
+ * - When bootstrap created only `main_admin` (no `system_admin` row yet),
+ *   the earliest main_admin is treated as Primary — same rule as migration
+ *   20260630195103 backfill.
+ */
+function resolvePrimaryOwnerUserId(byUser: OwnerRolesByUser): string | null {
+  for (const [id, roles] of byUser) {
+    if (roles.has("system_admin")) return id;
+  }
+  const mainAdminIds = [...byUser.entries()]
+    .filter(([, roles]) => roles.has("main_admin"))
+    .map(([id]) => id)
+    .sort();
+  return mainAdminIds[0] ?? null;
+}
+
+async function loadOwnerRolesByUser(supabaseAdmin: any): Promise<OwnerRolesByUser> {
+  const { data: roles, error } = await supabaseAdmin
+    .from("user_roles")
+    .select("user_id, role")
+    .in("role", ["system_admin", "main_admin"]);
+  if (error) throw new Error(error.message);
+  return buildOwnerRolesByUser(roles ?? []);
+}
 
 async function assertCallerIsPlatformOwner(
   supabase: any,
@@ -47,7 +87,9 @@ async function assertCallerIsPlatformOwner(
   if (error) throw new Error(error.message);
   const roles = (data ?? []).map((r: { role: string }) => r.role);
   if (roles.length === 0) throw new Error("אין הרשאה — פעולה מיועדת לבעלי מערכת בלבד");
-  return { isPrimary: roles.includes("system_admin") };
+  const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+  const byUser = await loadOwnerRolesByUser(supabaseAdmin);
+  return { isPrimary: resolvePrimaryOwnerUserId(byUser) === userId };
 }
 
 async function assertCallerIsPrimary(supabase: any, userId: string): Promise<void> {
@@ -70,12 +112,8 @@ export const listPlatformOwners = createServerFn({ method: "GET" })
       .in("role", ["system_admin", "main_admin"]);
     if (rolesErr) throw new Error(rolesErr.message);
 
-    const byUser = new Map<string, Set<string>>();
-    for (const r of roles ?? []) {
-      const set = byUser.get(r.user_id) ?? new Set<string>();
-      set.add(r.role);
-      byUser.set(r.user_id, set);
-    }
+    const byUser = buildOwnerRolesByUser(roles ?? []);
+    const primaryUserId = resolvePrimaryOwnerUserId(byUser);
     const ids = Array.from(byUser.keys());
     if (ids.length === 0) return [];
 
@@ -101,7 +139,7 @@ export const listPlatformOwners = createServerFn({ method: "GET" })
 
     return ids.map((id) => {
       const p: any = profileById.get(id) ?? {};
-      const isPrimary = byUser.get(id)?.has("system_admin") ?? false;
+      const isPrimary = id === primaryUserId;
       return {
         user_id: id,
         first_name: p.first_name ?? "",
@@ -430,5 +468,11 @@ export const getPlatformOwnerStatus = createServerFn({ method: "GET" })
       .in("role", ["system_admin", "main_admin"]);
     if (error) throw new Error(error.message);
     const roles = (data ?? []).map((r: { role: string }) => r.role);
-    return { isOwner: roles.length > 0, isPrimary: roles.includes("system_admin") };
+    if (roles.length === 0) return { isOwner: false, isPrimary: false };
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const byUser = await loadOwnerRolesByUser(supabaseAdmin);
+    return {
+      isOwner: true,
+      isPrimary: resolvePrimaryOwnerUserId(byUser) === userId,
+    };
   });
