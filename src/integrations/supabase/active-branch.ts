@@ -1,42 +1,16 @@
 /**
- * Active Branch — header propagation for server functions and PostgREST.
+ * Active Branch — client-side header propagation for server functions.
  *
- * The browser stores the selected branch in localStorage (managed by
- * `useActiveBranch`). Two pieces of middleware translate that into a
- * real server-side scope:
- *
- *   1. `attachActiveBranch` (client functionMiddleware) attaches the
- *      `X-Active-Branch` header to every server-function call.
- *
- *   2. `requireBranchContext` (server middleware) chains after
- *      `requireSupabaseAuth`, validates the header as a UUID and
- *      re-issues a Supabase client whose PostgREST requests carry the
- *      header. The `public.current_active_branch()` function reads it
- *      and the RESTRICTIVE RLS policies enforce branch isolation —
- *      including against tampering (non–Platform-Owners are pinned to
- *      their profile branch in SQL, the header is ignored for them).
- *
- * Server functions opt in by replacing
- *   `.middleware([requireSupabaseAuth])`
- * with
- *   `.middleware([requireBranchContext])`
- *
- * `context.supabase` then transparently performs every query under the
- * active branch. `context.branchId` exposes the resolved value for
- * code paths that need to stamp it onto inserts.
+ * Browser stores the selected branch in localStorage (managed by
+ * `useActiveBranch`). `attachActiveBranch` attaches `X-Active-Branch`
+ * to every server-function call. Server-side validation lives in
+ * `active-branch.server.ts` (`requireBranchContext`).
  */
 import { createMiddleware } from "@tanstack/react-start";
-import { getRequest } from "@tanstack/react-start/server";
-import { createClient } from "@supabase/supabase-js";
-import type { Database } from "./types";
-import { requireSupabaseAuth } from "./auth-middleware";
-import { supabase } from "./client";
 
 const STORAGE_KEY = "lov_active_branch_id";
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-
-// ---- Client side -----------------------------------------------------
 
 /**
  * Read the currently selected branch synchronously. Used by the client
@@ -56,8 +30,7 @@ export function readActiveBranchId(): string | null {
 /**
  * Functional middleware that runs on the client just before a server
  * function is dispatched. Appends `X-Active-Branch` to the request
- * headers when an active branch is set. Idempotent and safe to combine
- * with the existing bearer-token attacher (TanStack merges headers).
+ * headers when an active branch is set.
  */
 export const attachActiveBranch = createMiddleware({ type: "function" }).client(
   async ({ next }) => {
@@ -66,94 +39,10 @@ export const attachActiveBranch = createMiddleware({ type: "function" }).client(
   },
 );
 
-// ---- Server side -----------------------------------------------------
-
-const SUPABASE_URL = process.env.SUPABASE_URL;
-const SUPABASE_PUBLISHABLE_KEY = process.env.SUPABASE_PUBLISHABLE_KEY;
-
 /**
- * Server middleware that depends on `requireSupabaseAuth`. After the
- * caller is authenticated, it reads the (untrusted) X-Active-Branch
- * header, validates UUID shape, and re-creates a Supabase client whose
- * PostgREST traffic carries the header. The database (`current_active_branch()`
- * + RESTRICTIVE policies) then enforces:
- *
- *   - Platform Owners (main_admin / system_admin): scoped to the
- *     Platform-selected Branch via X-Active-Branch (bridged from
- *     Platform → Company → Branch / sourceBranchId). Unrestricted when
- *     no header is sent (cross-branch admin views).
- *   - Branch manager / department manager / employee: header is
- *     ignored at the SQL layer; always restricted to their own
- *     profile.branch_id. Tampering is harmless.
- *
- * `context.branchId` is the effective active Branch for stamping inserts
- * (Departments, etc.). Prefer the Platform header when present; otherwise
- * fall back to the database-resolved branch (Branch Managers with no
- * switcher).
- */
-export const requireBranchContext = createMiddleware({ type: "function" })
-  .middleware([requireSupabaseAuth])
-  .server(async ({ next, context }) => {
-    if (!SUPABASE_URL || !SUPABASE_PUBLISHABLE_KEY) {
-      // Cannot reissue client; fall back to the auth-only client.
-      return next({ context: { ...context, branchId: null as string | null } });
-    }
-
-    const request = getRequest();
-    const rawHeader = request?.headers.get("x-active-branch") ?? "";
-    const headerBranchId = UUID_RE.test(rawHeader) ? rawHeader : null;
-
-    const auth = request?.headers.get("authorization") ?? "";
-    const headers: Record<string, string> = {};
-    if (auth) headers.Authorization = auth;
-    // PostgREST exposes request headers to SQL through request.headers.
-    // Send the branch header in lowercase so public.current_active_branch()
-    // can read it reliably regardless of intermediary header casing.
-    if (headerBranchId) headers["x-active-branch"] = headerBranchId;
-
-    const scoped = createClient<Database>(
-      SUPABASE_URL,
-      SUPABASE_PUBLISHABLE_KEY,
-      {
-        global: { headers },
-        auth: {
-          storage: undefined,
-          persistSession: false,
-          autoRefreshToken: false,
-        },
-      },
-    );
-
-    // Platform Branch Mode always sends X-Active-Branch (sourceBranchId).
-    // Prefer that for context.branchId so Department mutations stamp the
-    // selected store even if SQL resolution lags. When the header is
-    // absent (Branch Manager), resolve via current_active_branch().
-    let resolvedBranchId: string | null = headerBranchId;
-    if (!headerBranchId) {
-      try {
-        const { data } = await scoped.rpc("current_active_branch" as never);
-        resolvedBranchId = (data as string | null) ?? null;
-      } catch {
-        resolvedBranchId = null;
-      }
-    }
-
-    return next({ context: { ...context, supabase: scoped, branchId: resolvedBranchId } });
-  });
-
-// ---- Realtime helper -------------------------------------------------
-
-/**
- * The Realtime WebSocket cannot carry per-channel headers, so RLS for
- * realtime falls back to the JWT only. System admins would otherwise
- * receive INSERT/UPDATE/DELETE events for every branch. Use this
- * postgres_changes filter helper to scope subscriptions to the active
- * branch. Non–system-admins always pass their profile branch.
+ * Realtime WebSocket cannot carry per-channel headers, so use this
+ * postgres_changes filter helper to scope subscriptions to the active branch.
  */
 export function branchScopedFilter(branchId: string | null): string | undefined {
   return branchId ? `branch_id=eq.${branchId}` : undefined;
 }
-
-// Re-export the client supabase for convenience in code paths that
-// only need browser access.
-export { supabase };

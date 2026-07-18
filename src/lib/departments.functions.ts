@@ -1,5 +1,5 @@
 import { createServerFn } from "@tanstack/react-start";
-import { requireBranchContext } from "@/integrations/supabase/active-branch";
+import { requireBranchContext } from "@/integrations/supabase/active-branch.server";
 import { z } from "zod";
 
 async function assertCanManageDepartments(supabase: any, userId: string) {

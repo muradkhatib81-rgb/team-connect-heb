@@ -1,5 +1,5 @@
 import { createServerFn } from "@tanstack/react-start";
-import { requireBranchContext } from "@/integrations/supabase/active-branch";
+import { requireBranchContext } from "@/integrations/supabase/active-branch.server";
 import { z } from "zod";
 
 const EMPLOYEE_EMAIL_DOMAIN = "employees.ramilevy.local";
@@ -100,14 +100,14 @@ export const createEmployee = createServerFn({ method: "POST" })
     if (dErr) throw new Error(dErr.message);
     if (!dept) throw new Error("מחלקה לא נמצאה");
 
-    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const branchId = (dept as { branch_id: string }).branch_id;
 
-    // Pre-check active duplicates (id_number on profiles)
-    const { data: existing, error: exErr } = await supabaseAdmin
+    // Duplicate checks via the authenticated, branch-scoped client (RLS).
+    const { data: existing, error: exErr } = await context.supabase
       .from("profiles")
       .select("id, full_name, is_active, job_title, department_id, on_leave, departments(name)")
       .eq("id_number", data.id_number)
-      .eq("branch_id", (dept as any).branch_id)
+      .eq("branch_id", branchId)
       .maybeSingle();
     if (exErr) throw new Error(exErr.message);
     if (existing) {
@@ -116,31 +116,26 @@ export const createEmployee = createServerFn({ method: "POST" })
         name: existing.full_name ?? "",
         job_title: existing.job_title ?? "",
         department_id: existing.department_id ?? null,
-        department_name: (existing as any).departments?.name ?? null,
+        department_name: (existing as { departments?: { name?: string } }).departments?.name ?? null,
         is_active: existing.is_active !== false,
-        on_leave: !!(existing as any).on_leave,
+        on_leave: !!(existing as { on_leave?: boolean }).on_leave,
       };
       throw new Error(`DUPLICATE_EMPLOYEE::${JSON.stringify(payload)}`);
     }
 
-    // Pre-check archived duplicates — require explicit confirmation from the admin
     if (!data.force_archived) {
-      const { data: arch, error: aErr } = await supabaseAdmin
-        .from("employee_archive")
-        .select("id, full_name, job_title, department_id, department_name, phone, archived_at, deactivated_at, snapshot")
-        .eq("id_number", data.id_number)
-        .eq("branch_id", (dept as any).branch_id)
-        .order("archived_at", { ascending: false })
-        .limit(1)
-        .maybeSingle();
+      const { data: archRows, error: aErr } = await context.supabase.rpc(
+        "find_archived_by_id_number",
+        { _id_number: data.id_number },
+      );
       if (aErr) throw new Error(aErr.message);
+      const arch = (archRows as unknown[] | null)?.[0] ?? null;
       if (arch) {
         throw new Error(`ARCHIVED_EXISTS::${JSON.stringify(arch)}`);
       }
     }
 
-
-
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const { data: created, error } = await supabaseAdmin.auth.admin.createUser({
       email: idEmail(data.id_number),
       password: data.password,
@@ -168,7 +163,7 @@ export const createEmployee = createServerFn({ method: "POST" })
         .from("profiles")
         .update({
           department_id: data.department_id,
-          branch_id: (dept as any).branch_id,
+          branch_id: branchId,
           avatar_url: data.avatar_url ?? null,
         })
         .eq("id", newUserId);
@@ -181,7 +176,7 @@ export const createEmployee = createServerFn({ method: "POST" })
           .from("departments")
           .update({ manager_id: newUserId })
           .eq("id", data.department_id)
-          .eq("branch_id", (dept as any).branch_id);
+          .eq("branch_id", branchId);
       }
     }
 

@@ -1,7 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { getRequest } from "@tanstack/react-start/server";
 import { createClient } from "@supabase/supabase-js";
-import { requireBranchContext } from "@/integrations/supabase/active-branch";
+import { requireBranchContext } from "@/integrations/supabase/active-branch.server";
 import type { Database } from "@/integrations/supabase/types";
 import { z } from "zod";
 
