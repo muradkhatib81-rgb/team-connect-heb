@@ -3,10 +3,13 @@ import { useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { syncFoundationSession } from "@/core/bootstrap";
 import { isPlatformOwner, type AppRole } from "./constants";
+import { formatEmployeeName } from "./employee-name";
 
 export interface AuthProfile {
   id: string;
   email: string | null;
+  first_name: string;
+  last_name: string;
   full_name: string;
   id_number: string | null;
   department_id: string | null;
@@ -36,7 +39,7 @@ async function fetchSessionAndProfile(): Promise<AuthProfile | null> {
   const profilesFrom = unscopedFrom("profiles") as ReturnType<typeof supabase.from>;
   const [{ data: profile }, { data: roles }, { data: contactRows }] = await Promise.all([
     profilesFrom
-      .select("id, full_name, department_id, job_title, is_active, branch_id, departments(name)")
+      .select("id, first_name, last_name, full_name, department_id, job_title, is_active, branch_id, departments(name)")
       .eq("id", user.id)
       .maybeSingle(),
     supabase.from("user_roles").select("role").eq("user_id", user.id),
@@ -48,7 +51,9 @@ async function fetchSessionAndProfile(): Promise<AuthProfile | null> {
   return {
     id: user.id,
     email: user.email ?? null,
-    full_name: p.full_name ?? "",
+    first_name: p.first_name ?? "",
+    last_name: p.last_name ?? "",
+    full_name: formatEmployeeName(p),
     id_number: contact.id_number ?? null,
     department_id: p.department_id ?? null,
     department_name: p.departments?.name ?? null,

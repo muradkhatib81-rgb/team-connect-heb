@@ -41,6 +41,7 @@ import {
 import { Switch } from "@/components/ui/switch";
 import { Loader2, Building2, Plus, Pencil, Trash2, User } from "lucide-react";
 import { toast } from "sonner";
+import { formatEmployeeName } from "@/lib/employee-name";
 
 export const Route = createFileRoute("/_authenticated/departments")({
   component: DepartmentsPage,
@@ -56,6 +57,8 @@ interface DepartmentRow {
 
 interface ManagerOption {
   id: string;
+  first_name?: string;
+  last_name?: string;
   full_name: string;
 }
 
@@ -125,9 +128,10 @@ function DepartmentsPage() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("profiles")
-        .select("id, full_name")
+        .select("id, first_name, last_name, full_name")
         .eq("is_active", true)
-        .order("full_name");
+        .order("first_name")
+        .order("last_name");
       if (error) throw error;
       return (data ?? []) as ManagerOption[];
     },
@@ -181,7 +185,7 @@ function DepartmentsPage() {
                   <div className="min-w-0">
                     <h2 className="text-lg font-semibold truncate">{d.name}</h2>
                     <p className="text-xs text-muted-foreground mt-1">
-                      אחראי: {mgr?.full_name ?? "לא הוגדר"}
+                      אחראי: {mgr ? formatEmployeeName(mgr) : "לא הוגדר"}
                     </p>
                   </div>
                   <div className="size-10 rounded-xl bg-primary/10 text-primary flex items-center justify-center shrink-0">
@@ -293,9 +297,10 @@ function DeptEmployeesDialog({
       if (dErr) throw dErr;
       const { data: emps, error: eErr } = await supabase
         .from("profiles")
-        .select("id, full_name, is_active, on_leave, avatar_url, department_id")
+        .select("id, first_name, last_name, full_name, is_active, on_leave, avatar_url, department_id")
         .eq("department_id", deptId)
-        .order("full_name");
+        .order("first_name")
+        .order("last_name");
       if (eErr) throw eErr;
       const empIds = (emps ?? []).map((e: any) => e.id);
       const [{ data: roles }, { data: manager }] = await Promise.all([
@@ -303,7 +308,7 @@ function DeptEmployeesDialog({
           ? supabase.from("user_roles").select("user_id, role").in("user_id", empIds)
           : Promise.resolve({ data: [] as any[] }),
         dept.manager_id
-          ? supabase.from("profiles").select("full_name").eq("id", dept.manager_id).maybeSingle()
+          ? supabase.from("profiles").select("first_name, last_name, full_name").eq("id", dept.manager_id).maybeSingle()
           : Promise.resolve({ data: null as any }),
       ]);
       const roleMap: Record<string, string> = {};
@@ -312,7 +317,7 @@ function DeptEmployeesDialog({
       });
       return {
         deptName: dept.name,
-        managerName: manager?.full_name ?? null,
+        managerName: manager ? formatEmployeeName(manager) : null,
         managerId: dept.manager_id,
         employees: (emps ?? []).map((e: any) => ({
           ...e,
@@ -365,7 +370,7 @@ function EmployeeListItem({ emp }: { emp: any }) {
   return (
     <div className="flex items-center justify-between gap-2">
       <div className="min-w-0">
-        <p className="font-medium truncate">{emp.full_name || "ללא שם"}</p>
+        <p className="font-medium truncate">{formatEmployeeName(emp)}</p>
         <p className="text-xs text-muted-foreground mt-0.5">
           {emp.roleLabel}
           {emp.isManager && (
@@ -403,7 +408,7 @@ function EmpProfileDialog({
       if (!employeeId) return null;
       const { data: profile, error: pErr } = await supabase
         .from("profiles")
-        .select("id, full_name, department_id, job_title, is_active, on_leave, avatar_url, departments(name)")
+        .select("id, first_name, last_name, full_name, department_id, job_title, is_active, on_leave, avatar_url, departments(name)")
         .eq("id", employeeId)
         .maybeSingle();
       if (pErr) throw pErr;
@@ -458,7 +463,7 @@ function EmpProfileDialog({
                 )}
               </div>
               <div>
-                <p className="font-semibold text-lg">{q.data.full_name || "ללא שם"}</p>
+                <p className="font-semibold text-lg">{formatEmployeeName(q.data)}</p>
                 <p className="text-sm text-muted-foreground">{q.data.roleLabel}</p>
               </div>
             </div>
@@ -545,7 +550,7 @@ function CreateDialog({
               <SelectContent>
                 <SelectItem value="none">לא הוגדר</SelectItem>
                 {managers.map((m) => (
-                  <SelectItem key={m.id} value={m.id}>{m.full_name}</SelectItem>
+                  <SelectItem key={m.id} value={m.id}>{formatEmployeeName(m)}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
@@ -592,10 +597,11 @@ function EditDialog({
     queryFn: async () => {
       const { data, error } = await supabase
         .from("profiles")
-        .select("id, full_name")
+        .select("id, first_name, last_name, full_name")
         .eq("department_id", dept.id)
         .eq("is_active", true)
-        .order("full_name");
+        .order("first_name")
+        .order("last_name");
       if (error) throw error;
       return (data ?? []) as ManagerOption[];
     },
@@ -705,7 +711,7 @@ function EditDialog({
                     const conflict = otherMgrs[m.id];
                     return (
                       <SelectItem key={m.id} value={m.id} disabled={!!conflict}>
-                        {m.full_name}
+                        {formatEmployeeName(m)}
                         {conflict ? ` (אחראי ב"${conflict}")` : ""}
                       </SelectItem>
                     );

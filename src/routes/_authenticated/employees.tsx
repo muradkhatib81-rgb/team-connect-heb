@@ -45,6 +45,7 @@ import {
 } from "@/components/ui/dialog";
 import { Search, Loader2, Pencil, UserPlus, Filter, ImagePlus, X, KeyRound, Trash2, Users, UserCheck, UserX, Plane, Coffee, Shield, Power } from "lucide-react";
 import { toast } from "sonner";
+import { formatEmployeeName, employeeMatchesSearch, employeeNameInitial, splitFullName } from "@/lib/employee-name";
 
 type FilterMode = "all" | "active" | "inactive" | "on_leave" | "on_break" | "managers" | "workers";
 
@@ -73,6 +74,8 @@ interface DeptOption {
 
 interface ProfileRow {
   id: string;
+  first_name: string;
+  last_name: string;
   full_name: string;
   id_number: string | null;
   department_id: string | null;
@@ -220,8 +223,9 @@ function EmployeesPage() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("profiles")
-        .select("id, full_name, department_id, job_title, is_active, on_leave, avatar_url, deactivated_at")
-        .order("full_name");
+        .select("id, first_name, last_name, full_name, department_id, job_title, is_active, on_leave, avatar_url, deactivated_at")
+        .order("first_name")
+        .order("last_name");
       if (error) throw error;
       return (data ?? []) as ProfileRow[];
     },
@@ -330,7 +334,7 @@ function EmployeesPage() {
       if (filterMode === "workers" && isManagerRole(e.id)) return false;
       if (!term) return true;
       return (
-        e.full_name.toLowerCase().includes(term) ||
+        employeeMatchesSearch(e, term) ||
         (e.id_number ?? "").includes(term) ||
         (e.phone ?? "").includes(term)
       );
@@ -453,7 +457,7 @@ function EmployeesPage() {
                   <img src={url} alt="" className="w-full h-full object-cover" />
                 ) : (
                   <span className="text-xl font-semibold text-muted-foreground">
-                    {(me.full_name || "?").charAt(0)}
+                    {employeeNameInitial(me)}
                   </span>
                 );
               })()}
@@ -688,7 +692,8 @@ export function CreateEmployeeDialog({
   const roleOptions = assignableRoleOptionsFor(currentUserRoles);
   const defaultDept = defaultDepartmentId ?? depts[0]?.id ?? "";
   const [form, setForm] = useState({
-    full_name: "",
+    first_name: "",
+    last_name: "",
     id_number: "",
     department_id: defaultDept,
     phone: "",
@@ -711,6 +716,8 @@ export function CreateEmployeeDialog({
   const [duplicate, setDuplicate] = useState<DuplicateInfo | null>(null);
   type ArchivedInfo = {
     id: string;
+    first_name?: string | null;
+    last_name?: string | null;
     full_name: string;
     job_title: string | null;
     department_id?: string | null;
@@ -729,7 +736,8 @@ export function CreateEmployeeDialog({
     if (!form.department_id) throw new Error("יש לבחור מחלקה");
     if (!/^\d{5,15}$/.test(form.id_number)) throw new Error("מספר זהות חייב להכיל 5–15 ספרות");
     if (form.password.length < 6) throw new Error("סיסמה ראשונית של 6 תווים לפחות");
-    if (!form.full_name.trim()) throw new Error("יש למלא שם עובד");
+    if (!form.first_name.trim()) throw new Error("יש למלא שם פרטי");
+    if (!form.last_name.trim()) throw new Error("יש למלא שם משפחה");
     const res = await createFn({
       data: { ...form, job_title: form.job_title || "", avatar_url: null, force_archived: forceArchived },
     });
@@ -854,14 +862,24 @@ export function CreateEmployeeDialog({
           </Field>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <Field label="שם עובד">
+            <Field label="שם פרטי">
               <Input
-                value={form.full_name}
-                onChange={(e) => setForm({ ...form, full_name: e.target.value })}
+                value={form.first_name}
+                onChange={(e) => setForm({ ...form, first_name: e.target.value })}
                 required
-                maxLength={100}
+                maxLength={50}
                 autoComplete="off"
-                name="emp_full_name"
+                name="emp_first_name"
+              />
+            </Field>
+            <Field label="שם משפחה">
+              <Input
+                value={form.last_name}
+                onChange={(e) => setForm({ ...form, last_name: e.target.value })}
+                required
+                maxLength={50}
+                autoComplete="off"
+                name="emp_last_name"
               />
             </Field>
             <Field label="מספר זהות">
@@ -1031,7 +1049,7 @@ export function CreateEmployeeDialog({
                     ניתן לשחזר את העובד הקודם עם כל הנתונים שנשמרו בארכיון, או לפתוח עבורו תקופת העסקה חדשה. ההיסטוריה הקודמת תישמר בארכיון בכל מקרה.
                   </p>
                   <div className="rounded-md border border-border bg-muted/40 p-3 text-sm space-y-1.5">
-                    <div>👤 <span className="text-muted-foreground">שם:</span> <strong>{archived.full_name || "—"}</strong></div>
+                    <div>👤 <span className="text-muted-foreground">שם:</span> <strong>{formatEmployeeName(archived)}</strong></div>
                     <div>💼 <span className="text-muted-foreground">תפקיד:</span> <strong>{archived.job_title || "—"}</strong></div>
                     <div>🏬 <span className="text-muted-foreground">מחלקה:</span> <strong>{archived.department_name || "—"}</strong></div>
                     <div>📁 <span className="text-muted-foreground">הועבר לארכיון:</span> <strong>{new Date(archived.archived_at).toLocaleString("he-IL")}</strong></div>
@@ -1058,9 +1076,11 @@ export function CreateEmployeeDialog({
                   // and phone. id_number stays the same. The archive row is kept
                   // as historical record of the previous employment period.
                   const snap = archived.snapshot ?? {};
+                  const archivedNames = splitFullName(archived.full_name || snap.full_name || "");
                   setForm((f) => ({
                     ...f,
-                    full_name: archived.full_name || snap.full_name || f.full_name,
+                    first_name: archived.first_name || snap.first_name || archivedNames.first_name || f.first_name,
+                    last_name: archived.last_name || snap.last_name || archivedNames.last_name || f.last_name,
                     department_id: archived.department_id || snap.department_id || f.department_id,
                     phone: archived.phone || snap.phone || "",
                   }));
@@ -1093,7 +1113,7 @@ export function CreateEmployeeDialog({
               <DialogTitle>📁 נתוני ארכיון (לצפייה בלבד)</DialogTitle>
             </DialogHeader>
             <div className="space-y-2 text-sm">
-              <div>👤 <span className="text-muted-foreground">שם:</span> <strong>{viewingArchive.full_name || "—"}</strong></div>
+              <div>👤 <span className="text-muted-foreground">שם:</span> <strong>{formatEmployeeName(viewingArchive)}</strong></div>
               <div>💼 <span className="text-muted-foreground">תפקיד:</span> <strong>{viewingArchive.job_title || "—"}</strong></div>
               <div>🏬 <span className="text-muted-foreground">מחלקה:</span> <strong>{viewingArchive.department_name || "—"}</strong></div>
               {viewingArchive.deactivated_at && (
@@ -1151,12 +1171,12 @@ function EmployeeRow({
           {avatarUrl ? (
             <img src={avatarUrl} alt="" className="w-full h-full object-cover" />
           ) : (
-            <span>{emp.full_name?.charAt(0) || "?"}</span>
+            <span>{employeeNameInitial(emp)}</span>
           )}
         </div>
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
-            <p className="font-semibold truncate">{emp.full_name || "ללא שם"}</p>
+            <p className="font-semibold truncate">{formatEmployeeName(emp)}</p>
             {!emp.is_active && <Badge variant="destructive" className="rounded-full text-xs">לא פעיל</Badge>}
             {emp.on_leave && <Badge variant="secondary" className="rounded-full text-xs">בחופש</Badge>}
           </div>
@@ -1234,7 +1254,7 @@ function DeleteEmployeeDialog({ employee, onClose }: { employee: ProfileRow; onC
     <AlertDialog open onOpenChange={(o) => !o && !mutation.isPending && onClose()}>
       <AlertDialogContent>
         <AlertDialogHeader>
-          <AlertDialogTitle>מחיקה מלאה — {employee.full_name || "עובד"}</AlertDialogTitle>
+          <AlertDialogTitle>מחיקה מלאה — {formatEmployeeName(employee)}</AlertDialogTitle>
           <AlertDialogDescription asChild>
             <div className="space-y-2 text-right">
               <p>
@@ -1284,7 +1304,7 @@ function ResetPasswordDialog({ employee, onClose }: { employee: ProfileRow; onCl
     <Dialog open onOpenChange={(o) => !o && onClose()}>
       <DialogContent className="max-w-md">
         <DialogHeader>
-          <DialogTitle>איפוס סיסמה — {employee.full_name || "עובד"}</DialogTitle>
+          <DialogTitle>איפוס סיסמה — {formatEmployeeName(employee)}</DialogTitle>
         </DialogHeader>
         <form
           onSubmit={(e) => {
@@ -1358,8 +1378,12 @@ function EditEmployeeDialog({
   const qc = useQueryClient();
   const jobTitlesQ = useJobTitles();
   const roleOptions = assignableRoleOptionsFor(currentUserRoles);
+  const initialNames = employee.first_name || employee.last_name
+    ? { first_name: employee.first_name, last_name: employee.last_name }
+    : splitFullName(employee.full_name);
   const [form, setForm] = useState({
-    full_name: employee.full_name,
+    first_name: initialNames.first_name,
+    last_name: initialNames.last_name,
     id_number: employee.id_number ?? "",
     department_id: employee.department_id ?? "",
     phone: employee.phone ?? "",
@@ -1387,7 +1411,8 @@ function EditEmployeeDialog({
       const { error: pErr } = await supabase
         .from("profiles")
         .update({
-          full_name: form.full_name,
+          first_name: form.first_name.trim(),
+          last_name: form.last_name.trim(),
           id_number: form.id_number || null,
           department_id: form.department_id,
           phone: form.phone || null,
@@ -1464,8 +1489,11 @@ function EditEmployeeDialog({
           </Field>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <Field label="שם עובד">
-              <Input value={form.full_name} onChange={(e) => setForm({ ...form, full_name: e.target.value })} required autoComplete="off" />
+            <Field label="שם פרטי">
+              <Input value={form.first_name} onChange={(e) => setForm({ ...form, first_name: e.target.value })} required autoComplete="off" maxLength={50} />
+            </Field>
+            <Field label="שם משפחה">
+              <Input value={form.last_name} onChange={(e) => setForm({ ...form, last_name: e.target.value })} required autoComplete="off" maxLength={50} />
             </Field>
             <Field label="מספר זהות">
               <Input value={form.id_number} onChange={(e) => setForm({ ...form, id_number: e.target.value })} dir="ltr" autoComplete="off" />

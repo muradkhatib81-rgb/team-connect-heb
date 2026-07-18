@@ -33,6 +33,7 @@ import {
   PLATFORM_AUDIT_KEY,
   PLATFORM_OWNERS_KEY,
 } from "@/lib/platform-owners.hooks";
+import { splitFullName } from "@/lib/employee-name";
 
 function useInvalidatePlatform() {
   const qc = useQueryClient();
@@ -53,7 +54,8 @@ export function PlatformOwnerCreateDialog({
 }) {
   const invalidate = useInvalidatePlatform();
   const createFn = useServerFn(createPlatformOwner);
-  const [full_name, setFullName] = useState("");
+  const [first_name, setFirstName] = useState("");
+  const [last_name, setLastName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [phone, setPhone] = useState("");
@@ -63,7 +65,8 @@ export function PlatformOwnerCreateDialog({
     mutationFn: () =>
       createFn({
         data: {
-          full_name: full_name.trim(),
+          first_name: first_name.trim(),
+          last_name: last_name.trim(),
           email: email.trim(),
           password,
           phone: phone.trim() || null,
@@ -74,7 +77,7 @@ export function PlatformOwnerCreateDialog({
       toast.success("בעל המערכת נוצר");
       invalidate();
       onOpenChange(false);
-      setFullName(""); setEmail(""); setPassword(""); setPhone(""); setIdNumber("");
+      setFirstName(""); setLastName(""); setEmail(""); setPassword(""); setPhone(""); setIdNumber("");
     },
     onError: (e: Error) => toast.error(e.message ?? "יצירה נכשלה"),
   });
@@ -98,7 +101,8 @@ export function PlatformOwnerCreateDialog({
         >
           <input type="text" name="username" autoComplete="username" className="hidden" tabIndex={-1} aria-hidden />
           <input type="password" name="password" autoComplete="current-password" className="hidden" tabIndex={-1} aria-hidden />
-          <Field label="שם מלא" value={full_name} onChange={setFullName} required autoComplete="off" name="po-full-name" />
+          <Field label="שם פרטי" value={first_name} onChange={setFirstName} required autoComplete="off" name="po-first-name" />
+          <Field label="שם משפחה" value={last_name} onChange={setLastName} required autoComplete="off" name="po-last-name" />
           <Field label='דוא"ל' type="email" value={email} onChange={setEmail} required autoComplete="off" name="po-email" />
           <Field label="סיסמה (מינ' 8 תווים)" type="password" value={password} onChange={setPassword} required autoComplete="new-password" name="po-password" />
           <Field label="טלפון" value={phone} onChange={setPhone} autoComplete="off" name="po-phone" />
@@ -107,7 +111,7 @@ export function PlatformOwnerCreateDialog({
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>ביטול</Button>
             <Button
               type="submit"
-              disabled={mut.isPending || full_name.trim().length < 2 || !email || password.length < 8}
+              disabled={mut.isPending || first_name.trim().length < 1 || last_name.trim().length < 1 || !email || password.length < 8}
               className="gap-2"
             >
               {mut.isPending && <Loader2 className="size-4 animate-spin" />}
@@ -133,7 +137,11 @@ export function PlatformOwnerEditDialog({
 }) {
   const invalidate = useInvalidatePlatform();
   const updateFn = useServerFn(updatePlatformOwnerProfile);
-  const [full_name, setFullName] = useState(owner.full_name);
+  const ownerNames = owner.first_name || owner.last_name
+    ? { first_name: owner.first_name, last_name: owner.last_name }
+    : splitFullName(owner.full_name);
+  const [first_name, setFirstName] = useState(ownerNames.first_name);
+  const [last_name, setLastName] = useState(ownerNames.last_name);
   const [phone, setPhone] = useState(owner.phone ?? "");
   const [id_number, setIdNumber] = useState(owner.id_number ?? "");
 
@@ -142,7 +150,8 @@ export function PlatformOwnerEditDialog({
       updateFn({
         data: {
           user_id: owner.user_id,
-          full_name: full_name.trim(),
+          first_name: first_name.trim(),
+          last_name: last_name.trim(),
           phone: phone.trim() || null,
           id_number: id_number.trim() || null,
         },
@@ -163,7 +172,8 @@ export function PlatformOwnerEditDialog({
           <DialogDescription>עדכון פרטי זהות של בעל המערכת</DialogDescription>
         </DialogHeader>
         <div className="space-y-3">
-          <Field label="שם מלא" value={full_name} onChange={setFullName} required />
+          <Field label="שם פרטי" value={first_name} onChange={setFirstName} required />
+          <Field label="שם משפחה" value={last_name} onChange={setLastName} required />
           <div className="space-y-1">
             <Label>דוא"ל</Label>
             <Input value={owner.email ?? ""} disabled readOnly dir="ltr" />
@@ -179,7 +189,7 @@ export function PlatformOwnerEditDialog({
           <Button variant="outline" onClick={() => onOpenChange(false)}>ביטול</Button>
           <Button
             onClick={() => mut.mutate()}
-            disabled={mut.isPending || full_name.trim().length < 2}
+            disabled={mut.isPending || first_name.trim().length < 1 || last_name.trim().length < 1}
             className="gap-2"
           >
             {mut.isPending && <Loader2 className="size-4 animate-spin" />}

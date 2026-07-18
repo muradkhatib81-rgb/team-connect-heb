@@ -37,7 +37,8 @@ function ProfilePage() {
       </div>
 
       <Card className="p-6 space-y-4">
-        <Row label="שם מלא" value={me.full_name ?? "—"} />
+        <Row label="שם פרטי" value={me.first_name || "—"} />
+        <Row label="שם משפחה" value={me.last_name || "—"} />
         <Row label="מספר זהות" value={me.id_number ?? "—"} />
         <Row label="טלפון" value={me.phone ?? "—"} />
         {!isPlatformOwner(me.roles) && <Row label="מחלקה" value={me.department_name ?? "—"} />}

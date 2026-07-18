@@ -647,10 +647,12 @@ export type Database = {
           deactivated_at: string | null
           department_id: string | null
           department_name: string | null
+          first_name: string | null
           full_name: string
           id: string
           id_number: string | null
           job_title: string | null
+          last_name: string | null
           original_id: string
           phone: string | null
           reason: string | null
@@ -664,10 +666,12 @@ export type Database = {
           deactivated_at?: string | null
           department_id?: string | null
           department_name?: string | null
+          first_name?: string | null
           full_name: string
           id?: string
           id_number?: string | null
           job_title?: string | null
+          last_name?: string | null
           original_id: string
           phone?: string | null
           reason?: string | null
@@ -681,10 +685,12 @@ export type Database = {
           deactivated_at?: string | null
           department_id?: string | null
           department_name?: string | null
+          first_name?: string | null
           full_name?: string
           id?: string
           id_number?: string | null
           job_title?: string | null
+          last_name?: string | null
           original_id?: string
           phone?: string | null
           reason?: string | null
@@ -1206,8 +1212,10 @@ export type Database = {
           deactivated_at: string | null
           department_id: string | null
           excluded_from_headcount: boolean
+          first_name: string
           full_name: string
           id: string
+          last_name: string
           id_number: string | null
           is_active: boolean
           job_title: string | null
@@ -1223,8 +1231,10 @@ export type Database = {
           deactivated_at?: string | null
           department_id?: string | null
           excluded_from_headcount?: boolean
+          first_name?: string
           full_name?: string
           id: string
+          last_name?: string
           id_number?: string | null
           is_active?: boolean
           job_title?: string | null
@@ -1240,8 +1250,10 @@ export type Database = {
           deactivated_at?: string | null
           department_id?: string | null
           excluded_from_headcount?: boolean
+          first_name?: string
           full_name?: string
           id?: string
+          last_name?: string
           id_number?: string | null
           is_active?: boolean
           job_title?: string | null

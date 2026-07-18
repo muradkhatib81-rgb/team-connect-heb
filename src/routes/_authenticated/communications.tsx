@@ -4,6 +4,7 @@ import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/use-auth";
 import { isAdmin } from "@/lib/constants";
+import { formatEmployeeName } from "@/lib/employee-name";
 import { Card } from "@/components/ui/card";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
@@ -1032,13 +1033,16 @@ function useEmployeesLite() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("profiles")
-        .select("id, full_name, department_id, departments(name)")
+        .select("id, first_name, last_name, full_name, department_id, departments(name)")
         .eq("is_active", true)
-        .order("full_name");
+        .order("first_name")
+        .order("last_name");
       if (error) throw error;
       return (data ?? []).map((r: any) => ({
         id: r.id,
-        full_name: r.full_name,
+        first_name: r.first_name,
+        last_name: r.last_name,
+        full_name: formatEmployeeName(r),
         department_id: r.department_id,
         department_name: r.departments?.name ?? "—",
       }));

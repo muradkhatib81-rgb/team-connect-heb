@@ -13,7 +13,8 @@ const idEmail = (idNumber: string) => `${idNumber.trim()}@${EMPLOYEE_EMAIL_DOMAI
 const ID_REGEX = /^\d{5,15}$/;
 
 const bootstrapInput = z.object({
-  full_name: z.string().trim().min(1).max(100),
+  first_name: z.string().trim().min(1, "יש למלא שם פרטי").max(50),
+  last_name: z.string().trim().min(1, "יש למלא שם משפחה").max(50),
   id_number: z.string().regex(ID_REGEX, "מספר זהות חייב להכיל ספרות בלבד (5–15 ספרות)"),
   password: z.string().min(6).max(72),
 });
@@ -37,7 +38,8 @@ export const bootstrapPlatformOwner = createServerFn({ method: "POST" })
       password: data.password,
       email_confirm: true,
       user_metadata: {
-        full_name: data.full_name,
+        first_name: data.first_name,
+        last_name: data.last_name,
         id_number: data.id_number,
         role: "main_admin",
       },

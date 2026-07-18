@@ -100,10 +100,11 @@ function AuthPage() {
   async function handleBootstrap(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     const form = new FormData(e.currentTarget);
-    const fullName = String(form.get("full_name") || "").trim();
+    const firstName = String(form.get("first_name") || "").trim();
+    const lastName = String(form.get("last_name") || "").trim();
     const idNumber = String(form.get("id_number") || "").trim();
     const password = String(form.get("password") || "");
-    if (!fullName || !idNumber || !password) {
+    if (!firstName || !lastName || !idNumber || !password) {
       toast.error("יש למלא את כל השדות");
       return;
     }
@@ -120,7 +121,7 @@ function AuthPage() {
       // Admin createUser (server) — no confirmation email / mailer rate limits.
       // Synthetic local email is only Supabase Auth's identifier; UI is ID+password.
       await bootstrapPlatformOwner({
-        data: { full_name: fullName, id_number: idNumber, password },
+        data: { first_name: firstName, last_name: lastName, id_number: idNumber, password },
       });
     } catch (err) {
       setLoading(false);
@@ -180,9 +181,15 @@ function AuthPage() {
                   </p>
                 </div>
                 <form onSubmit={handleBootstrap} className="space-y-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="name-up">שם מלא</Label>
-                    <Input id="name-up" name="full_name" required maxLength={100} />
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div className="space-y-2">
+                      <Label htmlFor="first-name-up">שם פרטי</Label>
+                      <Input id="first-name-up" name="first_name" required maxLength={50} />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="last-name-up">שם משפחה</Label>
+                      <Input id="last-name-up" name="last_name" required maxLength={50} />
+                    </div>
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="id-up">מספר זהות</Label>

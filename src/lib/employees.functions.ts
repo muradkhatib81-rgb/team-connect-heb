@@ -17,7 +17,8 @@ const APP_ROLES = [
 
 
 const createEmployeeSchema = z.object({
-  full_name: z.string().trim().min(1).max(100),
+  first_name: z.string().trim().min(1, "יש למלא שם פרטי").max(50),
+  last_name: z.string().trim().min(1, "יש למלא שם משפחה").max(50),
   id_number: z.string().regex(ID_REGEX, "מספר זהות לא תקין"),
   department_id: z.string().uuid("יש לבחור מחלקה"),
   job_title: z.string().trim().max(80).optional().default(""),
@@ -105,7 +106,7 @@ export const createEmployee = createServerFn({ method: "POST" })
     // Duplicate checks via the authenticated, branch-scoped client (RLS).
     const { data: existing, error: exErr } = await context.supabase
       .from("profiles")
-      .select("id, full_name, is_active, job_title, department_id, on_leave, departments(name)")
+      .select("id, first_name, last_name, full_name, is_active, job_title, department_id, on_leave, departments(name)")
       .eq("id_number", data.id_number)
       .eq("branch_id", branchId)
       .maybeSingle();
@@ -113,7 +114,7 @@ export const createEmployee = createServerFn({ method: "POST" })
     if (existing) {
       const payload = {
         id: existing.id,
-        name: existing.full_name ?? "",
+        name: [existing.first_name, existing.last_name].filter(Boolean).join(" ") || existing.full_name || "",
         job_title: existing.job_title ?? "",
         department_id: existing.department_id ?? null,
         department_name: (existing as { departments?: { name?: string } }).departments?.name ?? null,
@@ -141,7 +142,8 @@ export const createEmployee = createServerFn({ method: "POST" })
       password: data.password,
       email_confirm: true,
       user_metadata: {
-        full_name: data.full_name,
+        first_name: data.first_name,
+        last_name: data.last_name,
         id_number: data.id_number,
         department_id: data.department_id,
         job_title: data.job_title,

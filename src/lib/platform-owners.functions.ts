@@ -15,11 +15,14 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { formatEmployeeName } from "./employee-name";
 
 export type PlatformOwnerLevel = "primary" | "owner";
 
 export interface PlatformOwnerRow {
   user_id: string;
+  first_name: string;
+  last_name: string;
   full_name: string;
   email: string | null;
   phone: string | null;
@@ -78,7 +81,7 @@ export const listPlatformOwners = createServerFn({ method: "GET" })
 
     const { data: profiles, error: profErr } = await supabaseAdmin
       .from("profiles")
-      .select("id, full_name, id_number, phone, avatar_url, is_active, created_at")
+      .select("id, first_name, last_name, full_name, id_number, phone, avatar_url, is_active, created_at")
       .in("id", ids);
     if (profErr) throw new Error(profErr.message);
 
@@ -101,7 +104,9 @@ export const listPlatformOwners = createServerFn({ method: "GET" })
       const isPrimary = byUser.get(id)?.has("system_admin") ?? false;
       return {
         user_id: id,
-        full_name: p.full_name ?? "",
+        first_name: p.first_name ?? "",
+        last_name: p.last_name ?? "",
+        full_name: formatEmployeeName(p),
         email: emailByUser.get(id) ?? null,
         phone: p.phone ?? null,
         id_number: p.id_number ?? null,
@@ -116,7 +121,8 @@ export const listPlatformOwners = createServerFn({ method: "GET" })
 
 
 const createOwnerInput = z.object({
-  full_name: z.string().min(2, "נדרש שם מלא"),
+  first_name: z.string().trim().min(1, "נדרש שם פרטי").max(50),
+  last_name: z.string().trim().min(1, "נדרש שם משפחה").max(50),
   email: z.string().email("כתובת דוא\"ל לא תקינה"),
   password: z.string().min(8, "סיסמה חייבת להכיל לפחות 8 תווים"),
   id_number: z.string().trim().optional().nullable(),
@@ -144,7 +150,8 @@ export const createPlatformOwner = createServerFn({ method: "POST" })
       password: data.password,
       email_confirm: true,
       user_metadata: {
-        full_name: data.full_name,
+        first_name: data.first_name,
+        last_name: data.last_name,
         id_number: data.id_number ?? undefined,
         phone: data.phone ?? undefined,
         role: "main_admin",
@@ -170,7 +177,7 @@ export const createPlatformOwner = createServerFn({ method: "POST" })
     await supabaseAdmin.rpc("log_platform_owner_event", {
       _event: "owner.created",
       _target_user_id: newUserId,
-      _payload: { email: data.email, full_name: data.full_name },
+      _payload: { email: data.email, first_name: data.first_name, last_name: data.last_name },
     });
 
 
@@ -355,7 +362,8 @@ export const listPlatformOwnerAuditLog = createServerFn({ method: "GET" })
 
 const updateProfileInput = z.object({
   user_id: z.string().uuid(),
-  full_name: z.string().trim().min(2, "נדרש שם מלא"),
+  first_name: z.string().trim().min(1, "נדרש שם פרטי").max(50),
+  last_name: z.string().trim().min(1, "נדרש שם משפחה").max(50),
   phone: z.string().trim().nullable().optional(),
   id_number: z.string().trim().nullable().optional(),
 });
@@ -382,7 +390,10 @@ export const updatePlatformOwnerProfile = createServerFn({ method: "POST" })
       throw new Error("המשתמש אינו בעל מערכת");
     }
 
-    const patch: { full_name: string; phone?: string | null; id_number?: string | null } = { full_name: data.full_name };
+    const patch: { first_name: string; last_name: string; phone?: string | null; id_number?: string | null } = {
+      first_name: data.first_name,
+      last_name: data.last_name,
+    };
     if (data.phone !== undefined) patch.phone = data.phone ?? null;
     if (data.id_number !== undefined) patch.id_number = data.id_number ?? null;
 
