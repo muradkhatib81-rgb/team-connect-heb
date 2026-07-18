@@ -8,6 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Card } from "@/components/ui/card";
 import { toast } from "sonner";
 import { APP_NAME } from "@/lib/constants";
+import { bootstrapPlatformOwner } from "@/lib/auth-bootstrap.functions";
 import { resolveLandingPath } from "@/lib/use-auth";
 import { useCompanySettings } from "@/lib/use-company-settings";
 import { Store, Loader2 } from "lucide-react";
@@ -115,22 +116,17 @@ function AuthPage() {
       return;
     }
     setLoading(true);
-    const { error } = await supabase.auth.signUp({
-      email: idEmail(idNumber),
-      password,
-      options: {
-        data: {
-          full_name: fullName,
-          id_number: idNumber,
-        },
-      },
-    });
-    if (error) {
+    try {
+      // Admin createUser (server) — no confirmation email / mailer rate limits.
+      // Synthetic local email is only Supabase Auth's identifier; UI is ID+password.
+      await bootstrapPlatformOwner({
+        data: { full_name: fullName, id_number: idNumber, password },
+      });
+    } catch (err) {
       setLoading(false);
-      toast.error(error.message);
+      toast.error(err instanceof Error ? err.message : "יצירת בעל המערכת נכשלה");
       return;
     }
-    // Auto-confirm is on — sign in immediately.
     const { error: signInErr } = await supabase.auth.signInWithPassword({
       email: idEmail(idNumber),
       password,
