@@ -13,7 +13,7 @@
  *      re-issues a Supabase client whose PostgREST requests carry the
  *      header. The `public.current_active_branch()` function reads it
  *      and the RESTRICTIVE RLS policies enforce branch isolation —
- *      including against tampering (non–system-admins are pinned to
+ *      including against tampering (non–Platform-Owners are pinned to
  *      their profile branch in SQL, the header is ignored for them).
  *
  * Server functions opt in by replacing
@@ -78,15 +78,18 @@ const SUPABASE_PUBLISHABLE_KEY = process.env.SUPABASE_PUBLISHABLE_KEY;
  * PostgREST traffic carries the header. The database (`current_active_branch()`
  * + RESTRICTIVE policies) then enforces:
  *
- *   - System admin: scoped to the requested branch, or unrestricted
- *     when no header is sent (branches list view).
+ *   - Platform Owners (main_admin / system_admin): scoped to the
+ *     Platform-selected Branch via X-Active-Branch (bridged from
+ *     Platform → Company → Branch / sourceBranchId). Unrestricted when
+ *     no header is sent (cross-branch admin views).
  *   - Branch manager / department manager / employee: header is
  *     ignored at the SQL layer; always restricted to their own
  *     profile.branch_id. Tampering is harmless.
  *
- * `context.branchId` exposes the validated header for code that needs
- * to stamp branch_id explicitly. The default-branch trigger handles
- * the common case automatically.
+ * `context.branchId` is the effective active Branch for stamping inserts
+ * (Departments, etc.). Prefer the Platform header when present; otherwise
+ * fall back to the database-resolved branch (Branch Managers with no
+ * switcher).
  */
 export const requireBranchContext = createMiddleware({ type: "function" })
   .middleware([requireSupabaseAuth])
@@ -98,7 +101,7 @@ export const requireBranchContext = createMiddleware({ type: "function" })
 
     const request = getRequest();
     const rawHeader = request?.headers.get("x-active-branch") ?? "";
-    const branchId = UUID_RE.test(rawHeader) ? rawHeader : null;
+    const headerBranchId = UUID_RE.test(rawHeader) ? rawHeader : null;
 
     const auth = request?.headers.get("authorization") ?? "";
     const headers: Record<string, string> = {};
@@ -106,7 +109,7 @@ export const requireBranchContext = createMiddleware({ type: "function" })
     // PostgREST exposes request headers to SQL through request.headers.
     // Send the branch header in lowercase so public.current_active_branch()
     // can read it reliably regardless of intermediary header casing.
-    if (branchId) headers["x-active-branch"] = branchId;
+    if (headerBranchId) headers["x-active-branch"] = headerBranchId;
 
     const scoped = createClient<Database>(
       SUPABASE_URL,
@@ -121,17 +124,18 @@ export const requireBranchContext = createMiddleware({ type: "function" })
       },
     );
 
-    // `branchId` above is only the raw selected header. For non system-admin
-    // users the database intentionally ignores that header and resolves the
-    // caller's own profile.branch_id. Expose the *database-resolved* branch to
-    // server functions so inserts they stamp explicitly (departments, etc.) are
-    // still correct even when a Branch Manager has no switcher/header.
-    let resolvedBranchId: string | null = branchId;
-    try {
-      const { data } = await scoped.rpc("current_active_branch" as never);
-      resolvedBranchId = (data as string | null) ?? branchId;
-    } catch {
-      resolvedBranchId = branchId;
+    // Platform Branch Mode always sends X-Active-Branch (sourceBranchId).
+    // Prefer that for context.branchId so Department mutations stamp the
+    // selected store even if SQL resolution lags. When the header is
+    // absent (Branch Manager), resolve via current_active_branch().
+    let resolvedBranchId: string | null = headerBranchId;
+    if (!headerBranchId) {
+      try {
+        const { data } = await scoped.rpc("current_active_branch" as never);
+        resolvedBranchId = (data as string | null) ?? null;
+      } catch {
+        resolvedBranchId = null;
+      }
     }
 
     return next({ context: { ...context, supabase: scoped, branchId: resolvedBranchId } });

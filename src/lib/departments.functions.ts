@@ -19,6 +19,13 @@ async function assertCanManageDepartments(supabase: any, userId: string) {
   }
 }
 
+/** Active Branch from Platform → Company → Branch (X-Active-Branch / requireBranchContext). */
+function assertActiveBranch(branchId: string | null | undefined): asserts branchId is string {
+  if (!branchId) {
+    throw new Error("יש לבחור סניף פעיל לפני שינוי מחלקה");
+  }
+}
+
 
 const createSchema = z.object({
   name: z.string().trim().min(1).max(80),
@@ -40,6 +47,7 @@ export const createDepartment = createServerFn({ method: "POST" })
   .inputValidator((data: unknown) => createSchema.parse(data))
   .handler(async ({ data, context }) => {
     await assertCanManageDepartments(context.supabase, context.userId);
+    assertActiveBranch(context.branchId);
     let lastErr: any = null;
     for (let i = 0; i < 5; i++) {
       const code = generateCode(data.name);
@@ -81,8 +89,10 @@ export const updateDepartment = createServerFn({ method: "POST" })
   .inputValidator((data: unknown) => updateSchema.parse(data))
   .handler(async ({ data, context }) => {
     await assertCanManageDepartments(context.supabase, context.userId);
+    assertActiveBranch(context.branchId);
 
     // Manager change goes through the atomic RPC (updates dept + user_roles in one tx).
+    // RPC reads the same active Branch via current_active_branch() / X-Active-Branch.
     const newManagerId: string | null = data.manager_id ?? null;
     const { error: rpcErr } = await context.supabase.rpc("set_department_manager", {
       _dept_id: data.id,
@@ -108,6 +118,7 @@ export const deleteDepartment = createServerFn({ method: "POST" })
   .inputValidator((data: unknown) => deleteSchema.parse(data))
   .handler(async ({ data, context }) => {
     await assertCanManageDepartments(context.supabase, context.userId);
+    assertActiveBranch(context.branchId);
     const { count, error: cErr } = await context.supabase
       .from("profiles")
       .select("id", { count: "exact", head: true })
