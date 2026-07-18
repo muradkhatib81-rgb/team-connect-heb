@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useNavigate } from "@tanstack/react-router";
 import { toast } from "sonner";
 import {
   Archive,
@@ -13,7 +14,6 @@ import {
   Trash2,
   UserCog,
 } from "lucide-react";
-import { useNavigate } from "@tanstack/react-router";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -24,8 +24,10 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { companyService, type Company } from "@/modules/companies";
-import { companiesQueryKey, usePlatformContext } from "@/platform";
+import { companiesQueryKey, useCompanyContext, usePlatformContext } from "@/platform";
 import { CompanyEditDialog, CompanyDeleteDialog } from "./company-dialogs";
+
+type CompanyDetailsTab = "branches" | "managers" | "settings";
 
 /**
  * Company Actions Menu (⋮ / "ניהול") — the single, reusable entry point for
@@ -41,6 +43,7 @@ export function CompanyActionsMenu({
   onDeleted?: () => void;
 }) {
   const { platform } = usePlatformContext();
+  const { setActiveCompanyId } = useCompanyContext();
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const [editOpen, setEditOpen] = useState(false);
@@ -48,6 +51,15 @@ export function CompanyActionsMenu({
 
   const invalidate = () =>
     queryClient.invalidateQueries({ queryKey: companiesQueryKey(platform.id) });
+
+  const goToCompanyTab = (tab: CompanyDetailsTab) => {
+    setActiveCompanyId(company.id);
+    void navigate({
+      to: "/platform/companies/$companyId",
+      params: { companyId: company.id },
+      search: { tab },
+    });
+  };
 
   const toggleStatusMut = useMutation({
     mutationFn: () =>
@@ -88,42 +100,15 @@ export function CompanyActionsMenu({
             <Pencil className="size-4" />
             ערוך חברה
           </DropdownMenuItem>
-          <DropdownMenuItem
-            onClick={() =>
-              navigate({
-                to: "/platform/companies/$companyId",
-                params: { companyId: company.id },
-                search: { tab: "branches" },
-              })
-            }
-            className="gap-2"
-          >
+          <DropdownMenuItem onSelect={() => goToCompanyTab("branches")} className="gap-2">
             <GitBranch className="size-4" />
             נהל סניפים
           </DropdownMenuItem>
-          <DropdownMenuItem
-            onClick={() =>
-              navigate({
-                to: "/platform/companies/$companyId",
-                params: { companyId: company.id },
-                search: { tab: "managers" },
-              })
-            }
-            className="gap-2"
-          >
+          <DropdownMenuItem onSelect={() => goToCompanyTab("managers")} className="gap-2">
             <UserCog className="size-4" />
             מנהלי החברה
           </DropdownMenuItem>
-          <DropdownMenuItem
-            onClick={() =>
-              navigate({
-                to: "/platform/companies/$companyId",
-                params: { companyId: company.id },
-                search: { tab: "settings" },
-              })
-            }
-            className="gap-2"
-          >
+          <DropdownMenuItem onSelect={() => goToCompanyTab("settings")} className="gap-2">
             <SettingsIcon className="size-4" />
             הגדרות החברה
           </DropdownMenuItem>
