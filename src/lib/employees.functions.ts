@@ -1,9 +1,39 @@
 import { createServerFn } from "@tanstack/react-start";
 import { requireBranchContext } from "@/integrations/supabase/active-branch.server";
+import type { SupabaseClient } from "@supabase/supabase-js";
+import type { Database } from "@/integrations/supabase/types";
 import { z } from "zod";
 
 const EMPLOYEE_EMAIL_DOMAIN = "employees.ramilevy.local";
 const idEmail = (idNumber: string) => `${idNumber.trim()}@${EMPLOYEE_EMAIL_DOMAIN}`;
+
+type AdminClient = SupabaseClient<Database>;
+
+async function findAuthUserIdByEmail(supabaseAdmin: AdminClient, email: string): Promise<string | null> {
+  const normalized = email.trim().toLowerCase();
+  let page = 1;
+  while (page <= 20) {
+    const { data, error } = await supabaseAdmin.auth.admin.listUsers({ page, perPage: 200 });
+    if (error) throw new Error(error.message);
+    const hit = data.users.find((u) => (u.email ?? "").toLowerCase() === normalized);
+    if (hit) return hit.id;
+    if (data.users.length < 200) break;
+    page += 1;
+  }
+  return null;
+}
+
+/** Remove auth.users row left behind when profile was archived but auth delete failed. */
+async function cleanupOrphanEmployeeAuth(supabaseAdmin: AdminClient, idNumber: string) {
+  const email = idEmail(idNumber);
+  const uid = await findAuthUserIdByEmail(supabaseAdmin, email);
+  if (!uid) return;
+  const { data: prof } = await supabaseAdmin.from("profiles").select("id").eq("id", uid).maybeSingle();
+  if (!prof) {
+    const { error } = await supabaseAdmin.auth.admin.deleteUser(uid);
+    if (error) throw new Error(error.message);
+  }
+}
 
 const ID_REGEX = /^\d{5,15}$/;
 
@@ -137,11 +167,37 @@ export const createEmployee = createServerFn({ method: "POST" })
       if (aErr) throw new Error(aErr.message);
       const arch = (archRows as unknown[] | null)?.[0] ?? null;
       if (arch) {
-        throw new Error(`ARCHIVED_EXISTS::${JSON.stringify(arch)}`);
+        const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+        await cleanupOrphanEmployeeAuth(supabaseAdmin, data.id_number);
+        const { data: liveAfterCleanup, error: liveErr } = await context.supabase
+          .from("profiles")
+          .select("id, first_name, last_name, full_name, is_active, job_title, department_id, on_leave, departments(name)")
+          .eq("id_number", data.id_number)
+          .eq("branch_id", branchId)
+          .maybeSingle();
+        if (liveErr) throw new Error(liveErr.message);
+        if (liveAfterCleanup) {
+          const payload = {
+            id: liveAfterCleanup.id,
+            name:
+              [liveAfterCleanup.first_name, liveAfterCleanup.last_name].filter(Boolean).join(" ") ||
+              liveAfterCleanup.full_name ||
+              "",
+            job_title: liveAfterCleanup.job_title ?? "",
+            department_id: liveAfterCleanup.department_id ?? null,
+            department_name: (liveAfterCleanup as { departments?: { name?: string } }).departments?.name ?? null,
+            is_active: liveAfterCleanup.is_active !== false,
+            on_leave: !!(liveAfterCleanup as { on_leave?: boolean }).on_leave,
+          };
+          throw new Error(`DUPLICATE_EMPLOYEE::${JSON.stringify(payload)}`);
+        }
+        // Archive row alone does not block re-hire after permanent removal.
       }
     }
 
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    await cleanupOrphanEmployeeAuth(supabaseAdmin, data.id_number);
+
     const { data: created, error } = await supabaseAdmin.auth.admin.createUser({
       email: idEmail(data.id_number),
       password: data.password,
@@ -215,6 +271,12 @@ export const deleteEmployee = createServerFn({ method: "POST" })
     await assertProfileVisibleInActiveBranch(context.supabase, data.user_id);
     await assertTargetIsNotProtectedManager(context.supabase, data.user_id, caps);
 
+    const { data: profileRow } = await supabaseAdmin
+      .from("profiles")
+      .select("id_number")
+      .eq("id", data.user_id)
+      .maybeSingle();
+
     // Archive snapshot + cleanup (RPC enforces branch and role authorization)
     const { error: arcErr } = await context.supabase.rpc("archive_employee", {
       _user_id: data.user_id,
@@ -233,9 +295,18 @@ export const deleteEmployee = createServerFn({ method: "POST" })
       // non-fatal
     }
 
-    // Delete auth user (the profile + roles were already removed by the RPC)
+    // Delete auth user (profile + roles were already removed by the RPC)
     const { error } = await supabaseAdmin.auth.admin.deleteUser(data.user_id);
-    if (error) throw new Error(error.message);
+    if (error) {
+      if (profileRow?.id_number) {
+        await cleanupOrphanEmployeeAuth(supabaseAdmin, profileRow.id_number);
+      } else {
+        throw new Error(
+          error.message ||
+            "העובד הועבר לארכיון אך מחיקת חשבון ההתחברות נכשלה. נסו שוב.",
+        );
+      }
+    }
 
     return { ok: true };
   });
@@ -293,6 +364,99 @@ const setActiveSchema = z.object({
   is_active: z.boolean(),
   note: z.string().trim().max(500).optional(),
 });
+
+const updateEmployeeSchema = z.object({
+  user_id: z.string().uuid(),
+  first_name: z.string().trim().min(1, "יש למלא שם פרטי").max(50),
+  last_name: z.string().trim().min(1, "יש למלא שם משפחה").max(50),
+  id_number: z.string().regex(ID_REGEX, "מספר זהות לא תקין").nullable().optional(),
+  department_id: z.string().uuid("יש לבחור מחלקה"),
+  phone: z.string().trim().max(20).optional().default(""),
+  job_title: z.string().trim().max(80).optional().default(""),
+  on_leave: z.boolean(),
+  is_active: z.boolean(),
+  is_active_changed: z.boolean(),
+  avatar_url: z.string().trim().max(500).nullable().optional(),
+  role: z.enum(APP_ROLES).optional(),
+  role_changed: z.boolean().optional().default(false),
+});
+
+export const updateEmployee = createServerFn({ method: "POST" })
+  .middleware([requireBranchContext])
+  .inputValidator((data: unknown) => updateEmployeeSchema.parse(data))
+  .handler(async ({ data, context }) => {
+    const caps = await getEmployeeManagerCaps(context.supabase, context.userId);
+    if (!caps.canEdit) throw new Error("אין הרשאה לעריכת עובד");
+    if (!context.branchId) throw new Error("יש לבחור סניף פעיל");
+
+    await assertProfileVisibleInActiveBranch(context.supabase, data.user_id);
+    await assertTargetIsNotProtectedManager(context.supabase, data.user_id, caps);
+
+    if (data.user_id === context.userId && data.is_active_changed && !data.is_active) {
+      throw new Error("לא ניתן להשבית את החשבון של עצמך");
+    }
+
+    const { data: dept, error: dErr } = await context.supabase
+      .from("departments")
+      .select("id, branch_id")
+      .eq("id", data.department_id)
+      .maybeSingle();
+    if (dErr) throw new Error(dErr.message);
+    if (!dept || (dept as { branch_id: string }).branch_id !== context.branchId) {
+      throw new Error("מחלקה לא נמצאה בסניף הפעיל");
+    }
+
+    if (data.is_active_changed) {
+      const { error: activeErr } = await context.supabase.rpc("set_employee_active", {
+        _user_id: data.user_id,
+        _active: data.is_active,
+      });
+      if (activeErr) throw new Error(activeErr.message);
+    }
+
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { error: updErr } = await supabaseAdmin
+      .from("profiles")
+      .update({
+        first_name: data.first_name.trim(),
+        last_name: data.last_name.trim(),
+        id_number: data.id_number ?? null,
+        department_id: data.department_id,
+        phone: data.phone || null,
+        on_leave: data.on_leave,
+        job_title: data.job_title || null,
+        avatar_url: data.avatar_url ?? null,
+        ...(data.is_active_changed ? {} : { is_active: data.is_active }),
+      })
+      .eq("id", data.user_id)
+      .eq("branch_id", context.branchId);
+    if (updErr) throw new Error(updErr.message);
+
+    if (data.role_changed && data.role) {
+      assertAssignableRole(data.role, caps);
+      await supabaseAdmin.from("user_roles").delete().eq("user_id", data.user_id);
+      const { error: roleErr } = await supabaseAdmin
+        .from("user_roles")
+        .insert({ user_id: data.user_id, role: data.role });
+      if (roleErr) throw new Error(roleErr.message);
+
+      if (data.role === "department_manager") {
+        await supabaseAdmin
+          .from("departments")
+          .update({ manager_id: data.user_id })
+          .eq("id", data.department_id)
+          .eq("branch_id", context.branchId);
+      } else {
+        await supabaseAdmin
+          .from("departments")
+          .update({ manager_id: null })
+          .eq("manager_id", data.user_id)
+          .eq("branch_id", context.branchId);
+      }
+    }
+
+    return { ok: true };
+  });
 
 export const setEmployeeActive = createServerFn({ method: "POST" })
   .middleware([requireBranchContext])

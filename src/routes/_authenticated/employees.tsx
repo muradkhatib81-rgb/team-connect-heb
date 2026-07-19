@@ -3,7 +3,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { useState, useMemo, useRef, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { createEmployee, resetEmployeePassword, deleteEmployee, setEmployeeActive } from "@/lib/employees.functions";
+import { createEmployee, resetEmployeePassword, deleteEmployee, setEmployeeActive, updateEmployee } from "@/lib/employees.functions";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -1376,7 +1376,7 @@ function EditEmployeeDialog({
   currentUserRoles?: AppRole[];
 }) {
   const qc = useQueryClient();
-  const setActiveFn = useServerFn(setEmployeeActive);
+  const updateFn = useServerFn(updateEmployee);
   const jobTitlesQ = useJobTitles();
   const roleOptions = assignableRoleOptionsFor(currentUserRoles);
   const initialNames = employee.first_name || employee.last_name
@@ -1411,51 +1411,23 @@ function EditEmployeeDialog({
 
       const isActiveChanged = form.is_active !== employee.is_active;
 
-      const { data: updated, error: pErr } = await supabase
-        .from("profiles")
-        .update({
-          first_name: form.first_name.trim(),
-          last_name: form.last_name.trim(),
+      await updateFn({
+        data: {
+          user_id: employee.id,
+          first_name: form.first_name,
+          last_name: form.last_name,
           id_number: form.id_number || null,
           department_id: form.department_id,
-          phone: form.phone || null,
+          phone: form.phone || "",
           on_leave: form.on_leave,
-          job_title: form.job_title || null,
+          job_title: form.job_title || "",
+          is_active: form.is_active,
+          is_active_changed: isActiveChanged,
           avatar_url,
-          ...(isActiveChanged ? {} : { is_active: form.is_active }),
-        })
-        .eq("id", employee.id)
-        .select("id")
-        .maybeSingle();
-      if (pErr) throw pErr;
-      if (!updated) throw new Error("עדכון העובד נכשל — ודאו שהסניף הפעיל תואם לעובד");
-
-      if (isActiveChanged) {
-        await setActiveFn({ data: { user_id: employee.id, is_active: form.is_active } });
-      }
-
-      if (canEditRoles && form.role !== currentRoles[0]) {
-        const { error: dErr } = await supabase.from("user_roles").delete().eq("user_id", employee.id);
-        if (dErr) throw dErr;
-        const { error: iErr } = await supabase
-          .from("user_roles")
-          .insert({ user_id: employee.id, role: form.role });
-        if (iErr) throw iErr;
-      }
-
-      // Auto-link department manager
-      if (canEditRoles && form.role === "department_manager") {
-        await supabase
-          .from("departments")
-          .update({ manager_id: employee.id })
-          .eq("id", form.department_id);
-      } else if (canEditRoles && currentRoles[0] === "department_manager" && form.role !== "department_manager") {
-        // Unlink if previously managed
-        await supabase
-          .from("departments")
-          .update({ manager_id: null })
-          .eq("manager_id", employee.id);
-      }
+          role: form.role,
+          role_changed: canEditRoles && form.role !== (currentRoles[0] ?? "employee"),
+        },
+      });
     },
     onSuccess: () => {
       toast.success("העובד עודכן");
