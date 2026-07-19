@@ -539,7 +539,7 @@ function AdminDashboard({
 function EmployeeDashboard({ profile }: { profile: any }) {
   return (
     <div className="space-y-6">
-      <BreakShortcutCard userId={profile.id} employeeView />
+      <BreakShortcutCard userId={profile.id} />
       <EmployeeScheduleCard profile={profile} />
       <EmployeeNotificationsCard userId={profile.id} />
       <EmployeeNewMessagesCard userId={profile.id} />
@@ -2424,7 +2424,7 @@ function DashboardPendingBreakCard({ row }: { row: DashboardBreakRow }) {
   );
 }
 
-function BreakShortcutCard({ userId, employeeView = false }: { userId: string; employeeView?: boolean }) {
+function BreakShortcutCard({ userId }: { userId: string }) {
   const qc = useQueryClient();
   const navigate = useNavigate();
   const [, setTick] = useState(0);
@@ -2487,27 +2487,10 @@ function BreakShortcutCard({ userId, employeeView = false }: { userId: string; e
     onError: (e: any) => toast.error(e?.message ?? "שגיאה"),
   });
 
-  const goRequest = () => navigate({ to: employeeView ? "/break-planning" : "/breaks" });
+  const goRequest = () => navigate({ to: "/breaks" });
   const hasBreakCards = !!activeBreak || upcomingBreaks.length > 0 || pendingBreaks.length > 0;
 
   if (!hasBreakCards) {
-    if (employeeView) {
-      return (
-        <Card className="card-elevated p-5 border-2 border-border/60">
-          <div className="flex items-center gap-3">
-            <div className="size-11 rounded-xl bg-muted text-muted-foreground flex items-center justify-center shrink-0">
-              <Coffee className="size-6" />
-            </div>
-            <div className="flex-1 min-w-0">
-              <h3 className="font-semibold text-base">הפסקות</h3>
-              <p className="text-xs text-muted-foreground mt-0.5">
-                אין הפסקה פעילה או מתוכננת כרגע.
-              </p>
-            </div>
-          </div>
-        </Card>
-      );
-    }
     return (
       <Card
         role="button"
