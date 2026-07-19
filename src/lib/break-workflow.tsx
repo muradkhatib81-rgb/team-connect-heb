@@ -117,14 +117,67 @@ export function todayJerusalemDate(): string {
   }).format(new Date());
 }
 
-export function sortBreaksByStart<T extends { planned_start?: string | null; requested_at: string }>(
-  rows: T[],
-): T[] {
+export function breakStartIso(row: {
+  planned_start?: string | null;
+  approved_at_time?: string | null;
+  requested_at: string;
+  started_at?: string | null;
+}) {
+  return row.started_at ?? row.planned_start ?? row.approved_at_time ?? row.requested_at;
+}
+
+export function sortBreaksByStart<
+  T extends {
+    planned_start?: string | null;
+    approved_at_time?: string | null;
+    requested_at: string;
+    started_at?: string | null;
+  },
+>(rows: T[]): T[] {
   return [...rows].sort((a, b) => {
-    const ta = new Date(a.planned_start ?? a.requested_at).getTime();
-    const tb = new Date(b.planned_start ?? b.requested_at).getTime();
+    const ta = new Date(breakStartIso(a)).getTime();
+    const tb = new Date(breakStartIso(b)).getTime();
     return ta - tb;
   });
+}
+
+/** Active break first; otherwise the earliest upcoming pre-active break. */
+export function pickPrimaryBreak<
+  T extends {
+    id: string;
+    status: string;
+    planned_start?: string | null;
+    approved_at_time?: string | null;
+    requested_at: string;
+    started_at?: string | null;
+  },
+>(rows: T[]): T | null {
+  if (!rows.length) return null;
+  const active = rows.find((r) => r.status === "active");
+  if (active) return active;
+  const preActive = rows.filter((r) =>
+    (BREAK_PRE_ACTIVE_STATUSES as readonly string[]).includes(r.status),
+  );
+  return sortBreaksByStart(preActive)[0] ?? null;
+}
+
+/** Next scheduled break after the primary one (for dashboard preview). */
+export function pickNextScheduledBreak<
+  T extends {
+    id: string;
+    status: string;
+    planned_start?: string | null;
+    approved_at_time?: string | null;
+    requested_at: string;
+    started_at?: string | null;
+  },
+>(rows: T[], excludeId?: string): T | null {
+  const preActive = rows.filter(
+    (r) =>
+      r.id !== excludeId &&
+      (BREAK_PRE_ACTIVE_STATUSES as readonly string[]).includes(r.status),
+  );
+  return sortBreaksByStart(preActive)[0] ?? null;
 }
 
 /**

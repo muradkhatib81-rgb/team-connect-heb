@@ -1376,6 +1376,7 @@ function EditEmployeeDialog({
   currentUserRoles?: AppRole[];
 }) {
   const qc = useQueryClient();
+  const setActiveFn = useServerFn(setEmployeeActive);
   const jobTitlesQ = useJobTitles();
   const roleOptions = assignableRoleOptionsFor(currentUserRoles);
   const initialNames = employee.first_name || employee.last_name
@@ -1408,7 +1409,9 @@ function EditEmployeeDialog({
         avatar_url = await uploadAvatar(avatarFile, employee.id);
       }
 
-      const { error: pErr } = await supabase
+      const isActiveChanged = form.is_active !== employee.is_active;
+
+      const { data: updated, error: pErr } = await supabase
         .from("profiles")
         .update({
           first_name: form.first_name.trim(),
@@ -1416,13 +1419,20 @@ function EditEmployeeDialog({
           id_number: form.id_number || null,
           department_id: form.department_id,
           phone: form.phone || null,
-          is_active: form.is_active,
           on_leave: form.on_leave,
           job_title: form.job_title || null,
           avatar_url,
+          ...(isActiveChanged ? {} : { is_active: form.is_active }),
         })
-        .eq("id", employee.id);
+        .eq("id", employee.id)
+        .select("id")
+        .maybeSingle();
       if (pErr) throw pErr;
+      if (!updated) throw new Error("עדכון העובד נכשל — ודאו שהסניף הפעיל תואם לעובד");
+
+      if (isActiveChanged) {
+        await setActiveFn({ data: { user_id: employee.id, is_active: form.is_active } });
+      }
 
       if (canEditRoles && form.role !== currentRoles[0]) {
         const { error: dErr } = await supabase.from("user_roles").delete().eq("user_id", employee.id);

@@ -214,6 +214,20 @@ function BreakPlanningPage() {
     onError: (e: any) => toast.error(e?.message ?? "שגיאה בביטול"),
   });
 
+  const endMut = useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await (supabase as any).rpc("end_my_break", { _id: id });
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      toast.success("סומן: חזרת מההפסקה");
+      qc.invalidateQueries({ queryKey: ["my-breaks-today"] });
+      qc.invalidateQueries({ queryKey: ["my-break-shortcut"] });
+      qc.invalidateQueries({ queryKey: ["my-active-break"] });
+    },
+    onError: (e: any) => toast.error(e?.message ?? "שגיאה"),
+  });
+
   const rows = todayQ.data ?? [];
   const activeBreak = rows.find((r) => r.status === "active");
 
@@ -241,13 +255,20 @@ function BreakPlanningPage() {
 
       {activeBreak && (
         <Card className="card-elevated p-4 border-green-500/50 bg-green-50/50 dark:bg-green-950/20">
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-3 flex-wrap">
             <Coffee className="size-5 text-green-600" />
             <div className="flex-1">
               <p className="font-medium">הפסקה פעילה כעת</p>
               {activeBreak.ends_at && <BreakLiveTimer endsAt={activeBreak.ends_at} />}
             </div>
             <Badge>פעילה</Badge>
+            <Button
+              size="sm"
+              onClick={() => endMut.mutate(activeBreak.id)}
+              disabled={endMut.isPending}
+            >
+              {endMut.isPending ? <Loader2 className="size-4 animate-spin" /> : "סיום הפסקה"}
+            </Button>
           </div>
         </Card>
       )}

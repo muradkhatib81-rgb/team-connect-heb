@@ -48,6 +48,9 @@ import {
   BREAK_PRE_ACTIVE_STATUSES,
   BREAK_STATUS_LABEL,
   BREAK_STATUS_TONE,
+  pickNextScheduledBreak,
+  pickPrimaryBreak,
+  fmtBreakTime,
 } from "@/lib/break-workflow";
 
 export const Route = createFileRoute("/_authenticated/dashboard")({
@@ -535,7 +538,7 @@ function AdminDashboard({
 function EmployeeDashboard({ profile }: { profile: any }) {
   return (
     <div className="space-y-6">
-      <BreakShortcutCard userId={profile.id} />
+      <BreakShortcutCard userId={profile.id} employeeView />
       <EmployeeScheduleCard profile={profile} />
       <EmployeeNotificationsCard userId={profile.id} />
       <EmployeeNewMessagesCard userId={profile.id} />
@@ -1973,41 +1976,12 @@ function MyActiveBreakCard({ userId }: { userId: string }) {
     enabled: !!userId,
     queryKey: ["my-active-break", userId],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("break_requests")
-        .select(
-          "id, user_id, status, break_setting_id, approved_at_time, approval_decided_at, started_at, ends_at, completed_at, duration_minutes, approved_by",
-        )
-        .eq("user_id", userId)
-        .in("status", [...BREAK_PRE_ACTIVE_STATUSES, "active"])
-        .order("created_at", { ascending: false })
-        .limit(1)
-        .maybeSingle();
-      if (error) throw error;
-      if (!data) return null;
-      const row = data as any;
-      const { data: setting } = await supabase
-        .from("break_settings")
-        .select("name")
-        .eq("id", row.break_setting_id)
-        .maybeSingle();
-      let approver: { full_name: string; role_label: string | null; job_title: string | null } | null = null;
-      if (row.approved_by) {
-        const { data: ap } = await (supabase as any).rpc("get_profiles_basic_info", {
-          user_ids: [row.approved_by],
-        });
-        const rec = Array.isArray(ap) ? ap[0] : null;
-        if (rec) approver = { full_name: rec.full_name, role_label: rec.role_label, job_title: rec.job_title };
-      }
-      return {
-        ...row,
-        setting_name: (setting as any)?.name ?? "הפסקה",
-        approver,
-      };
+      const { primary } = await fetchMyBreakDashboardRows(userId);
+      return primary;
     },
   });
 
-
+  useActivateDueBreaksPoll(userId, qc);
 
   useEffect(() => {
     const ch = supabase
@@ -2265,28 +2239,22 @@ function DetailRow({ k, v }: { k: string; v: string }) {
   );
 }
 
-function BreakShortcutCard({ userId }: { userId: string }) {
-  const qc = useQueryClient();
-  const navigate = useNavigate();
-  const [, setTick] = useState(0);
+const MY_BREAK_SELECT =
+  "id, status, break_setting_id, requested_at, planned_start, approved_at_time, approval_decided_at, started_at, ends_at, duration_minutes, approved_by";
 
-  const breakQ = useQuery({
-    enabled: !!userId,
-    queryKey: ["my-break-shortcut", userId],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("break_requests")
-        .select(
-          "id, status, break_setting_id, requested_at, approved_at_time, approval_decided_at, started_at, ends_at, duration_minutes, approved_by",
-        )
-        .eq("user_id", userId)
-        .in("status", [...BREAK_PRE_ACTIVE_STATUSES, "active"])
-        .order("created_at", { ascending: false })
-        .limit(1)
-        .maybeSingle();
-      if (error) throw error;
-      if (!data) return null;
-      const row = data as any;
+async function fetchMyBreakDashboardRows(userId: string) {
+  const { data, error } = await supabase
+    .from("break_requests")
+    .select(MY_BREAK_SELECT)
+    .eq("user_id", userId)
+    .in("status", [...BREAK_PRE_ACTIVE_STATUSES, "active", "pending_approval"])
+    .order("requested_at", { ascending: true });
+  if (error) throw error;
+  const rows = (data ?? []) as any[];
+  if (!rows.length) return { primary: null, next: null, all: [] as any[] };
+
+  const enriched = await Promise.all(
+    rows.map(async (row) => {
       const { data: setting } = await supabase
         .from("break_settings")
         .select("name")
@@ -2301,9 +2269,51 @@ function BreakShortcutCard({ userId }: { userId: string }) {
         if (rec) approver = { full_name: rec.full_name, role_label: rec.role_label, job_title: rec.job_title };
       }
       return { ...row, setting_name: (setting as any)?.name ?? "הפסקה", approver };
-    },
+    }),
+  );
+
+  const primary = pickPrimaryBreak(enriched);
+  const next = pickNextScheduledBreak(enriched, primary?.id);
+  return { primary, next, all: enriched };
+}
+
+function useActivateDueBreaksPoll(userId: string, qc: ReturnType<typeof useQueryClient>) {
+  useEffect(() => {
+    if (!userId) return;
+    let cancelled = false;
+    const invalidate = () => {
+      qc.invalidateQueries({ queryKey: ["my-break-shortcut", userId] });
+      qc.invalidateQueries({ queryKey: ["my-active-break", userId] });
+    };
+    const tick = async () => {
+      try {
+        const { data, error } = await (supabase as any).rpc("activate_due_break_requests");
+        if (!cancelled && !error && typeof data === "number" && data > 0) invalidate();
+      } catch {
+        // non-fatal
+      }
+    };
+    void tick();
+    const id = setInterval(tick, 30000);
+    return () => {
+      cancelled = true;
+      clearInterval(id);
+    };
+  }, [userId, qc]);
+}
+
+function BreakShortcutCard({ userId, employeeView = false }: { userId: string; employeeView?: boolean }) {
+  const qc = useQueryClient();
+  const navigate = useNavigate();
+  const [, setTick] = useState(0);
+
+  const breakQ = useQuery({
+    enabled: !!userId,
+    queryKey: ["my-break-shortcut", userId],
+    queryFn: () => fetchMyBreakDashboardRows(userId),
   });
 
+  useActivateDueBreaksPoll(userId, qc);
 
   useEffect(() => {
     const ch = supabase
@@ -2336,10 +2346,31 @@ function BreakShortcutCard({ userId }: { userId: string }) {
     onError: (e: any) => toast.error(e?.message ?? "שגיאה"),
   });
 
-  const goRequest = () => navigate({ to: "/breaks" });
-  const r = breakQ.data;
+  const goRequest = () => navigate({ to: employeeView ? "/break-planning" : "/breaks" });
+  const r = breakQ.data?.primary ?? null;
+  const nextBreak = breakQ.data?.next ?? null;
 
   if (!r) {
+    if (employeeView) {
+      return (
+        <Card className="card-elevated p-5 border-2 border-border/60">
+          <div className="flex items-center gap-3">
+            <div className="size-11 rounded-xl bg-muted text-muted-foreground flex items-center justify-center shrink-0">
+              <Coffee className="size-6" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <h3 className="font-semibold text-base">הפסקות</h3>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                אין הפסקה פעילה או מתוכננת כרגע.
+              </p>
+            </div>
+            <Button size="sm" variant="outline" className="gap-2 shrink-0" asChild>
+              <Link to="/break-planning">תכנון הפסקות</Link>
+            </Button>
+          </div>
+        </Card>
+      );
+    }
     return (
       <Card
         role="button"
@@ -2370,10 +2401,10 @@ function BreakShortcutCard({ userId }: { userId: string }) {
   if (r.status === "pending" || r.status === "pending_approval") {
     return (
       <Card
-        role="button"
-        tabIndex={0}
-        onClick={goRequest}
-        onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") goRequest(); }}
+        role={employeeView ? undefined : "button"}
+        tabIndex={employeeView ? undefined : 0}
+        onClick={employeeView ? undefined : goRequest}
+        onKeyDown={employeeView ? undefined : (e) => { if (e.key === "Enter" || e.key === " ") goRequest(); }}
         className="card-elevated p-5 border-2 border-amber-500 bg-amber-50 dark:bg-amber-950/30 cursor-pointer transition-colors hover:brightness-[0.98]"
       >
         <div className="flex items-start gap-3">
@@ -2402,7 +2433,7 @@ function BreakShortcutCard({ userId }: { userId: string }) {
   const isActive = r.status === "active";
   const isPreActive = (BREAK_PRE_ACTIVE_STATUSES as readonly string[]).includes(r.status);
   const startsAtIso: string | null =
-    r.started_at ?? r.approved_at_time ?? (r as any).requested_at ?? null;
+    r.started_at ?? r.planned_start ?? r.approved_at_time ?? r.requested_at ?? null;
   const endsAtMs = r.ends_at
     ? new Date(r.ends_at).getTime()
     : startsAtIso
@@ -2429,14 +2460,25 @@ function BreakShortcutCard({ userId }: { userId: string }) {
           : "--:--";
 
   const canEnd = isActive;
+  const cardNavProps = employeeView
+    ? {}
+    : {
+        role: "button" as const,
+        tabIndex: 0,
+        onClick: goRequest,
+        onKeyDown: (e: React.KeyboardEvent) => {
+          if (e.key === "Enter" || e.key === " ") goRequest();
+        },
+      };
 
   return (
     <Card
-      role="button"
-      tabIndex={0}
-      onClick={goRequest}
-      onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") goRequest(); }}
-      className={"card-elevated p-5 border-2 cursor-pointer transition-colors hover:brightness-[0.98] " + tone.card}
+      {...cardNavProps}
+      className={
+        "card-elevated p-5 border-2 transition-colors " +
+        tone.card +
+        (employeeView ? "" : " cursor-pointer hover:brightness-[0.98]")
+      }
     >
       <div className="flex items-start gap-3">
         <div className={"size-11 rounded-xl flex items-center justify-center shrink-0 " + tone.icon}>
@@ -2444,7 +2486,7 @@ function BreakShortcutCard({ userId }: { userId: string }) {
         </div>
         <div className="flex-1 min-w-0 space-y-3">
           <div className="flex flex-wrap items-center gap-2">
-            <h3 className="font-semibold">הפסקה</h3>
+            <h3 className="font-semibold">{isActive ? "הפסקה נוכחית" : "הפסקה הבאה"}</h3>
             <Badge variant={overrun ? "destructive" : isActive ? "default" : "secondary"}>
               {tone.label}
             </Badge>
@@ -2470,6 +2512,16 @@ function BreakShortcutCard({ userId }: { userId: string }) {
               <div>🏁 סיום מתוכנן: <span className="text-foreground font-medium">{fmtHM(new Date(endsAtMs).toISOString())}</span></div>
             )}
           </div>
+
+          {nextBreak && isActive && (
+            <div className="rounded-md border border-border/60 bg-background/50 p-2.5 text-xs">
+              <div className="font-medium text-foreground">הפסקה הבאה</div>
+              <div className="text-muted-foreground mt-0.5">
+                ☕ {nextBreak.setting_name} · {nextBreak.duration_minutes} דק׳ ·{" "}
+                {fmtBreakTime(nextBreak.planned_start ?? nextBreak.requested_at)}
+              </div>
+            </div>
+          )}
 
           {(r as any).approver && (
             <div className="rounded-md border border-border/60 bg-background/50 p-2.5 text-xs space-y-0.5">
@@ -2497,7 +2549,7 @@ function BreakShortcutCard({ userId }: { userId: string }) {
                 disabled={endMut.isPending}
               >
                 {endMut.isPending ? <Loader2 className="size-4 animate-spin" /> : <CheckCircle2 className="size-4" />}
-                ✅ חזרתי מהפסקה
+                סיום הפסקה
               </Button>
             </div>
           )}
