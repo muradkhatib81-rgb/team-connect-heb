@@ -2616,7 +2616,7 @@ function OnBreakSection({ profile }: { profile: any }) {
         )
         .gte("created_at", dayStart.toISOString())
         .lt("created_at", dayEnd.toISOString())
-        .order("created_at", { ascending: true });
+        .order("requested_at", { ascending: true });
       if (error) throw error;
       const rows = (data ?? []) as any[];
       if (!rows.length) return [];

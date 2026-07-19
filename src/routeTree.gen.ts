@@ -29,6 +29,7 @@ import { Route as AuthenticatedChangePasswordRouteImport } from './routes/_authe
 import { Route as AuthenticatedBreaksAdminRouteImport } from './routes/_authenticated/breaks-admin'
 import { Route as AuthenticatedBreaksRouteImport } from './routes/_authenticated/breaks'
 import { Route as AuthenticatedBreakSettingsRouteImport } from './routes/_authenticated/break-settings'
+import { Route as AuthenticatedBreakPlanningRouteImport } from './routes/_authenticated/break-planning'
 import { Route as AuthenticatedPlatformRouteRouteImport } from './routes/_authenticated/platform/route'
 import { Route as AuthenticatedPlatformIndexRouteImport } from './routes/_authenticated/platform/index'
 import { Route as AuthenticatedSystemSettingsRouteImport } from './routes/_authenticated/system.settings'
@@ -158,6 +159,12 @@ const AuthenticatedBreakSettingsRoute =
   AuthenticatedBreakSettingsRouteImport.update({
     id: '/break-settings',
     path: '/break-settings',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
+const AuthenticatedBreakPlanningRoute =
+  AuthenticatedBreakPlanningRouteImport.update({
+    id: '/break-planning',
+    path: '/break-planning',
     getParentRoute: () => AuthenticatedRouteRoute,
   } as any)
 const AuthenticatedPlatformRouteRoute =
@@ -297,6 +304,7 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
   '/platform': typeof AuthenticatedPlatformRouteRouteWithChildren
+  '/break-planning': typeof AuthenticatedBreakPlanningRoute
   '/break-settings': typeof AuthenticatedBreakSettingsRoute
   '/breaks': typeof AuthenticatedBreaksRoute
   '/breaks-admin': typeof AuthenticatedBreaksAdminRoute
@@ -339,6 +347,7 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
+  '/break-planning': typeof AuthenticatedBreakPlanningRoute
   '/break-settings': typeof AuthenticatedBreakSettingsRoute
   '/breaks': typeof AuthenticatedBreaksRoute
   '/breaks-admin': typeof AuthenticatedBreaksAdminRoute
@@ -383,6 +392,7 @@ export interface FileRoutesById {
   '/_authenticated': typeof AuthenticatedRouteRouteWithChildren
   '/auth': typeof AuthRoute
   '/_authenticated/platform': typeof AuthenticatedPlatformRouteRouteWithChildren
+  '/_authenticated/break-planning': typeof AuthenticatedBreakPlanningRoute
   '/_authenticated/break-settings': typeof AuthenticatedBreakSettingsRoute
   '/_authenticated/breaks': typeof AuthenticatedBreaksRoute
   '/_authenticated/breaks-admin': typeof AuthenticatedBreaksAdminRoute
@@ -428,6 +438,7 @@ export interface FileRouteTypes {
     | '/'
     | '/auth'
     | '/platform'
+    | '/break-planning'
     | '/break-settings'
     | '/breaks'
     | '/breaks-admin'
@@ -470,6 +481,7 @@ export interface FileRouteTypes {
   to:
     | '/'
     | '/auth'
+    | '/break-planning'
     | '/break-settings'
     | '/breaks'
     | '/breaks-admin'
@@ -513,6 +525,7 @@ export interface FileRouteTypes {
     | '/_authenticated'
     | '/auth'
     | '/_authenticated/platform'
+    | '/_authenticated/break-planning'
     | '/_authenticated/break-settings'
     | '/_authenticated/breaks'
     | '/_authenticated/breaks-admin'
@@ -700,6 +713,13 @@ declare module '@tanstack/react-router' {
       path: '/break-settings'
       fullPath: '/break-settings'
       preLoaderRoute: typeof AuthenticatedBreakSettingsRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/break-planning': {
+      id: '/_authenticated/break-planning'
+      path: '/break-planning'
+      fullPath: '/break-planning'
+      preLoaderRoute: typeof AuthenticatedBreakPlanningRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
     '/_authenticated/platform': {
@@ -968,6 +988,7 @@ const AuthenticatedSystemRouteWithChildren =
 
 interface AuthenticatedRouteRouteChildren {
   AuthenticatedPlatformRouteRoute: typeof AuthenticatedPlatformRouteRouteWithChildren
+  AuthenticatedBreakPlanningRoute: typeof AuthenticatedBreakPlanningRoute
   AuthenticatedBreakSettingsRoute: typeof AuthenticatedBreakSettingsRoute
   AuthenticatedBreaksRoute: typeof AuthenticatedBreaksRoute
   AuthenticatedBreaksAdminRoute: typeof AuthenticatedBreaksAdminRoute
@@ -989,6 +1010,7 @@ interface AuthenticatedRouteRouteChildren {
 
 const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedPlatformRouteRoute: AuthenticatedPlatformRouteRouteWithChildren,
+  AuthenticatedBreakPlanningRoute: AuthenticatedBreakPlanningRoute,
   AuthenticatedBreakSettingsRoute: AuthenticatedBreakSettingsRoute,
   AuthenticatedBreaksRoute: AuthenticatedBreaksRoute,
   AuthenticatedBreaksAdminRoute: AuthenticatedBreaksAdminRoute,

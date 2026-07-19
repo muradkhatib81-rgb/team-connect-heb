@@ -209,6 +209,13 @@ export function AppShell({ children }: { children: ReactNode }) {
       section: branchSection,
     },
     {
+      to: "/break-planning",
+      label: "תכנון הפסקות",
+      icon: CalendarDays,
+      visible: canRequestBreak,
+      section: branchSection,
+    },
+    {
       to: "/breaks-admin",
       label: "ניהול הפסקות",
       icon: Coffee,

@@ -117,7 +117,7 @@ export class SupabaseDatabaseClient implements IDatabaseClient {
     if (error) {
       throw new Error(`findMany(${table}): ${error.message}`);
     }
-    return (data ?? []).map((row) => fromDbRow<T>(row as Record<string, unknown>));
+    return (data ?? []).map((row: Record<string, unknown>) => fromDbRow<T>(row));
   }
 
   async insert<T>(table: string, data: Partial<T>): Promise<T> {

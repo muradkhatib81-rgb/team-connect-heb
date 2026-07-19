@@ -372,18 +372,23 @@ export type Database = {
           approved_by: string | null
           branch_id: string | null
           break_setting_id: string
+          cancelled_at: string | null
+          cancelled_by: string | null
+          cancellation_reason: string | null
           completed_at: string | null
-          completed_by: string | null
           created_at: string
           department_id: string | null
           duration_minutes: number
           end_notified_at: string | null
+          end_verified_by: string | null
           ended_by: string | null
           ended_by_manager_id: string | null
           ended_by_manager_name: string | null
           ending_notified_at: string | null
+          ending_verified_at: string | null
           ends_at: string | null
           id: string
+          last_modified_at: string | null
           note: string | null
           overtime_minutes: number | null
           planned_duration: number | null
@@ -407,18 +412,23 @@ export type Database = {
           approved_by?: string | null
           branch_id?: string | null
           break_setting_id: string
+          cancelled_at?: string | null
+          cancelled_by?: string | null
+          cancellation_reason?: string | null
           completed_at?: string | null
-          completed_by?: string | null
           created_at?: string
           department_id?: string | null
           duration_minutes: number
           end_notified_at?: string | null
+          end_verified_by?: string | null
           ended_by?: string | null
           ended_by_manager_id?: string | null
           ended_by_manager_name?: string | null
           ending_notified_at?: string | null
+          ending_verified_at?: string | null
           ends_at?: string | null
           id?: string
+          last_modified_at?: string | null
           note?: string | null
           overtime_minutes?: number | null
           planned_duration?: number | null
@@ -442,18 +452,23 @@ export type Database = {
           approved_by?: string | null
           branch_id?: string | null
           break_setting_id?: string
+          cancelled_at?: string | null
+          cancelled_by?: string | null
+          cancellation_reason?: string | null
           completed_at?: string | null
-          completed_by?: string | null
           created_at?: string
           department_id?: string | null
           duration_minutes?: number
           end_notified_at?: string | null
+          end_verified_by?: string | null
           ended_by?: string | null
           ended_by_manager_id?: string | null
           ended_by_manager_name?: string | null
           ending_notified_at?: string | null
+          ending_verified_at?: string | null
           ends_at?: string | null
           id?: string
+          last_modified_at?: string | null
           note?: string | null
           overtime_minutes?: number | null
           planned_duration?: number | null
@@ -2268,7 +2283,14 @@ export type Database = {
         Args: { _user_id: string }
         Returns: boolean
       }
-      can_user_request_break: { Args: { _user_id: string }; Returns: boolean }
+      cancel_break_request: {
+        Args: { _id: string; _reason?: string }
+        Returns: undefined
+      }
+      reschedule_break_request: {
+        Args: { _id: string; _new_duration?: number; _new_start: string }
+        Returns: undefined
+      }
       can_view_announcement: {
         Args: { _ann_id: string; _user_id: string }
         Returns: boolean
@@ -2569,6 +2591,8 @@ export type Database = {
         | "rejected"
         | "ended_by_manager"
         | "cancelled"
+        | "cancelled_by_employee"
+        | "cancelled_by_manager"
       comm_audit_action:
         | "created"
         | "edited"
@@ -2745,6 +2769,8 @@ export const Constants = {
         "rejected",
         "ended_by_manager",
         "cancelled",
+        "cancelled_by_employee",
+        "cancelled_by_manager",
       ],
       comm_audit_action: [
         "created",

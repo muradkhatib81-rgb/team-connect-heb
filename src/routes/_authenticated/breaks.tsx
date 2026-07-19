@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
@@ -237,35 +237,17 @@ function BreaksPage() {
       const setting = settingsQ.data?.find((s) => s.id === settingId);
       if (!setting) throw new Error("סוג הפסקה לא קיים");
       if (!timeStr) throw new Error("יש לבחור שעה");
-      const now = new Date();
-      const dayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-      const dayEnd = new Date(dayStart.getTime() + 24 * 60 * 60 * 1000);
-      const { data: existing, error: exErr } = await supabase
-        .from("break_requests")
-        .select("id, status")
-        .eq("user_id", me!.id)
-        .eq("break_setting_id", settingId)
-        .gte("created_at", dayStart.toISOString())
-        .lt("created_at", dayEnd.toISOString())
-        .limit(1);
-      if (exErr) throw exErr;
-      if ((existing ?? []).length > 0) {
-        throw new Error("כבר שלחת בקשה עבור סוג הפסקה זה היום.");
-      }
       const requestedAt = isoFromLocalTime(timeStr);
       const { data: policy } = await (supabase as any).rpc("get_break_policy");
       const effectiveRequiresApproval = policy?.requires_approval === true;
-      // Do NOT send status / started_at / ends_at from the client.
-      // The BEFORE INSERT trigger `break_requests_apply_policy` sets
-      // status='pending' when approval is required, or auto-approves to
-      // 'approved' otherwise. The row becomes 'active' only when the
-      // chosen time arrives (activate_due_break_requests / pg_cron).
       const { error } = await supabase.from("break_requests").insert({
         user_id: me!.id,
         department_id: me!.department_id ?? null,
         break_setting_id: settingId,
         duration_minutes: setting.duration_minutes,
+        planned_duration: setting.duration_minutes,
         requested_at: requestedAt,
+        planned_start: requestedAt,
         note: note.trim() || null,
       });
       if (error) throw error;
@@ -314,6 +296,9 @@ function BreaksPage() {
               ? "הגשת בקשת הפסקה וצפייה בסטטוס. השעה המאושרת היא הקובעת."
               : "הגשת הפסקה ללא צורך באישור מנהל. השעה שבחרת תאושר אוטומטית."}
           </p>
+          <Button variant="link" className="h-auto p-0 text-sm" asChild>
+            <Link to="/break-planning">תכנון הפסקות למשמרת ←</Link>
+          </Button>
         </div>
       </header>
 
@@ -494,7 +479,7 @@ export function ApproveList({
     const t = new Date(target).getTime();
     return all.filter((r) => {
       if (r.id === excludeId) return false;
-      if (r.status === "cancelled" || r.status === "completed" || r.status === "rejected" || r.status === "ended_by_manager") return false;
+      if (r.status === "cancelled" || r.status === "cancelled_by_employee" || r.status === "cancelled_by_manager" || r.status === "completed" || r.status === "rejected" || r.status === "ended_by_manager") return false;
       const ref = r.approved_at_time ?? r.requested_at;
       const rt = new Date(ref).getTime();
       return Math.abs(rt - t) <= 60_000; // within 1 minute
@@ -538,6 +523,19 @@ export function ApproveList({
       qc.invalidateQueries({ queryKey: ["dashboard-daily-breaks"] });
     },
     onError: (e: any) => toast.error(e?.message ?? "שגיאה בדחייה"),
+  });
+
+  const cancelMut = useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await (supabase as any).rpc("cancel_break_request", { _id: id });
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      toast.success("ההפסקה בוטלה");
+      qc.invalidateQueries({ queryKey: ["all-break-requests"] });
+      qc.invalidateQueries({ queryKey: ["dashboard-daily-breaks"] });
+    },
+    onError: (e: any) => toast.error(e?.message ?? "שגיאה"),
   });
 
   if (loading) {
