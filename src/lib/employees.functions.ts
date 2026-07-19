@@ -9,12 +9,19 @@ const idEmail = (idNumber: string) => `${idNumber.trim()}@${EMPLOYEE_EMAIL_DOMAI
 
 type AdminClient = SupabaseClient<Database>;
 
+function formatAuthError(error: { message?: string; code?: string } | null): string {
+  const raw = error?.message?.trim();
+  if (raw && raw !== "{}" && raw !== "undefined") return raw;
+  if (error?.code === "email_exists") return "כבר קיים עובד עם מספר זהות זה.";
+  return "שגיאה בחשבון ההתחברות של העובד. נסו שוב או פנו לתמיכה.";
+}
+
 async function findAuthUserIdByEmail(supabaseAdmin: AdminClient, email: string): Promise<string | null> {
   const normalized = email.trim().toLowerCase();
   let page = 1;
   while (page <= 20) {
     const { data, error } = await supabaseAdmin.auth.admin.listUsers({ page, perPage: 200 });
-    if (error) throw new Error(error.message);
+    if (error) throw new Error(formatAuthError(error));
     const hit = data.users.find((u) => (u.email ?? "").toLowerCase() === normalized);
     if (hit) return hit.id;
     if (data.users.length < 200) break;
@@ -23,7 +30,72 @@ async function findAuthUserIdByEmail(supabaseAdmin: AdminClient, email: string):
   return null;
 }
 
-/** Remove auth.users row left behind when profile was archived but auth delete failed. */
+/**
+ * When profile was archived but auth.users remained (delete blocked by FK/triggers),
+ * reuse the existing auth row and insert a fresh profile instead of delete+create.
+ */
+async function reprovisionOrphanEmployeeAuth(
+  supabaseAdmin: AdminClient,
+  data: CreateEmployeeInput,
+  branchId: string,
+): Promise<string | null> {
+  const email = idEmail(data.id_number);
+  const uid = await findAuthUserIdByEmail(supabaseAdmin, email);
+  if (!uid) return null;
+
+  const { data: prof } = await supabaseAdmin.from("profiles").select("id").eq("id", uid).maybeSingle();
+  if (prof) return null;
+
+  const { error: updErr } = await supabaseAdmin.auth.admin.updateUserById(uid, {
+    password: data.password,
+    email_confirm: true,
+    user_metadata: {
+      first_name: data.first_name,
+      last_name: data.last_name,
+      id_number: data.id_number,
+      department_id: data.department_id,
+      job_title: data.job_title,
+      phone: data.phone,
+      role: data.role,
+    },
+  });
+  if (updErr) throw new Error(formatAuthError(updErr));
+
+  const fullName = `${data.first_name.trim()} ${data.last_name.trim()}`.trim();
+  const { error: profErr } = await supabaseAdmin.from("profiles").insert({
+    id: uid,
+    first_name: data.first_name.trim(),
+    last_name: data.last_name.trim(),
+    full_name: fullName,
+    id_number: data.id_number,
+    department_id: data.department_id,
+    branch_id: branchId,
+    job_title: data.job_title || null,
+    phone: data.phone || null,
+    avatar_url: data.avatar_url ?? null,
+    must_change_password: true,
+    is_active: true,
+  });
+  if (profErr) throw new Error(profErr.message);
+
+  await supabaseAdmin.from("user_roles").delete().eq("user_id", uid);
+  const { error: roleErr } = await supabaseAdmin
+    .from("user_roles")
+    .insert({ user_id: uid, role: data.role });
+  if (roleErr) throw new Error(roleErr.message);
+
+  if (data.role === "department_manager") {
+    await supabaseAdmin
+      .from("departments")
+      .update({ manager_id: uid })
+      .eq("id", data.department_id)
+      .eq("branch_id", branchId);
+  }
+
+  return uid;
+}
+
+/** Best-effort auth cleanup after archive; non-fatal when FK triggers block delete. */
 async function cleanupOrphanEmployeeAuth(supabaseAdmin: AdminClient, idNumber: string) {
   const email = idEmail(idNumber);
   const uid = await findAuthUserIdByEmail(supabaseAdmin, email);
@@ -31,7 +103,9 @@ async function cleanupOrphanEmployeeAuth(supabaseAdmin: AdminClient, idNumber: s
   const { data: prof } = await supabaseAdmin.from("profiles").select("id").eq("id", uid).maybeSingle();
   if (!prof) {
     const { error } = await supabaseAdmin.auth.admin.deleteUser(uid);
-    if (error) throw new Error(error.message);
+    if (error) {
+      console.error(`[cleanupOrphanEmployeeAuth] deleteUser failed for ${uid}: ${formatAuthError(error)}`);
+    }
   }
 }
 
@@ -120,6 +194,8 @@ const createEmployeeSchemaExt = createEmployeeSchema.extend({
   force_archived: z.boolean().optional().default(false),
 });
 
+type CreateEmployeeInput = z.infer<typeof createEmployeeSchemaExt>;
+
 export const createEmployee = createServerFn({ method: "POST" })
   .middleware([requireBranchContext])
   .inputValidator((data: unknown) => createEmployeeSchemaExt.parse(data))
@@ -167,36 +243,16 @@ export const createEmployee = createServerFn({ method: "POST" })
       if (aErr) throw new Error(aErr.message);
       const arch = (archRows as unknown[] | null)?.[0] ?? null;
       if (arch) {
-        const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-        await cleanupOrphanEmployeeAuth(supabaseAdmin, data.id_number);
-        const { data: liveAfterCleanup, error: liveErr } = await context.supabase
-          .from("profiles")
-          .select("id, first_name, last_name, full_name, is_active, job_title, department_id, on_leave, departments(name)")
-          .eq("id_number", data.id_number)
-          .eq("branch_id", branchId)
-          .maybeSingle();
-        if (liveErr) throw new Error(liveErr.message);
-        if (liveAfterCleanup) {
-          const payload = {
-            id: liveAfterCleanup.id,
-            name:
-              [liveAfterCleanup.first_name, liveAfterCleanup.last_name].filter(Boolean).join(" ") ||
-              liveAfterCleanup.full_name ||
-              "",
-            job_title: liveAfterCleanup.job_title ?? "",
-            department_id: liveAfterCleanup.department_id ?? null,
-            department_name: (liveAfterCleanup as { departments?: { name?: string } }).departments?.name ?? null,
-            is_active: liveAfterCleanup.is_active !== false,
-            on_leave: !!(liveAfterCleanup as { on_leave?: boolean }).on_leave,
-          };
-          throw new Error(`DUPLICATE_EMPLOYEE::${JSON.stringify(payload)}`);
-        }
-        // Archive row alone does not block re-hire after permanent removal.
+        throw new Error(`ARCHIVED_EXISTS::${JSON.stringify(arch)}`);
       }
     }
 
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    await cleanupOrphanEmployeeAuth(supabaseAdmin, data.id_number);
+
+    const reprovisionedId = await reprovisionOrphanEmployeeAuth(supabaseAdmin, data, branchId);
+    if (reprovisionedId) {
+      return { id: reprovisionedId };
+    }
 
     const { data: created, error } = await supabaseAdmin.auth.admin.createUser({
       email: idEmail(data.id_number),
@@ -213,11 +269,13 @@ export const createEmployee = createServerFn({ method: "POST" })
       },
     });
     if (error) {
-      const msg = error.message?.toLowerCase() ?? "";
+      const msg = formatAuthError(error).toLowerCase();
       if (msg.includes("already") || msg.includes("registered") || msg.includes("exists") || msg.includes("duplicate")) {
+        const fallbackId = await reprovisionOrphanEmployeeAuth(supabaseAdmin, data, branchId);
+        if (fallbackId) return { id: fallbackId };
         throw new Error("כבר קיים עובד עם מספר זהות זה.");
       }
-      throw new Error(error.message || "שגיאה ביצירת עובד");
+      throw new Error(formatAuthError(error) || "שגיאה ביצירת עובד");
     }
 
     const newUserId = created.user?.id ?? null;

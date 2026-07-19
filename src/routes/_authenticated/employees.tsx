@@ -4,6 +4,7 @@ import { useServerFn } from "@tanstack/react-start";
 import { useState, useMemo, useRef, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { createEmployee, resetEmployeePassword, deleteEmployee, setEmployeeActive, updateEmployee } from "@/lib/employees.functions";
+import { extractServerFnErrorMessage } from "@/lib/server-fn-error";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -763,7 +764,7 @@ export function CreateEmployeeDialog({
       onClose();
     },
     onError: (e: any) => {
-      const msg: string = e?.message ?? "שגיאה ביצירת עובד";
+      const msg = extractServerFnErrorMessage(e, "שגיאה ביצירת עובד");
       const idx = msg.indexOf("DUPLICATE_EMPLOYEE::");
       if (idx >= 0) {
         try {
@@ -814,7 +815,7 @@ export function CreateEmployeeDialog({
       setArchived(null);
       onClose();
     },
-    onError: (e: any) => toast.error(e?.message ?? "שגיאה ביצירת עובד"),
+    onError: (e: any) => toast.error(extractServerFnErrorMessage(e, "שגיאה ביצירת עובד")),
   });
 
 
