@@ -364,6 +364,9 @@ export type Database = {
       }
       break_requests: {
         Row: {
+          actual_duration: number | null
+          actual_end: string | null
+          actual_start: string | null
           approval_decided_at: string | null
           approved_at_time: string | null
           approved_by: string | null
@@ -375,18 +378,30 @@ export type Database = {
           department_id: string | null
           duration_minutes: number
           end_notified_at: string | null
+          ended_by: string | null
+          ended_by_manager_id: string | null
+          ended_by_manager_name: string | null
           ending_notified_at: string | null
           ends_at: string | null
           id: string
           note: string | null
+          overtime_minutes: number | null
+          planned_duration: number | null
+          planned_start: string | null
+          rejected_at: string | null
+          rejected_by: string | null
+          rejection_reason: string | null
           requested_at: string
           start_notified_at: string | null
           started_at: string | null
-          status: string
+          status: Database["public"]["Enums"]["break_request_status"]
           updated_at: string
           user_id: string
         }
         Insert: {
+          actual_duration?: number | null
+          actual_end?: string | null
+          actual_start?: string | null
           approval_decided_at?: string | null
           approved_at_time?: string | null
           approved_by?: string | null
@@ -398,18 +413,30 @@ export type Database = {
           department_id?: string | null
           duration_minutes: number
           end_notified_at?: string | null
+          ended_by?: string | null
+          ended_by_manager_id?: string | null
+          ended_by_manager_name?: string | null
           ending_notified_at?: string | null
           ends_at?: string | null
           id?: string
           note?: string | null
+          overtime_minutes?: number | null
+          planned_duration?: number | null
+          planned_start?: string | null
+          rejected_at?: string | null
+          rejected_by?: string | null
+          rejection_reason?: string | null
           requested_at: string
           start_notified_at?: string | null
           started_at?: string | null
-          status?: string
+          status?: Database["public"]["Enums"]["break_request_status"]
           updated_at?: string
           user_id: string
         }
         Update: {
+          actual_duration?: number | null
+          actual_end?: string | null
+          actual_start?: string | null
           approval_decided_at?: string | null
           approved_at_time?: string | null
           approved_by?: string | null
@@ -421,14 +448,23 @@ export type Database = {
           department_id?: string | null
           duration_minutes?: number
           end_notified_at?: string | null
+          ended_by?: string | null
+          ended_by_manager_id?: string | null
+          ended_by_manager_name?: string | null
           ending_notified_at?: string | null
           ends_at?: string | null
           id?: string
           note?: string | null
+          overtime_minutes?: number | null
+          planned_duration?: number | null
+          planned_start?: string | null
+          rejected_at?: string | null
+          rejected_by?: string | null
+          rejection_reason?: string | null
           requested_at?: string
           start_notified_at?: string | null
           started_at?: string | null
-          status?: string
+          status?: Database["public"]["Enums"]["break_request_status"]
           updated_at?: string
           user_id?: string
         }
@@ -2203,6 +2239,10 @@ export type Database = {
     }
     Functions: {
       activate_due_break_requests: { Args: never; Returns: number }
+      approve_break_request: {
+        Args: { _approved_at_time?: string; _id: string }
+        Returns: undefined
+      }
       archive_employee: {
         Args: { _reason?: string; _user_id: string }
         Returns: string
@@ -2239,7 +2279,10 @@ export type Database = {
       }
       current_active_branch: { Args: never; Returns: string }
       delete_branch_cascade: { Args: { _branch_id: string }; Returns: Json }
-      end_break_by_manager: { Args: { _id: string }; Returns: undefined }
+      end_break_by_manager: {
+        Args: { _id: string; _reason?: string }
+        Returns: undefined
+      }
       end_my_break: { Args: { _id: string }; Returns: undefined }
       find_archived_by_id_number: {
         Args: { _id_number: string }
@@ -2473,7 +2516,10 @@ export type Database = {
         Args: { _event: string; _payload?: Json; _target_user_id?: string }
         Returns: string
       }
-      manual_end_break: { Args: { _id: string }; Returns: undefined }
+      manual_end_break: {
+        Args: { _id: string; _reason?: string }
+        Returns: undefined
+      }
       notify_announcement_edited: {
         Args: { _ann_id: string; _title: string }
         Returns: undefined
@@ -2492,6 +2538,10 @@ export type Database = {
         Returns: undefined
       }
       reset_breaks_log_daily: { Args: never; Returns: undefined }
+      reject_break_request: {
+        Args: { _id: string; _reason?: string }
+        Returns: undefined
+      }
       set_department_manager: {
         Args: { _dept_id: string; _new_manager_id: string }
         Returns: undefined
@@ -2509,6 +2559,16 @@ export type Database = {
         | "department_manager"
         | "employee"
         | "system_admin"
+      break_request_status:
+        | "scheduled"
+        | "pending_approval"
+        | "approved"
+        | "waiting_for_start"
+        | "active"
+        | "completed"
+        | "rejected"
+        | "ended_by_manager"
+        | "cancelled"
       comm_audit_action:
         | "created"
         | "edited"
@@ -2674,6 +2734,17 @@ export const Constants = {
         "department_manager",
         "employee",
         "system_admin",
+      ],
+      break_request_status: [
+        "scheduled",
+        "pending_approval",
+        "approved",
+        "waiting_for_start",
+        "active",
+        "completed",
+        "rejected",
+        "ended_by_manager",
+        "cancelled",
       ],
       comm_audit_action: [
         "created",

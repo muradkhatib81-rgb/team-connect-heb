@@ -44,6 +44,11 @@ import { CreateEmployeeDialog } from "./employees";
 import { ManagementOnShiftCard } from "@/components/management-on-shift-card";
 import { MorningBoard } from "@/components/morning-board";
 import { LiveShiftCardsSection } from "@/components/live-shift-cards";
+import {
+  BREAK_PRE_ACTIVE_STATUSES,
+  BREAK_STATUS_LABEL,
+  BREAK_STATUS_TONE,
+} from "@/lib/break-workflow";
 
 export const Route = createFileRoute("/_authenticated/dashboard")({
   component: DashboardPage,
@@ -1974,7 +1979,7 @@ function MyActiveBreakCard({ userId }: { userId: string }) {
           "id, user_id, status, break_setting_id, approved_at_time, approval_decided_at, started_at, ends_at, completed_at, duration_minutes, approved_by",
         )
         .eq("user_id", userId)
-        .in("status", ["approved", "active"])
+        .in("status", [...BREAK_PRE_ACTIVE_STATUSES, "active"])
         .order("created_at", { ascending: false })
         .limit(1)
         .maybeSingle();
@@ -2040,7 +2045,9 @@ function MyActiveBreakCard({ userId }: { userId: string }) {
 
   const now = Date.now();
   const isActive = r.status === "active";
-  const startsAtIso: string | null = r.started_at ?? r.approved_at_time ?? null;
+  const isPreActive = (BREAK_PRE_ACTIVE_STATUSES as readonly string[]).includes(r.status);
+  const startsAtIso: string | null =
+    r.started_at ?? r.approved_at_time ?? (r as any).requested_at ?? null;
   const endsAtMs = r.ends_at
     ? new Date(r.ends_at).getTime()
     : startsAtIso
@@ -2075,9 +2082,11 @@ function MyActiveBreakCard({ userId }: { userId: string }) {
     ? `+${fmtHMS(overrunMs)}`
     : isActive && endsAtMs
       ? fmtHMS(remainingMs)
-      : endsAtMs
-        ? fmtHMS(Math.max(0, endsAtMs - now))
-        : "--:--";
+      : isPreActive && startsAtIso
+        ? fmtHMS(Math.max(0, new Date(startsAtIso).getTime() - now))
+        : endsAtMs
+          ? fmtHMS(Math.max(0, endsAtMs - now))
+          : "--:--";
 
   const actualDurMin =
     r.completed_at && startsAtIso
@@ -2271,7 +2280,7 @@ function BreakShortcutCard({ userId }: { userId: string }) {
           "id, status, break_setting_id, requested_at, approved_at_time, approval_decided_at, started_at, ends_at, duration_minutes, approved_by",
         )
         .eq("user_id", userId)
-        .in("status", ["pending", "approved", "active"])
+        .in("status", [...BREAK_PRE_ACTIVE_STATUSES, "active"])
         .order("created_at", { ascending: false })
         .limit(1)
         .maybeSingle();
@@ -2358,7 +2367,7 @@ function BreakShortcutCard({ userId }: { userId: string }) {
     );
   }
 
-  if (r.status === "pending") {
+  if (r.status === "pending" || r.status === "pending_approval") {
     return (
       <Card
         role="button"
@@ -2391,7 +2400,9 @@ function BreakShortcutCard({ userId }: { userId: string }) {
 
   const now = Date.now();
   const isActive = r.status === "active";
-  const startsAtIso: string | null = r.started_at ?? r.approved_at_time ?? null;
+  const isPreActive = (BREAK_PRE_ACTIVE_STATUSES as readonly string[]).includes(r.status);
+  const startsAtIso: string | null =
+    r.started_at ?? r.approved_at_time ?? (r as any).requested_at ?? null;
   const endsAtMs = r.ends_at
     ? new Date(r.ends_at).getTime()
     : startsAtIso
@@ -2409,7 +2420,13 @@ function BreakShortcutCard({ userId }: { userId: string }) {
 
   const bigTimer = overrun
     ? `+${fmtHMS(overrunMs)}`
-    : endsAtMs ? fmtHMS(Math.max(0, remainingMs)) : "--:--";
+    : isActive && endsAtMs
+      ? fmtHMS(remainingMs)
+      : isPreActive && startsAtIso
+        ? fmtHMS(Math.max(0, new Date(startsAtIso).getTime() - now))
+        : endsAtMs
+          ? fmtHMS(Math.max(0, remainingMs))
+          : "--:--";
 
   const canEnd = isActive;
 
@@ -2577,7 +2594,7 @@ function OnBreakSection({ profile }: { profile: any }) {
       const { count, error } = await supabase
         .from("break_requests")
         .select("id", { count: "exact", head: true })
-        .eq("status", "pending");
+        .eq("status", "pending_approval");
       if (error) throw error;
       return count ?? 0;
     },
@@ -2740,21 +2757,8 @@ function OnBreakSection({ profile }: { profile: any }) {
         }).format(new Date(iso))
       : "—";
 
-  const STATUS_LABEL: Record<string, string> = {
-    pending: "ממתין לאישור",
-    approved: "אושר · טרם יצא להפסקה",
-    active: "נמצא בהפסקה",
-    completed: "סיים את ההפסקה",
-    cancelled: "בוטלה",
-  };
-
-  const STATUS_TONE: Record<string, "default" | "secondary" | "destructive" | "outline"> = {
-    pending: "secondary",
-    approved: "outline",
-    active: "default",
-    completed: "secondary",
-    cancelled: "destructive",
-  };
+  const STATUS_LABEL = BREAK_STATUS_LABEL;
+  const STATUS_TONE = BREAK_STATUS_TONE;
 
 
   return (
@@ -3100,7 +3104,7 @@ function OnBreakSection({ profile }: { profile: any }) {
                         ) : (
                           <CheckCircle2 className="size-4" />
                         )}
-                        החזר מהפסקה
+                        החזר עובד מהפסקה
                       </Button>
                     </div>
                   </li>

@@ -45,6 +45,16 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import {
+  BREAK_PRE_ACTIVE_STATUSES,
+  BREAK_PENDING_APPROVAL_STATUSES,
+  BREAK_STATUS_LABEL,
+  BREAK_STATUS_TONE,
+  BreakLiveTimer,
+  fmtBreakTime,
+  isoFromLocalTime,
+  toLocalTime,
+} from "@/lib/break-workflow";
 
 export const Route = createFileRoute("/_authenticated/breaks")({
   component: BreaksPage,
@@ -74,47 +84,6 @@ interface BreakRequest {
   ends_at: string | null;
   completed_at: string | null;
   created_at: string;
-}
-
-const STATUS_LABEL: Record<string, string> = {
-  pending: "ממתינה לאישור",
-  approved: "אושרה",
-  active: "בהפסקה",
-  completed: "הסתיימה",
-  cancelled: "בוטלה",
-};
-const STATUS_TONE: Record<string, "default" | "secondary" | "destructive" | "outline"> = {
-  pending: "secondary",
-  approved: "default",
-  active: "default",
-  completed: "outline",
-  cancelled: "destructive",
-};
-
-function fmtTime(iso: string | null) {
-  if (!iso) return "—";
-  const d = new Date(iso);
-  return new Intl.DateTimeFormat("he-IL", {
-    timeZone: "Asia/Jerusalem",
-    hour: "2-digit",
-    minute: "2-digit",
-    hour12: false,
-  }).format(d);
-}
-
-function isoFromLocalTime(timeStr: string): string {
-  // timeStr "HH:MM" → today's date at that local time, ISO
-  const [hh, mm] = timeStr.split(":").map(Number);
-  const now = new Date();
-  const d = new Date(now.getFullYear(), now.getMonth(), now.getDate(), hh, mm, 0, 0);
-  return d.toISOString();
-}
-
-function toLocalTime(iso: string): string {
-  const d = new Date(iso);
-  const hh = String(d.getHours()).padStart(2, "0");
-  const mm = String(d.getMinutes()).padStart(2, "0");
-  return `${hh}:${mm}`;
 }
 
 function BreaksPage() {
@@ -207,6 +176,10 @@ function BreaksPage() {
             toast.success("ההפסקה שלך התחילה");
           } else if (prev !== "completed" && next === "completed") {
             toast("ההפסקה הסתיימה");
+          } else if (prev !== "rejected" && next === "rejected") {
+            toast.error("בקשת ההפסקה נדחתה");
+          } else if (prev !== "ended_by_manager" && next === "ended_by_manager") {
+            toast("ההפסקה הסתיימה על ידי מנהל");
           }
           qc.invalidateQueries({ queryKey: ["my-break-requests"] });
         },
@@ -296,13 +269,13 @@ function BreaksPage() {
         note: note.trim() || null,
       });
       if (error) throw error;
-      return { requiresApproval: effectiveRequiresApproval };
+      return { requiresApproval: effectiveRequiresApproval, timeStr };
     },
     onSuccess: (result) => {
       toast.success(
         result.requiresApproval
           ? "בקשת ההפסקה נשלחה לאישור"
-          : "הבקשה נקלטה. ההפסקה תתחיל בשעה שנבחרה.",
+          : `ההפסקה נקבעה בהצלחה.\nההפסקה תתחיל אוטומטית בשעה ${result.timeStr}.`,
       );
       setTimeDialogOpen(false);
       setSettingId("");
@@ -453,25 +426,25 @@ function BreaksPage() {
                         {setting?.name ?? "הפסקה"} · {r.duration_minutes} דק׳
                       </p>
                       <p className="text-xs text-muted-foreground">
-                        שעה: {fmtTime(showTime)}
+                        שעה: {fmtBreakTime(showTime)}
                         {r.status === "active" && r.ends_at ? (
-                          <> · מסתיים ב־{fmtTime(r.ends_at)}</>
+                          <> · מסתיים ב־{fmtBreakTime(r.ends_at)}</>
                         ) : null}
                       </p>
                       {r.status === "active" && r.ends_at && (
                         <BreakLiveTimer endsAt={r.ends_at} />
                       )}
-                      {r.status === "approved" && !r.started_at && (
+                      {(BREAK_PRE_ACTIVE_STATUSES as readonly string[]).includes(r.status) && (
                         <p className="text-xs text-muted-foreground mt-1">
-                          ההפסקה תתחיל אוטומטית בשעה שנבחרה. עד אז את/ה במצב "בעבודה".
+                          ההפסקה תתחיל אוטומטית בשעה {fmtBreakTime(showTime)}. עד אז את/ה במצב "בעבודה".
                         </p>
                       )}
                       {r.note && (
                         <p className="text-xs text-muted-foreground mt-1">הערה: {r.note}</p>
                       )}
                     </div>
-                    <Badge variant={STATUS_TONE[r.status] ?? "secondary"}>
-                      {STATUS_LABEL[r.status] ?? r.status}
+                    <Badge variant={BREAK_STATUS_TONE[r.status] ?? "secondary"}>
+                      {BREAK_STATUS_LABEL[r.status] ?? r.status}
                     </Badge>
                   </Card>
                 );
@@ -503,9 +476,12 @@ export function ApproveList({
 }) {
   const qc = useQueryClient();
   const [editing, setEditing] = useState<BreakRequest | null>(null);
-  const [deleteTarget, setDeleteTarget] = useState<BreakRequest | null>(null);
+  const [rejectTarget, setRejectTarget] = useState<BreakRequest | null>(null);
+  const [rejectReason, setRejectReason] = useState("");
 
-  const pending = all.filter((r) => r.status === "pending");
+  const pending = all.filter((r) =>
+    (BREAK_PENDING_APPROVAL_STATUSES as readonly string[]).includes(r.status),
+  );
 
   const profOf = (uid: string) => profiles.find((p) => p.id === uid);
   const deptName = (id: string | null) =>
@@ -518,7 +494,7 @@ export function ApproveList({
     const t = new Date(target).getTime();
     return all.filter((r) => {
       if (r.id === excludeId) return false;
-      if (r.status === "cancelled" || r.status === "completed") return false;
+      if (r.status === "cancelled" || r.status === "completed" || r.status === "rejected" || r.status === "ended_by_manager") return false;
       const ref = r.approved_at_time ?? r.requested_at;
       const rt = new Date(ref).getTime();
       return Math.abs(rt - t) <= 60_000; // within 1 minute
@@ -527,50 +503,41 @@ export function ApproveList({
 
   const approveMut = useMutation({
     mutationFn: async (input: { id: string; approvedTimeIso: string }) => {
-      const { error } = await supabase
-        .from("break_requests")
-        .update({
-          status: "approved",
-          approved_at_time: input.approvedTimeIso,
-          approved_by: me,
-          approval_decided_at: new Date().toISOString(),
-        })
-        .eq("id", input.id);
+      const { error } = await (supabase as any).rpc("approve_break_request", {
+        _id: input.id,
+        _approved_at_time: input.approvedTimeIso,
+      });
       if (error) throw error;
-      // Notify the employee
-      const req = all.find((r) => r.id === input.id);
-      if (req) {
-        await supabase.from("schedule_notifications").insert({
-          user_id: req.user_id,
-          schedule_id: null,
-          message: `בקשת ההפסקה שלך אושרה. שעת ההפסקה עודכנה ל־${fmtTime(input.approvedTimeIso)}.`,
-        });
-      }
     },
     onSuccess: () => {
       toast.success("הבקשה אושרה");
       setEditing(null);
       qc.invalidateQueries({ queryKey: ["all-break-requests"] });
       qc.invalidateQueries({ queryKey: ["my-break-requests"] });
+      qc.invalidateQueries({ queryKey: ["dashboard-pending-breaks"] });
     },
     onError: (e: any) => toast.error(e?.message ?? "שגיאה"),
   });
 
-  const deleteMut = useMutation({
-    mutationFn: async (id: string) => {
-      const { error } = await supabase.from("break_requests").delete().eq("id", id);
+  const rejectMut = useMutation({
+    mutationFn: async (input: { id: string; reason?: string }) => {
+      const { error } = await (supabase as any).rpc("reject_break_request", {
+        _id: input.id,
+        _reason: input.reason?.trim() || null,
+      });
       if (error) throw error;
     },
     onSuccess: () => {
-      toast.success("הבקשה נמחקה");
-      setDeleteTarget(null);
+      toast.success("הבקשה נדחתה");
+      setRejectTarget(null);
+      setRejectReason("");
       qc.invalidateQueries({ queryKey: ["all-break-requests"] });
       qc.invalidateQueries({ queryKey: ["my-break-requests"] });
       qc.invalidateQueries({ queryKey: ["dashboard-on-break"] });
       qc.invalidateQueries({ queryKey: ["dashboard-pending-breaks"] });
       qc.invalidateQueries({ queryKey: ["dashboard-daily-breaks"] });
     },
-    onError: (e: any) => toast.error(e?.message ?? "שגיאה במחיקה"),
+    onError: (e: any) => toast.error(e?.message ?? "שגיאה בדחייה"),
   });
 
   if (loading) {
@@ -605,7 +572,7 @@ export function ApproveList({
                   </p>
                   <p className="text-xs text-muted-foreground">
                     {setting?.name ?? "הפסקה"} · {r.duration_minutes} דק׳ · ביקש/ה לשעה{" "}
-                    {fmtTime(r.requested_at)}
+                    {fmtBreakTime(r.requested_at)}
                   </p>
                   {r.note && (
                     <p className="text-xs text-muted-foreground mt-1">הערה: {r.note}</p>
@@ -628,15 +595,18 @@ export function ApproveList({
                     }
                     disabled={approveMut.isPending}
                   >
-                    <CheckCircle2 className="size-4" /> אישור
+                    <CheckCircle2 className="size-4" /> אשר
                   </Button>
                   <Button
                     size="sm"
                     variant="ghost"
                     className="gap-1 text-destructive hover:text-destructive"
-                    onClick={() => setDeleteTarget(r)}
+                    onClick={() => {
+                      setRejectTarget(r);
+                      setRejectReason("");
+                    }}
                   >
-                    <Trash2 className="size-4" /> מחיקה
+                    <Trash2 className="size-4" /> דחה
                   </Button>
                 </div>
               </div>
@@ -686,23 +656,41 @@ export function ApproveList({
       </Dialog>
 
       <AlertDialog
-        open={!!deleteTarget}
-        onOpenChange={(o) => !o && setDeleteTarget(null)}
+        open={!!rejectTarget}
+        onOpenChange={(o) => {
+          if (!o) {
+            setRejectTarget(null);
+            setRejectReason("");
+          }
+        }}
       >
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>מחיקת בקשת הפסקה</AlertDialogTitle>
+            <AlertDialogTitle>דחיית בקשת הפסקה</AlertDialogTitle>
             <AlertDialogDescription>
-              הבקשה תוסר מיד אצל המנהל ואצל העובד. לא ניתן לשחזר.
+              העובד/ת יקבל/תקבל הודעה על הדחייה. ניתן להוסיף סיבה (אופציונלי).
             </AlertDialogDescription>
           </AlertDialogHeader>
+          <div className="py-2">
+            <Label htmlFor="reject-reason">סיבת דחייה (אופציונלי)</Label>
+            <Textarea
+              id="reject-reason"
+              value={rejectReason}
+              onChange={(e) => setRejectReason(e.target.value)}
+              rows={3}
+              className="mt-1.5"
+            />
+          </div>
           <AlertDialogFooter>
             <AlertDialogCancel>ביטול</AlertDialogCancel>
             <AlertDialogAction
-              onClick={() => deleteTarget && deleteMut.mutate(deleteTarget.id)}
-              disabled={deleteMut.isPending}
+              onClick={() =>
+                rejectTarget &&
+                rejectMut.mutate({ id: rejectTarget.id, reason: rejectReason })
+              }
+              disabled={rejectMut.isPending}
             >
-              מחיקה
+              דחה
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -753,41 +741,5 @@ function EditTimeDialog({
         </Button>
       </DialogFooter>
     </DialogContent>
-  );
-}
-
-/**
- * Live countdown → count-up display for an active break.
- * - Source of truth is `endsAt` set by the server (activate_due_break_requests).
- * - When now < endsAt: shows remaining time counting down (MM:SS).
- * - When now >= endsAt: switches to red count-up "חריגה MM:SS", meaning the
- *   employee stayed past their allotted break. The break does NOT auto-end;
- *   only the employee ("סיום הפסקה") or a manager ("החזר מהפסקה") ends it.
- * The 1-second interval is a pure display ticker — it does not decide state.
- */
-function BreakLiveTimer({ endsAt }: { endsAt: string }) {
-  const [now, setNow] = useState(() => Date.now());
-  useEffect(() => {
-    const t = setInterval(() => setNow(Date.now()), 1000);
-    return () => clearInterval(t);
-  }, []);
-  const endMs = new Date(endsAt).getTime();
-  const diffMs = endMs - now;
-  const abs = Math.max(0, Math.abs(diffMs));
-  const mm = String(Math.floor(abs / 60000)).padStart(2, "0");
-  const ss = String(Math.floor((abs % 60000) / 1000)).padStart(2, "0");
-  const overrun = diffMs <= 0;
-  return (
-    <p
-      className={
-        "mt-1 text-sm font-mono tabular-nums " +
-        (overrun ? "text-red-600 font-bold" : "text-foreground")
-      }
-      dir="ltr"
-      aria-live="polite"
-    >
-      {overrun ? "חריגה " : "נותר "}
-      {mm}:{ss}
-    </p>
   );
 }

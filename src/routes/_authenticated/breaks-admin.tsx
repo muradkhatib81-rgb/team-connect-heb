@@ -157,7 +157,9 @@ function BreaksAdminPage() {
     );
   }
 
-  const pendingCount = (allReqQ.data ?? []).filter((r) => r.status === "pending").length;
+  const pendingCount = (allReqQ.data ?? []).filter((r) =>
+    r.status === "pending_approval" || r.status === "pending",
+  ).length;
 
   return (
     <div className="space-y-6">
