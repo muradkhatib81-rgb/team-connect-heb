@@ -47,12 +47,14 @@ import {
   BREAK_STATUS_LABEL,
   BREAK_STATUS_TONE,
   BreakLiveTimer,
+  breakStartIso,
   fmtBreakTime,
   isBreakEditable,
   isoFromLocalTime,
   sortBreaksByStart,
   toLocalTime,
   todayJerusalemDate,
+  useActivateDueBreaksPoll,
 } from "@/lib/break-workflow";
 
 export const Route = createFileRoute("/_authenticated/break-planning")({
@@ -119,6 +121,18 @@ function BreakPlanningPage() {
       if (error) throw error;
       return sortBreaksByStart((data ?? []) as BreakRequestRow[]);
     },
+  });
+
+  const rows = todayQ.data ?? [];
+  const activeBreak = rows.find((r) => r.status === "active");
+  const nextDueRow = rows.find(
+    (r) =>
+      r.status !== "active" &&
+      ["scheduled", "approved", "waiting_for_start"].includes(r.status),
+  );
+  useActivateDueBreaksPoll(me?.id, qc, {
+    plannedStartIso: nextDueRow ? breakStartIso(nextDueRow) : null,
+    isActive: !!activeBreak,
   });
 
   useEffect(() => {
@@ -227,9 +241,6 @@ function BreakPlanningPage() {
     },
     onError: (e: any) => toast.error(e?.message ?? "שגיאה"),
   });
-
-  const rows = todayQ.data ?? [];
-  const activeBreak = rows.find((r) => r.status === "active");
 
   if (!me) return null;
 

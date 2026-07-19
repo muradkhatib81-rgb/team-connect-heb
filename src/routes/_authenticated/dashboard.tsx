@@ -51,6 +51,8 @@ import {
   pickNextScheduledBreak,
   pickPrimaryBreak,
   fmtBreakTime,
+  breakStartIso,
+  useActivateDueBreaksPoll,
 } from "@/lib/break-workflow";
 
 export const Route = createFileRoute("/_authenticated/dashboard")({
@@ -1981,7 +1983,11 @@ function MyActiveBreakCard({ userId }: { userId: string }) {
     },
   });
 
-  useActivateDueBreaksPoll(userId, qc);
+  const activeRow = breakQ.data;
+  useActivateDueBreaksPoll(userId, qc, {
+    plannedStartIso: activeRow ? breakStartIso(activeRow) : null,
+    isActive: activeRow?.status === "active",
+  });
 
   useEffect(() => {
     const ch = supabase
@@ -2277,31 +2283,6 @@ async function fetchMyBreakDashboardRows(userId: string) {
   return { primary, next, all: enriched };
 }
 
-function useActivateDueBreaksPoll(userId: string, qc: ReturnType<typeof useQueryClient>) {
-  useEffect(() => {
-    if (!userId) return;
-    let cancelled = false;
-    const invalidate = () => {
-      qc.invalidateQueries({ queryKey: ["my-break-shortcut", userId] });
-      qc.invalidateQueries({ queryKey: ["my-active-break", userId] });
-    };
-    const tick = async () => {
-      try {
-        const { data, error } = await (supabase as any).rpc("activate_due_break_requests");
-        if (!cancelled && !error && typeof data === "number" && data > 0) invalidate();
-      } catch {
-        // non-fatal
-      }
-    };
-    void tick();
-    const id = setInterval(tick, 30000);
-    return () => {
-      cancelled = true;
-      clearInterval(id);
-    };
-  }, [userId, qc]);
-}
-
 function BreakShortcutCard({ userId, employeeView = false }: { userId: string; employeeView?: boolean }) {
   const qc = useQueryClient();
   const navigate = useNavigate();
@@ -2313,7 +2294,11 @@ function BreakShortcutCard({ userId, employeeView = false }: { userId: string; e
     queryFn: () => fetchMyBreakDashboardRows(userId),
   });
 
-  useActivateDueBreaksPoll(userId, qc);
+  const primaryRow = breakQ.data?.primary ?? null;
+  useActivateDueBreaksPoll(userId, qc, {
+    plannedStartIso: primaryRow ? breakStartIso(primaryRow) : null,
+    isActive: primaryRow?.status === "active",
+  });
 
   useEffect(() => {
     const ch = supabase
@@ -2364,9 +2349,6 @@ function BreakShortcutCard({ userId, employeeView = false }: { userId: string; e
                 אין הפסקה פעילה או מתוכננת כרגע.
               </p>
             </div>
-            <Button size="sm" variant="outline" className="gap-2 shrink-0" asChild>
-              <Link to="/break-planning">תכנון הפסקות</Link>
-            </Button>
           </div>
         </Card>
       );
@@ -2434,6 +2416,7 @@ function BreakShortcutCard({ userId, employeeView = false }: { userId: string; e
   const isPreActive = (BREAK_PRE_ACTIVE_STATUSES as readonly string[]).includes(r.status);
   const startsAtIso: string | null =
     r.started_at ?? r.planned_start ?? r.approved_at_time ?? r.requested_at ?? null;
+  const isPastDueStart = isPreActive && !!startsAtIso && now >= new Date(startsAtIso).getTime();
   const endsAtMs = r.ends_at
     ? new Date(r.ends_at).getTime()
     : startsAtIso
@@ -2588,6 +2571,8 @@ function OnBreakSection({ profile }: { profile: any }) {
     },
   });
   const canSee = isMainAdmin || !!permQ.data;
+
+  useActivateDueBreaksPoll(profile.id, qc);
 
   const onBreakQ = useQuery({
     enabled: canSee,

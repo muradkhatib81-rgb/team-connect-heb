@@ -152,8 +152,9 @@ export function AppShell({ children }: { children: ReactNode }) {
 
   // Managers of breaks: main admin, branch manager, or any user with the explicit permission.
   const isBreaksManager = isMainAdmin || isBranchManager || !!breakPermQ.data?.breaks;
-  // Every user (including managers) can request their own break — managers are also employees.
+  // Plain employees plan breaks via "תכנון הפסקות" only — not the quick-request "/breaks" page.
   const canRequestBreak = true;
+  const canQuickRequestBreak = canRequestBreak && !isPlainEmployee;
   const canManageEom = isMainAdmin || isBranchManager || !!breakPermQ.data?.eom;
 
   type NavEntry = {
@@ -205,7 +206,7 @@ export function AppShell({ children }: { children: ReactNode }) {
       to: "/breaks",
       label: "הפסקה",
       icon: Coffee,
-      visible: canRequestBreak,
+      visible: canQuickRequestBreak,
       section: branchSection,
     },
     {

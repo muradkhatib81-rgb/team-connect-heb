@@ -1,4 +1,6 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import type { QueryClient } from "@tanstack/react-query";
+import { supabase } from "@/integrations/supabase/client";
 
 /** Explicit break request statuses — never infer from timestamps alone. */
 export type BreakRequestStatus =
@@ -184,6 +186,63 @@ export function pickNextScheduledBreak<
  * Countdown → 00:00 → red count-up for active breaks.
  * Source of truth is server `endsAt`.
  */
+/** Polls activation RPCs so scheduled breaks flip to active at start time. */
+export function useActivateDueBreaksPoll(
+  userId: string | undefined,
+  qc: QueryClient,
+  opts?: { plannedStartIso?: string | null; isActive?: boolean },
+) {
+  const activatingRef = useRef(false);
+
+  useEffect(() => {
+    if (!userId) return;
+    let cancelled = false;
+
+    const invalidate = () => {
+      qc.invalidateQueries({ queryKey: ["my-break-shortcut", userId] });
+      qc.invalidateQueries({ queryKey: ["my-active-break", userId] });
+      qc.invalidateQueries({ queryKey: ["dashboard-on-break"] });
+      qc.invalidateQueries({ queryKey: ["dashboard-daily-breaks"] });
+      qc.invalidateQueries({ queryKey: ["my-breaks-today"] });
+    };
+
+    const runActivation = async () => {
+      if (activatingRef.current) return;
+      activatingRef.current = true;
+      try {
+        await (supabase as any).rpc("activate_due_breaks_for_user", { _user_id: userId });
+        await (supabase as any).rpc("activate_due_break_requests");
+        if (!cancelled) invalidate();
+      } finally {
+        activatingRef.current = false;
+      }
+    };
+
+    void runActivation();
+    const intervalMs =
+      opts?.plannedStartIso && !opts?.isActive
+        ? 5000
+        : 15000;
+    const id = setInterval(() => void runActivation(), intervalMs);
+
+    let dueTimer: ReturnType<typeof setTimeout> | undefined;
+    if (opts?.plannedStartIso && !opts?.isActive) {
+      const dueMs = new Date(opts.plannedStartIso).getTime() - Date.now();
+      if (dueMs <= 0) {
+        void runActivation();
+      } else if (dueMs < 86_400_000) {
+        dueTimer = setTimeout(() => void runActivation(), dueMs + 250);
+      }
+    }
+
+    return () => {
+      cancelled = true;
+      clearInterval(id);
+      if (dueTimer) clearTimeout(dueTimer);
+    };
+  }, [userId, qc, opts?.plannedStartIso, opts?.isActive]);
+}
+
 export function BreakLiveTimer({ endsAt }: { endsAt: string }) {
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
