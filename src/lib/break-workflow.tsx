@@ -210,9 +210,17 @@ export function useActivateDueBreaksPoll(
       if (activatingRef.current) return;
       activatingRef.current = true;
       try {
-        await (supabase as any).rpc("activate_due_breaks_for_user", { _user_id: userId });
-        await (supabase as any).rpc("activate_due_break_requests");
-        if (!cancelled) invalidate();
+        const { error: userErr } = await (supabase as any).rpc("activate_due_breaks_for_user", {
+          _user_id: userId,
+        });
+        if (userErr) {
+          console.error("[break-activation] activate_due_breaks_for_user failed:", userErr.message);
+        }
+        const { error: allErr } = await (supabase as any).rpc("activate_due_break_requests");
+        if (allErr) {
+          console.error("[break-activation] activate_due_break_requests failed:", allErr.message);
+        }
+        if (!cancelled && !userErr && !allErr) invalidate();
       } finally {
         activatingRef.current = false;
       }
