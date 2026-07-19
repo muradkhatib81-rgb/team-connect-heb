@@ -45,13 +45,16 @@ import { ManagementOnShiftCard } from "@/components/management-on-shift-card";
 import { MorningBoard } from "@/components/morning-board";
 import { LiveShiftCardsSection } from "@/components/live-shift-cards";
 import {
+  BREAK_PENDING_APPROVAL_STATUSES,
   BREAK_PRE_ACTIVE_STATUSES,
   BREAK_STATUS_LABEL,
   BREAK_STATUS_TONE,
-  pickNextScheduledBreak,
+  pickActiveBreak,
   pickPrimaryBreak,
+  pickUpcomingBreak,
   fmtBreakTime,
   breakStartIso,
+  todayJerusalemDate,
   useActivateDueBreaksPoll,
 } from "@/lib/break-workflow";
 
@@ -228,11 +231,7 @@ function DashboardPage() {
 
       {admin || isDeptManager ? (
         <>
-          {isDeptManager && !admin ? (
-            <BreakShortcutCard userId={profile.id} />
-          ) : (
-            <MyActiveBreakCard userId={profile.id} />
-          )}
+          <BreakShortcutCard userId={profile.id} />
           <TasksStatsSection stats={tasksStatsQuery.data} loading={tasksStatsQuery.isLoading} />
           <SchedulesStatsSection profile={profile} />
           <OnBreakSection profile={profile} />
@@ -2279,8 +2278,150 @@ async function fetchMyBreakDashboardRows(userId: string) {
   );
 
   const primary = pickPrimaryBreak(enriched);
-  const next = pickNextScheduledBreak(enriched, primary?.id);
-  return { primary, next, all: enriched };
+  const active = pickActiveBreak(enriched);
+  const next = active ? pickUpcomingBreak(enriched, active.id) : pickUpcomingBreak(enriched);
+  return { primary, next, active, all: enriched };
+}
+
+type DashboardBreakRow = Awaited<ReturnType<typeof fetchMyBreakDashboardRows>>["all"][number];
+
+function getBreakStartIso(row: DashboardBreakRow) {
+  return row.started_at ?? row.planned_start ?? row.approved_at_time ?? row.requested_at ?? null;
+}
+
+function getBreakEndsAtMs(row: DashboardBreakRow, startsAtIso: string | null) {
+  if (row.ends_at) return new Date(row.ends_at).getTime();
+  if (startsAtIso) return new Date(startsAtIso).getTime() + (row.duration_minutes ?? 0) * 60000;
+  return null;
+}
+
+function DashboardActiveBreakCard({
+  row,
+  onEnd,
+  ending,
+}: {
+  row: DashboardBreakRow;
+  onEnd: () => void;
+  ending: boolean;
+}) {
+  const now = Date.now();
+  const startsAtIso = getBreakStartIso(row);
+  const endsAtMs = getBreakEndsAtMs(row, startsAtIso);
+  const remainingMs = endsAtMs ? endsAtMs - now : 0;
+  const overrunMs = endsAtMs && now > endsAtMs ? now - endsAtMs : 0;
+  const overrun = overrunMs > 0;
+  const bigTimer = overrun ? `+${fmtHMS(overrunMs)}` : endsAtMs ? fmtHMS(remainingMs) : "--:--";
+  const tone = overrun
+    ? { card: "border-red-500 bg-red-50 dark:bg-red-950/30", icon: "bg-red-500/10 text-red-600", timer: "text-red-600", label: "🔴 חריגה" }
+    : { card: "border-green-500 bg-green-50 dark:bg-green-950/30", icon: "bg-green-500/10 text-green-600", timer: "text-green-600", label: "🟢 בהפסקה" };
+
+  return (
+    <Card className={"card-elevated p-5 border-2 " + tone.card}>
+      <div className="flex items-start gap-3">
+        <div className={"size-11 rounded-xl flex items-center justify-center shrink-0 " + tone.icon}>
+          <Coffee className="size-6" />
+        </div>
+        <div className="flex-1 min-w-0 space-y-3">
+          <div className="flex flex-wrap items-center gap-2">
+            <h3 className="font-semibold">הפסקה נוכחית</h3>
+            <Badge variant={overrun ? "destructive" : "default"}>{tone.label}</Badge>
+            <span className="text-sm text-muted-foreground">
+              ☕ {row.setting_name} · {row.duration_minutes} דק׳
+            </span>
+          </div>
+          <div className="flex flex-col items-center justify-center py-1 select-none">
+            <div className={"font-mono font-bold tabular-nums text-4xl sm:text-5xl tracking-wider " + tone.timer}>
+              {bigTimer}
+            </div>
+            <div className="mt-1 text-xs text-muted-foreground">
+              {overrun ? "זמן חריגה — נא לחזור לעבודה" : "זמן נותר להפסקה"}
+            </div>
+          </div>
+          <div className="grid sm:grid-cols-2 gap-x-4 gap-y-1 text-xs text-muted-foreground">
+            {startsAtIso && (
+              <div>▶️ התחלה: <span className="text-foreground font-medium">{fmtHM(startsAtIso)}</span></div>
+            )}
+            {endsAtMs && (
+              <div>🏁 סיום מתוכנן: <span className="text-foreground font-medium">{fmtHM(new Date(endsAtMs).toISOString())}</span></div>
+            )}
+          </div>
+          <Button
+            size="sm"
+            className="gap-2 w-full sm:w-auto"
+            variant={overrun ? "destructive" : "default"}
+            onClick={onEnd}
+            disabled={ending}
+          >
+            {ending ? <Loader2 className="size-4 animate-spin" /> : <CheckCircle2 className="size-4" />}
+            סיום הפסקה
+          </Button>
+        </div>
+      </div>
+    </Card>
+  );
+}
+
+function DashboardUpcomingBreakCard({ row }: { row: DashboardBreakRow }) {
+  const now = Date.now();
+  const startsAtIso = getBreakStartIso(row);
+  const startsMs = startsAtIso ? new Date(startsAtIso).getTime() : null;
+  const countdownMs = startsMs ? Math.max(0, startsMs - now) : 0;
+  const endsAtMs = getBreakEndsAtMs(row, startsAtIso);
+
+  return (
+    <Card className="card-elevated p-5 border-2 border-amber-500 bg-amber-50 dark:bg-amber-950/30">
+      <div className="flex items-start gap-3">
+        <div className="size-11 rounded-xl flex items-center justify-center shrink-0 bg-amber-500/10 text-amber-600">
+          <Clock className="size-6" />
+        </div>
+        <div className="flex-1 min-w-0 space-y-3">
+          <div className="flex flex-wrap items-center gap-2">
+            <h3 className="font-semibold">הפסקה הבאה</h3>
+            <Badge variant="secondary">{BREAK_STATUS_LABEL[row.status] ?? row.status}</Badge>
+            <span className="text-sm text-muted-foreground">
+              ☕ {row.setting_name} · {row.duration_minutes} דק׳
+            </span>
+          </div>
+          <div className="flex flex-col items-center justify-center py-1 select-none">
+            <div className="font-mono font-bold tabular-nums text-4xl sm:text-5xl tracking-wider text-amber-600">
+              {startsMs ? fmtHMS(countdownMs) : "--:--"}
+            </div>
+            <div className="mt-1 text-xs text-muted-foreground">זמן עד תחילת ההפסקה</div>
+          </div>
+          <div className="grid sm:grid-cols-2 gap-x-4 gap-y-1 text-xs text-muted-foreground">
+            {startsAtIso && (
+              <div>▶️ התחלה מתוכננת: <span className="text-foreground font-medium">{fmtHM(startsAtIso)}</span></div>
+            )}
+            {endsAtMs && (
+              <div>🏁 סיום מתוכנן: <span className="text-foreground font-medium">{fmtHM(new Date(endsAtMs).toISOString())}</span></div>
+            )}
+          </div>
+        </div>
+      </div>
+    </Card>
+  );
+}
+
+function DashboardPendingBreakCard({ row }: { row: DashboardBreakRow }) {
+  return (
+    <Card className="card-elevated p-5 border-2 border-amber-500 bg-amber-50 dark:bg-amber-950/30">
+      <div className="flex items-start gap-3">
+        <div className="size-11 rounded-xl bg-amber-500/15 text-amber-600 flex items-center justify-center shrink-0">
+          <Clock className="size-6" />
+        </div>
+        <div className="flex-1 min-w-0 space-y-1">
+          <div className="flex flex-wrap items-center gap-2">
+            <h3 className="font-semibold">הפסקה</h3>
+            <Badge variant="secondary">🟡 ממתינה לאישור</Badge>
+          </div>
+          <p className="text-sm text-muted-foreground">
+            ☕ {row.setting_name} · {row.duration_minutes} דק׳ · שעה מבוקשת{" "}
+            {row.requested_at ? fmtHM(row.requested_at) : "—"}
+          </p>
+        </div>
+      </div>
+    </Card>
+  );
 }
 
 function BreakShortcutCard({ userId, employeeView = false }: { userId: string; employeeView?: boolean }) {
@@ -2294,10 +2435,21 @@ function BreakShortcutCard({ userId, employeeView = false }: { userId: string; e
     queryFn: () => fetchMyBreakDashboardRows(userId),
   });
 
-  const primaryRow = breakQ.data?.primary ?? null;
+  const allRows = breakQ.data?.all ?? [];
+  const activeBreak = pickActiveBreak(allRows);
+  const upcomingBreaks = allRows.filter(
+    (row) =>
+      row.id !== activeBreak?.id &&
+      (BREAK_PRE_ACTIVE_STATUSES as readonly string[]).includes(row.status),
+  );
+  const pendingBreaks = allRows.filter((row) =>
+    (BREAK_PENDING_APPROVAL_STATUSES as readonly string[]).includes(row.status),
+  );
+  const pollTarget = activeBreak ? upcomingBreaks[0] : upcomingBreaks[0] ?? null;
+
   useActivateDueBreaksPoll(userId, qc, {
-    plannedStartIso: primaryRow ? breakStartIso(primaryRow) : null,
-    isActive: primaryRow?.status === "active",
+    plannedStartIso: pollTarget ? breakStartIso(pollTarget) : null,
+    isActive: !!activeBreak,
   });
 
   useEffect(() => {
@@ -2306,7 +2458,10 @@ function BreakShortcutCard({ userId, employeeView = false }: { userId: string; e
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "break_requests", filter: `user_id=eq.${userId}` },
-        () => qc.invalidateQueries({ queryKey: ["my-break-shortcut", userId] }),
+        () => {
+          qc.invalidateQueries({ queryKey: ["my-break-shortcut", userId] });
+          qc.invalidateQueries({ queryKey: ["my-breaks-today"] });
+        },
       )
       .subscribe();
     const id = setInterval(() => setTick((t) => t + 1), 1000);
@@ -2325,6 +2480,7 @@ function BreakShortcutCard({ userId, employeeView = false }: { userId: string; e
       toast.success("סומן: חזרת מההפסקה");
       qc.invalidateQueries({ queryKey: ["my-break-shortcut", userId] });
       qc.invalidateQueries({ queryKey: ["my-active-break", userId] });
+      qc.invalidateQueries({ queryKey: ["my-breaks-today"] });
       qc.invalidateQueries({ queryKey: ["dashboard-on-break"] });
       qc.invalidateQueries({ queryKey: ["dashboard-daily-breaks"] });
     },
@@ -2332,10 +2488,9 @@ function BreakShortcutCard({ userId, employeeView = false }: { userId: string; e
   });
 
   const goRequest = () => navigate({ to: employeeView ? "/break-planning" : "/breaks" });
-  const r = breakQ.data?.primary ?? null;
-  const nextBreak = breakQ.data?.next ?? null;
+  const hasBreakCards = !!activeBreak || upcomingBreaks.length > 0 || pendingBreaks.length > 0;
 
-  if (!r) {
+  if (!hasBreakCards) {
     if (employeeView) {
       return (
         <Card className="card-elevated p-5 border-2 border-border/60">
@@ -2380,169 +2535,143 @@ function BreakShortcutCard({ userId, employeeView = false }: { userId: string; e
     );
   }
 
-  if (r.status === "pending" || r.status === "pending_approval") {
-    return (
-      <Card
-        role={employeeView ? undefined : "button"}
-        tabIndex={employeeView ? undefined : 0}
-        onClick={employeeView ? undefined : goRequest}
-        onKeyDown={employeeView ? undefined : (e) => { if (e.key === "Enter" || e.key === " ") goRequest(); }}
-        className="card-elevated p-5 border-2 border-amber-500 bg-amber-50 dark:bg-amber-950/30 cursor-pointer transition-colors hover:brightness-[0.98]"
-      >
-        <div className="flex items-start gap-3">
-          <div className="size-11 rounded-xl bg-amber-500/15 text-amber-600 flex items-center justify-center shrink-0">
-            <Clock className="size-6" />
-          </div>
-          <div className="flex-1 min-w-0 space-y-1">
-            <div className="flex flex-wrap items-center gap-2">
-              <h3 className="font-semibold">הפסקה</h3>
-              <Badge variant="secondary">🟡 ממתינה לאישור</Badge>
-            </div>
-            <p className="text-sm text-muted-foreground">
-              ☕ {r.setting_name} · {r.duration_minutes} דק׳ · שעה מבוקשת{" "}
-              {r.requested_at ? fmtHM(r.requested_at) : "—"}
-            </p>
-            <p className="text-xs text-muted-foreground">
-              לא ניתן לשלוח בקשה נוספת עד לקבלת החלטה.
-            </p>
-          </div>
-        </div>
-      </Card>
-    );
-  }
-
-  const now = Date.now();
-  const isActive = r.status === "active";
-  const isPreActive = (BREAK_PRE_ACTIVE_STATUSES as readonly string[]).includes(r.status);
-  const startsAtIso: string | null =
-    r.started_at ?? r.planned_start ?? r.approved_at_time ?? r.requested_at ?? null;
-  const isPastDueStart = isPreActive && !!startsAtIso && now >= new Date(startsAtIso).getTime();
-  const endsAtMs = r.ends_at
-    ? new Date(r.ends_at).getTime()
-    : startsAtIso
-      ? new Date(startsAtIso).getTime() + (r.duration_minutes ?? 0) * 60000
-      : null;
-  const remainingMs = endsAtMs ? endsAtMs - now : 0;
-  const overrunMs = endsAtMs && now > endsAtMs ? now - endsAtMs : 0;
-  const overrun = isActive && overrunMs > 0;
-
-  const tone = overrun
-    ? { card: "border-red-500 bg-red-50 dark:bg-red-950/30", icon: "bg-red-500/10 text-red-600", timer: "text-red-600", label: "🔴 חריגה" }
-    : isActive
-      ? { card: "border-green-500 bg-green-50 dark:bg-green-950/30", icon: "bg-green-500/10 text-green-600", timer: "text-green-600", label: "🟢 בהפסקה" }
-      : { card: "border-amber-500 bg-amber-50 dark:bg-amber-950/30", icon: "bg-amber-500/10 text-amber-600", timer: "text-amber-600", label: "🟡 אושרה · ממתינה להתחלה" };
-
-  const bigTimer = overrun
-    ? `+${fmtHMS(overrunMs)}`
-    : isActive && endsAtMs
-      ? fmtHMS(remainingMs)
-      : isPreActive && startsAtIso
-        ? fmtHMS(Math.max(0, new Date(startsAtIso).getTime() - now))
-        : endsAtMs
-          ? fmtHMS(Math.max(0, remainingMs))
-          : "--:--";
-
-  const canEnd = isActive;
-  const cardNavProps = employeeView
-    ? {}
-    : {
-        role: "button" as const,
-        tabIndex: 0,
-        onClick: goRequest,
-        onKeyDown: (e: React.KeyboardEvent) => {
-          if (e.key === "Enter" || e.key === " ") goRequest();
-        },
-      };
-
   return (
-    <Card
-      {...cardNavProps}
-      className={
-        "card-elevated p-5 border-2 transition-colors " +
-        tone.card +
-        (employeeView ? "" : " cursor-pointer hover:brightness-[0.98]")
-      }
-    >
-      <div className="flex items-start gap-3">
-        <div className={"size-11 rounded-xl flex items-center justify-center shrink-0 " + tone.icon}>
-          <Coffee className="size-6" />
-        </div>
-        <div className="flex-1 min-w-0 space-y-3">
-          <div className="flex flex-wrap items-center gap-2">
-            <h3 className="font-semibold">{isActive ? "הפסקה נוכחית" : "הפסקה הבאה"}</h3>
-            <Badge variant={overrun ? "destructive" : isActive ? "default" : "secondary"}>
-              {tone.label}
-            </Badge>
-            <span className="text-sm text-muted-foreground">
-              ☕ {r.setting_name} · {r.duration_minutes} דק׳
-            </span>
-          </div>
-
-          <div className="flex flex-col items-center justify-center py-1 select-none">
-            <div className={"font-mono font-bold tabular-nums text-4xl sm:text-5xl tracking-wider " + tone.timer}>
-              {bigTimer}
-            </div>
-            <div className="mt-1 text-xs text-muted-foreground">
-              {overrun ? "זמן חריגה — נא לחזור לעבודה" : isActive ? "זמן נותר להפסקה" : "הפסקה מאושרת — תתחיל בקרוב"}
-            </div>
-          </div>
-
-          <div className="grid sm:grid-cols-2 gap-x-4 gap-y-1 text-xs text-muted-foreground">
-            {startsAtIso && (
-              <div>▶️ התחלה: <span className="text-foreground font-medium">{fmtHM(startsAtIso)}</span></div>
-            )}
-            {endsAtMs && (
-              <div>🏁 סיום מתוכנן: <span className="text-foreground font-medium">{fmtHM(new Date(endsAtMs).toISOString())}</span></div>
-            )}
-          </div>
-
-          {nextBreak && isActive && (
-            <div className="rounded-md border border-border/60 bg-background/50 p-2.5 text-xs">
-              <div className="font-medium text-foreground">הפסקה הבאה</div>
-              <div className="text-muted-foreground mt-0.5">
-                ☕ {nextBreak.setting_name} · {nextBreak.duration_minutes} דק׳ ·{" "}
-                {fmtBreakTime(nextBreak.planned_start ?? nextBreak.requested_at)}
-              </div>
-            </div>
-          )}
-
-          {(r as any).approver && (
-            <div className="rounded-md border border-border/60 bg-background/50 p-2.5 text-xs space-y-0.5">
-              <div className="font-medium text-foreground">✅ אושרה ע״י</div>
-              <div className="text-muted-foreground">
-                👤 <span className="text-foreground font-medium">{(r as any).approver.full_name}</span>
-                {(r as any).approver.role_label && <span> · 💼 {(r as any).approver.role_label}</span>}
-                {(r as any).approver.job_title && <span> ({(r as any).approver.job_title})</span>}
-              </div>
-              {r.approval_decided_at && (
-                <div className="text-muted-foreground">
-                  📅 <span className="text-foreground font-medium">{formatHeDateTime(r.approval_decided_at)}</span>
-                </div>
-              )}
-            </div>
-          )}
-
-          {canEnd && (
-            <div className="pt-1" onClick={(e) => e.stopPropagation()}>
-              <Button
-                size="sm"
-                className="gap-2 w-full sm:w-auto"
-                variant={overrun ? "destructive" : "default"}
-                onClick={() => endMut.mutate(r.id)}
-                disabled={endMut.isPending}
-              >
-                {endMut.isPending ? <Loader2 className="size-4 animate-spin" /> : <CheckCircle2 className="size-4" />}
-                סיום הפסקה
-              </Button>
-            </div>
-          )}
-
-        </div>
-      </div>
-    </Card>
+    <div className="space-y-4">
+      {pendingBreaks.map((row) => (
+        <DashboardPendingBreakCard key={row.id} row={row} />
+      ))}
+      {activeBreak && (
+        <DashboardActiveBreakCard
+          row={activeBreak}
+          onEnd={() => endMut.mutate(activeBreak.id)}
+          ending={endMut.isPending}
+        />
+      )}
+      {upcomingBreaks.map((row) => (
+        <DashboardUpcomingBreakCard key={row.id} row={row} />
+      ))}
+    </div>
   );
 }
 
+
+type ManagerOnBreakRow = {
+  id: string;
+  userId: string;
+  name: string;
+  job_title: string | null;
+  role_label: string | null;
+  department: string;
+  type: string;
+  durationMinutes: number;
+  startedAt: string | null;
+  endsAt: string | null;
+  approverName: string;
+  upcoming: {
+    type: string;
+    durationMinutes: number;
+    plannedStart: string | null;
+    status: string;
+  } | null;
+};
+
+function ManagerEmployeeBreakPanel({
+  row,
+  fmtT,
+  onReturn,
+  returning,
+}: {
+  row: ManagerOnBreakRow;
+  fmtT: (iso: string | null) => string;
+  onReturn: () => void;
+  returning: boolean;
+}) {
+  const now = Date.now();
+  const endsTs = row.endsAt ? new Date(row.endsAt).getTime() : 0;
+  const remainingMs = endsTs ? endsTs - now : 0;
+  const overrunMs = endsTs && now > endsTs ? now - endsTs : 0;
+  const upcomingStartMs = row.upcoming?.plannedStart
+    ? new Date(row.upcoming.plannedStart).getTime()
+    : null;
+  const upcomingCountdownMs = upcomingStartMs ? Math.max(0, upcomingStartMs - now) : 0;
+
+  return (
+    <div className={row.upcoming ? "grid gap-3 lg:grid-cols-2" : ""}>
+      <Card
+        className={
+          "card-elevated p-4 border-2 " +
+          (overrunMs > 0
+            ? "border-red-500 bg-red-50 dark:bg-red-950/30"
+            : "border-green-500 bg-green-50 dark:bg-green-950/30")
+        }
+      >
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0 space-y-1">
+            <p className="font-semibold truncate">
+              👤 {row.name}
+              {row.role_label ? ` · 💼 ${row.role_label}` : ""}
+            </p>
+            <p className="text-xs text-muted-foreground">
+              🏬 {row.department} · ☕ {row.type} · {row.durationMinutes} דק׳
+            </p>
+            <p className="text-xs text-muted-foreground">
+              ▶️ {fmtT(row.startedAt)} · 🏁 {fmtT(row.endsAt)} · אישר/ה: {row.approverName}
+            </p>
+            <Badge variant={overrunMs > 0 ? "destructive" : "default"} className="mt-1">
+              {overrunMs > 0 ? "🔴 חריגה" : "🟢 הפסקה נוכחית"}
+            </Badge>
+          </div>
+          <div className="text-center shrink-0">
+            <div
+              className={
+                "font-mono font-bold tabular-nums text-2xl " +
+                (overrunMs > 0 ? "text-red-600" : "text-green-600")
+              }
+            >
+              {overrunMs > 0 ? `+${fmtHMS(overrunMs)}` : endsTs ? fmtHMS(remainingMs) : "--:--"}
+            </div>
+            <Button
+              size="sm"
+              variant={overrunMs > 0 ? "destructive" : "outline"}
+              className="gap-1 mt-2"
+              onClick={onReturn}
+              disabled={returning}
+            >
+              {returning ? (
+                <Loader2 className="size-4 animate-spin" />
+              ) : (
+                <CheckCircle2 className="size-4" />
+              )}
+              החזר מההפסקה
+            </Button>
+          </div>
+        </div>
+      </Card>
+
+      {row.upcoming && (
+        <Card className="card-elevated p-4 border-2 border-amber-500 bg-amber-50 dark:bg-amber-950/30">
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0 space-y-1">
+              <p className="font-semibold">הפסקה הבאה · {row.name}</p>
+              <p className="text-xs text-muted-foreground">
+                ☕ {row.upcoming.type} · {row.upcoming.durationMinutes} דק׳
+              </p>
+              <p className="text-xs text-muted-foreground">
+                ▶️ התחלה מתוכננת: {fmtT(row.upcoming.plannedStart)}
+              </p>
+              <Badge variant="secondary" className="mt-1">
+                {BREAK_STATUS_LABEL[row.upcoming.status] ?? row.upcoming.status}
+              </Badge>
+            </div>
+            <div className="font-mono font-bold tabular-nums text-2xl text-amber-600 shrink-0">
+              {upcomingStartMs ? fmtHMS(upcomingCountdownMs) : "--:--"}
+            </div>
+          </div>
+        </Card>
+      )}
+    </div>
+  );
+}
 
 function OnBreakSection({ profile }: { profile: any }) {
   const qc = useQueryClient();
@@ -2587,9 +2716,35 @@ function OnBreakSection({ profile }: { profile: any }) {
       if (error) throw error;
       const rows = (data ?? []) as any[];
       if (!rows.length) return [];
-      const uids = Array.from(new Set(rows.flatMap((r) => [r.user_id, r.approved_by].filter(Boolean))));
+
+      const today = todayJerusalemDate();
+      const dayStart = `${today}T00:00:00+03:00`;
+      const dayEnd = `${today}T23:59:59+03:00`;
+      const activeUserIds = Array.from(new Set(rows.map((r) => r.user_id as string)));
+
+      const { data: upcomingRaw } = await supabase
+        .from("break_requests")
+        .select(
+          "id, user_id, break_setting_id, planned_start, requested_at, approved_at_time, started_at, duration_minutes, status",
+        )
+        .in("user_id", activeUserIds)
+        .in("status", [...BREAK_PRE_ACTIVE_STATUSES])
+        .gte("requested_at", dayStart)
+        .lte("requested_at", dayEnd);
+
+      const uids = Array.from(
+        new Set([
+          ...rows.flatMap((r) => [r.user_id, r.approved_by].filter(Boolean)),
+          ...(upcomingRaw ?? []).map((r: any) => r.user_id),
+        ]),
+      );
       const dids = Array.from(new Set(rows.map((r) => r.department_id).filter(Boolean)));
-      const sids = Array.from(new Set(rows.map((r) => r.break_setting_id).filter(Boolean)));
+      const sids = Array.from(
+        new Set([
+          ...rows.map((r) => r.break_setting_id),
+          ...(upcomingRaw ?? []).map((r: any) => r.break_setting_id),
+        ].filter(Boolean)),
+      );
       const [{ data: profs }, { data: depts }, { data: settings }, { data: meta }] =
         await Promise.all([
           supabase.from("profiles").select("id, full_name, job_title").in("id", uids),
@@ -2605,22 +2760,44 @@ function OnBreakSection({ profile }: { profile: any }) {
       const dMap = new Map((depts ?? []).map((d: any) => [d.id, d.name]));
       const sMap = new Map((settings ?? []).map((s: any) => [s.id, s.name]));
       const mMap = new Map((meta ?? []).map((m: any) => [m.id, m]));
-      return rows.map((r) => ({
-        id: r.id,
-        userId: r.user_id as string,
-        name: (pMap.get(r.user_id) as any)?.full_name ?? "—",
-        job_title:
-          (mMap.get(r.user_id) as any)?.job_title ??
-          (pMap.get(r.user_id) as any)?.job_title ??
-          null,
-        role_label: (mMap.get(r.user_id) as any)?.role_label ?? null,
-        department: dMap.get(r.department_id) ?? "—",
-        type: sMap.get(r.break_setting_id) ?? "הפסקה",
-        startedAt: r.started_at as string | null,
-        endsAt: r.ends_at as string | null,
-        approverName:
-          r.approved_by ? (pMap.get(r.approved_by) as any)?.full_name ?? "—" : "—",
-      }));
+
+      const upcomingByUser = new Map<string, any>();
+      for (const uid of activeUserIds) {
+        const userRows = (upcomingRaw ?? []).filter((r: any) => r.user_id === uid);
+        const activeRow = rows.find((r) => r.user_id === uid);
+        const next = pickUpcomingBreak(userRows as any[], activeRow?.id);
+        if (next) upcomingByUser.set(uid, next);
+      }
+
+      return rows.map((r) => {
+        const upcoming = upcomingByUser.get(r.user_id);
+        const upcomingStart = upcoming ? breakStartIso(upcoming) : null;
+        return {
+          id: r.id,
+          userId: r.user_id as string,
+          name: (pMap.get(r.user_id) as any)?.full_name ?? "—",
+          job_title:
+            (mMap.get(r.user_id) as any)?.job_title ??
+            (pMap.get(r.user_id) as any)?.job_title ??
+            null,
+          role_label: (mMap.get(r.user_id) as any)?.role_label ?? null,
+          department: dMap.get(r.department_id) ?? "—",
+          type: sMap.get(r.break_setting_id) ?? "הפסקה",
+          durationMinutes: r.duration_minutes as number,
+          startedAt: r.started_at as string | null,
+          endsAt: r.ends_at as string | null,
+          approverName:
+            r.approved_by ? (pMap.get(r.approved_by) as any)?.full_name ?? "—" : "—",
+          upcoming: upcoming
+            ? {
+                type: sMap.get(upcoming.break_setting_id) ?? "הפסקה",
+                durationMinutes: upcoming.duration_minutes as number,
+                plannedStart: upcomingStart,
+                status: upcoming.status as string,
+              }
+            : null,
+        };
+      });
     },
   });
 
@@ -2759,7 +2936,9 @@ function OnBreakSection({ profile }: { profile: any }) {
 
 
 
-  // Realtime + minute tick for countdown
+  const [, setOnBreakTick] = useState(0);
+
+  // Realtime + second tick for live countdowns
   useEffect(() => {
     if (!canSee) return;
     const ch = supabase
@@ -2770,10 +2949,7 @@ function OnBreakSection({ profile }: { profile: any }) {
         qc.invalidateQueries({ queryKey: ["dashboard-daily-breaks"] });
       })
       .subscribe();
-    const t = setInterval(() => {
-      qc.invalidateQueries({ queryKey: ["dashboard-on-break"] });
-      qc.invalidateQueries({ queryKey: ["dashboard-daily-breaks"] });
-    }, 10_000);
+    const t = setInterval(() => setOnBreakTick((n) => n + 1), 1000);
     return () => {
       supabase.removeChannel(ch);
       clearInterval(t);
@@ -2835,6 +3011,26 @@ function OnBreakSection({ profile }: { profile: any }) {
           <Coffee className="size-5 text-primary" />
         </Card>
       </div>
+
+      {list.length > 0 && (
+        <section className="space-y-3">
+          <h2 className="text-lg font-semibold flex items-center gap-2">
+            <Coffee className="size-5 text-primary" />
+            עובדים בהפסקה כעת
+          </h2>
+          <div className="space-y-3">
+            {list.map((r) => (
+              <ManagerEmployeeBreakPanel
+                key={r.id}
+                row={r}
+                fmtT={fmtT}
+                onReturn={() => setConfirmReturn({ id: r.id, userId: r.userId, name: r.name })}
+                returning={manualEndMut.isPending}
+              />
+            ))}
+          </div>
+        </section>
+      )}
 
       <Dialog open={logOpen} onOpenChange={setLogOpen}>
         <DialogContent className="max-w-6xl">
@@ -3122,6 +3318,27 @@ function OnBreakSection({ profile }: { profile: any }) {
                       <p className="text-xs text-muted-foreground">
                         אישר/ה: {r.approverName}
                       </p>
+                      {r.upcoming && (
+                        <div className="mt-2 rounded-md border border-amber-500/40 bg-amber-50/60 dark:bg-amber-950/20 p-2.5 text-xs">
+                          <p className="font-medium text-foreground">הפסקה הבאה</p>
+                          <p className="text-muted-foreground mt-0.5">
+                            ☕ {r.upcoming.type} · {r.upcoming.durationMinutes} דק׳ ·{" "}
+                            {r.upcoming.plannedStart ? fmtT(r.upcoming.plannedStart) : "—"} ·{" "}
+                            {BREAK_STATUS_LABEL[r.upcoming.status] ?? r.upcoming.status}
+                          </p>
+                          {r.upcoming.plannedStart && (
+                            <p className="text-amber-600 font-mono tabular-nums mt-1">
+                              ⏳ עוד{" "}
+                              {fmtHMS(
+                                Math.max(
+                                  0,
+                                  new Date(r.upcoming.plannedStart).getTime() - Date.now(),
+                                ),
+                              )}
+                            </p>
+                          )}
+                        </div>
+                      )}
                     </div>
                     <div className="shrink-0 flex flex-col items-end gap-1">
                       {overrunMs > 0 ? (

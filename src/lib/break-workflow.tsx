@@ -139,8 +139,49 @@ export function sortBreaksByStart<
   return [...rows].sort((a, b) => {
     const ta = new Date(breakStartIso(a)).getTime();
     const tb = new Date(breakStartIso(b)).getTime();
+    return tb - ta;
+  });
+}
+
+/** Earliest scheduled start first — used for "next upcoming" break selection. */
+export function sortBreaksByStartAsc<
+  T extends {
+    planned_start?: string | null;
+    approved_at_time?: string | null;
+    requested_at: string;
+    started_at?: string | null;
+  },
+>(rows: T[]): T[] {
+  return [...rows].sort((a, b) => {
+    const ta = new Date(breakStartIso(a)).getTime();
+    const tb = new Date(breakStartIso(b)).getTime();
     return ta - tb;
   });
+}
+
+export function pickActiveBreak<
+  T extends { status: string },
+>(rows: T[]): T | null {
+  return rows.find((r) => r.status === "active") ?? null;
+}
+
+/** Earliest pre-active break, optionally excluding one row (e.g. current active). */
+export function pickUpcomingBreak<
+  T extends {
+    id: string;
+    status: string;
+    planned_start?: string | null;
+    approved_at_time?: string | null;
+    requested_at: string;
+    started_at?: string | null;
+  },
+>(rows: T[], excludeId?: string): T | null {
+  const preActive = rows.filter(
+    (r) =>
+      r.id !== excludeId &&
+      (BREAK_PRE_ACTIVE_STATUSES as readonly string[]).includes(r.status),
+  );
+  return sortBreaksByStartAsc(preActive)[0] ?? null;
 }
 
 /** Active break first; otherwise the earliest upcoming pre-active break. */
@@ -160,7 +201,7 @@ export function pickPrimaryBreak<
   const preActive = rows.filter((r) =>
     (BREAK_PRE_ACTIVE_STATUSES as readonly string[]).includes(r.status),
   );
-  return sortBreaksByStart(preActive)[0] ?? null;
+  return sortBreaksByStartAsc(preActive)[0] ?? null;
 }
 
 /** Next scheduled break after the primary one (for dashboard preview). */
@@ -174,12 +215,7 @@ export function pickNextScheduledBreak<
     started_at?: string | null;
   },
 >(rows: T[], excludeId?: string): T | null {
-  const preActive = rows.filter(
-    (r) =>
-      r.id !== excludeId &&
-      (BREAK_PRE_ACTIVE_STATUSES as readonly string[]).includes(r.status),
-  );
-  return sortBreaksByStart(preActive)[0] ?? null;
+  return pickUpcomingBreak(rows, excludeId);
 }
 
 /**

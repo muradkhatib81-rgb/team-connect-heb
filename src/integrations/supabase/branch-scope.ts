@@ -52,8 +52,21 @@ const BRANCH_SCOPED_TABLES = new Set<string>([
 let activeBranchId: string | null = null;
 let patched = false;
 
+function syncSupabaseBranchHeader(id: string | null) {
+  try {
+    const rest = (supabase as { rest?: { headers?: Record<string, string> } }).rest;
+    if (!rest) return;
+    if (!rest.headers) rest.headers = {};
+    if (id) rest.headers["x-active-branch"] = id;
+    else delete rest.headers["x-active-branch"];
+  } catch {
+    // non-fatal
+  }
+}
+
 export function setActiveBranchScope(id: string | null) {
   activeBranchId = id;
+  syncSupabaseBranchHeader(id);
 }
 
 export function getActiveBranchScope(): string | null {

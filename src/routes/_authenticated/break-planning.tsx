@@ -1,6 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/use-auth";
 import { Card } from "@/components/ui/card";
@@ -51,11 +51,14 @@ import {
   fmtBreakTime,
   isBreakEditable,
   isoFromLocalTime,
+  pickActiveBreak,
+  pickUpcomingBreak,
   sortBreaksByStart,
   toLocalTime,
   todayJerusalemDate,
   useActivateDueBreaksPoll,
 } from "@/lib/break-workflow";
+import { isAdmin } from "@/lib/constants";
 
 export const Route = createFileRoute("/_authenticated/break-planning")({
   component: BreakPlanningPage,
@@ -97,7 +100,7 @@ function BreakPlanningPage() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("break_settings")
-        .select("id, name, duration_minutes")
+        .select("id, name, duration_minutes, order_index, is_active")
         .eq("is_active", true)
         .order("order_index", { ascending: true });
       if (error) throw error;
@@ -124,12 +127,9 @@ function BreakPlanningPage() {
   });
 
   const rows = todayQ.data ?? [];
-  const activeBreak = rows.find((r) => r.status === "active");
-  const nextDueRow = rows.find(
-    (r) =>
-      r.status !== "active" &&
-      ["scheduled", "approved", "waiting_for_start"].includes(r.status),
-  );
+  const activeBreak = pickActiveBreak(rows);
+  const nextDueRow = pickUpcomingBreak(rows, activeBreak?.id);
+  const isPlainEmployee = !!me && !isAdmin(me.roles) && !me.roles.includes("department_manager");
   useActivateDueBreaksPoll(me?.id, qc, {
     plannedStartIso: nextDueRow ? breakStartIso(nextDueRow) : null,
     isActive: !!activeBreak,
@@ -146,6 +146,7 @@ function BreakPlanningPage() {
           qc.invalidateQueries({ queryKey: ["my-breaks-today"] });
           qc.invalidateQueries({ queryKey: ["my-break-requests"] });
           qc.invalidateQueries({ queryKey: ["my-active-break"] });
+          qc.invalidateQueries({ queryKey: ["my-break-shortcut"] });
         },
       )
       .subscribe();
@@ -316,7 +317,7 @@ function BreakPlanningPage() {
                   <Badge variant={BREAK_STATUS_TONE[r.status] ?? "secondary"}>
                     {BREAK_STATUS_LABEL[r.status] ?? r.status}
                   </Badge>
-                  {isBreakEditable(r.status) && (
+                  {isBreakEditable(r.status) && !isPlainEmployee && (
                     <div className="flex gap-2">
                       <Button size="sm" variant="outline" onClick={() => setEditTarget(r)}>
                         <Pencil className="size-4" />
@@ -338,6 +339,7 @@ function BreakPlanningPage() {
         )}
       </Card>
 
+      {!isPlainEmployee && (
       <Card className="card-elevated p-5 space-y-4">
         <div className="flex items-center justify-between">
           <h2 className="font-semibold">הוספת הפסקות חדשות</h2>
@@ -425,6 +427,7 @@ function BreakPlanningPage() {
           </div>
         )}
       </Card>
+      )}
 
       {editTarget && (
         <EditBreakDialog
@@ -470,10 +473,23 @@ function EditBreakDialog({
   const startIso = row.planned_start ?? row.requested_at;
   const [timeStr, setTimeStr] = useState(toLocalTime(startIso));
   const [settingId, setSettingId] = useState(row.break_setting_id);
+  const settingOptions = useMemo(() => {
+    if (settings.some((s) => s.id === row.break_setting_id)) return settings;
+    return [
+      ...settings,
+      {
+        id: row.break_setting_id,
+        name: "סוג הפסקה נוכחי",
+        duration_minutes: row.duration_minutes ?? row.planned_duration ?? 0,
+        order_index: -1,
+        is_active: false,
+      },
+    ];
+  }, [settings, row.break_setting_id, row.duration_minutes, row.planned_duration]);
 
   const saveMut = useMutation({
     mutationFn: async () => {
-      const setting = settings.find((s) => s.id === settingId);
+      const setting = settingOptions.find((s) => s.id === settingId);
       const newStart = isoFromLocalTime(timeStr);
       const { error } = await (supabase as any).rpc("reschedule_break_request", {
         _id: row.id,
@@ -504,7 +520,7 @@ function EditBreakDialog({
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                {settings.map((s) => (
+                {settingOptions.map((s) => (
                   <SelectItem key={s.id} value={s.id}>
                     {s.name} · {s.duration_minutes} דק׳
                   </SelectItem>

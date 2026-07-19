@@ -40,29 +40,34 @@ async function getEmployeeManagerCaps(supabase: any, userId: string) {
   if (error) throw new Error("שגיאת הרשאות");
   const roles = (rolesRows ?? []).map((r: any) => r.role as string);
   const isMainAdmin = roles.includes("main_admin");
+  const isSystemAdmin = roles.includes("system_admin");
+  const isPlatformOwner = isMainAdmin || isSystemAdmin;
   const isBranchManager = roles.includes("branch_manager");
   const isAssistantManager = roles.includes("assistant_manager");
   const p: any = perm ?? {};
   return {
     roles,
     isMainAdmin,
+    isSystemAdmin,
+    isPlatformOwner,
     isBranchManager,
-    canAdd: isMainAdmin || isBranchManager || (isAssistantManager && !!p.can_add_employee),
-    canEdit: isMainAdmin || isBranchManager || (isAssistantManager && !!p.can_edit_employee),
-    canDelete: isMainAdmin || isBranchManager || (isAssistantManager && !!p.can_delete_employee),
-    canResetPassword: isMainAdmin || isBranchManager || (isAssistantManager && !!p.can_reset_employee_password),
+    canAdd: isPlatformOwner || isBranchManager || (isAssistantManager && !!p.can_add_employee),
+    canEdit: isPlatformOwner || isBranchManager || (isAssistantManager && !!p.can_edit_employee),
+    canDelete: isPlatformOwner || isBranchManager || (isAssistantManager && !!p.can_delete_employee),
+    canResetPassword:
+      isPlatformOwner || isBranchManager || (isAssistantManager && !!p.can_reset_employee_password),
   };
 }
 
 function assertAssignableRole(role: (typeof APP_ROLES)[number], caps: Awaited<ReturnType<typeof getEmployeeManagerCaps>>) {
-  if (caps.isMainAdmin) return;
+  if (caps.isPlatformOwner) return;
   if (role === "main_admin" || role === "branch_manager") {
     throw new Error("מנהל סניף אינו יכול להעניק תפקיד בעל המערכת או מנהל סניף");
   }
 }
 
 async function assertTargetIsNotProtectedManager(supabase: any, targetUserId: string, caps: Awaited<ReturnType<typeof getEmployeeManagerCaps>>) {
-  if (caps.isMainAdmin) return;
+  if (caps.isPlatformOwner) return;
   const { data, error } = await supabase.from("user_roles").select("role").eq("user_id", targetUserId);
   if (error) throw new Error(error.message);
   const roles = (data ?? []).map((r: any) => r.role as string);
