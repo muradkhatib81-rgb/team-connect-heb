@@ -1454,7 +1454,7 @@ function EditEmployeeDialog({
 
   return (
     <Dialog open onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="max-w-lg max-sm:top-4 max-sm:translate-y-0">
+      <DialogContent className="max-w-lg max-md:top-4 max-md:translate-y-0 overflow-x-hidden">
         <DialogHeader>
           <DialogTitle>עריכת עובד</DialogTitle>
         </DialogHeader>
@@ -1463,7 +1463,7 @@ function EditEmployeeDialog({
             e.preventDefault();
             mutation.mutate();
           }}
-          className="space-y-4"
+          className="space-y-4 min-w-0"
           autoComplete="off"
         >
           <Field label="תמונת פרופיל">
@@ -1480,7 +1480,7 @@ function EditEmployeeDialog({
             />
           </Field>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 min-w-0">
             <Field label="שם פרטי">
               <Input value={form.first_name} onChange={(e) => setForm({ ...form, first_name: e.target.value })} required autoComplete="off" maxLength={50} />
             </Field>
@@ -1556,7 +1556,7 @@ function EditEmployeeDialog({
             />
           </div>
 
-          <DialogFooter className="gap-2 sm:gap-2 sm:justify-between">
+          <DialogFooter className="gap-2 sm:flex-col-reverse md:flex-row md:justify-between">
             {canDelete ? (
               <Button
                 type="button"
