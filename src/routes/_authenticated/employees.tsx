@@ -632,7 +632,7 @@ function AvatarPicker({
   const [preview, setPreview] = useState<string | null>(initialUrl);
 
   return (
-    <div className="flex items-center gap-3">
+    <div className="flex flex-wrap items-center gap-3">
       <div className="size-16 rounded-full bg-accent overflow-hidden flex items-center justify-center shrink-0 border border-border">
         {preview ? (
           <img src={preview} alt="" className="w-full h-full object-cover" />
@@ -640,7 +640,7 @@ function AvatarPicker({
           <ImagePlus className="size-6 text-muted-foreground" />
         )}
       </div>
-      <div className="flex gap-2">
+      <div className="flex flex-wrap gap-2">
         <Button type="button" variant="outline" size="sm" onClick={() => inputRef.current?.click()}>
           {preview ? "החלפת תמונה" : "העלאת תמונה"}
         </Button>
@@ -1454,7 +1454,7 @@ function EditEmployeeDialog({
 
   return (
     <Dialog open onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="max-w-lg">
+      <DialogContent className="max-w-lg max-sm:top-4 max-sm:translate-y-0">
         <DialogHeader>
           <DialogTitle>עריכת עובד</DialogTitle>
         </DialogHeader>
