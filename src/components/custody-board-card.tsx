@@ -242,7 +242,8 @@ export function CustodyBoardCard() {
                   else if (canReturn && slot.checkout) returnMut.mutate(slot.checkout.id);
                 }}
                 className={[
-                  "rounded-xl border-2 p-4 text-right transition-all",
+                  "rounded-xl border-2 p-4 text-right transition-all min-h-[7.5rem]",
+                  "flex flex-col justify-between gap-2",
                   "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
                   taken
                     ? "border-red-400/60 bg-red-500/10 hover:bg-red-500/15"
@@ -250,9 +251,13 @@ export function CustodyBoardCard() {
                   !canTake && !canReturn ? "opacity-70 cursor-default" : "cursor-pointer",
                 ].join(" ")}
               >
-                <div className="font-semibold text-sm mb-1">{slot.name}</div>
+                <div className="flex flex-1 items-center justify-center text-center px-1">
+                  <span className="font-bold text-2xl sm:text-3xl leading-tight break-words">
+                    {slot.name}
+                  </span>
+                </div>
                 {taken && slot.checkout ? (
-                  <div className="text-xs space-y-0.5 text-red-900/80 dark:text-red-100/90">
+                  <div className="text-xs space-y-0.5 text-red-900/80 dark:text-red-100/90 shrink-0">
                     <div>{slot.checkout.full_name ?? "—"}</div>
                     {slot.checkout.department_name && (
                       <div className="text-muted-foreground">{slot.checkout.department_name}</div>
@@ -277,7 +282,7 @@ export function CustodyBoardCard() {
                     )}
                   </div>
                 ) : (
-                  <div className="text-xs text-emerald-700 dark:text-emerald-300 flex items-center gap-1">
+                  <div className="text-xs text-emerald-700 dark:text-emerald-300 flex items-center justify-center gap-1 shrink-0">
                     <Hand className="size-3.5" />
                     פנוי — לחץ ללקיחה
                   </div>
