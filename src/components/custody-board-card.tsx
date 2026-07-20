@@ -258,7 +258,9 @@ export function CustodyBoardCard() {
                 </div>
                 {taken && slot.checkout ? (
                   <div className="text-xs space-y-0.5 text-red-900/80 dark:text-red-100/90 shrink-0">
-                    <div>{slot.checkout.full_name ?? "—"}</div>
+                    <div className="text-lg sm:text-xl font-bold leading-tight">
+                      {slot.checkout.full_name ?? "—"}
+                    </div>
                     {slot.checkout.department_name && (
                       <div className="text-muted-foreground">{slot.checkout.department_name}</div>
                     )}
