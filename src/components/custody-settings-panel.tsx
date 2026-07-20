@@ -137,6 +137,7 @@ export function CustodySettingsPanel({ branchId, userId, compact }: Props) {
         const sort_order = i + 1;
         if (row.sort_order === sort_order) continue;
         await upsertCustodyItemType({
+          branchId,
           id: row.id,
           name: row.name,
           sort_order,
@@ -152,6 +153,7 @@ export function CustodySettingsPanel({ branchId, userId, compact }: Props) {
   const deactivateMut = useMutation({
     mutationFn: async (row: CustodyItemTypeRow) => {
       await upsertCustodyItemType({
+        branchId,
         id: row.id,
         name: row.name,
         sort_order: row.sort_order,
@@ -170,6 +172,7 @@ export function CustodySettingsPanel({ branchId, userId, compact }: Props) {
   const saveBranchMut = useMutation({
     mutationFn: () =>
       upsertCustodyBranchSettings({
+        branchId,
         default_employee_reminder_minutes: branchForm.default_employee_reminder_minutes,
         manager_midnight_warning_minutes: branchForm.manager_midnight_warning_minutes,
         daily_log_reset_hours: branchForm.daily_log_reset_hours,
@@ -341,6 +344,7 @@ export function CustodySettingsPanel({ branchId, userId, compact }: Props) {
                       size="sm"
                       onClick={() =>
                         saveTypeMut.mutate({
+                          branchId,
                           id: row.id,
                           name: row.name,
                           sort_order: row.sort_order,
@@ -447,6 +451,7 @@ export function CustodySettingsPanel({ branchId, userId, compact }: Props) {
         }}
         onSave={(values) =>
           saveTypeMut.mutate({
+            branchId,
             id: editRow?.id,
             name: values.name,
             sort_order: editRow?.sort_order ?? activeRows.length + 1,

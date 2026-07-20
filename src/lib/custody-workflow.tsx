@@ -135,6 +135,7 @@ export async function fetchCustodyBranchSettings(
 }
 
 export async function upsertCustodyItemType(input: {
+  branchId: string;
   id?: string | null;
   name: string;
   sort_order?: number;
@@ -147,12 +148,14 @@ export async function upsertCustodyItemType(input: {
     _sort_order: input.sort_order ?? 0,
     _is_active: input.is_active ?? true,
     _employee_reminder_minutes: input.employee_reminder_minutes ?? null,
+    _branch_id: input.branchId,
   });
   if (error) throw error;
   return data as string;
 }
 
 export async function upsertCustodyBranchSettings(input: {
+  branchId: string;
   default_employee_reminder_minutes?: number;
   manager_midnight_warning_minutes?: number;
   daily_log_reset_hours?: number;
@@ -161,6 +164,7 @@ export async function upsertCustodyBranchSettings(input: {
     _default_employee_reminder_minutes: input.default_employee_reminder_minutes ?? null,
     _manager_midnight_warning_minutes: input.manager_midnight_warning_minutes ?? null,
     _daily_log_reset_hours: input.daily_log_reset_hours ?? null,
+    _branch_id: input.branchId,
   });
   if (error) throw error;
 }
@@ -236,17 +240,25 @@ export async function fetchCustodyBoard(branchId: string): Promise<CustodyBoardS
   }));
 }
 
-export async function checkoutCustodyItem(itemTypeId: string): Promise<string> {
+export async function checkoutCustodyItem(
+  itemTypeId: string,
+  branchId: string,
+): Promise<string> {
   const { data, error } = await (supabase as any).rpc("checkout_custody_item", {
     _item_type_id: itemTypeId,
+    _branch_id: branchId,
   });
   if (error) throw error;
   return data as string;
 }
 
-export async function returnCustodyItem(checkoutId: string): Promise<void> {
+export async function returnCustodyItem(
+  checkoutId: string,
+  branchId: string,
+): Promise<void> {
   const { error } = await (supabase as any).rpc("return_custody_item", {
     _checkout_id: checkoutId,
+    _branch_id: branchId,
   });
   if (error) throw error;
 }

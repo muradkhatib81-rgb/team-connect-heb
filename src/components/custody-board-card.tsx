@@ -99,7 +99,10 @@ export function CustodyBoardCard() {
   }, [profile?.id, scopedBranchId, qc]);
 
   const checkoutMut = useMutation({
-    mutationFn: checkoutCustodyItem,
+    mutationFn: (itemTypeId: string) => {
+      if (!scopedBranchId) throw new Error("לא נמצא סניף");
+      return checkoutCustodyItem(itemTypeId, scopedBranchId);
+    },
     onSuccess: () => {
       toast.success("הציוד נלקח בהצלחה");
       invalidateCustodyQueries(qc, scopedBranchId, profile?.id);
@@ -108,7 +111,10 @@ export function CustodyBoardCard() {
   });
 
   const returnMut = useMutation({
-    mutationFn: returnCustodyItem,
+    mutationFn: (checkoutId: string) => {
+      if (!scopedBranchId) throw new Error("לא נמצא סניף");
+      return returnCustodyItem(checkoutId, scopedBranchId);
+    },
     onSuccess: () => {
       toast.success("הציוד הוחזר");
       invalidateCustodyQueries(qc, scopedBranchId, profile?.id);
