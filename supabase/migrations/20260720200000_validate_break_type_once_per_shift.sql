@@ -27,6 +27,9 @@ AS $$
 DECLARE
   v_shift record;
   v_type_name text;
+  v_day date := (_planned_start AT TIME ZONE 'Asia/Jerusalem')::date;
+  v_window_start timestamptz;
+  v_window_end timestamptz;
 BEGIN
   IF _break_setting_id IS NULL THEN
     RAISE EXCEPTION 'יש לבחור סוג הפסקה';
@@ -40,9 +43,13 @@ BEGIN
   FROM public.get_employee_shift_bounds(_user_id, _planned_start)
   LIMIT 1;
 
-  -- No published shift window: skip type quota (matches shift-bounds behavior).
-  IF NOT FOUND OR v_shift.shift_start IS NULL THEN
-    RETURN;
+  IF FOUND AND v_shift.shift_start IS NOT NULL THEN
+    v_window_start := v_shift.shift_start;
+    v_window_end := v_shift.shift_end;
+  ELSE
+    -- Fallback when no published shift: Jerusalem calendar day.
+    v_window_start := (v_day + time '00:00') AT TIME ZONE 'Asia/Jerusalem';
+    v_window_end := v_window_start + interval '1 day';
   END IF;
 
   IF EXISTS (
@@ -52,8 +59,8 @@ BEGIN
       AND br.break_setting_id = _break_setting_id
       AND (_exclude_id IS NULL OR br.id <> _exclude_id)
       AND br.status::text = ANY(public.break_consumed_statuses())
-      AND COALESCE(br.planned_start, br.requested_at) >= v_shift.shift_start
-      AND COALESCE(br.planned_start, br.requested_at) < v_shift.shift_end
+      AND COALESCE(br.planned_start, br.requested_at) >= v_window_start
+      AND COALESCE(br.planned_start, br.requested_at) < v_window_end
   ) THEN
     SELECT COALESCE(bs.name, 'הפסקה') INTO v_type_name
     FROM public.break_settings bs
