@@ -39,9 +39,10 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Switch } from "@/components/ui/switch";
-import { Loader2, Building2, Plus, Pencil, Trash2, User } from "lucide-react";
+import { Loader2, Building2, Plus, Pencil, Trash2, User, UserPlus, Crown } from "lucide-react";
 import { toast } from "sonner";
 import { formatEmployeeName } from "@/lib/employee-name";
+import { CreateEmployeeDialog } from "@/routes/_authenticated/employees";
 
 export const Route = createFileRoute("/_authenticated/departments")({
   component: DepartmentsPage,
@@ -185,7 +186,7 @@ function DepartmentsPage() {
                   <div className="min-w-0">
                     <h2 className="text-xl sm:text-2xl font-bold leading-tight truncate">{d.name}</h2>
                     <p className="mt-1.5 leading-tight">
-                      <span className="text-xs text-muted-foreground">אחראי: </span>
+                      <span className="text-xs text-muted-foreground">אחראי מחלקה: </span>
                       <span className="text-base sm:text-lg font-bold">
                         {mgr ? formatEmployeeName(mgr) : "לא הוגדר"}
                       </span>
@@ -253,6 +254,9 @@ function DepartmentsPage() {
         deptId={deptDialogId}
         onClose={() => setDeptDialogId(null)}
         onSelectEmployee={canManageDepartments ? setEmpDialogId : undefined}
+        canManage={canManageDepartments}
+        departments={deptsQuery.data ?? []}
+        currentUserRoles={me.roles}
       />
       <EmpProfileDialog
         employeeId={empDialogId}
@@ -277,16 +281,39 @@ function Stat({ label, value }: { label: string; value: number }) {
   );
 }
 
+function invalidateDepartmentEmployeeQueries(qc: ReturnType<typeof useQueryClient>, deptId: string | null) {
+  qc.invalidateQueries({ queryKey: ["departments"] });
+  qc.invalidateQueries({ queryKey: ["employees"] });
+  qc.invalidateQueries({ queryKey: ["all-roles"] });
+  qc.invalidateQueries({ queryKey: ["dashboard", "stats"] });
+  qc.invalidateQueries({ queryKey: ["dashboard", "employees-total", "active"] });
+  if (deptId) {
+    qc.invalidateQueries({ queryKey: ["dept-employees-dialog", deptId] });
+    qc.invalidateQueries({ queryKey: ["dept-employees-for-manager", deptId] });
+    qc.invalidateQueries({ queryKey: ["other-dept-managers", deptId] });
+  }
+}
+
 function DeptEmployeesDialog({
   deptId,
   onClose,
   onSelectEmployee,
+  canManage,
+  departments,
+  currentUserRoles,
 }: {
   deptId: string | null;
   onClose: () => void;
   onSelectEmployee?: (id: string) => void;
+  canManage?: boolean;
+  departments: DepartmentRow[];
+  currentUserRoles?: AppRole[];
 }) {
   const open = deptId !== null;
+  const qc = useQueryClient();
+  const updateFn = useServerFn(updateDepartment);
+  const [addingEmployee, setAddingEmployee] = useState(false);
+
   const q = useQuery({
     enabled: open && !!deptId,
     queryKey: ["dept-employees-dialog", deptId],
@@ -294,7 +321,7 @@ function DeptEmployeesDialog({
       if (!deptId) return null;
       const { data: dept, error: dErr } = await supabase
         .from("departments")
-        .select("id, name, manager_id")
+        .select("id, name, manager_id, is_active")
         .eq("id", deptId)
         .single();
       if (dErr) throw dErr;
@@ -319,6 +346,7 @@ function DeptEmployeesDialog({
         roleMap[r.user_id] = ROLE_LABELS[r.role as AppRole] ?? r.role;
       });
       return {
+        dept,
         deptName: dept.name,
         managerName: manager ? formatEmployeeName(manager) : null,
         managerId: dept.manager_id,
@@ -331,41 +359,162 @@ function DeptEmployeesDialog({
     },
   });
 
+  const otherManagersQuery = useQuery({
+    enabled: open && !!deptId && !!canManage,
+    queryKey: ["other-dept-managers", deptId],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("departments")
+        .select("id, name, manager_id")
+        .neq("id", deptId!)
+        .not("manager_id", "is", null);
+      if (error) throw error;
+      const map: Record<string, string> = {};
+      (data ?? []).forEach((d: any) => {
+        if (d.manager_id) map[d.manager_id] = d.name;
+      });
+      return map;
+    },
+  });
+
+  const setManagerMut = useMutation({
+    mutationFn: async (managerId: string | null) => {
+      if (!deptId || !q.data?.deptName) throw new Error("לא נמצאה מחלקה");
+      if (managerId && otherManagersQuery.data?.[managerId]) {
+        throw new Error(
+          `העובד כבר משמש כאחראי מחלקה של "${otherManagersQuery.data[managerId]}".`,
+        );
+      }
+      await updateFn({
+        data: {
+          id: deptId,
+          name: q.data.deptName,
+          manager_id: managerId,
+          is_active: q.data.dept.is_active,
+        },
+      });
+    },
+    onSuccess: (_data, managerId) => {
+      toast.success(managerId ? "אחראי מחלקה עודכן" : "אחראי מחלקה הוסר");
+      invalidateDepartmentEmployeeQueries(qc, deptId);
+    },
+    onError: (e: Error) => toast.error(e.message ?? "שגיאה בעדכון אחראי מחלקה"),
+  });
+
+  const deptRow = departments.find((d) => d.id === deptId);
+
   return (
-    <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
-      <DialogContent className="max-w-lg">
-        <DialogHeader>
-          <DialogTitle>עובדי {q.data?.deptName ?? "—"}</DialogTitle>
-        </DialogHeader>
-        {q.isLoading ? (
-          <div className="flex justify-center py-8">
-            <Loader2 className="size-5 animate-spin text-primary" />
-          </div>
-        ) : !q.data || q.data.employees.length === 0 ? (
-          <p className="text-sm text-muted-foreground py-6 text-center">אין עובדים במחלקה זו.</p>
-        ) : (
-          <ul className="divide-y max-h-[60vh] overflow-auto">
-            {q.data.employees.map((emp: any) => (
-              <li key={emp.id}>
-                {onSelectEmployee ? (
-                  <button
-                    type="button"
-                    onClick={() => onSelectEmployee(emp.id)}
-                    className="w-full text-right py-3 px-2 hover:bg-accent/30 rounded-md"
-                  >
-                    <EmployeeListItem emp={emp} />
-                  </button>
-                ) : (
-                  <div className="py-3 px-2">
-                    <EmployeeListItem emp={emp} />
-                  </div>
-                )}
-              </li>
-            ))}
-          </ul>
-        )}
-      </DialogContent>
-    </Dialog>
+    <>
+      <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>עובדי {q.data?.deptName ?? "—"}</DialogTitle>
+            {q.data?.managerName && (
+              <p className="text-sm text-muted-foreground">
+                אחראי מחלקה: <span className="font-semibold text-foreground">{q.data.managerName}</span>
+              </p>
+            )}
+          </DialogHeader>
+
+          {canManage && (
+            <div className="flex flex-wrap gap-2 pb-1">
+              <Button
+                type="button"
+                size="sm"
+                className="gap-1.5"
+                onClick={() => setAddingEmployee(true)}
+              >
+                <UserPlus className="size-4" />
+                הוסף עובד למחלקה
+              </Button>
+              {q.data?.managerId && (
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  disabled={setManagerMut.isPending}
+                  onClick={() => setManagerMut.mutate(null)}
+                >
+                  הסר אחראי מחלקה
+                </Button>
+              )}
+            </div>
+          )}
+
+          {q.isLoading ? (
+            <div className="flex justify-center py-8">
+              <Loader2 className="size-5 animate-spin text-primary" />
+            </div>
+          ) : !q.data || q.data.employees.length === 0 ? (
+            <p className="text-sm text-muted-foreground py-6 text-center">
+              {canManage ? "אין עובדים במחלקה — לחץ «הוסף עובד» למעלה." : "אין עובדים במחלקה זו."}
+            </p>
+          ) : (
+            <ul className="divide-y max-h-[60vh] overflow-auto">
+              {q.data.employees.map((emp: any) => {
+                const conflictDept = otherManagersQuery.data?.[emp.id];
+                const canSetManager =
+                  canManage &&
+                  emp.is_active &&
+                  !emp.isManager &&
+                  !conflictDept;
+
+                return (
+                  <li key={emp.id} className="py-3 px-2">
+                    <div className="flex items-start justify-between gap-2">
+                      {onSelectEmployee ? (
+                        <button
+                          type="button"
+                          onClick={() => onSelectEmployee(emp.id)}
+                          className="flex-1 min-w-0 text-right hover:bg-accent/30 rounded-md -m-1 p-1"
+                        >
+                          <EmployeeListItem emp={emp} />
+                        </button>
+                      ) : (
+                        <div className="flex-1 min-w-0">
+                          <EmployeeListItem emp={emp} />
+                        </div>
+                      )}
+                      {canSetManager && (
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          className="gap-1 shrink-0 h-8 text-xs"
+                          disabled={setManagerMut.isPending}
+                          onClick={() => setManagerMut.mutate(emp.id)}
+                        >
+                          <Crown className="size-3.5" />
+                          אחראי מחלקה
+                        </Button>
+                      )}
+                    </div>
+                    {conflictDept && canManage && !emp.isManager && (
+                      <p className="text-xs text-muted-foreground mt-1 mr-1">
+                        אחראי ב«{conflictDept}»
+                      </p>
+                    )}
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {addingEmployee && deptId && deptRow && (
+        <CreateEmployeeDialog
+          depts={departments.map((d) => ({ id: d.id, name: d.name, code: d.code }))}
+          defaultDepartmentId={deptId}
+          lockDepartment
+          currentUserRoles={currentUserRoles}
+          onClose={() => {
+            setAddingEmployee(false);
+            invalidateDepartmentEmployeeQueries(qc, deptId);
+          }}
+        />
+      )}
+    </>
   );
 }
 
