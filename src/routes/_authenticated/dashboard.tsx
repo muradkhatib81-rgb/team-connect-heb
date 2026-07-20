@@ -491,7 +491,7 @@ function AdminDashboard({
               >
                 <div className="flex items-start justify-between gap-2">
                   <div className="min-w-0">
-                    <p className="text-xs text-muted-foreground truncate">{d.name}</p>
+                    <p className="text-base sm:text-lg font-bold leading-tight truncate">{d.name}</p>
                     <p className="text-2xl font-bold mt-1">{stats.byDept[d.id] ?? 0}</p>
                   </div>
                   {canCreateEmployee && (

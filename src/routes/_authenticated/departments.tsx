@@ -183,7 +183,7 @@ function DepartmentsPage() {
               >
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
-                    <h2 className="text-lg font-semibold truncate">{d.name}</h2>
+                    <h2 className="text-xl sm:text-2xl font-bold leading-tight truncate">{d.name}</h2>
                     <p className="text-xs text-muted-foreground mt-1">
                       אחראי: {mgr ? formatEmployeeName(mgr) : "לא הוגדר"}
                     </p>
