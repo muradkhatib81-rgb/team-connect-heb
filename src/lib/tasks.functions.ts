@@ -798,6 +798,15 @@ export const PERMISSION_KEYS = [
   "can_manage_employee_of_month",
   // Morning Board
   "can_manage_morning_board",
+  // Equipment management (מערכת ניהול ציוד)
+  "can_create_custody",
+  "can_edit_custody",
+  "can_delete_custody",
+  "can_return_custody",
+  "can_receive_custody_alerts",
+  "can_view_custody_daily_log",
+  "can_run_custody_monthly_report",
+  "can_configure_custody",
 ] as const;
 
 const setPermsSchema = z.object({

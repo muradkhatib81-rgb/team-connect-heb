@@ -68,6 +68,7 @@ import {
   Trophy,
   Sun,
   Megaphone,
+  Package,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useServerFn } from "@tanstack/react-start";
@@ -191,6 +192,21 @@ const CATEGORIES: Category[] = [
     icon: Megaphone,
     perms: [
       { key: "can_manage_morning_board", label: "📢 ניהול תוכן לוח ראשי", description: "מאפשר להוסיף, לערוך, לסדר ולמחוק את פריטי הלוח הראשי של הסניף — תמונות, סרטונים והודעות. ניתן להעניק רק לאחראי סניף או סגן אחראי." },
+    ],
+  },
+  {
+    id: "custody",
+    title: "מערכת ניהול ציוד",
+    icon: Package,
+    perms: [
+      { key: "can_create_custody", label: "הוספת ציוד", description: "מאפשר להוסיף פריטי ציוד חדשים (לדוגמה: ציוד 1, ציוד 2). ניתן להעניק למנהל סניף או סגן מנהל." },
+      { key: "can_edit_custody", label: "עריכת ציוד", description: "מאפשר לשנות שם, סדר ותזכורות של פריטי ציוד קיימים." },
+      { key: "can_delete_custody", label: "השבתת/מחיקת ציוד", description: "מאפשר להשבית פריט ציוד שלא בשימוש." },
+      { key: "can_return_custody", label: "החזרת ציוד בשם עובד", description: "מאפשר להחזיר ציוד שעובד אחר לקח." },
+      { key: "can_receive_custody_alerts", label: "קבלת התראות ציוד", description: "מקבל התראה כשעובד סיים משמרת ועדיין מחזיק ציוד, או לפני חצות." },
+      { key: "can_configure_custody", label: "הגדרות מערכת ציוד", description: "מאפשר לעדכן זמני תזכורת, איפוס לוג יומי והתראות חצות." },
+      { key: "can_view_custody_daily_log", label: "צפייה בלוג יומי", description: "מאפשר לצפות בלוג השימוש היומי בציוד (מתאפס לפי הגדרות הסניף)." },
+      { key: "can_run_custody_monthly_report", label: "דוח חודשי ציוד", description: "מאפשר להפיק דוח חודשי ולארכב נתוני ציוד." },
     ],
   },
   {

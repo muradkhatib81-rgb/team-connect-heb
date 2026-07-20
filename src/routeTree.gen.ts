@@ -23,6 +23,7 @@ import { Route as AuthenticatedEmployeesRouteImport } from './routes/_authentica
 import { Route as AuthenticatedEmployeeOfMonthRouteImport } from './routes/_authenticated/employee-of-month'
 import { Route as AuthenticatedDepartmentsRouteImport } from './routes/_authenticated/departments'
 import { Route as AuthenticatedDashboardRouteImport } from './routes/_authenticated/dashboard'
+import { Route as AuthenticatedCustodySettingsRouteImport } from './routes/_authenticated/custody-settings'
 import { Route as AuthenticatedCompanySettingsRouteImport } from './routes/_authenticated/company-settings'
 import { Route as AuthenticatedCommunicationsRouteImport } from './routes/_authenticated/communications'
 import { Route as AuthenticatedChangePasswordRouteImport } from './routes/_authenticated/change-password'
@@ -126,6 +127,12 @@ const AuthenticatedDashboardRoute = AuthenticatedDashboardRouteImport.update({
   path: '/dashboard',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
+const AuthenticatedCustodySettingsRoute =
+  AuthenticatedCustodySettingsRouteImport.update({
+    id: '/custody-settings',
+    path: '/custody-settings',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
 const AuthenticatedCompanySettingsRoute =
   AuthenticatedCompanySettingsRouteImport.update({
     id: '/company-settings',
@@ -311,6 +318,7 @@ export interface FileRoutesByFullPath {
   '/change-password': typeof AuthenticatedChangePasswordRoute
   '/communications': typeof AuthenticatedCommunicationsRoute
   '/company-settings': typeof AuthenticatedCompanySettingsRoute
+  '/custody-settings': typeof AuthenticatedCustodySettingsRoute
   '/dashboard': typeof AuthenticatedDashboardRoute
   '/departments': typeof AuthenticatedDepartmentsRoute
   '/employee-of-month': typeof AuthenticatedEmployeeOfMonthRoute
@@ -354,6 +362,7 @@ export interface FileRoutesByTo {
   '/change-password': typeof AuthenticatedChangePasswordRoute
   '/communications': typeof AuthenticatedCommunicationsRoute
   '/company-settings': typeof AuthenticatedCompanySettingsRoute
+  '/custody-settings': typeof AuthenticatedCustodySettingsRoute
   '/dashboard': typeof AuthenticatedDashboardRoute
   '/departments': typeof AuthenticatedDepartmentsRoute
   '/employee-of-month': typeof AuthenticatedEmployeeOfMonthRoute
@@ -399,6 +408,7 @@ export interface FileRoutesById {
   '/_authenticated/change-password': typeof AuthenticatedChangePasswordRoute
   '/_authenticated/communications': typeof AuthenticatedCommunicationsRoute
   '/_authenticated/company-settings': typeof AuthenticatedCompanySettingsRoute
+  '/_authenticated/custody-settings': typeof AuthenticatedCustodySettingsRoute
   '/_authenticated/dashboard': typeof AuthenticatedDashboardRoute
   '/_authenticated/departments': typeof AuthenticatedDepartmentsRoute
   '/_authenticated/employee-of-month': typeof AuthenticatedEmployeeOfMonthRoute
@@ -445,6 +455,7 @@ export interface FileRouteTypes {
     | '/change-password'
     | '/communications'
     | '/company-settings'
+    | '/custody-settings'
     | '/dashboard'
     | '/departments'
     | '/employee-of-month'
@@ -488,6 +499,7 @@ export interface FileRouteTypes {
     | '/change-password'
     | '/communications'
     | '/company-settings'
+    | '/custody-settings'
     | '/dashboard'
     | '/departments'
     | '/employee-of-month'
@@ -532,6 +544,7 @@ export interface FileRouteTypes {
     | '/_authenticated/change-password'
     | '/_authenticated/communications'
     | '/_authenticated/company-settings'
+    | '/_authenticated/custody-settings'
     | '/_authenticated/dashboard'
     | '/_authenticated/departments'
     | '/_authenticated/employee-of-month'
@@ -671,6 +684,13 @@ declare module '@tanstack/react-router' {
       path: '/dashboard'
       fullPath: '/dashboard'
       preLoaderRoute: typeof AuthenticatedDashboardRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/custody-settings': {
+      id: '/_authenticated/custody-settings'
+      path: '/custody-settings'
+      fullPath: '/custody-settings'
+      preLoaderRoute: typeof AuthenticatedCustodySettingsRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
     '/_authenticated/company-settings': {
@@ -995,6 +1015,7 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedChangePasswordRoute: typeof AuthenticatedChangePasswordRoute
   AuthenticatedCommunicationsRoute: typeof AuthenticatedCommunicationsRoute
   AuthenticatedCompanySettingsRoute: typeof AuthenticatedCompanySettingsRoute
+  AuthenticatedCustodySettingsRoute: typeof AuthenticatedCustodySettingsRoute
   AuthenticatedDashboardRoute: typeof AuthenticatedDashboardRoute
   AuthenticatedDepartmentsRoute: typeof AuthenticatedDepartmentsRoute
   AuthenticatedEmployeeOfMonthRoute: typeof AuthenticatedEmployeeOfMonthRoute
@@ -1017,6 +1038,7 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedChangePasswordRoute: AuthenticatedChangePasswordRoute,
   AuthenticatedCommunicationsRoute: AuthenticatedCommunicationsRoute,
   AuthenticatedCompanySettingsRoute: AuthenticatedCompanySettingsRoute,
+  AuthenticatedCustodySettingsRoute: AuthenticatedCustodySettingsRoute,
   AuthenticatedDashboardRoute: AuthenticatedDashboardRoute,
   AuthenticatedDepartmentsRoute: AuthenticatedDepartmentsRoute,
   AuthenticatedEmployeeOfMonthRoute: AuthenticatedEmployeeOfMonthRoute,
