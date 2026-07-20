@@ -43,6 +43,7 @@ import { formatHeDateTime } from "@/lib/date-format";
 import { CreateEmployeeDialog } from "./employees";
 import { ManagementOnShiftCard } from "@/components/management-on-shift-card";
 import { CustodyBoardCard } from "@/components/custody-board-card";
+import { CustodyLogCard } from "@/components/custody-log-card";
 import { MorningBoard } from "@/components/morning-board";
 import { LiveShiftCardsSection } from "@/components/live-shift-cards";
 import {
@@ -213,6 +214,7 @@ function DashboardPage() {
       <MorningBoard />
       <ManagementOnShiftCard />
       <CustodyBoardCard />
+      <CustodyLogCard />
 
       <header>
         <p className="text-sm text-muted-foreground">שלום,</p>

@@ -1,0 +1,72 @@
+import { readFileSync } from "fs";
+import { execFileSync } from "child_process";
+
+const ref = "qvuxttguepaeqjginodf";
+const version = "20260720240000";
+const name = "custody_log_select_rls";
+const path = `supabase/migrations/${version}_${name}.sql`;
+
+function getToken() {
+  if (process.env.SUPABASE_ACCESS_TOKEN) return process.env.SUPABASE_ACCESS_TOKEN.trim();
+  return execFileSync("powershell", ["-NoProfile", "-File", "scripts/read-supabase-cli-token.ps1"], {
+    encoding: "utf8",
+    cwd: process.cwd(),
+  }).trim();
+}
+
+async function dbQuery(token, sql) {
+  const res = await fetch(`https://api.supabase.com/v1/projects/${ref}/database/query`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}`, Accept: "application/json", "Content-Type": "application/json" },
+    body: JSON.stringify({ query: sql }),
+  });
+  return { ok: res.ok, status: res.status, text: await res.text() };
+}
+
+const token = getToken();
+if (!token) {
+  console.error("No Supabase token");
+  process.exit(1);
+}
+
+const existing = await dbQuery(
+  token,
+  `SELECT version FROM supabase_migrations.schema_migrations WHERE version = '${version}';`,
+);
+if (existing.text.includes(version)) {
+  console.log("SKIP already applied", version);
+} else {
+  console.log("APPLY", path);
+  const sql = readFileSync(path, "utf8");
+  const apply = await dbQuery(token, sql);
+  console.log("apply_status", apply.status);
+  if (!apply.ok) {
+    console.error(apply.text);
+    process.exit(1);
+  }
+  const record = await dbQuery(
+    token,
+    `INSERT INTO supabase_migrations.schema_migrations (version, name, statements)
+     VALUES ('${version}', '${name}', ARRAY[]::text[])
+     ON CONFLICT (version) DO NOTHING;`,
+  );
+  if (!record.ok) {
+    console.error(record.text);
+    process.exit(1);
+  }
+  console.log("RECORDED", version);
+}
+
+const policyCheck = await dbQuery(
+  token,
+  `SELECT polname FROM pg_policy p
+   JOIN pg_class c ON c.oid = p.polrelid
+   JOIN pg_namespace n ON n.oid = c.relnamespace
+   WHERE n.nspname = 'public' AND c.relname = 'custody_session_archive' AND p.polname = 'custody_archive_select';`,
+);
+if (!policyCheck.ok || !policyCheck.text.includes("custody_archive_select")) {
+  console.error("VERIFY_FAIL custody_archive_select policy", policyCheck.text);
+  process.exit(1);
+}
+console.log("VERIFY_OK custody_archive_select policy");
+console.log("ALL_OK");

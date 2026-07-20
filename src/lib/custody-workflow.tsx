@@ -1,6 +1,7 @@
 import type { QueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { isPlatformOwner, type AppRole } from "@/lib/constants";
+import { todayJerusalemDate } from "@/lib/break-workflow";
 
 export type CustodyItemType = {
   id: string;
@@ -31,7 +32,24 @@ export type CustodyUserCaps = {
   canConfigure: boolean;
   canViewDailyLog: boolean;
   canRunMonthlyReport: boolean;
+  canReceiveAlerts: boolean;
   canOpenSettings: boolean;
+  /** בעל מערכת, or any explicit מערכת ניהול ציוד grant from /permissions. */
+  canAccessCustodyLog: boolean;
+};
+
+export type CustodyLogRow = {
+  id: string;
+  itemName: string;
+  userName: string;
+  departmentName: string | null;
+  checkedOutAt: string;
+  returnedAt: string | null;
+  durationMinutes: number | null;
+  returnType: string | null;
+  returnActorName: string | null;
+  status: "active" | "returned";
+  spansMidnight: boolean;
 };
 
 export type CustodyItemTypeRow = CustodyItemType & {
@@ -53,6 +71,10 @@ export function custodyQueryKey(branchId: string | null) {
   return ["custody-board", branchId] as const;
 }
 
+export function custodyLogQueryKey(branchId: string | null) {
+  return ["custody-daily-log", branchId] as const;
+}
+
 export function custodyVisibleQueryKey(userId: string | null) {
   return ["custody-board-visible", userId] as const;
 }
@@ -69,7 +91,7 @@ export async function fetchCustodyUserCaps(userId: string): Promise<CustodyUserC
     supabase
       .from("user_task_permissions")
       .select(
-        "can_create_custody, can_edit_custody, can_delete_custody, can_return_custody, can_configure_custody, can_view_custody_daily_log, can_run_custody_monthly_report",
+        "can_create_custody, can_edit_custody, can_delete_custody, can_return_custody, can_receive_custody_alerts, can_configure_custody, can_view_custody_daily_log, can_run_custody_monthly_report",
       )
       .eq("user_id", userId)
       .maybeSingle(),
@@ -81,10 +103,21 @@ export async function fetchCustodyUserCaps(userId: string): Promise<CustodyUserC
   const canEdit = owner || !!(p as any).can_edit_custody;
   const canDelete = owner || !!(p as any).can_delete_custody;
   const canReturnOthers = owner || !!(p as any).can_return_custody;
+  const canReceiveAlerts = owner || !!(p as any).can_receive_custody_alerts;
   const canConfigure = owner || !!(p as any).can_configure_custody;
   const canViewDailyLog = owner || !!(p as any).can_view_custody_daily_log;
   const canRunMonthlyReport = owner || !!(p as any).can_run_custody_monthly_report;
   const canOpenSettings = canCreate || canEdit || canDelete || canConfigure;
+  const canAccessCustodyLog =
+    owner ||
+    !!(p as any).can_create_custody ||
+    !!(p as any).can_edit_custody ||
+    !!(p as any).can_delete_custody ||
+    !!(p as any).can_return_custody ||
+    !!(p as any).can_receive_custody_alerts ||
+    !!(p as any).can_configure_custody ||
+    !!(p as any).can_view_custody_daily_log ||
+    !!(p as any).can_run_custody_monthly_report;
   return {
     isPlatformOwner: owner,
     canCreate,
@@ -94,8 +127,110 @@ export async function fetchCustodyUserCaps(userId: string): Promise<CustodyUserC
     canConfigure,
     canViewDailyLog,
     canRunMonthlyReport,
+    canReceiveAlerts,
     canOpenSettings,
+    canAccessCustodyLog,
   };
+}
+
+export async function fetchCustodyDailyLog(branchId: string): Promise<CustodyLogRow[]> {
+  const today = todayJerusalemDate();
+  const dayStart = `${today}T00:00:00+03:00`;
+  const dayEnd = `${today}T23:59:59.999+03:00`;
+
+  const [{ data: archive, error: archiveErr }, { data: active, error: activeErr }] =
+    await Promise.all([
+      supabase
+        .from("custody_session_archive")
+        .select(
+          "id, item_name, user_name, department_name, checked_out_at, returned_at, duration_minutes, return_type, return_actor_name, spans_midnight",
+        )
+        .eq("branch_id", branchId)
+        .gte("returned_at", dayStart)
+        .lte("returned_at", dayEnd)
+        .order("returned_at", { ascending: false }),
+      supabase
+        .from("custody_checkouts")
+        .select("id, checked_out_at, user_id, department_id, item_type_id")
+        .eq("branch_id", branchId)
+        .eq("status", "active"),
+    ]);
+  if (archiveErr) throw archiveErr;
+  if (activeErr) throw activeErr;
+
+  const returned: CustodyLogRow[] = (archive ?? []).map((r: any) => ({
+    id: r.id as string,
+    itemName: r.item_name as string,
+    userName: r.user_name as string,
+    departmentName: (r.department_name as string | null) ?? null,
+    checkedOutAt: r.checked_out_at as string,
+    returnedAt: r.returned_at as string,
+    durationMinutes: r.duration_minutes as number,
+    returnType: r.return_type as string,
+    returnActorName: (r.return_actor_name as string | null) ?? null,
+    status: "returned" as const,
+    spansMidnight: !!r.spans_midnight,
+  }));
+
+  const activeRows = (active ?? []) as Array<{
+    id: string;
+    checked_out_at: string;
+    user_id: string;
+    department_id: string | null;
+    item_type_id: string;
+  }>;
+
+  if (activeRows.length === 0) {
+    return returned;
+  }
+
+  const userIds = [...new Set(activeRows.map((r) => r.user_id))];
+  const deptIds = [
+    ...new Set(activeRows.map((r) => r.department_id).filter(Boolean)),
+  ] as string[];
+  const typeIds = [...new Set(activeRows.map((r) => r.item_type_id))];
+
+  const [{ data: profs }, { data: depts }, { data: types }] = await Promise.all([
+    supabase.from("profiles").select("id, full_name").in("id", userIds),
+    deptIds.length
+      ? supabase.from("departments").select("id, name").in("id", deptIds)
+      : Promise.resolve({ data: [] as Array<{ id: string; name: string }> }),
+    supabase.from("custody_item_types").select("id, name").in("id", typeIds),
+  ]);
+
+  const profMap = new Map(
+    (profs ?? []).map((p: { id: string; full_name: string | null }) => [p.id, p.full_name]),
+  );
+  const deptMap = new Map(
+    (depts ?? []).map((d: { id: string; name: string }) => [d.id, d.name]),
+  );
+  const typeMap = new Map(
+    (types ?? []).map((t: { id: string; name: string }) => [t.id, t.name]),
+  );
+
+  const now = Date.now();
+  const activeLog: CustodyLogRow[] = activeRows.map((r) => {
+    const checkedMs = new Date(r.checked_out_at).getTime();
+    return {
+      id: r.id,
+      itemName: typeMap.get(r.item_type_id) ?? "—",
+      userName: profMap.get(r.user_id) ?? "—",
+      departmentName: r.department_id ? deptMap.get(r.department_id) ?? null : null,
+      checkedOutAt: r.checked_out_at,
+      returnedAt: null,
+      durationMinutes: Math.max(0, Math.round((now - checkedMs) / 60000)),
+      returnType: null,
+      returnActorName: null,
+      status: "active",
+      spansMidnight:
+        new Date(r.checked_out_at).toLocaleDateString("en-CA", { timeZone: "Asia/Jerusalem" }) !==
+        today,
+    };
+  });
+
+  return [...activeLog, ...returned].sort(
+    (a, b) => new Date(b.checkedOutAt).getTime() - new Date(a.checkedOutAt).getTime(),
+  );
 }
 
 /** Suggested name for the next equipment item: ציוד 1, ציוד 2, … */
@@ -266,6 +401,7 @@ export async function returnCustodyItem(
 export function invalidateCustodyQueries(qc: QueryClient, branchId: string | null, userId?: string) {
   qc.invalidateQueries({ queryKey: custodyQueryKey(branchId) });
   qc.invalidateQueries({ queryKey: custodySettingsQueryKey(branchId) });
+  qc.invalidateQueries({ queryKey: custodyLogQueryKey(branchId) });
   if (userId) qc.invalidateQueries({ queryKey: custodyVisibleQueryKey(userId) });
 }
 
