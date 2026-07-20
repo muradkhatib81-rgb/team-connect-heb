@@ -1185,15 +1185,18 @@ function EmployeeRow({
           )}
         </div>
         <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 flex-wrap">
-            <p className="font-semibold truncate">{formatEmployeeName(emp)}</p>
+          <div className="flex items-center gap-2 flex-wrap min-w-0">
+            <p className="font-semibold truncate">
+              {formatEmployeeName(emp)}
+              <span className="text-muted-foreground font-normal mx-1.5">·</span>
+              <span className="font-medium">{deptName ?? "ללא מחלקה"}</span>
+            </p>
             {!emp.is_active && <Badge variant="destructive" className="rounded-full text-xs">לא פעיל</Badge>}
             {emp.on_leave && <Badge variant="secondary" className="rounded-full text-xs">בחופש</Badge>}
           </div>
-          <p className="text-xs text-muted-foreground mt-0.5 truncate">
-            {deptName ?? "ללא מחלקה"}
-            {emp.phone ? ` · ${emp.phone}` : ""}
-          </p>
+          {emp.phone && (
+            <p className="text-xs text-muted-foreground mt-0.5 truncate">{emp.phone}</p>
+          )}
           {roles.length > 0 && (
             <div className="flex flex-wrap gap-1 mt-2">
               {roles.map((r) => (
