@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import type { QueryClient } from "@tanstack/react-query";
+import { combineToIso } from "@/lib/date-format";
 import { supabase } from "@/integrations/supabase/client";
 
 /** Explicit break request statuses — never infer from timestamps alone. */
@@ -90,11 +91,18 @@ export function fmtBreakTime(iso: string | null) {
   }).format(new Date(iso));
 }
 
+/** Convert HH:MM (Asia/Jerusalem wall clock) to UTC ISO — matches `toLocalTime` / `fmtBreakTime`. */
 export function isoFromLocalTime(timeStr: string, baseDate?: Date): string {
-  const [hh, mm] = timeStr.split(":").map(Number);
   const ref = baseDate ?? new Date();
-  const d = new Date(ref.getFullYear(), ref.getMonth(), ref.getDate(), hh, mm, 0, 0);
-  return d.toISOString();
+  const dateStr = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Jerusalem",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(ref);
+  const iso = combineToIso(dateStr, timeStr);
+  if (!iso) throw new Error(`שעה לא תקינה: ${timeStr}`);
+  return iso;
 }
 
 export function toLocalTime(iso: string): string {
