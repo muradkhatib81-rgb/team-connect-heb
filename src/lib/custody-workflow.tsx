@@ -1,4 +1,6 @@
+import { useEffect } from "react";
 import type { QueryClient } from "@tanstack/react-query";
+import { useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { isPlatformOwner, type AppRole } from "@/lib/constants";
 import { todayJerusalemDate } from "@/lib/break-workflow";
@@ -75,14 +77,28 @@ export function custodyLogQueryKey(branchId: string | null) {
   return ["custody-daily-log", branchId] as const;
 }
 
-export function custodyVisibleQueryKey(userId: string | null) {
-  return ["custody-board-visible", userId] as const;
+export function custodyVisibleQueryKey(userId: string | null, branchId?: string | null) {
+  return ["custody-board-visible", userId, branchId ?? null] as const;
 }
 
-export async function fetchCustodyBoardVisible(): Promise<boolean> {
-  const { data, error } = await (supabase as any).rpc("is_custody_board_visible");
+export async function fetchCustodyBoardVisible(branchId?: string | null): Promise<boolean> {
+  const { data, error } = await (supabase as any).rpc("is_custody_board_visible", {
+    _branch_id: branchId ?? null,
+  });
   if (error) throw error;
   return !!data;
+}
+
+export function custodyDurationMinutes(checkedOutAt: string, nowMs = Date.now()) {
+  return Math.max(0, Math.round((nowMs - new Date(checkedOutAt).getTime()) / 60000));
+}
+
+export function fmtCustodyDuration(minutes: number | null) {
+  if (minutes == null) return "—";
+  if (minutes < 60) return `${minutes} דק׳`;
+  const h = Math.floor(minutes / 60);
+  const m = minutes % 60;
+  return m > 0 ? `${h} שע׳ ${m} דק׳` : `${h} שע׳`;
 }
 
 export async function fetchCustodyUserCaps(userId: string): Promise<CustodyUserCaps> {
@@ -402,7 +418,47 @@ export function invalidateCustodyQueries(qc: QueryClient, branchId: string | nul
   qc.invalidateQueries({ queryKey: custodyQueryKey(branchId) });
   qc.invalidateQueries({ queryKey: custodySettingsQueryKey(branchId) });
   qc.invalidateQueries({ queryKey: custodyLogQueryKey(branchId) });
-  if (userId) qc.invalidateQueries({ queryKey: custodyVisibleQueryKey(userId) });
+  if (userId) {
+    qc.invalidateQueries({ queryKey: ["custody-board-visible", userId] });
+  }
+}
+
+/** Supabase Realtime — instant refresh when checkouts / returns change. */
+export function useCustodyRealtime(
+  branchId: string | null,
+  userId: string | undefined,
+  enabled: boolean,
+) {
+  const qc = useQueryClient();
+  useEffect(() => {
+    if (!enabled || !branchId || !userId) return;
+    const ch = supabase
+      .channel(`custody-realtime-${userId}-${branchId}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "custody_checkouts",
+          filter: `branch_id=eq.${branchId}`,
+        },
+        () => invalidateCustodyQueries(qc, branchId, userId),
+      )
+      .on(
+        "postgres_changes",
+        {
+          event: "INSERT",
+          schema: "public",
+          table: "custody_session_archive",
+          filter: `branch_id=eq.${branchId}`,
+        },
+        () => invalidateCustodyQueries(qc, branchId, userId),
+      )
+      .subscribe();
+    return () => {
+      supabase.removeChannel(ch);
+    };
+  }, [branchId, userId, enabled, qc]);
 }
 
 /** 24-hour time (HH:mm) in Jerusalem. */

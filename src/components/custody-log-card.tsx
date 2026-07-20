@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
   Select,
@@ -16,32 +17,36 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Loader2, ClipboardList, ChevronLeft } from "lucide-react";
-import { supabase } from "@/integrations/supabase/client";
+import { Loader2, ClipboardList, ChevronLeft, RotateCcw } from "lucide-react";
 import { useAuth } from "@/lib/use-auth";
 import { useActiveBranch } from "@/lib/use-active-branch";
+import { toast } from "sonner";
 import {
+  custodyDurationMinutes,
   custodyLogQueryKey,
   custodyTimeHM,
   fetchCustodyDailyLog,
   fetchCustodyUserCaps,
+  fmtCustodyDuration,
   invalidateCustodyQueries,
+  returnCustodyItem,
 } from "@/lib/custody-workflow";
 
-function fmtDuration(minutes: number | null) {
-  if (minutes == null) return "—";
-  if (minutes < 60) return `${minutes} דק׳`;
-  const h = Math.floor(minutes / 60);
-  const m = minutes % 60;
-  return m > 0 ? `${h} שע׳ ${m} דק׳` : `${h} שע׳`;
-}
+type CustodyLogCardProps = {
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
+};
 
-export function CustodyLogCard() {
-  const [open, setOpen] = useState(false);
+export function CustodyLogCard({ open: openProp, onOpenChange }: CustodyLogCardProps = {}) {
+  const [internalOpen, setInternalOpen] = useState(false);
+  const open = openProp ?? internalOpen;
+  const setOpen = onOpenChange ?? setInternalOpen;
+
   const [search, setSearch] = useState("");
   const [empFilter, setEmpFilter] = useState("__all");
   const [itemFilter, setItemFilter] = useState("__all");
   const [statusFilter, setStatusFilter] = useState("__all");
+  const [durationTick, setDurationTick] = useState(() => Date.now());
 
   const { data: profile } = useAuth();
   const qc = useQueryClient();
@@ -58,41 +63,30 @@ export function CustodyLogCard() {
     enabled: !!scopedBranchId && !!capsQ.data?.canAccessCustodyLog,
     queryKey: custodyLogQueryKey(scopedBranchId),
     queryFn: () => fetchCustodyDailyLog(scopedBranchId!),
-    staleTime: 20_000,
+    staleTime: 0,
   });
 
-  useEffect(() => {
-    if (!profile || !scopedBranchId || !capsQ.data?.canAccessCustodyLog) return;
-    const ch = supabase
-      .channel(`custody-log-${profile.id}-${scopedBranchId}`)
-      .on(
-        "postgres_changes",
-        {
-          event: "*",
-          schema: "public",
-          table: "custody_checkouts",
-          filter: `branch_id=eq.${scopedBranchId}`,
-        },
-        () => invalidateCustodyQueries(qc, scopedBranchId, profile.id),
-      )
-      .on(
-        "postgres_changes",
-        {
-          event: "INSERT",
-          schema: "public",
-          table: "custody_session_archive",
-          filter: `branch_id=eq.${scopedBranchId}`,
-        },
-        () => qc.invalidateQueries({ queryKey: custodyLogQueryKey(scopedBranchId) }),
-      )
-      .subscribe();
-    return () => {
-      supabase.removeChannel(ch);
-    };
-  }, [profile?.id, scopedBranchId, capsQ.data?.canAccessCustodyLog, qc]);
+  const returnMut = useMutation({
+    mutationFn: (checkoutId: string) => {
+      if (!scopedBranchId) throw new Error("לא נמצא סניף");
+      return returnCustodyItem(checkoutId, scopedBranchId);
+    },
+    onSuccess: () => {
+      toast.success("הציוד הוחזר");
+      invalidateCustodyQueries(qc, scopedBranchId, profile?.id);
+    },
+    onError: (e: Error) => toast.error(e.message ?? "שגיאה בהחזרת ציוד"),
+  });
 
   const log = logQ.data ?? [];
   const activeCount = log.filter((r) => r.status === "active").length;
+  const canReturnOthers = !!capsQ.data?.canReturnOthers;
+
+  useEffect(() => {
+    if (!open || activeCount === 0) return;
+    const id = window.setInterval(() => setDurationTick(Date.now()), 60_000);
+    return () => window.clearInterval(id);
+  }, [open, activeCount]);
 
   const filtered = useMemo(() => {
     return log.filter((r) => {
@@ -240,6 +234,7 @@ export function CustodyLogCard() {
                     <th className="text-right p-2">🕒 החזרה</th>
                     <th className="text-right p-2">⏱️ משך</th>
                     <th className="text-right p-2">📌 סטטוס</th>
+                    {canReturnOthers && <th className="text-right p-2">⚙️ פעולות</th>}
                   </tr>
                 </thead>
                 <tbody>
@@ -252,7 +247,11 @@ export function CustodyLogCard() {
                       <td className="p-2 tabular-nums">
                         {r.returnedAt ? custodyTimeHM(r.returnedAt) : "—"}
                       </td>
-                      <td className="p-2">{fmtDuration(r.durationMinutes)}</td>
+                      <td className="p-2">
+                        {r.status === "active"
+                          ? fmtCustodyDuration(custodyDurationMinutes(r.checkedOutAt, durationTick))
+                          : fmtCustodyDuration(r.durationMinutes)}
+                      </td>
                       <td className="p-2">
                         {r.status === "active" ? (
                           <Badge className="bg-amber-500 text-white hover:bg-amber-500">
@@ -272,6 +271,25 @@ export function CustodyLogCard() {
                           </Badge>
                         )}
                       </td>
+                      {canReturnOthers && (
+                        <td className="p-2">
+                          {r.status === "active" ? (
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              className="gap-1 h-8"
+                              disabled={returnMut.isPending}
+                              onClick={() => returnMut.mutate(r.id)}
+                            >
+                              <RotateCcw className="size-3.5" />
+                              החזר
+                            </Button>
+                          ) : (
+                            "—"
+                          )}
+                        </td>
+                      )}
                     </tr>
                   ))}
                 </tbody>

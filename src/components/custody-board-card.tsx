@@ -35,9 +35,9 @@ export function CustodyBoardCard() {
   const scopedBranchId = activeBranchId ?? profile?.branch_id ?? null;
 
   const visibleQ = useQuery({
-    enabled: !!profile,
-    queryKey: custodyVisibleQueryKey(profile?.id ?? null),
-    queryFn: fetchCustodyBoardVisible,
+    enabled: !!profile && !!scopedBranchId,
+    queryKey: custodyVisibleQueryKey(profile?.id ?? null, scopedBranchId),
+    queryFn: () => fetchCustodyBoardVisible(scopedBranchId),
     staleTime: 30_000,
   });
 
@@ -85,12 +85,12 @@ export function CustodyBoardCard() {
           table: "management_on_shift",
           filter: `branch_id=eq.${scopedBranchId}`,
         },
-        () => qc.invalidateQueries({ queryKey: custodyVisibleQueryKey(profile.id) }),
+        () => qc.invalidateQueries({ queryKey: custodyVisibleQueryKey(profile.id, scopedBranchId) }),
       )
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "schedule_shifts" },
-        () => qc.invalidateQueries({ queryKey: custodyVisibleQueryKey(profile.id) }),
+        () => qc.invalidateQueries({ queryKey: custodyVisibleQueryKey(profile.id, scopedBranchId) }),
       )
       .subscribe();
     return () => {

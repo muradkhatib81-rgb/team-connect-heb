@@ -42,8 +42,7 @@ import { EmployeeOfMonthSection } from "@/components/employee-of-month-section";
 import { formatHeDateTime } from "@/lib/date-format";
 import { CreateEmployeeDialog } from "./employees";
 import { ManagementOnShiftCard } from "@/components/management-on-shift-card";
-import { CustodyBoardCard } from "@/components/custody-board-card";
-import { CustodyLogCard } from "@/components/custody-log-card";
+import { CustodyDashboardSection } from "@/components/custody-dashboard-section";
 import { MorningBoard } from "@/components/morning-board";
 import { LiveShiftCardsSection } from "@/components/live-shift-cards";
 import {
@@ -213,8 +212,7 @@ function DashboardPage() {
     <div className="space-y-8">
       <MorningBoard />
       <ManagementOnShiftCard />
-      <CustodyBoardCard />
-      <CustodyLogCard />
+      <CustodyDashboardSection />
 
       <header>
         <p className="text-sm text-muted-foreground">שלום,</p>
