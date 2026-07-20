@@ -77,6 +77,56 @@ export const BREAK_TERMINAL_STATUSES = [
   "cancelled_by_manager",
 ] as const;
 
+/** Statuses that consume the one-per-shift slot for a break type (matches DB). */
+export const BREAK_CONSUMED_STATUSES = [
+  "scheduled",
+  "pending_approval",
+  "approved",
+  "waiting_for_start",
+  "active",
+  "completed",
+  "ended_by_manager",
+] as const;
+
+export function isBreakTypeConsumedStatus(status: string) {
+  return (BREAK_CONSUMED_STATUSES as readonly string[]).includes(status);
+}
+
+export function consumedBreakSettingIds(
+  breaks: ReadonlyArray<{ break_setting_id: string; status: string }>,
+): Set<string> {
+  const ids = new Set<string>();
+  for (const b of breaks) {
+    if (isBreakTypeConsumedStatus(b.status)) ids.add(b.break_setting_id);
+  }
+  return ids;
+}
+
+export function consumedBreakSettingIdsForJerusalemDay(
+  breaks: ReadonlyArray<{
+    break_setting_id: string;
+    status: string;
+    planned_start?: string | null;
+    requested_at?: string | null;
+  }>,
+  day: string,
+): Set<string> {
+  const ids = new Set<string>();
+  for (const b of breaks) {
+    if (!isBreakTypeConsumedStatus(b.status)) continue;
+    const start = b.planned_start ?? b.requested_at;
+    if (!start) continue;
+    const breakDay = new Intl.DateTimeFormat("en-CA", {
+      timeZone: "Asia/Jerusalem",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    }).format(new Date(start));
+    if (breakDay === day) ids.add(b.break_setting_id);
+  }
+  return ids;
+}
+
 export function isBreakEditable(status: string) {
   return (BREAK_EDITABLE_STATUSES as readonly string[]).includes(status);
 }

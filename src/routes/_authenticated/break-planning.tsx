@@ -48,6 +48,7 @@ import {
   BREAK_STATUS_TONE,
   BreakLiveTimer,
   breakStartIso,
+  consumedBreakSettingIds,
   fmtBreakTime,
   isBreakEditable,
   isoFromLocalTime,
@@ -127,6 +128,7 @@ function BreakPlanningPage() {
   });
 
   const rows = todayQ.data ?? [];
+  const consumedTypeIds = useMemo(() => consumedBreakSettingIds(rows), [rows]);
   const activeBreak = pickActiveBreak(rows);
   const nextDueRow = pickUpcomingBreak(rows, activeBreak?.id);
   const isPlainEmployee = !!me && !isAdmin(me.roles) && !me.roles.includes("department_manager");
@@ -171,11 +173,12 @@ function BreakPlanningPage() {
 
   const addDraft = () => {
     const settings = settingsQ.data ?? [];
+    const firstAvailable = settings.find((s) => !consumedTypeIds.has(s.id));
     setDrafts((d) => [
       ...d,
       {
         key: String(Date.now()) + Math.random(),
-        settingId: settings[0]?.id ?? "",
+        settingId: firstAvailable?.id ?? settings[0]?.id ?? "",
         timeStr: toLocalTime(new Date().toISOString()),
         note: "",
       },
@@ -185,9 +188,18 @@ function BreakPlanningPage() {
   const submitDraftsMut = useMutation({
     mutationFn: async () => {
       if (!drafts.length) throw new Error("יש להוסיף לפחות הפסקה אחת");
+      const seen = new Set<string>();
       for (const d of drafts) {
         if (!d.settingId) throw new Error("יש לבחור סוג הפסקה לכל שורה");
         if (!d.timeStr) throw new Error("יש לבחור שעה לכל הפסקה");
+        if (seen.has(d.settingId)) {
+          throw new Error("לא ניתן לתכנן אותו סוג הפסקה פעמיים במשמרת");
+        }
+        seen.add(d.settingId);
+        if (consumedTypeIds.has(d.settingId)) {
+          const setting = settingsQ.data?.find((s) => s.id === d.settingId);
+          throw new Error(`סוג ההפסקה "${setting?.name ?? ""}" כבר נוצל במשמרת זו`);
+        }
         const setting = settingsQ.data?.find((s) => s.id === d.settingId);
         if (!setting) throw new Error("סוג הפסקה לא קיים");
         const requestedAt = isoFromLocalTime(d.timeStr);
@@ -354,7 +366,14 @@ function BreakPlanningPage() {
           </p>
         ) : (
           <div className="space-y-3">
-            {drafts.map((d, idx) => (
+            {drafts.map((d, idx) => {
+              const draftTypeIds = new Set(
+                drafts.filter((_, i) => i !== idx).map((x) => x.settingId).filter(Boolean),
+              );
+              const rowSettings = (settingsQ.data ?? []).filter(
+                (s) => !consumedTypeIds.has(s.id) && !draftTypeIds.has(s.id),
+              );
+              return (
               <div key={d.key} className="grid sm:grid-cols-4 gap-3 items-end border rounded-lg p-3">
                 <div className="space-y-1.5">
                   <Label>סוג הפסקה</Label>
@@ -370,7 +389,7 @@ function BreakPlanningPage() {
                       <SelectValue placeholder="בחר/י" />
                     </SelectTrigger>
                     <SelectContent>
-                      {(settingsQ.data ?? []).map((s) => (
+                      {rowSettings.map((s) => (
                         <SelectItem key={s.id} value={s.id}>
                           {s.name} · {s.duration_minutes} דק׳
                         </SelectItem>
@@ -411,7 +430,8 @@ function BreakPlanningPage() {
                   <Trash2 className="size-4" />
                 </Button>
               </div>
-            ))}
+            );
+            })}
             <Button
               className="gap-2 w-full sm:w-auto"
               onClick={() => submitDraftsMut.mutate()}

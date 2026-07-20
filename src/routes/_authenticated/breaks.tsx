@@ -51,9 +51,11 @@ import {
   BREAK_STATUS_LABEL,
   BREAK_STATUS_TONE,
   BreakLiveTimer,
+  consumedBreakSettingIdsForJerusalemDay,
   fmtBreakTime,
   isoFromLocalTime,
   toLocalTime,
+  todayJerusalemDate,
 } from "@/lib/break-workflow";
 
 export const Route = createFileRoute("/_authenticated/breaks")({
@@ -83,6 +85,7 @@ interface BreakRequest {
   started_at: string | null;
   ends_at: string | null;
   completed_at: string | null;
+  planned_start: string | null;
   created_at: string;
 }
 
@@ -268,6 +271,16 @@ function BreaksPage() {
     onError: (e: any) => toast.error(e?.message ?? "שגיאה בשליחה"),
   });
 
+  const today = todayJerusalemDate();
+  const consumedTypeIds = useMemo(
+    () => consumedBreakSettingIdsForJerusalemDay(myReqQ.data ?? [], today),
+    [myReqQ.data, today],
+  );
+  const availableSettings = useMemo(
+    () => (settingsQ.data ?? []).filter((s) => !consumedTypeIds.has(s.id)),
+    [settingsQ.data, consumedTypeIds],
+  );
+
   function openTimeDialog() {
     if (!settingId) {
       toast.error("יש לבחור סוג הפסקה");
@@ -278,8 +291,6 @@ function BreaksPage() {
   }
 
   if (!me) return null;
-
-
 
   const myReqs = myReqQ.data ?? [];
 
@@ -319,7 +330,7 @@ function BreaksPage() {
                       <SelectValue placeholder="בחר/י סוג הפסקה" />
                     </SelectTrigger>
                     <SelectContent>
-                      {(settingsQ.data ?? []).map((s) => (
+                      {availableSettings.map((s) => (
                         <SelectItem key={s.id} value={s.id}>
                           {s.name} · {s.duration_minutes} דק׳
                         </SelectItem>
