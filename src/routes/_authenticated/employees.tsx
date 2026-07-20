@@ -98,6 +98,18 @@ const FILTER_LABELS: Record<FilterMode, string> = {
   workers: "👤 עובדים",
 };
 
+/** Org-level managers only — department_manager counts as an employee in filters/stats. */
+const ORG_MANAGER_ROLES = new Set<AppRole>([
+  "system_admin",
+  "main_admin",
+  "branch_manager",
+  "assistant_manager",
+]);
+
+function isOrgManagerRole(roles: string[]) {
+  return roles.some((role) => ORG_MANAGER_ROLES.has(role as AppRole));
+}
+
 function assignableRoleOptionsFor(roles: AppRole[] | undefined): AppRole[] {
   if (roles?.includes("main_admin")) return ROLE_OPTIONS;
   if (roles?.includes("branch_manager")) {
@@ -305,10 +317,7 @@ function EmployeesPage() {
   }, [allowed, qcPage]);
 
   const rolesMap = rolesQuery.data ?? {};
-  const isManagerRole = (uid: string) => {
-    const r = rolesMap[uid] ?? [];
-    return r.some((role) => role !== "employee");
-  };
+  const isManagerRole = (uid: string) => isOrgManagerRole(rolesMap[uid] ?? []);
 
   // Merge optional contact details (id_number, phone) into the profiles list.
   const employees: ProfileRow[] = useMemo(() => {
@@ -379,7 +388,7 @@ function EmployeesPage() {
     let inactive = 0;
     employees.forEach((e) => {
       const r = roles[e.id] ?? [];
-      const isManager = r.some((role) => role !== "employee");
+      const isManager = isOrgManagerRole(r);
       if (isManager) managers += 1;
       else workers += 1;
       if (e.is_active) active += 1;
