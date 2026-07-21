@@ -63,6 +63,12 @@ import { Time24Input } from "@/components/ui/time24-input";
 
 type SchedulesView = "pending" | "editor" | "approved" | "saved";
 type SchedulesSearch = { dept?: string; week?: string; view?: SchedulesView };
+type SummaryShiftPick = {
+  day: string;
+  dayLabel: string;
+  shiftName: string;
+  members: { employeeId: string; departmentId: string }[];
+};
 export const Route = createFileRoute("/_authenticated/schedules")({
   component: SchedulesPage,
   validateSearch: (s: Record<string, unknown>): SchedulesSearch => ({
@@ -868,34 +874,71 @@ function SchedulesPage() {
     !visible.published_at &&
     canPublishDirect;
 
+  const deptNameById = useMemo(() => {
+    const m: Record<string, string> = {};
+    for (const d of deptsQ.data ?? []) m[d.id] = d.name;
+    return m;
+  }, [deptsQ.data]);
+
   const dailyShiftSummary = useMemo(
     () =>
       days.map((day, idx) => ({
         day,
         label: FULL_DAY_NAMES[idx],
         counts: activeShifts.map((s) => {
-          const set = new Set<string>();
+          const members: { employeeId: string; departmentId: string }[] = [];
+          const seen = new Set<string>();
+          const add = (employeeId: string, departmentId: string) => {
+            if (!employeeId || !departmentId || seen.has(employeeId)) return;
+            seen.add(employeeId);
+            members.push({ employeeId, departmentId });
+          };
           // Saved shifts from OTHER departments in this branch (already persisted).
           for (const row of weekSavedQ.data?.shifts ?? []) {
             if (row.department_id === selectedDept) continue;
-            if (row.day_date === day && row.shift === s.code) set.add(row.employee_id);
+            if (row.day_date === day && row.shift === s.code) {
+              add(row.employee_id, row.department_id);
+            }
           }
           // Current department: use the live (unsaved) edits so counters update
           // as the manager builds the schedule.
-          for (const emp of empsQ.data ?? []) {
-            if (edits[emp.id]?.[day] === s.code) set.add(emp.id);
+          if (selectedDept) {
+            for (const emp of empsQ.data ?? []) {
+              if (edits[emp.id]?.[day] === s.code) add(emp.id, selectedDept);
+            }
           }
-          return { ...s, count: set.size };
+          return { ...s, count: members.length, members };
         }),
       })),
     [days, activeShifts, empsQ.data, edits, weekSavedQ.data, selectedDept],
   );
 
-  const deptNameById = useMemo(() => {
-    const m: Record<string, string> = {};
-    for (const d of deptsQ.data ?? []) m[d.id] = d.name;
-    return m;
-  }, [deptsQ.data]);
+  const [summaryShiftPick, setSummaryShiftPick] = useState<SummaryShiftPick | null>(null);
+
+  const summaryMembersQ = useQuery({
+    enabled: !!summaryShiftPick && summaryShiftPick.members.length > 0,
+    queryKey: [
+      "schedule-summary-members",
+      summaryShiftPick?.members.map((m) => m.employeeId).sort().join(","),
+    ],
+    queryFn: async () => {
+      const pick = summaryShiftPick!;
+      const ids = pick.members.map((m) => m.employeeId);
+      const { data, error } = await supabase
+        .from("profiles")
+        .select("id, full_name")
+        .in("id", ids);
+      if (error) throw error;
+      const nameById = new Map((data ?? []).map((p) => [p.id, p.full_name]));
+      const empsById = new Map((empsQ.data ?? []).map((e) => [e.id, e.full_name]));
+      return pick.members
+        .map((m) => ({
+          name: nameById.get(m.employeeId) ?? empsById.get(m.employeeId) ?? "—",
+          department: deptNameById[m.departmentId] ?? "—",
+        }))
+        .sort((a, b) => a.name.localeCompare(b.name, "he"));
+    },
+  });
 
   function openScheduleFromPending(p: {
     department_id: string;
@@ -1454,9 +1497,21 @@ function SchedulesPage() {
                     </div>
                     <div className="flex flex-wrap gap-2">
                       {day.counts.map((s) => (
-                        <span
+                        <button
                           key={`${day.day}-${s.code}`}
-                          className="px-3 py-1.5 rounded-md text-sm font-medium border"
+                          type="button"
+                          disabled={s.count === 0}
+                          onClick={() =>
+                            setSummaryShiftPick({
+                              day: day.day,
+                              dayLabel: day.label,
+                              shiftName: s.name,
+                              members: s.members,
+                            })
+                          }
+                          className={`px-3 py-1.5 rounded-md text-sm font-medium border text-start ${
+                            s.count > 0 ? "cursor-pointer hover:opacity-90 transition-opacity" : "cursor-default opacity-70"
+                          }`}
                           style={shiftStyle(s.code)}
                         >
                           <span
@@ -1464,7 +1519,7 @@ function SchedulesPage() {
                             style={{ backgroundColor: s.color }}
                           />
                           {s.name}: <strong>{s.count}</strong> עובדים
-                        </span>
+                        </button>
                       ))}
                     </div>
                   </div>
@@ -1741,6 +1796,39 @@ function SchedulesPage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <Dialog open={!!summaryShiftPick} onOpenChange={(open) => !open && setSummaryShiftPick(null)}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>
+              {summaryShiftPick
+                ? `יום ${summaryShiftPick.dayLabel} · ${summaryShiftPick.shiftName}`
+                : "עובדים במשמרת"}
+            </DialogTitle>
+          </DialogHeader>
+          {summaryMembersQ.isLoading ? (
+            <div className="flex justify-center py-8">
+              <Loader2 className="size-5 animate-spin text-primary" />
+            </div>
+          ) : (summaryMembersQ.data ?? []).length === 0 ? (
+            <p className="text-sm text-muted-foreground py-4 text-center">אין עובדים.</p>
+          ) : (
+            <ul className="divide-y max-h-[50vh] overflow-auto">
+              {(summaryMembersQ.data ?? []).map((row, i) => (
+                <li key={i} className="py-2.5 flex items-center justify-between gap-3">
+                  <span className="font-medium">{row.name}</span>
+                  <span className="text-sm text-muted-foreground shrink-0">{row.department}</span>
+                </li>
+              ))}
+            </ul>
+          )}
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => setSummaryShiftPick(null)}>
+              סגור
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
