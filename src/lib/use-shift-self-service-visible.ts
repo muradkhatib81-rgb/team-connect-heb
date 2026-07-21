@@ -4,13 +4,19 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/use-auth";
 import { useActiveBranch } from "@/lib/use-active-branch";
 import {
-  custodyVisibleQueryKey,
-  fetchCustodyBoardVisible,
-} from "@/lib/custody-workflow";
-import {
-  BREAK_PENDING_APPROVAL_STATUSES,
-  BREAK_PRE_ACTIVE_STATUSES,
-} from "@/lib/break-workflow";
+  fetchShiftSelfServiceVisible,
+  shiftVisibleQueryKey,
+} from "@/lib/shift-visible-rpc";
+
+/** Open break statuses — inlined to avoid circular imports from break-workflow. */
+const OPEN_BREAK_NAV_STATUSES = new Set([
+  "active",
+  "scheduled",
+  "approved",
+  "waiting_for_start",
+  "pending_approval",
+  "pending",
+]);
 
 /**
  * UI gate for employee self-service (break request card, custody board).
@@ -26,21 +32,16 @@ export function useShiftSelfServiceVisible() {
 
   const visibleQ = useQuery({
     enabled: !!userId && !onLeave,
-    queryKey: custodyVisibleQueryKey(userId, scopedBranchId),
-    queryFn: async () => {
-      try {
-        return await fetchCustodyBoardVisible(scopedBranchId);
-      } catch {
-        return false;
-      }
-    },
+    queryKey: shiftVisibleQueryKey(userId, scopedBranchId),
+    queryFn: () => fetchShiftSelfServiceVisible(scopedBranchId),
     staleTime: 30_000,
+    retry: false,
   });
 
   useEffect(() => {
     if (!userId || !scopedBranchId) return;
     const invalidate = () =>
-      qc.invalidateQueries({ queryKey: custodyVisibleQueryKey(userId, scopedBranchId) });
+      qc.invalidateQueries({ queryKey: shiftVisibleQueryKey(userId, scopedBranchId) });
     const ch = supabase
       .channel(`shift-self-service-visible-${userId}`)
       .on(
@@ -103,12 +104,6 @@ export function useShiftSelfServiceVisible() {
   };
 }
 
-const OPEN_BREAK_NAV_STATUSES = [
-  "active",
-  ...BREAK_PRE_ACTIVE_STATUSES,
-  ...BREAK_PENDING_APPROVAL_STATUSES,
-] as const;
-
 /**
  * Sidebar / breaks page gate: on-shift (or not on leave) plus open break requests
  * so users can still reach /breaks to view or end an active break.
@@ -127,11 +122,11 @@ export function useBreakSelfServiceNavVisible() {
         .select("status")
         .eq("user_id", userId!)
         .limit(30);
-      if (error) throw error;
-      const open = new Set<string>(OPEN_BREAK_NAV_STATUSES);
-      return (data ?? []).some((r) => open.has(r.status));
+      if (error) return false;
+      return (data ?? []).some((r) => OPEN_BREAK_NAV_STATUSES.has(r.status));
     },
     staleTime: 30_000,
+    retry: false,
   });
 
   return {

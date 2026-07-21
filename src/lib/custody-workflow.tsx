@@ -4,6 +4,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { isPlatformOwner, type AppRole } from "@/lib/constants";
 import { todayJerusalemDate } from "@/lib/break-workflow";
+import { fetchShiftSelfServiceVisible, shiftVisibleQueryKey } from "@/lib/shift-visible-rpc";
 
 export type CustodyItemType = {
   id: string;
@@ -78,15 +79,11 @@ export function custodyLogQueryKey(branchId: string | null) {
 }
 
 export function custodyVisibleQueryKey(userId: string | null, branchId?: string | null) {
-  return ["custody-board-visible", userId, branchId ?? null] as const;
+  return shiftVisibleQueryKey(userId, branchId);
 }
 
 export async function fetchCustodyBoardVisible(branchId?: string | null): Promise<boolean> {
-  const { data, error } = await (supabase as any).rpc("is_custody_board_visible", {
-    _branch_id: branchId ?? null,
-  });
-  if (error) throw error;
-  return !!data;
+  return fetchShiftSelfServiceVisible(branchId);
 }
 
 export function custodyDurationMinutes(checkedOutAt: string, nowMs = Date.now()) {
