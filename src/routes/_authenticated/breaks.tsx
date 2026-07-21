@@ -93,9 +93,9 @@ interface BreakRequest {
 function BreaksPage() {
   const { data: me } = useAuth();
   const qc = useQueryClient();
-  const isMainAdmin = !!me?.roles.includes("main_admin");
+  const isMainAdmin = !!me?.roles?.includes("main_admin");
   const isBranchOrAssistant =
-    !!me?.roles.includes("branch_manager") || !!me?.roles.includes("assistant_manager");
+    !!me?.roles?.includes("branch_manager") || !!me?.roles?.includes("assistant_manager");
 
   const permQ = useQuery({
     enabled: !!me?.id && !isMainAdmin,

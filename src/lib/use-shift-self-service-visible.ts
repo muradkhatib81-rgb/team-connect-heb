@@ -27,7 +27,13 @@ export function useShiftSelfServiceVisible() {
   const visibleQ = useQuery({
     enabled: !!userId && !onLeave,
     queryKey: custodyVisibleQueryKey(userId, scopedBranchId),
-    queryFn: () => fetchCustodyBoardVisible(scopedBranchId),
+    queryFn: async () => {
+      try {
+        return await fetchCustodyBoardVisible(scopedBranchId);
+      } catch {
+        return false;
+      }
+    },
     staleTime: 30_000,
   });
 

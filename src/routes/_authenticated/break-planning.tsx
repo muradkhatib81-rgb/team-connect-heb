@@ -128,8 +128,8 @@ function BreakPlanningPage() {
     },
   });
 
-  const isMainAdmin = !!me?.roles.includes("main_admin");
-  const isBranchManager = !!me?.roles.includes("branch_manager");
+  const isMainAdmin = !!me?.roles?.includes("main_admin");
+  const isBranchManager = !!me?.roles?.includes("branch_manager");
   const permQ = useQuery({
     enabled: !!me?.id && !isMainAdmin && !isBranchManager,
     queryKey: ["my-break-manage-perm", me?.id],
