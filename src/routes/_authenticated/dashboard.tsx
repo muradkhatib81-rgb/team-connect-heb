@@ -166,11 +166,15 @@ function DashboardPage() {
     enabled: !!profile,
     queryKey: ["dashboard", "tasks-stats"],
     refetchOnMount: "always",
+    retry: false,
     queryFn: async () => {
       const { data, error } = await supabase
         .from("tasks")
         .select("id, status, due_at, completed_at");
-      if (error) throw error;
+      if (error) {
+        console.warn("[dashboard] tasks-stats query failed", error.message);
+        return { open: 0, in_progress: 0, completed: 0, overdue: 0 };
+      }
       const rows = (data ?? []) as { id: string; status: string; due_at: string | null; completed_at: string | null }[];
       const now = Date.now();
       return {
@@ -2257,7 +2261,7 @@ async function fetchMyBreakDashboardRows(userId: string) {
     .eq("user_id", userId)
     .in("status", [...BREAK_PRE_ACTIVE_STATUSES, "active", "pending_approval"])
     .order("requested_at", { ascending: true });
-  if (error) throw error;
+  if (error) return { primary: null, next: null, all: [] as any[] };
   const rows = (data ?? []) as any[];
   if (!rows.length) return { primary: null, next: null, all: [] as any[] };
 

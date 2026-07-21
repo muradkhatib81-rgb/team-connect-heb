@@ -39,6 +39,7 @@ export function CustodyBoardCard() {
     queryKey: custodyVisibleQueryKey(profile?.id ?? null, scopedBranchId),
     queryFn: () => fetchCustodyBoardVisible(scopedBranchId),
     staleTime: 30_000,
+    retry: false,
   });
 
   const capsQ = useQuery({

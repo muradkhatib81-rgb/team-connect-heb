@@ -9,10 +9,13 @@ export function shiftVisibleQueryKey(userId: string | null, branchId?: string | 
  */
 export async function fetchShiftSelfServiceVisible(branchId?: string | null): Promise<boolean> {
   try {
-    const withBranch = branchId ? { _branch_id: branchId } : {};
-    let { data, error } = await (supabase as any).rpc("is_custody_board_visible", withBranch);
+    // Prefer x-active-branch header (set by branch-scope) — never send null params
+    // (PostgREST returns 400 for explicit null _branch_id).
+    let { data, error } = await (supabase as any).rpc("is_custody_board_visible", {});
     if (error && branchId) {
-      ({ data, error } = await (supabase as any).rpc("is_custody_board_visible", {}));
+      ({ data, error } = await (supabase as any).rpc("is_custody_board_visible", {
+        _branch_id: branchId,
+      }));
     }
     if (error) return false;
     return !!data;
