@@ -59,6 +59,7 @@ import {
   todayJerusalemDate,
   useActivateDueBreaksPoll,
 } from "@/lib/break-workflow";
+import { useBreakSelfServiceNavVisible } from "@/lib/use-shift-self-service-visible";
 
 export const Route = createFileRoute("/_authenticated/break-planning")({
   component: BreakPlanningPage,
@@ -91,6 +92,7 @@ interface DraftBreak {
 
 function BreakPlanningPage() {
   const { data: me } = useAuth();
+  const breakNav = useBreakSelfServiceNavVisible();
   const qc = useQueryClient();
   const today = todayJerusalemDate();
 
@@ -270,6 +272,21 @@ function BreakPlanningPage() {
   });
 
   if (!me) return null;
+
+  if (!breakNav.isLoading && !breakNav.isVisible) {
+    return (
+      <Card className="card-elevated p-8 text-center space-y-3">
+        <CalendarClock className="size-10 mx-auto text-muted-foreground" />
+        <h1 className="text-xl font-bold">תכנון הפסקות</h1>
+        <p className="text-sm text-muted-foreground">
+          תכנון הפסקות זמין רק במהלך משמרת שבסידור העבודה, ולא בזמן חופשה.
+        </p>
+        <Button variant="outline" asChild>
+          <Link to="/dashboard">חזרה ללוח הראשי</Link>
+        </Button>
+      </Card>
+    );
+  }
 
   return (
     <div className="space-y-6">

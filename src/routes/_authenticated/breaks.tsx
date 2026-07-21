@@ -57,6 +57,7 @@ import {
   toLocalTime,
   todayJerusalemDate,
 } from "@/lib/break-workflow";
+import { useShiftSelfServiceVisible } from "@/lib/use-shift-self-service-visible";
 
 export const Route = createFileRoute("/_authenticated/breaks")({
   component: BreaksPage,
@@ -124,6 +125,8 @@ function BreaksPage() {
     },
   });
   const canRequestBreak = canRequestQ.data !== false;
+  const shiftGate = useShiftSelfServiceVisible();
+  const canShowRequestForm = canRequestBreak && shiftGate.isVisible;
 
   // Managers are also employees: they may request their own break here.
   // The dedicated /breaks-admin screen remains for approval/management.
@@ -307,19 +310,23 @@ function BreaksPage() {
               ? "הגשת בקשת הפסקה וצפייה בסטטוס. השעה המאושרת היא הקובעת."
               : "הגשת הפסקה ללא צורך באישור מנהל. השעה שבחרת תאושר אוטומטית."}
           </p>
-          <Button variant="link" className="h-auto p-0 text-sm" asChild>
-            <Link to="/break-planning">תכנון הפסקות למשמרת ←</Link>
-          </Button>
+          {shiftGate.isVisible ? (
+            <Button variant="link" className="h-auto p-0 text-sm" asChild>
+              <Link to="/break-planning">תכנון הפסקות למשמרת ←</Link>
+            </Button>
+          ) : (
+            <p className="text-sm text-muted-foreground">תכנון הפסקות — זמין במהלך משמרת בלבד</p>
+          )}
         </div>
       </header>
 
-      <Tabs defaultValue={canRequestBreak ? "request" : "mine"} className="space-y-4">
+      <Tabs defaultValue={canShowRequestForm ? "request" : "mine"} className="space-y-4">
         <TabsList>
-          {canRequestBreak && <TabsTrigger value="request">בקשת הפסקה</TabsTrigger>}
+          {canShowRequestForm && <TabsTrigger value="request">בקשת הפסקה</TabsTrigger>}
           <TabsTrigger value="mine">הבקשות שלי</TabsTrigger>
         </TabsList>
 
-        {canRequestBreak && (
+        {canShowRequestForm && (
           <TabsContent value="request">
             <Card className="card-elevated p-5 space-y-4">
               <div className="grid sm:grid-cols-2 gap-4">

@@ -47,6 +47,7 @@ import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { NotificationsBell } from "@/components/notifications-bell";
 import { useActiveBranch } from "@/lib/use-active-branch";
+import { useBreakSelfServiceNavVisible } from "@/lib/use-shift-self-service-visible";
 import { AppFooter } from "@/components/app-footer";
 import { useBranchContext, useCompanyContext } from "@/platform";
 
@@ -152,8 +153,8 @@ export function AppShell({ children }: { children: ReactNode }) {
 
   // Managers of breaks: main admin, branch manager, or any user with the explicit permission.
   const isBreaksManager = isMainAdmin || isBranchManager || !!breakPermQ.data?.breaks;
-  // Every user (including employees and managers) can open the break page from the sidebar.
-  const canRequestBreak = true;
+  const breakSelfServiceNav = useBreakSelfServiceNavVisible();
+  const canRequestBreak = breakSelfServiceNav.isVisible;
   const canManageEom = isMainAdmin || isBranchManager || !!breakPermQ.data?.eom;
 
   type NavEntry = {
