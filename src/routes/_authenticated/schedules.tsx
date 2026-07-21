@@ -47,6 +47,7 @@ import {
   AlertTriangle,
   Trash2,
   RefreshCw,
+  UserX,
 } from "lucide-react";
 import { toast } from "sonner";
 import {
@@ -59,6 +60,7 @@ import {
   copyPreviousWeek,
   deleteSchedule,
   publishAllWeekSchedules,
+  setEmployeeScheduleExclusion,
 } from "@/lib/schedules.functions";
 import { formatHeDate, formatHeDateTime } from "@/lib/date-format";
 import { useShiftDefinitions } from "@/lib/use-shift-definitions";
@@ -570,17 +572,22 @@ function SchedulesPage() {
       if (isEmployee) {
         const { data, error } = await (supabase as any)
           .from("department_coworkers")
-          .select("id, full_name, is_active")
+          .select("id, full_name, is_active, excluded_from_schedule")
           .eq("department_id", selectedDept!)
           .eq("is_active", true)
           .order("full_name");
         if (error) throw error;
-        return (data ?? []) as { id: string; full_name: string; is_active: boolean }[];
+        return (data ?? []) as {
+          id: string;
+          full_name: string;
+          is_active: boolean;
+          excluded_from_schedule: boolean;
+        }[];
       }
       const [{ data, error }, { data: dept }] = await Promise.all([
         supabase
         .from("profiles")
-        .select("id, full_name, is_active")
+        .select("id, full_name, is_active, excluded_from_schedule")
         .eq("department_id", selectedDept!)
         .eq("is_active", true)
           .order("full_name"),
@@ -592,7 +599,7 @@ function SchedulesPage() {
       if (managerId && !rows.some((e: any) => e.id === managerId)) {
         const { data: mgr } = await supabase
           .from("profiles")
-          .select("id, full_name, is_active")
+          .select("id, full_name, is_active, excluded_from_schedule")
           .eq("id", managerId)
           .eq("is_active", true)
           .maybeSingle();
@@ -690,6 +697,7 @@ function SchedulesPage() {
   const publishAllFn = useServerFn(publishAllWeekSchedules);
   
   const copyFn = useServerFn(copyPreviousWeek);
+  const setExclusionFn = useServerFn(setEmployeeScheduleExclusion);
 
   const createMut = useMutation({
     mutationFn: () => createFn({ data: { department_id: selectedDept!, week_start: weekStart } }),
@@ -831,6 +839,39 @@ function SchedulesPage() {
     },
   });
 
+  const exclusionMut = useMutation({
+    mutationFn: (args: { user_id: string; excluded: boolean }) =>
+      setExclusionFn({
+        data: {
+          user_id: args.user_id,
+          excluded: args.excluded,
+          schedule_id: visible?.id,
+        },
+      }),
+    onSuccess: (_data, vars) => {
+      toast.success(
+        vars.excluded ? "העובד הוגדר כלא נכלל בסידור" : "העובד נכלל שוב בסידור",
+      );
+      qc.invalidateQueries({ queryKey: ["dept-employees", selectedDept] });
+      if (visible?.id) {
+        qc.invalidateQueries({ queryKey: ["schedule-shifts", visible.id] });
+      }
+      if (vars.excluded) {
+        setEdits((prev) => {
+          const next = { ...prev };
+          delete next[vars.user_id];
+          return next;
+        });
+        setTimeEdits((prev) => {
+          const next = { ...prev };
+          delete next[vars.user_id];
+          return next;
+        });
+      }
+    },
+    onError: (e: any) => toast.error(e?.message ?? "שגיאה בעדכון"),
+  });
+
   const deleteFn = useServerFn(deleteSchedule);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const deleteMut = useMutation({
@@ -886,6 +927,8 @@ function SchedulesPage() {
       end_time: string | null;
     }[] = [];
     for (const [emp, m] of Object.entries(edits)) {
+      const empRow = empsQ.data?.find((e) => e.id === emp);
+      if (empRow?.excluded_from_schedule) continue;
       for (const [day, shift] of Object.entries(m)) {
         const t = timeEdits[emp]?.[day];
         const norm = (v: string | null | undefined) =>
@@ -921,6 +964,7 @@ function SchedulesPage() {
       || (visible.status === "approved" && (isMainAdmin || canPublishDirect))
       || (visible.status === "pending_approval" && (isMainAdmin || canApprove || canPublishDirect)));
 
+  const canToggleScheduleExclusion = !isEmployee && !!visible && editable;
 
   const canShowApprove =
     !!visible &&
@@ -964,6 +1008,7 @@ function SchedulesPage() {
           // as the manager builds the schedule.
           if (selectedDept) {
             for (const emp of empsQ.data ?? []) {
+              if (emp.excluded_from_schedule) continue;
               if (edits[emp.id]?.[day] === s.code) add(emp.id, selectedDept);
             }
           }
@@ -1765,9 +1810,49 @@ function SchedulesPage() {
                   </tr>
                 )}
                 {(empsQ.data ?? []).map((emp) => (
-                  <tr key={emp.id} className="border-t">
-                    <td className="p-3 sticky right-0 bg-card font-medium">{emp.full_name}</td>
+                  <tr
+                    key={emp.id}
+                    className={`border-t ${emp.excluded_from_schedule ? "bg-muted/20" : ""}`}
+                  >
+                    <td className="p-3 sticky right-0 bg-card font-medium z-[1]">
+                      <div className="flex items-center gap-2 justify-end min-w-0">
+                        <span className="min-w-0 truncate">{emp.full_name}</span>
+                        {emp.excluded_from_schedule && (
+                          <Badge variant="outline" className="text-[10px] shrink-0 rounded-full">
+                            לא בסידור
+                          </Badge>
+                        )}
+                        {canToggleScheduleExclusion && (
+                          <Button
+                            type="button"
+                            variant={emp.excluded_from_schedule ? "secondary" : "ghost"}
+                            size="icon"
+                            className="size-7 shrink-0"
+                            disabled={exclusionMut.isPending}
+                            title={
+                              emp.excluded_from_schedule
+                                ? "כלול בסידור עבודה"
+                                : "לא נכלל בסידור עבודה"
+                            }
+                            aria-label={
+                              emp.excluded_from_schedule
+                                ? "כלול בסידור עבודה"
+                                : "לא נכלל בסידור עבודה"
+                            }
+                            onClick={() =>
+                              exclusionMut.mutate({
+                                user_id: emp.id,
+                                excluded: !emp.excluded_from_schedule,
+                              })
+                            }
+                          >
+                            <UserX className="size-3.5" />
+                          </Button>
+                        )}
+                      </div>
+                    </td>
                     {days.map((day) => {
+                      const excluded = !!emp.excluded_from_schedule;
                       const cur = edits[emp.id]?.[day];
                       const pub = publishedMap[emp.id]?.[day] ?? null;
                       const def = cur ? shiftDefsQ.map.get(cur) : undefined;
@@ -1783,11 +1868,11 @@ function SchedulesPage() {
                       const isModified =
                         visible.status === "approved" &&
                         (cur ?? null) !== pub;
-                      if (!editable) {
+                      if (!editable || excluded) {
                         return (
                           <td key={day} className="p-2 text-center align-top">
                             <div className="relative inline-block">
-                              {cur ? (
+                              {cur && !excluded ? (
                                 <>
                                   <span
                                     className={`inline-block px-2 py-1 rounded-md text-xs font-medium border ${

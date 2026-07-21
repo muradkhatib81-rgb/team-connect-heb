@@ -1263,6 +1263,7 @@ export type Database = {
           deactivated_at: string | null
           department_id: string | null
           excluded_from_headcount: boolean
+          excluded_from_schedule: boolean
           first_name: string
           full_name: string
           id: string
@@ -1282,6 +1283,7 @@ export type Database = {
           deactivated_at?: string | null
           department_id?: string | null
           excluded_from_headcount?: boolean
+          excluded_from_schedule?: boolean
           first_name?: string
           full_name?: string
           id: string
@@ -1301,6 +1303,7 @@ export type Database = {
           deactivated_at?: string | null
           department_id?: string | null
           excluded_from_headcount?: boolean
+          excluded_from_schedule?: boolean
           first_name?: string
           full_name?: string
           id?: string
@@ -2215,6 +2218,7 @@ export type Database = {
           avatar_url: string | null
           department_id: string | null
           excluded_from_headcount: boolean | null
+          excluded_from_schedule: boolean | null
           full_name: string | null
           id: string | null
           is_active: boolean | null
@@ -2225,6 +2229,7 @@ export type Database = {
           avatar_url?: string | null
           department_id?: string | null
           excluded_from_headcount?: boolean | null
+          excluded_from_schedule?: boolean | null
           full_name?: string | null
           id?: string | null
           is_active?: boolean | null
@@ -2235,6 +2240,7 @@ export type Database = {
           avatar_url?: string | null
           department_id?: string | null
           excluded_from_headcount?: boolean | null
+          excluded_from_schedule?: boolean | null
           full_name?: string | null
           id?: string | null
           is_active?: boolean | null

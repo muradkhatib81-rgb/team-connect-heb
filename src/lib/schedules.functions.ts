@@ -33,7 +33,7 @@ async function getDepartmentScheduleEmployees(supabase: any, departmentId: strin
   const [{ data: emps }, { data: dept }] = await Promise.all([
     supabase
       .from("profiles")
-      .select("id, full_name, is_active")
+      .select("id, full_name, is_active, excluded_from_schedule")
       .eq("department_id", departmentId)
       .eq("is_active", true),
     supabase
@@ -47,13 +47,17 @@ async function getDepartmentScheduleEmployees(supabase: any, departmentId: strin
   if (dept?.manager_id && !rows.some((e: any) => e.id === dept.manager_id)) {
     const { data: mgr } = await supabase
       .from("profiles")
-      .select("id, full_name, is_active")
+      .select("id, full_name, is_active, excluded_from_schedule")
       .eq("id", dept.manager_id)
       .eq("is_active", true)
       .maybeSingle();
-    if (mgr) rows.push(mgr);
+    if (mgr) rows.push(mgr as any);
   }
   return rows;
+}
+
+function schedulableDepartmentEmployees(employees: any[]) {
+  return (employees ?? []).filter((e: any) => !e.excluded_from_schedule);
 }
 
 
@@ -211,6 +215,13 @@ export const saveScheduleShifts = createServerFn({ method: "POST" })
       }
     }
 
+    // Drop shifts for employees marked as not schedulable.
+    const deptEmployees = await getDepartmentScheduleEmployees(context.supabase, sched.department_id);
+    const schedulableIds = new Set(
+      schedulableDepartmentEmployees(deptEmployees).map((e: any) => e.id as string),
+    );
+    const shiftsInput = data.shifts.filter((s) => schedulableIds.has(s.employee_id));
+
     // Snapshot existing shifts for change detection + preserve published_shift snapshot
     const { data: existingShifts } = await context.supabase
       .from("schedule_shifts")
@@ -219,7 +230,7 @@ export const saveScheduleShifts = createServerFn({ method: "POST" })
     const keyOf = (s: { employee_id: string; day_date: string; shift: string }) =>
       `${s.employee_id}|${s.day_date}|${s.shift}`;
     const beforeSet = new Set((existingShifts ?? []).map(keyOf));
-    const afterSet = new Set(data.shifts.map(keyOf));
+    const afterSet = new Set(shiftsInput.map(keyOf));
     const changed =
       beforeSet.size !== afterSet.size ||
       [...beforeSet].some((k) => !afterSet.has(k)) ||
@@ -237,8 +248,8 @@ export const saveScheduleShifts = createServerFn({ method: "POST" })
       .delete()
       .eq("schedule_id", data.schedule_id);
     if (delErr) throw new Error(delErr.message);
-    if (data.shifts.length) {
-      const rows = data.shifts.map((s) => ({
+    if (shiftsInput.length) {
+      const rows = shiftsInput.map((s) => ({
         ...s,
         schedule_id: data.schedule_id,
         // Carry the snapshot forward so the approver/published comparison
@@ -333,10 +344,13 @@ export const submitSchedule = createServerFn({ method: "POST" })
       m.get(s.day_date)!.push(s.shift);
     }
 
+    const schedulable = schedulableDepartmentEmployees(deptEmployees ?? []);
+    const schedulableIds = new Set(schedulable.map((e: any) => e.id as string));
+
     // Auto-fill missing (employee, day) cells as "off" so an unset cell defaults
     // to a day off rather than blocking submission.
     const autoFill: { schedule_id: string; employee_id: string; day_date: string; shift: "off" }[] = [];
-    for (const emp of deptEmployees ?? []) {
+    for (const emp of schedulable) {
       const m = map.get(emp.id) ?? new Map<string, string[]>();
       for (const d of days) {
         if (!m.has(d)) {
@@ -353,7 +367,8 @@ export const submitSchedule = createServerFn({ method: "POST" })
 
     // Duplicates / off-with-shift checks per employee per day
     for (const [empId, dayMap] of map) {
-      const emp = (deptEmployees ?? []).find((e: any) => e.id === empId);
+      if (!schedulableIds.has(empId)) continue;
+      const emp = schedulable.find((e: any) => e.id === empId);
       const name = emp?.full_name ?? "עובד";
       for (const [day, list] of dayMap) {
         if (list.length > 1) errors.push(`${name}: יותר ממשמרת אחת בתאריך ${day}`);
@@ -752,8 +767,10 @@ async function publishOneUnpublishedSchedule(
     if (!m.has(s.day_date)) m.set(s.day_date, []);
     m.get(s.day_date)!.push(s.shift);
   }
+  const schedulable = schedulableDepartmentEmployees(deptEmployees ?? []);
+  const schedulableIds = new Set(schedulable.map((e: any) => e.id as string));
   const autoFill: { schedule_id: string; employee_id: string; day_date: string; shift: "off" }[] = [];
-  for (const emp of deptEmployees ?? []) {
+  for (const emp of schedulable) {
     const m = map.get(emp.id) ?? new Map<string, string[]>();
     for (const d of days) {
       if (!m.has(d)) {
@@ -768,7 +785,8 @@ async function publishOneUnpublishedSchedule(
     if (afErr) throw new Error(afErr.message);
   }
   for (const [empId, dayMap] of map) {
-    const emp = (deptEmployees ?? []).find((e: any) => e.id === empId);
+    if (!schedulableIds.has(empId)) continue;
+    const emp = schedulable.find((e: any) => e.id === empId);
     const name = emp?.full_name ?? "עובד";
     for (const [day, list] of dayMap) {
       if (list.length > 1) errors.push(`${name}: יותר ממשמרת אחת בתאריך ${day}`);
@@ -918,6 +936,65 @@ export const rejectSchedule = createServerFn({ method: "POST" })
     return { ok: true };
   });
 
+// ---------- Toggle employee schedule exclusion (roles/permissions unchanged) ----------
+export const setEmployeeScheduleExclusion = createServerFn({ method: "POST" })
+  .middleware([requireBranchContext])
+  .inputValidator((d: unknown) =>
+    z
+      .object({
+        user_id: z.string().uuid(),
+        excluded: z.boolean(),
+        schedule_id: z.string().uuid().optional(),
+      })
+      .parse(d),
+  )
+  .handler(async ({ data, context }) => {
+    const caps = await getCaps(context.supabase, context.userId);
+    if (
+      !(
+        caps.isMainAdmin ||
+        caps.isBranchMgr ||
+        caps.canCreate ||
+        caps.canApprove ||
+        caps.canPublishDirect
+      )
+    ) {
+      throw new Error("אין הרשאה");
+    }
+
+    const { data: profile, error: pErr } = await context.supabase
+      .from("profiles")
+      .select("id, department_id, branch_id")
+      .eq("id", data.user_id)
+      .maybeSingle();
+    if (pErr || !profile) throw new Error("עובד לא נמצא");
+    if (context.branchId && profile.branch_id !== context.branchId) {
+      throw new Error("עובד לא נמצא בסניף הפעיל");
+    }
+    if (caps.isDeptMgr && !caps.isMainAdmin && !caps.isBranchMgr) {
+      if (profile.department_id !== caps.departmentId) {
+        throw new Error("אין הרשאה לעדכן עובד מחלקה אחרת");
+      }
+    }
+
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { error: updErr } = await supabaseAdmin
+      .from("profiles")
+      .update({ excluded_from_schedule: data.excluded })
+      .eq("id", data.user_id);
+    if (updErr) throw new Error(updErr.message);
+
+    if (data.excluded && data.schedule_id) {
+      await supabaseAdmin
+        .from("schedule_shifts")
+        .delete()
+        .eq("schedule_id", data.schedule_id)
+        .eq("employee_id", data.user_id);
+    }
+
+    return { ok: true };
+  });
+
 // ---------- COPY from previous week ----------
 export const copyPreviousWeek = createServerFn({ method: "POST" })
   .middleware([requireBranchContext])
@@ -945,8 +1022,14 @@ export const copyPreviousWeek = createServerFn({ method: "POST" })
       .from("schedule_shifts")
       .select("employee_id, day_date, shift")
       .eq("schedule_id", prev.id);
-    // Shift dates +7
-    const next = (prevShifts ?? []).map((s: any) => {
+    const deptEmployees = await getDepartmentScheduleEmployees(context.supabase, sched.department_id);
+    const schedulableIds = new Set(
+      schedulableDepartmentEmployees(deptEmployees).map((e: any) => e.id as string),
+    );
+    // Shift dates +7 — skip employees not included in scheduling.
+    const next = (prevShifts ?? [])
+      .filter((s: any) => schedulableIds.has(s.employee_id))
+      .map((s: any) => {
       const d = new Date(s.day_date + "T00:00:00Z");
       d.setUTCDate(d.getUTCDate() + 7);
       return {
@@ -1064,7 +1147,7 @@ export const getUnpublishedWeekSummary = createServerFn({ method: "POST" })
         .from("profiles")
         .select("id")
         .in("id", empIds)
-        .eq("excluded_from_headcount", true);
+        .or("excluded_from_headcount.eq.true,excluded_from_schedule.eq.true");
       excludedSet = new Set((excluded ?? []).map((p: any) => p.id));
     }
 
