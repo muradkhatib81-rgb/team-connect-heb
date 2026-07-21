@@ -1672,17 +1672,35 @@ function ShiftCellDialog({
       if (!ids.length) return [];
       const { data: shifts } = await supabase
         .from("schedule_shifts")
-        .select("employee_id")
+        .select("employee_id, start_time, end_time")
         .in("schedule_id", ids)
         .eq("day_date", cell!.day)
         .eq("shift", cell!.shift);
-      const empIds = Array.from(new Set((shifts ?? []).map((s: any) => s.employee_id)));
+      const timesByEmp = new Map<string, { start: string | null; end: string | null }>();
+      for (const s of shifts ?? []) {
+        timesByEmp.set(s.employee_id, {
+          start: s.start_time ? String(s.start_time).slice(0, 5) : null,
+          end: s.end_time ? String(s.end_time).slice(0, 5) : null,
+        });
+      }
+      const empIds = Array.from(timesByEmp.keys());
       if (!empIds.length) return [];
-      const { data: emps } = await supabase
-        .from("profiles")
-        .select("id, full_name, department_id")
-        .in("id", empIds)
-        .order("full_name");
+      const [{ data: emps }, { data: shiftDef }] = await Promise.all([
+        supabase
+          .from("profiles")
+          .select("id, full_name, department_id")
+          .in("id", empIds)
+          .order("full_name"),
+        cell!.shift !== "off"
+          ? supabase
+              .from("shift_definitions")
+              .select("start_time, end_time")
+              .eq("code", cell!.shift)
+              .maybeSingle()
+          : Promise.resolve({ data: null as { start_time?: string | null; end_time?: string | null } | null }),
+      ]);
+      const defaultStart = shiftDef?.start_time ? String(shiftDef.start_time).slice(0, 5) : null;
+      const defaultEnd = shiftDef?.end_time ? String(shiftDef.end_time).slice(0, 5) : null;
       const deptIds = Array.from(
         new Set((emps ?? []).map((e: any) => e.department_id).filter(Boolean)),
       );
@@ -1691,10 +1709,17 @@ function ShiftCellDialog({
         : { data: [] as any[] };
       const dm: Record<string, string> = {};
       (depts ?? []).forEach((d: any) => (dm[d.id] = d.name));
-      return (emps ?? []).map((e: any) => ({
-        ...e,
-        department_name: dm[e.department_id] ?? "—",
-      }));
+      return (emps ?? []).map((e: any) => {
+        const t = timesByEmp.get(e.id);
+        const start = t?.start ?? defaultStart;
+        const end = t?.end ?? defaultEnd;
+        return {
+          ...e,
+          department_name: dm[e.department_id] ?? "—",
+          time_range:
+            cell!.shift !== "off" && start && end ? `${start}–${end}` : null,
+        };
+      });
     },
   });
 
@@ -1727,7 +1752,14 @@ function ShiftCellDialog({
             {q.data.map((e: any) => (
               <li key={e.id} className="flex items-center justify-between py-3 gap-3">
                 <div className="min-w-0">
-                  <p className="font-medium truncate">{e.full_name}</p>
+                  <p className="font-medium truncate flex items-center gap-2 flex-wrap">
+                    <span>{e.full_name}</span>
+                    {e.time_range && (
+                      <span className="text-xs font-normal text-muted-foreground tabular-nums" dir="ltr">
+                        {e.time_range}
+                      </span>
+                    )}
+                  </p>
                   <p className="text-xs text-muted-foreground truncate">{e.department_name}</p>
                 </div>
                 <Badge variant="outline" className="shrink-0">
