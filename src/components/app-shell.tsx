@@ -130,6 +130,8 @@ export function AppShell({ children }: { children: ReactNode }) {
     // Plain employees may now access /dashboard directly (clean employee view).
   }, [profile?.must_change_password, profile, pathname, navigate]);
 
+  const breakSelfServiceNav = useBreakSelfServiceNavVisible();
+
   // Realtime bridge and the Branch Mode gate read the active branch via
   // <ActiveBranchProvider/>, which now wraps this whole component (see
   // routes/_authenticated/route.tsx). See <RealtimeBridge/> and
@@ -153,7 +155,6 @@ export function AppShell({ children }: { children: ReactNode }) {
 
   // Managers of breaks: main admin, branch manager, or any user with the explicit permission.
   const isBreaksManager = isMainAdmin || isBranchManager || !!breakPermQ.data?.breaks;
-  const breakSelfServiceNav = useBreakSelfServiceNavVisible();
   const canRequestBreak = breakSelfServiceNav.isVisible;
   const canManageEom = isMainAdmin || isBranchManager || !!breakPermQ.data?.eom;
 
