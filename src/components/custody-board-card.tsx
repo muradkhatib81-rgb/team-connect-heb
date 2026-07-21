@@ -135,6 +135,8 @@ export function CustodyBoardCard() {
 
   if (!profile || visibleQ.isLoading) return null;
 
+  if (profile.on_leave) return null;
+
   if (visibleQ.data !== true) {
     if (caps?.canOpenSettings && scopedBranchId) {
       return (

@@ -58,6 +58,7 @@ import {
   todayJerusalemDate,
   useActivateDueBreaksPoll,
 } from "@/lib/break-workflow";
+import { useShiftSelfServiceVisible } from "@/lib/use-shift-self-service-visible";
 
 export const Route = createFileRoute("/_authenticated/dashboard")({
   component: DashboardPage,
@@ -2430,6 +2431,7 @@ function BreakShortcutCard({ userId }: { userId: string }) {
   const qc = useQueryClient();
   const navigate = useNavigate();
   const [, setTick] = useState(0);
+  const shiftGate = useShiftSelfServiceVisible();
 
   const breakQ = useQuery({
     enabled: !!userId,
@@ -2493,6 +2495,7 @@ function BreakShortcutCard({ userId }: { userId: string }) {
   const hasBreakCards = !!activeBreak || upcomingBreaks.length > 0 || pendingBreaks.length > 0;
 
   if (!hasBreakCards) {
+    if (shiftGate.isLoading || !shiftGate.isVisible) return null;
     return (
       <Card
         role="button"
