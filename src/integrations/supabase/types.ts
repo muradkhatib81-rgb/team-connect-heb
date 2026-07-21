@@ -1438,6 +1438,8 @@ export type Database = {
           end_time: string | null
           id: string
           published_shift: string | null
+          published_start_time: string | null
+          published_end_time: string | null
           schedule_id: string
           shift: string
           start_time: string | null
@@ -1451,6 +1453,8 @@ export type Database = {
           end_time?: string | null
           id?: string
           published_shift?: string | null
+          published_start_time?: string | null
+          published_end_time?: string | null
           schedule_id: string
           shift: string
           start_time?: string | null
@@ -1464,6 +1468,8 @@ export type Database = {
           end_time?: string | null
           id?: string
           published_shift?: string | null
+          published_start_time?: string | null
+          published_end_time?: string | null
           schedule_id?: string
           shift?: string
           start_time?: string | null

@@ -64,6 +64,7 @@ import {
 } from "@/lib/schedules.functions";
 import { formatHeDate, formatHeDateTime } from "@/lib/date-format";
 import { isEmployeeOnLeaveOnDate, effectiveScheduleShift } from "@/lib/employee-leave";
+import { isScheduleCellModified } from "@/lib/schedule-publish-diff";
 import { useShiftDefinitions } from "@/lib/use-shift-definitions";
 import { Time24Input } from "@/components/ui/time24-input";
 
@@ -652,7 +653,9 @@ function SchedulesPage() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("schedule_shifts")
-        .select("employee_id, day_date, shift, published_shift, start_time, end_time")
+        .select(
+          "employee_id, day_date, shift, published_shift, published_start_time, published_end_time, start_time, end_time",
+        )
         .eq("schedule_id", visible!.id);
       if (error) throw error;
       return data ?? [];
@@ -696,6 +699,22 @@ function SchedulesPage() {
     for (const s of shiftsQ.data ?? []) {
       m[s.employee_id] ??= {};
       m[s.employee_id][s.day_date] = ((s as any).published_shift ?? null) as Shift | null;
+    }
+    return m;
+  }, [shiftsQ.data]);
+
+  const publishedTimesMap = useMemo(() => {
+    const m: Record<string, Record<string, { start: string | null; end: string | null }>> = {};
+    for (const s of shiftsQ.data ?? []) {
+      m[s.employee_id] ??= {};
+      m[s.employee_id][s.day_date] = {
+        start: (s as any).published_start_time
+          ? String((s as any).published_start_time).slice(0, 5)
+          : null,
+        end: (s as any).published_end_time
+          ? String((s as any).published_end_time).slice(0, 5)
+          : null,
+      };
     }
     return m;
   }, [shiftsQ.data]);
@@ -1914,6 +1933,7 @@ function SchedulesPage() {
                         | Shift
                         | undefined;
                       const pub = publishedMap[emp.id]?.[day] ?? null;
+                      const pubDef = pub ? shiftDefsQ.map.get(pub) : undefined;
                       const def = cur ? shiftDefsQ.map.get(cur) : undefined;
                       const cellTimes = timeEdits[emp.id]?.[day];
                       const effStart =
@@ -1922,11 +1942,16 @@ function SchedulesPage() {
                       const effEnd =
                         cellTimes?.end ??
                         (def?.end_time ? String(def.end_time).slice(0, 5) : null);
-                      // Mark as "modified after publish" only when the schedule is approved
-                      // and the current value differs from the published snapshot.
                       const isModified =
                         visible.status === "approved" &&
-                        (cur ?? null) !== pub;
+                        isScheduleCellModified({
+                          currentShift: cur ?? null,
+                          publishedShift: pub,
+                          currentStart: effStart,
+                          currentEnd: effEnd,
+                          publishedTimes: publishedTimesMap[emp.id]?.[day],
+                          publishedShiftDefaults: pubDef,
+                        });
                       if (!editable || excluded || onLeaveDay) {
                         return (
                           <td key={day} className="p-2 text-center align-top">
