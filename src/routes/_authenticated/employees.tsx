@@ -399,16 +399,15 @@ function EmployeesPage() {
   // used by the table below, so every counter and the rendered rows stay in sync.
   const summaryStats = useMemo(() => {
     const roles = rolesQuery.data ?? {};
-    let managers = 0;
+    // Role-based counts use the full list so managers excluded from headcount
+    // (e.g. branch/assistant manager job titles) still appear in the card.
+    const managers = employees.filter((e) => isOrgManagerRole(roles[e.id] ?? [])).length;
     let workers = 0;
     let active = 0;
     let onLeave = 0;
     let inactive = 0;
     countedEmployees.forEach((e) => {
-      const r = roles[e.id] ?? [];
-      const isManager = isOrgManagerRole(r);
-      if (isManager) managers += 1;
-      else workers += 1;
+      if (!isOrgManagerRole(roles[e.id] ?? [])) workers += 1;
       if (e.is_active) active += 1;
       if (e.on_leave) onLeave += 1;
       if (!e.is_active) inactive += 1;
