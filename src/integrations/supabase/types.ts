@@ -1271,6 +1271,8 @@ export type Database = {
           id_number: string | null
           is_active: boolean
           job_title: string | null
+          leave_end_date: string | null
+          leave_start_date: string | null
           must_change_password: boolean
           on_leave: boolean
           phone: string | null
@@ -1291,6 +1293,8 @@ export type Database = {
           id_number?: string | null
           is_active?: boolean
           job_title?: string | null
+          leave_end_date?: string | null
+          leave_start_date?: string | null
           must_change_password?: boolean
           on_leave?: boolean
           phone?: string | null
@@ -1311,6 +1315,8 @@ export type Database = {
           id_number?: string | null
           is_active?: boolean
           job_title?: string | null
+          leave_end_date?: string | null
+          leave_start_date?: string | null
           must_change_password?: boolean
           on_leave?: boolean
           phone?: string | null

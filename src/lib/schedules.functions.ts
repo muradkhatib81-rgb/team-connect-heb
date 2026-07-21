@@ -1,6 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { requireBranchContext } from "@/integrations/supabase/active-branch.server";
 import { z } from "zod";
+import { isEmployeeOnLeaveOnDate } from "@/lib/employee-leave";
 
 // Shift codes are dynamic — validated against public.shift_definitions at runtime.
 const shiftCode = z.string().min(1).max(64);
@@ -33,7 +34,7 @@ async function getDepartmentScheduleEmployees(supabase: any, departmentId: strin
   const [{ data: emps }, { data: dept }] = await Promise.all([
     supabase
       .from("profiles")
-      .select("id, full_name, is_active, excluded_from_schedule")
+      .select("id, full_name, is_active, excluded_from_schedule, on_leave, leave_start_date, leave_end_date")
       .eq("department_id", departmentId)
       .eq("is_active", true),
     supabase
@@ -47,7 +48,7 @@ async function getDepartmentScheduleEmployees(supabase: any, departmentId: strin
   if (dept?.manager_id && !rows.some((e: any) => e.id === dept.manager_id)) {
     const { data: mgr } = await supabase
       .from("profiles")
-      .select("id, full_name, is_active, excluded_from_schedule")
+      .select("id, full_name, is_active, excluded_from_schedule, on_leave, leave_start_date, leave_end_date")
       .eq("id", dept.manager_id)
       .eq("is_active", true)
       .maybeSingle();
@@ -58,6 +59,67 @@ async function getDepartmentScheduleEmployees(supabase: any, departmentId: strin
 
 function schedulableDepartmentEmployees(employees: any[]) {
   return (employees ?? []).filter((e: any) => !e.excluded_from_schedule);
+}
+
+function weekDaysOfSchedule(sched: { week_start: string }): string[] {
+  return Array.from({ length: 7 }, (_, i) => {
+    const d = new Date(sched.week_start + "T00:00:00Z");
+    d.setUTCDate(d.getUTCDate() + i);
+    return d.toISOString().slice(0, 10);
+  });
+}
+
+/** Force חופש (off) on leave days before save/submit validation. */
+function applyLeaveOffToShifts(
+  sched: { week_start: string },
+  deptEmployees: any[],
+  shifts: {
+    employee_id: string;
+    day_date: string;
+    shift: string;
+    start_time?: string | null;
+    end_time?: string | null;
+  }[],
+) {
+  const schedulable = schedulableDepartmentEmployees(deptEmployees);
+  const days = weekDaysOfSchedule(sched);
+  const byCell = new Map<string, (typeof shifts)[number]>();
+  for (const s of shifts) byCell.set(`${s.employee_id}|${s.day_date}`, s);
+  for (const emp of schedulable) {
+    for (const day of days) {
+      if (!isEmployeeOnLeaveOnDate(emp, day)) continue;
+      const key = `${emp.id}|${day}`;
+      const prev = byCell.get(key);
+      byCell.set(key, {
+        ...(prev ?? { employee_id: emp.id, day_date: day }),
+        employee_id: emp.id,
+        day_date: day,
+        shift: "off",
+        start_time: null,
+        end_time: null,
+      });
+    }
+  }
+  return [...byCell.values()];
+}
+
+function applyLeaveOffToShiftMap(
+  sched: { week_start: string },
+  deptEmployees: any[],
+  map: Map<string, Map<string, string[]>>,
+) {
+  const schedulable = schedulableDepartmentEmployees(deptEmployees);
+  const days = weekDaysOfSchedule(sched);
+  for (const emp of schedulable) {
+    let m = map.get(emp.id);
+    if (!m) {
+      m = new Map();
+      map.set(emp.id, m);
+    }
+    for (const day of days) {
+      if (isEmployeeOnLeaveOnDate(emp, day)) m.set(day, ["off"]);
+    }
+  }
 }
 
 
@@ -220,7 +282,11 @@ export const saveScheduleShifts = createServerFn({ method: "POST" })
     const schedulableIds = new Set(
       schedulableDepartmentEmployees(deptEmployees).map((e: any) => e.id as string),
     );
-    const shiftsInput = data.shifts.filter((s) => schedulableIds.has(s.employee_id));
+    const shiftsInput = applyLeaveOffToShifts(
+      sched,
+      deptEmployees,
+      data.shifts.filter((s) => schedulableIds.has(s.employee_id)),
+    );
 
     // Snapshot existing shifts for change detection + preserve published_shift snapshot
     const { data: existingShifts } = await context.supabase
@@ -346,6 +412,8 @@ export const submitSchedule = createServerFn({ method: "POST" })
 
     const schedulable = schedulableDepartmentEmployees(deptEmployees ?? []);
     const schedulableIds = new Set(schedulable.map((e: any) => e.id as string));
+
+    applyLeaveOffToShiftMap(sched, deptEmployees ?? [], map);
 
     // Auto-fill missing (employee, day) cells as "off" so an unset cell defaults
     // to a day off rather than blocking submission.
@@ -769,6 +837,9 @@ async function publishOneUnpublishedSchedule(
   }
   const schedulable = schedulableDepartmentEmployees(deptEmployees ?? []);
   const schedulableIds = new Set(schedulable.map((e: any) => e.id as string));
+
+  applyLeaveOffToShiftMap(sched, deptEmployees ?? [], map);
+
   const autoFill: { schedule_id: string; employee_id: string; day_date: string; shift: "off" }[] = [];
   for (const emp of schedulable) {
     const m = map.get(emp.id) ?? new Map<string, string[]>();

@@ -432,6 +432,8 @@ const updateEmployeeSchema = z.object({
   phone: z.string().trim().max(20).optional().default(""),
   job_title: z.string().trim().max(80).optional().default(""),
   on_leave: z.boolean(),
+  leave_start_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional(),
+  leave_end_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional(),
   is_active: z.boolean(),
   is_active_changed: z.boolean(),
   avatar_url: z.string().trim().max(500).nullable().optional(),
@@ -452,6 +454,20 @@ export const updateEmployee = createServerFn({ method: "POST" })
 
     if (data.user_id === context.userId && data.is_active_changed && !data.is_active) {
       throw new Error("לא ניתן להשבית את החשבון של עצמך");
+    }
+
+    let leaveStart = data.leave_start_date ?? null;
+    let leaveEnd = data.leave_end_date ?? null;
+    if (data.on_leave) {
+      if (!leaveStart || !leaveEnd) {
+        throw new Error("יש להזין תאריך התחלה וסיום לחופשה");
+      }
+      if (leaveEnd < leaveStart) {
+        throw new Error("תאריך סיום החופשה חייב להיות אחרי תאריך ההתחלה");
+      }
+    } else {
+      leaveStart = null;
+      leaveEnd = null;
     }
 
     const { data: dept, error: dErr } = await context.supabase
@@ -482,6 +498,8 @@ export const updateEmployee = createServerFn({ method: "POST" })
         department_id: data.department_id,
         phone: data.phone || null,
         on_leave: data.on_leave,
+        leave_start_date: leaveStart,
+        leave_end_date: leaveEnd,
         job_title: data.job_title || null,
         avatar_url: data.avatar_url ?? null,
         ...(data.is_active_changed ? {} : { is_active: data.is_active }),

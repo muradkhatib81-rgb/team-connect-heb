@@ -63,6 +63,7 @@ import {
   setEmployeeScheduleExclusion,
 } from "@/lib/schedules.functions";
 import { formatHeDate, formatHeDateTime } from "@/lib/date-format";
+import { isEmployeeOnLeaveOnDate } from "@/lib/employee-leave";
 import { useShiftDefinitions } from "@/lib/use-shift-definitions";
 import { Time24Input } from "@/components/ui/time24-input";
 
@@ -572,7 +573,7 @@ function SchedulesPage() {
       if (isEmployee) {
         const { data, error } = await (supabase as any)
           .from("department_coworkers")
-          .select("id, full_name, is_active, excluded_from_schedule")
+          .select("id, full_name, is_active, excluded_from_schedule, on_leave, leave_start_date, leave_end_date")
           .eq("department_id", selectedDept!)
           .eq("is_active", true)
           .order("full_name");
@@ -582,6 +583,9 @@ function SchedulesPage() {
           full_name: string;
           is_active: boolean;
           excluded_from_schedule: boolean;
+          on_leave: boolean;
+          leave_start_date: string | null;
+          leave_end_date: string | null;
         }[];
       }
       const [{ data, error }, { data: dept }] = await Promise.all([
@@ -599,7 +603,7 @@ function SchedulesPage() {
       if (managerId && !rows.some((e: any) => e.id === managerId)) {
         const { data: mgr } = await supabase
           .from("profiles")
-          .select("id, full_name, is_active, excluded_from_schedule")
+          .select("id, full_name, is_active, excluded_from_schedule, on_leave, leave_start_date, leave_end_date")
           .eq("id", managerId)
           .eq("is_active", true)
           .maybeSingle();
@@ -642,9 +646,17 @@ function SchedulesPage() {
       const en = (s as any).end_time ? String((s as any).end_time).slice(0, 5) : null;
       t[s.employee_id][s.day_date] = { start: st, end: en };
     }
+    for (const emp of empsQ.data ?? []) {
+      for (const day of days) {
+        if (isEmployeeOnLeaveOnDate(emp, day)) {
+          next[emp.id] ??= {};
+          next[emp.id][day] = "off";
+        }
+      }
+    }
     setEdits(next);
     setTimeEdits(t);
-  }, [shiftsQ.data]);
+  }, [shiftsQ.data, empsQ.data, days]);
 
   // Published-snapshot map (from DB) — drives the "modified after publish" marker
   // and persists across refreshes for all viewers of an approved schedule.
@@ -1822,6 +1834,11 @@ function SchedulesPage() {
                             לא בסידור
                           </Badge>
                         )}
+                        {emp.on_leave && days.some((d) => isEmployeeOnLeaveOnDate(emp, d)) && (
+                          <Badge variant="secondary" className="text-[10px] shrink-0 rounded-full">
+                            בחופש
+                          </Badge>
+                        )}
                         {canToggleScheduleExclusion && (
                           <Button
                             type="button"
@@ -1853,6 +1870,7 @@ function SchedulesPage() {
                     </td>
                     {days.map((day) => {
                       const excluded = !!emp.excluded_from_schedule;
+                      const onLeaveDay = isEmployeeOnLeaveOnDate(emp, day);
                       const cur = edits[emp.id]?.[day];
                       const pub = publishedMap[emp.id]?.[day] ?? null;
                       const def = cur ? shiftDefsQ.map.get(cur) : undefined;
@@ -1868,7 +1886,7 @@ function SchedulesPage() {
                       const isModified =
                         visible.status === "approved" &&
                         (cur ?? null) !== pub;
-                      if (!editable || excluded) {
+                      if (!editable || excluded || onLeaveDay) {
                         return (
                           <td key={day} className="p-2 text-center align-top">
                             <div className="relative inline-block">
@@ -1882,6 +1900,9 @@ function SchedulesPage() {
                                   >
                                     {shiftLabel(cur)}
                                   </span>
+                                  {onLeaveDay && (
+                                    <p className="text-[10px] text-muted-foreground mt-0.5">חופשה</p>
+                                  )}
                                   {effStart && effEnd && (
                                     <div className="text-[10px] text-muted-foreground mt-1 tabular-nums" dir="ltr">
                                       {effStart}–{effEnd}

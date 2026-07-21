@@ -5,6 +5,7 @@ import { useState, useMemo, useRef, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { createEmployee, resetEmployeePassword, deleteEmployee, setEmployeeActive, updateEmployee } from "@/lib/employees.functions";
 import { extractServerFnErrorMessage } from "@/lib/server-fn-error";
+import { formatLeaveDateRange } from "@/lib/employee-leave";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -84,6 +85,8 @@ interface ProfileRow {
   phone: string | null;
   is_active: boolean;
   on_leave: boolean;
+  leave_start_date: string | null;
+  leave_end_date: string | null;
   avatar_url: string | null;
   deactivated_at: string | null;
   excluded_from_headcount?: boolean;
@@ -241,7 +244,7 @@ function EmployeesPage() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("profiles")
-        .select("id, first_name, last_name, full_name, department_id, job_title, is_active, on_leave, avatar_url, deactivated_at, excluded_from_headcount")
+        .select("id, first_name, last_name, full_name, department_id, job_title, is_active, on_leave, leave_start_date, leave_end_date, avatar_url, deactivated_at, excluded_from_headcount")
         .order("first_name")
         .order("last_name");
       if (error) throw error;
@@ -1212,6 +1215,11 @@ function EmployeeRow({
             {!emp.is_active && <Badge variant="destructive" className="rounded-full text-xs">לא פעיל</Badge>}
             {emp.on_leave && <Badge variant="secondary" className="rounded-full text-xs">בחופש</Badge>}
           </div>
+          {emp.on_leave && formatLeaveDateRange(emp.leave_start_date, emp.leave_end_date) && (
+            <p className="text-xs text-muted-foreground mt-0.5">
+              {formatLeaveDateRange(emp.leave_start_date, emp.leave_end_date)}
+            </p>
+          )}
           {emp.phone && (
             <p className="text-xs text-muted-foreground mt-0.5 truncate">{emp.phone}</p>
           )}
@@ -1421,6 +1429,8 @@ function EditEmployeeDialog({
     phone: employee.phone ?? "",
     is_active: employee.is_active,
     on_leave: employee.on_leave,
+    leave_start_date: employee.leave_start_date?.slice(0, 10) ?? "",
+    leave_end_date: employee.leave_end_date?.slice(0, 10) ?? "",
     role: (currentRoles[0] ?? "employee") as AppRole,
     avatar_url: employee.avatar_url,
     job_title: employee.job_title ?? "",
@@ -1433,6 +1443,17 @@ function EditEmployeeDialog({
       if (!form.department_id) throw new Error("יש לבחור מחלקה");
       const selected = depts.find((d) => d.id === form.department_id);
       if (!selected) throw new Error("מחלקה לא נמצאה");
+      if (form.on_leave && (!form.leave_start_date || !form.leave_end_date)) {
+        throw new Error("יש להזין תאריך התחלה וסיום לחופשה");
+      }
+      if (
+        form.on_leave &&
+        form.leave_end_date &&
+        form.leave_start_date &&
+        form.leave_end_date < form.leave_start_date
+      ) {
+        throw new Error("תאריך סיום החופשה חייב להיות אחרי תאריך ההתחלה");
+      }
 
       let avatar_url: string | null = form.avatar_url;
       if (removeAvatar) avatar_url = null;
@@ -1451,6 +1472,8 @@ function EditEmployeeDialog({
           department_id: form.department_id,
           phone: form.phone || "",
           on_leave: form.on_leave,
+          leave_start_date: form.on_leave ? form.leave_start_date : null,
+          leave_end_date: form.on_leave ? form.leave_end_date : null,
           job_title: form.job_title || "",
           is_active: form.is_active,
           is_active_changed: isActiveChanged,
@@ -1466,6 +1489,8 @@ function EditEmployeeDialog({
       qc.invalidateQueries({ queryKey: ["all-roles"] });
       qc.invalidateQueries({ queryKey: ["departments"] });
       qc.invalidateQueries({ queryKey: ["dashboard", "stats"] });
+      qc.invalidateQueries({ queryKey: ["dept-employees"] });
+      qc.invalidateQueries({ queryKey: ["schedule-shifts"] });
       onClose();
     },
     onError: (e: any) => {
@@ -1573,9 +1598,44 @@ function EditEmployeeDialog({
             </div>
             <Switch
               checked={form.on_leave}
-              onCheckedChange={(v) => setForm({ ...form, on_leave: v })}
+              onCheckedChange={(v) =>
+                setForm({
+                  ...form,
+                  on_leave: v,
+                  ...(v ? {} : { leave_start_date: "", leave_end_date: "" }),
+                })
+              }
             />
           </div>
+
+          {form.on_leave && (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 rounded-lg border border-border p-3">
+              <div className="space-y-1.5">
+                <Label htmlFor="leave_start">תאריך התחלת חופשה</Label>
+                <Input
+                  id="leave_start"
+                  type="date"
+                  value={form.leave_start_date}
+                  onChange={(e) => setForm({ ...form, leave_start_date: e.target.value })}
+                  required={form.on_leave}
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="leave_end">תאריך סיום חופשה</Label>
+                <Input
+                  id="leave_end"
+                  type="date"
+                  value={form.leave_end_date}
+                  min={form.leave_start_date || undefined}
+                  onChange={(e) => setForm({ ...form, leave_end_date: e.target.value })}
+                  required={form.on_leave}
+                />
+              </div>
+              <p className="text-xs text-muted-foreground sm:col-span-2">
+                בימים אלו הסידור יסומן אוטומטית כ«חופש».
+              </p>
+            </div>
+          )}
 
           <DialogFooter className="gap-2 sm:flex-col-reverse md:flex-row md:justify-between">
             {canDelete ? (
