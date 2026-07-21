@@ -1,5 +1,6 @@
 import { useEffect } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import type { RealtimeChannel } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/use-auth";
 import { useActiveBranch } from "@/lib/use-active-branch";
@@ -7,6 +8,36 @@ import {
   fetchShiftSelfServiceVisible,
   shiftVisibleQueryKey,
 } from "@/lib/shift-visible-rpc";
+
+/** Supabase throws if `.on()` is called after `subscribe()` on an existing channel name. */
+const sharedChannelRefs = new Map<string, number>();
+const sharedChannels = new Map<string, RealtimeChannel>();
+
+function retainSharedChannel(
+  channelName: string,
+  setup: (channel: RealtimeChannel) => RealtimeChannel,
+): () => void {
+  const nextRefs = (sharedChannelRefs.get(channelName) ?? 0) + 1;
+  sharedChannelRefs.set(channelName, nextRefs);
+  if (nextRefs === 1) {
+    const channel = setup(supabase.channel(channelName));
+    channel.subscribe();
+    sharedChannels.set(channelName, channel);
+  }
+  return () => {
+    const remaining = (sharedChannelRefs.get(channelName) ?? 1) - 1;
+    if (remaining <= 0) {
+      sharedChannelRefs.delete(channelName);
+      const channel = sharedChannels.get(channelName);
+      if (channel) {
+        void supabase.removeChannel(channel);
+        sharedChannels.delete(channelName);
+      }
+    } else {
+      sharedChannelRefs.set(channelName, remaining);
+    }
+  };
+}
 
 /** Open break statuses — inlined to avoid circular imports from break-workflow. */
 const OPEN_BREAK_NAV_STATUSES = new Set([
@@ -42,47 +73,43 @@ export function useShiftSelfServiceVisible() {
     if (!userId || !scopedBranchId) return;
     const invalidate = () =>
       qc.invalidateQueries({ queryKey: shiftVisibleQueryKey(userId, scopedBranchId) });
-    const ch = supabase
-      .channel(`shift-self-service-visible-${userId}`)
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "schedule_shifts" },
-        invalidate,
-      )
-      .on("postgres_changes", { event: "*", schema: "public", table: "schedules" }, invalidate)
-      .on(
-        "postgres_changes",
-        {
-          event: "*",
-          schema: "public",
-          table: "management_on_shift",
-          filter: `branch_id=eq.${scopedBranchId}`,
-        },
-        invalidate,
-      )
-      .on(
-        "postgres_changes",
-        {
-          event: "*",
-          schema: "public",
-          table: "profiles",
-          filter: `id=eq.${userId}`,
-        },
-        invalidate,
-      )
-      .subscribe();
-    return () => {
-      supabase.removeChannel(ch);
-    };
+    return retainSharedChannel(`shift-self-service-visible-${userId}`, (channel) =>
+      channel
+        .on(
+          "postgres_changes",
+          { event: "*", schema: "public", table: "schedule_shifts" },
+          invalidate,
+        )
+        .on("postgres_changes", { event: "*", schema: "public", table: "schedules" }, invalidate)
+        .on(
+          "postgres_changes",
+          {
+            event: "*",
+            schema: "public",
+            table: "management_on_shift",
+            filter: `branch_id=eq.${scopedBranchId}`,
+          },
+          invalidate,
+        )
+        .on(
+          "postgres_changes",
+          {
+            event: "*",
+            schema: "public",
+            table: "profiles",
+            filter: `id=eq.${userId}`,
+          },
+          invalidate,
+        ),
+    );
   }, [userId, scopedBranchId, qc]);
 
   useEffect(() => {
     if (!userId) return;
     const invalidateOpen = () =>
       qc.invalidateQueries({ queryKey: ["my-open-break-nav", userId] });
-    const ch = supabase
-      .channel(`open-break-nav-rt-${userId}`)
-      .on(
+    return retainSharedChannel(`open-break-nav-rt-${userId}`, (channel) =>
+      channel.on(
         "postgres_changes",
         {
           event: "*",
@@ -91,11 +118,8 @@ export function useShiftSelfServiceVisible() {
           filter: `user_id=eq.${userId}`,
         },
         invalidateOpen,
-      )
-      .subscribe();
-    return () => {
-      supabase.removeChannel(ch);
-    };
+      ),
+    );
   }, [userId, qc]);
 
   return {
