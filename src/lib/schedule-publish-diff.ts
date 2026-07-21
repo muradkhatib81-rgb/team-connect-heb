@@ -38,7 +38,7 @@ export function isScheduleCellModified(args: {
 
 export type PublishedCellBaseline = PublishedCellTimes & { shift: string | null };
 
-/** Build in-memory baseline for change markers (shift + times at publish/open). */
+/** Build frozen baseline for change markers (published shift + effective times at open). */
 export function buildPublishedBaselineFromShifts(
   rows: {
     employee_id: string;
@@ -47,14 +47,30 @@ export function buildPublishedBaselineFromShifts(
     start_time?: string | null;
     end_time?: string | null;
   }[],
+  shiftDefs?: Map<string, { start_time?: string | null; end_time?: string | null }>,
 ): Record<string, PublishedCellBaseline> {
   const m: Record<string, PublishedCellBaseline> = {};
   for (const s of rows) {
+    const pubShift = s.published_shift ?? null;
+    const pubDef = pubShift ? shiftDefs?.get(pubShift) : undefined;
     m[`${s.employee_id}|${s.day_date}`] = {
-      shift: s.published_shift ?? null,
-      start: normScheduleTimeHm(s.start_time),
-      end: normScheduleTimeHm(s.end_time),
+      shift: pubShift,
+      start:
+        normScheduleTimeHm(s.start_time) ?? normScheduleTimeHm(pubDef?.start_time),
+      end: normScheduleTimeHm(s.end_time) ?? normScheduleTimeHm(pubDef?.end_time),
     };
   }
   return m;
+}
+
+export function isScheduleTimeModified(args: {
+  currentStart: string | null;
+  currentEnd: string | null;
+  publishedTimes?: PublishedCellTimes;
+}): boolean {
+  const pubStart = normScheduleTimeHm(args.publishedTimes?.start);
+  const pubEnd = normScheduleTimeHm(args.publishedTimes?.end);
+  const curStart = normScheduleTimeHm(args.currentStart);
+  const curEnd = normScheduleTimeHm(args.currentEnd);
+  return curStart !== pubStart || curEnd !== pubEnd;
 }

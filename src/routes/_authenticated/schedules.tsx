@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/use-auth";
@@ -64,7 +64,7 @@ import {
 } from "@/lib/schedules.functions";
 import { formatHeDate, formatHeDateTime } from "@/lib/date-format";
 import { isEmployeeOnLeaveOnDate, effectiveScheduleShift } from "@/lib/employee-leave";
-import { isScheduleCellModified, buildPublishedBaselineFromShifts } from "@/lib/schedule-publish-diff";
+import { isScheduleCellModified, buildPublishedBaselineFromShifts, isScheduleTimeModified } from "@/lib/schedule-publish-diff";
 import { useShiftDefinitions } from "@/lib/use-shift-definitions";
 import { Time24Input } from "@/components/ui/time24-input";
 
@@ -701,20 +701,27 @@ function SchedulesPage() {
     return m;
   }, [shiftsQ.data]);
 
-  // In-memory baseline for time-change markers (works without optional DB columns).
+  // Frozen baseline for change markers — captured once when opening an approved schedule.
   const [publishedBaseline, setPublishedBaseline] = useState<
     Record<string, { shift: string | null; start: string | null; end: string | null }>
   >({});
+  const publishedBaselineScheduleIdRef = useRef<string | null>(null);
 
-  const resetPublishedBaseline = () => setPublishedBaseline({});
+  const reseedPublishedBaseline = () => {
+    publishedBaselineScheduleIdRef.current = null;
+  };
 
   useEffect(() => {
-    if (!visible?.id || visible.status !== "approved" || !shiftsQ.data) {
+    if (!visible?.id || visible.status !== "approved") {
+      publishedBaselineScheduleIdRef.current = null;
       setPublishedBaseline({});
       return;
     }
-    setPublishedBaseline(buildPublishedBaselineFromShifts(shiftsQ.data));
-  }, [visible?.id, visible?.status, shiftsQ.dataUpdatedAt]);
+    if (!shiftsQ.data?.length || !shiftDefsQ.isSuccess) return;
+    if (publishedBaselineScheduleIdRef.current === visible.id) return;
+    publishedBaselineScheduleIdRef.current = visible.id;
+    setPublishedBaseline(buildPublishedBaselineFromShifts(shiftsQ.data, shiftDefsQ.map));
+  }, [visible?.id, visible?.status, shiftsQ.data, shiftDefsQ.isSuccess, shiftDefsQ.map]);
 
   // Realtime: keep schedule list synced
   useEffect(() => {
@@ -779,6 +786,7 @@ function SchedulesPage() {
     },
     onSuccess: () => {
       toast.success("נשמר");
+      reseedPublishedBaseline();
       qc.invalidateQueries({ queryKey: ["schedule", selectedDept, weekStart] });
       qc.invalidateQueries({ queryKey: ["schedule-shifts", visible?.id] });
       qc.invalidateQueries({ queryKey: ["schedule-decision"] });
@@ -799,6 +807,7 @@ function SchedulesPage() {
     },
     onSuccess: (r: any) => {
       toast.success(r?.published ? "סידור העבודה פורסם" : r?.approved ? "הסידור אושר וממתין לפרסום" : "נשלח לאישור");
+      reseedPublishedBaseline();
       qc.invalidateQueries({ queryKey: ["schedule"] });
       qc.invalidateQueries({ queryKey: ["schedule-shifts", visible?.id] });
       qc.invalidateQueries({ queryKey: ["schedules-pending"] });
@@ -821,6 +830,7 @@ function SchedulesPage() {
     },
     onSuccess: (r: any) => {
       toast.success(r?.published ? "סידור העבודה פורסם" : "הסידור אושר וממתין לפרסום");
+      reseedPublishedBaseline();
       qc.invalidateQueries({ queryKey: ["schedule"] });
       qc.invalidateQueries({ queryKey: ["schedule-shifts", visible?.id] });
       qc.invalidateQueries({ queryKey: ["schedules-pending"] });
@@ -842,6 +852,7 @@ function SchedulesPage() {
     },
     onSuccess: () => {
       toast.success("סידור העבודה פורסם");
+      reseedPublishedBaseline();
       qc.invalidateQueries({ queryKey: ["schedule"] });
       qc.invalidateQueries({ queryKey: ["schedule-shifts", visible?.id] });
       qc.invalidateQueries({ queryKey: ["schedules-approved"] });
@@ -941,7 +952,7 @@ function SchedulesPage() {
     onSuccess: () => {
       toast.success("סידור העבודה נמחק");
       setDeleteOpen(false);
-      resetPublishedBaseline();
+      reseedPublishedBaseline();
       qc.invalidateQueries({ queryKey: ["schedule"] });
       qc.invalidateQueries({ queryKey: ["schedule", selectedDept, weekStart] });
       qc.invalidateQueries({ queryKey: ["schedules-pending"] });
@@ -1955,6 +1966,16 @@ function SchedulesPage() {
                             : undefined,
                           publishedShiftDefaults: pubDef,
                         });
+                      const isTimeModified =
+                        visible.status === "approved" &&
+                        !!cur &&
+                        cur !== "off" &&
+                        !!baseline &&
+                        isScheduleTimeModified({
+                          currentStart: effStart,
+                          currentEnd: effEnd,
+                          publishedTimes: { start: baseline.start, end: baseline.end },
+                        });
                       if (!editable || excluded || onLeaveDay) {
                         return (
                           <td key={day} className="p-2 text-center align-top">
@@ -2016,7 +2037,12 @@ function SchedulesPage() {
                               </SelectContent>
                             </Select>
                             {cur && def?.start_time && def?.end_time && (
-                              <div className="flex items-center gap-1" dir="ltr">
+                              <div
+                                className={`flex items-center gap-1 rounded-md ${
+                                  isTimeModified ? "ring-2 ring-orange-500 p-0.5" : ""
+                                }`}
+                                dir="ltr"
+                              >
                                 <Time24Input
                                   aria-label="שעת התחלה"
                                   value={effStart ?? ""}
