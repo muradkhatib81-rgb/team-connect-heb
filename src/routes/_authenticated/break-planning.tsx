@@ -59,7 +59,6 @@ import {
   todayJerusalemDate,
   useActivateDueBreaksPoll,
 } from "@/lib/break-workflow";
-import { isAdmin } from "@/lib/constants";
 
 export const Route = createFileRoute("/_authenticated/break-planning")({
   component: BreakPlanningPage,
@@ -127,11 +126,26 @@ function BreakPlanningPage() {
     },
   });
 
+  const isMainAdmin = !!me?.roles.includes("main_admin");
+  const isBranchManager = !!me?.roles.includes("branch_manager");
+  const permQ = useQuery({
+    enabled: !!me?.id && !isMainAdmin && !isBranchManager,
+    queryKey: ["my-break-manage-perm", me?.id],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("user_task_permissions")
+        .select("can_manage_breaks")
+        .eq("user_id", me!.id)
+        .maybeSingle();
+      return !!(data as any)?.can_manage_breaks;
+    },
+  });
+  const isBreaksManager = isMainAdmin || isBranchManager || !!permQ.data;
+
   const rows = todayQ.data ?? [];
   const consumedTypeIds = useMemo(() => consumedBreakSettingIds(rows), [rows]);
   const activeBreak = pickActiveBreak(rows);
   const nextDueRow = pickUpcomingBreak(rows, activeBreak?.id);
-  const isPlainEmployee = !!me && !isAdmin(me.roles) && !me.roles.includes("department_manager");
   useActivateDueBreaksPoll(me?.id, qc, {
     plannedStartIso: nextDueRow ? breakStartIso(nextDueRow) : null,
     isActive: !!activeBreak,
@@ -329,7 +343,7 @@ function BreakPlanningPage() {
                   <Badge variant={BREAK_STATUS_TONE[r.status] ?? "secondary"}>
                     {BREAK_STATUS_LABEL[r.status] ?? r.status}
                   </Badge>
-                  {isBreakEditable(r.status) && !isPlainEmployee && (
+                  {isBreakEditable(r.status) && isBreaksManager && (
                     <div className="flex gap-2">
                       <Button size="sm" variant="outline" onClick={() => setEditTarget(r)}>
                         <Pencil className="size-4" />
@@ -351,7 +365,7 @@ function BreakPlanningPage() {
         )}
       </Card>
 
-      {!isPlainEmployee && (
+      {isBreaksManager && (
       <Card className="card-elevated p-5 space-y-4">
         <div className="flex items-center justify-between">
           <h2 className="font-semibold">הוספת הפסקות חדשות</h2>
