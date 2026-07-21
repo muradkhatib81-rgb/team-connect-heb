@@ -63,7 +63,7 @@ import {
   setEmployeeScheduleExclusion,
 } from "@/lib/schedules.functions";
 import { formatHeDate, formatHeDateTime } from "@/lib/date-format";
-import { isEmployeeOnLeaveOnDate } from "@/lib/employee-leave";
+import { isEmployeeOnLeaveOnDate, effectiveScheduleShift } from "@/lib/employee-leave";
 import { useShiftDefinitions } from "@/lib/use-shift-definitions";
 import { Time24Input } from "@/components/ui/time24-input";
 
@@ -592,7 +592,7 @@ function SchedulesPage() {
       const [{ data, error }, { data: dept }] = await Promise.all([
         supabase
         .from("profiles")
-        .select("id, full_name, is_active, excluded_from_schedule, excluded_from_headcount")
+        .select("id, full_name, is_active, excluded_from_schedule, excluded_from_headcount, on_leave, leave_start_date, leave_end_date")
         .eq("department_id", selectedDept!)
         .eq("is_active", true)
           .order("full_name"),
@@ -725,6 +725,9 @@ function SchedulesPage() {
           invalidateSavedWeek();
         },
       )
+      .on("postgres_changes", { event: "*", schema: "public", table: "profiles" }, () => {
+        qc.invalidateQueries({ queryKey: ["dept-employees"] });
+      })
       .subscribe();
     return () => {
       supabase.removeChannel(ch);
@@ -973,15 +976,18 @@ function SchedulesPage() {
       const empRow = empsQ.data?.find((e) => e.id === emp);
       if (empRow?.excluded_from_schedule) continue;
       for (const [day, shift] of Object.entries(m)) {
+        const resolved = empRow
+          ? (effectiveScheduleShift(empRow, day, shift) as Shift)
+          : shift;
         const t = timeEdits[emp]?.[day];
         const norm = (v: string | null | undefined) =>
           v && /^\d{2}:\d{2}$/.test(v) ? `${v}:00` : v && /^\d{2}:\d{2}:\d{2}$/.test(v) ? v : null;
         list.push({
           employee_id: emp,
           day_date: day,
-          shift,
-          start_time: norm(t?.start ?? null),
-          end_time: norm(t?.end ?? null),
+          shift: resolved,
+          start_time: resolved === "off" ? null : norm(t?.start ?? null),
+          end_time: resolved === "off" ? null : norm(t?.end ?? null),
         });
       }
     }
@@ -1053,7 +1059,8 @@ function SchedulesPage() {
           if (selectedDept) {
             for (const emp of empsQ.data ?? []) {
               if (emp.excluded_from_schedule) continue;
-              if (edits[emp.id]?.[day] === s.code) add(emp.id, selectedDept);
+              const shift = effectiveScheduleShift(emp, day, edits[emp.id]?.[day]);
+              if (shift === s.code) add(emp.id, selectedDept);
             }
           }
           return { ...s, count: members.length, members };
@@ -1903,7 +1910,9 @@ function SchedulesPage() {
                     {days.map((day) => {
                       const excluded = !!emp.excluded_from_schedule;
                       const onLeaveDay = isEmployeeOnLeaveOnDate(emp, day);
-                      const cur = edits[emp.id]?.[day];
+                      const cur = effectiveScheduleShift(emp, day, edits[emp.id]?.[day]) as
+                        | Shift
+                        | undefined;
                       const pub = publishedMap[emp.id]?.[day] ?? null;
                       const def = cur ? shiftDefsQ.map.get(cur) : undefined;
                       const cellTimes = timeEdits[emp.id]?.[day];
@@ -1932,10 +1941,7 @@ function SchedulesPage() {
                                   >
                                     {shiftLabel(cur)}
                                   </span>
-                                  {onLeaveDay && (
-                                    <p className="text-[10px] text-muted-foreground mt-0.5">חופשה</p>
-                                  )}
-                                  {effStart && effEnd && (
+                                  {effStart && effEnd && cur !== "off" && (
                                     <div className="text-[10px] text-muted-foreground mt-1 tabular-nums" dir="ltr">
                                       {effStart}–{effEnd}
                                     </div>

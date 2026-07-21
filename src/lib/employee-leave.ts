@@ -25,6 +25,16 @@ export function isEmployeeOnLeaveOnDate(
   return true;
 }
 
+/** Override stored shift with חופש when the employee is on leave that day. */
+export function effectiveScheduleShift<T extends string | null | undefined>(
+  emp: EmployeeLeaveFields,
+  dayDate: string,
+  shift: T,
+): T | "off" {
+  if (isEmployeeOnLeaveOnDate(emp, dayDate)) return "off";
+  return shift;
+}
+
 export function formatLeaveDateRange(
   start: string | null | undefined,
   end: string | null | undefined,
