@@ -7,6 +7,7 @@ import { useAuth } from "@/lib/use-auth";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Textarea } from "@/components/ui/textarea";
 import {
   Select,
@@ -39,6 +40,7 @@ import {
   Copy,
   Send,
   CheckCircle2,
+  ChevronDown,
   
   Loader2,
   Save,
@@ -324,6 +326,22 @@ function SchedulesPage() {
     () => new Set(weekSavedQ.data?.deptIdsWithSaved ?? []),
     [weekSavedQ.data],
   );
+
+  /** Departments with no saved schedule shifts yet for this week (includes none created). */
+  const deptsPendingSchedule = useMemo(
+    () => (deptsQ.data ?? []).filter((d) => !savedDeptSet.has(d.id)),
+    [deptsQ.data, savedDeptSet],
+  );
+
+  const switchableDepts = useMemo(
+    () => deptsPendingSchedule.filter((d) => d.id !== selectedDept),
+    [deptsPendingSchedule, selectedDept],
+  );
+
+  const canSwitchDepartments =
+    !isEmployee &&
+    !isDeptMgr &&
+    (isMainAdmin || isBranchMgr || !!permsQ.data?.can_create_schedule);
 
 
 
@@ -1303,6 +1321,49 @@ function SchedulesPage() {
             <div className="text-sm font-medium px-3 py-2 bg-muted rounded-md">
               {deptsQ.data?.find((d) => d.id === selectedDept)?.name ?? "—"}
             </div>
+          ) : schedQ.data && canSwitchDepartments ? (
+            <Popover>
+              <PopoverTrigger asChild>
+                <button
+                  type="button"
+                  className="w-full text-sm font-medium px-3 py-2 bg-muted rounded-md flex items-center justify-between gap-2 hover:bg-muted/80 transition-colors"
+                >
+                  <span>{deptsQ.data?.find((d) => d.id === selectedDept)?.name ?? "—"}</span>
+                  <ChevronDown className="size-4 shrink-0 opacity-60" />
+                </button>
+              </PopoverTrigger>
+              <PopoverContent align="start" className="w-80 p-0" dir="rtl">
+                <div className="p-3 border-b">
+                  <p className="text-xs text-muted-foreground">מחלקה נוכחית</p>
+                  <p className="font-medium">{deptsQ.data?.find((d) => d.id === selectedDept)?.name ?? "—"}</p>
+                </div>
+                <div className="p-2">
+                  <p className="text-xs text-muted-foreground px-2 py-1">מחלקות ללא סידור שמור לשבוע זה</p>
+                  {switchableDepts.length === 0 ? (
+                    <p className="text-sm text-muted-foreground px-2 py-3 text-center">
+                      כל שאר המחלקות כבר קיים להן סידור שמור.
+                    </p>
+                  ) : (
+                    <ul className="max-h-56 overflow-auto">
+                      {switchableDepts.map((d) => (
+                        <li key={d.id}>
+                          <button
+                            type="button"
+                            className="w-full text-right px-3 py-2.5 rounded-md hover:bg-accent transition-colors flex items-center justify-between gap-2"
+                            onClick={() => setSelectedDept(d.id)}
+                          >
+                            <span className="font-medium">{d.name}</span>
+                            <Badge variant="outline" className="text-xs shrink-0">
+                              {deptsWithSchedule.has(d.id) ? "טיוטה — לא נשמר" : "ללא סידור"}
+                            </Badge>
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              </PopoverContent>
+            </Popover>
           ) : schedQ.data ? (
             <div className="text-sm font-medium px-3 py-2 bg-muted rounded-md">
               {deptsQ.data?.find((d) => d.id === selectedDept)?.name ?? "—"}
