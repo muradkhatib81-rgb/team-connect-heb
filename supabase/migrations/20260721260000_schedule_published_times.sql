@@ -11,3 +11,5 @@ FROM public.schedules s
 WHERE ss.schedule_id = s.id
   AND s.status = 'approved'
   AND ss.published_shift IS NOT NULL;
+
+NOTIFY pgrst, 'reload schema';

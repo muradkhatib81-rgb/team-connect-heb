@@ -64,7 +64,7 @@ import {
 } from "@/lib/schedules.functions";
 import { formatHeDate, formatHeDateTime } from "@/lib/date-format";
 import { isEmployeeOnLeaveOnDate, effectiveScheduleShift } from "@/lib/employee-leave";
-import { isScheduleCellModified } from "@/lib/schedule-publish-diff";
+import { isScheduleCellModified, buildPublishedBaselineFromShifts } from "@/lib/schedule-publish-diff";
 import { useShiftDefinitions } from "@/lib/use-shift-definitions";
 import { Time24Input } from "@/components/ui/time24-input";
 
@@ -653,9 +653,7 @@ function SchedulesPage() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("schedule_shifts")
-        .select(
-          "employee_id, day_date, shift, published_shift, published_start_time, published_end_time, start_time, end_time",
-        )
+        .select("employee_id, day_date, shift, published_shift, start_time, end_time")
         .eq("schedule_id", visible!.id);
       if (error) throw error;
       return data ?? [];
@@ -703,21 +701,20 @@ function SchedulesPage() {
     return m;
   }, [shiftsQ.data]);
 
-  const publishedTimesMap = useMemo(() => {
-    const m: Record<string, Record<string, { start: string | null; end: string | null }>> = {};
-    for (const s of shiftsQ.data ?? []) {
-      m[s.employee_id] ??= {};
-      m[s.employee_id][s.day_date] = {
-        start: (s as any).published_start_time
-          ? String((s as any).published_start_time).slice(0, 5)
-          : null,
-        end: (s as any).published_end_time
-          ? String((s as any).published_end_time).slice(0, 5)
-          : null,
-      };
+  // In-memory baseline for time-change markers (works without optional DB columns).
+  const [publishedBaseline, setPublishedBaseline] = useState<
+    Record<string, { shift: string | null; start: string | null; end: string | null }>
+  >({});
+
+  const resetPublishedBaseline = () => setPublishedBaseline({});
+
+  useEffect(() => {
+    if (!visible?.id || visible.status !== "approved" || !shiftsQ.data) {
+      setPublishedBaseline({});
+      return;
     }
-    return m;
-  }, [shiftsQ.data]);
+    setPublishedBaseline(buildPublishedBaselineFromShifts(shiftsQ.data));
+  }, [visible?.id, visible?.status, shiftsQ.dataUpdatedAt]);
 
   // Realtime: keep schedule list synced
   useEffect(() => {
@@ -944,7 +941,9 @@ function SchedulesPage() {
     onSuccess: () => {
       toast.success("סידור העבודה נמחק");
       setDeleteOpen(false);
+      resetPublishedBaseline();
       qc.invalidateQueries({ queryKey: ["schedule"] });
+      qc.invalidateQueries({ queryKey: ["schedule", selectedDept, weekStart] });
       qc.invalidateQueries({ queryKey: ["schedules-pending"] });
       qc.invalidateQueries({ queryKey: ["dashboard-schedules"] });
       qc.invalidateQueries({ queryKey: ["schedules-week-saved", weekStart] });
@@ -1933,7 +1932,9 @@ function SchedulesPage() {
                         | Shift
                         | undefined;
                       const pub = publishedMap[emp.id]?.[day] ?? null;
-                      const pubDef = pub ? shiftDefsQ.map.get(pub) : undefined;
+                      const baseline = publishedBaseline[`${emp.id}|${day}`];
+                      const pubShift = baseline?.shift ?? pub;
+                      const pubDef = pubShift ? shiftDefsQ.map.get(pubShift as Shift) : undefined;
                       const def = cur ? shiftDefsQ.map.get(cur) : undefined;
                       const cellTimes = timeEdits[emp.id]?.[day];
                       const effStart =
@@ -1946,10 +1947,12 @@ function SchedulesPage() {
                         visible.status === "approved" &&
                         isScheduleCellModified({
                           currentShift: cur ?? null,
-                          publishedShift: pub,
+                          publishedShift: pubShift,
                           currentStart: effStart,
                           currentEnd: effEnd,
-                          publishedTimes: publishedTimesMap[emp.id]?.[day],
+                          publishedTimes: baseline
+                            ? { start: baseline.start, end: baseline.end }
+                            : undefined,
                           publishedShiftDefaults: pubDef,
                         });
                       if (!editable || excluded || onLeaveDay) {

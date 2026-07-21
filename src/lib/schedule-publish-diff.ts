@@ -35,3 +35,26 @@ export function isScheduleCellModified(args: {
   const curEnd = normScheduleTimeHm(args.currentEnd);
   return curStart !== pubStart || curEnd !== pubEnd;
 }
+
+export type PublishedCellBaseline = PublishedCellTimes & { shift: string | null };
+
+/** Build in-memory baseline for change markers (shift + times at publish/open). */
+export function buildPublishedBaselineFromShifts(
+  rows: {
+    employee_id: string;
+    day_date: string;
+    published_shift?: string | null;
+    start_time?: string | null;
+    end_time?: string | null;
+  }[],
+): Record<string, PublishedCellBaseline> {
+  const m: Record<string, PublishedCellBaseline> = {};
+  for (const s of rows) {
+    m[`${s.employee_id}|${s.day_date}`] = {
+      shift: s.published_shift ?? null,
+      start: normScheduleTimeHm(s.start_time),
+      end: normScheduleTimeHm(s.end_time),
+    };
+  }
+  return m;
+}

@@ -123,25 +123,17 @@ function applyLeaveOffToShiftMap(
 }
 
 
-type PublishedShiftSnapshot = {
-  published_shift: string | null;
-  published_start_time: string | null;
-  published_end_time: string | null;
-};
+type PublishedShiftSnapshot = string | null;
 
 async function snapshotPublishedShifts(supabase: any, scheduleId: string) {
   const { data: cur } = await supabase
     .from("schedule_shifts")
-    .select("id, shift, start_time, end_time")
+    .select("id, shift")
     .eq("schedule_id", scheduleId);
   for (const row of cur ?? []) {
     await supabase
       .from("schedule_shifts")
-      .update({
-        published_shift: row.shift,
-        published_start_time: row.start_time,
-        published_end_time: row.end_time,
-      })
+      .update({ published_shift: row.shift })
       .eq("id", row.id);
   }
 }
@@ -314,7 +306,7 @@ export const saveScheduleShifts = createServerFn({ method: "POST" })
     // Snapshot existing shifts for change detection + preserve published_shift snapshot
     const { data: existingShifts } = await context.supabase
       .from("schedule_shifts")
-      .select("employee_id, day_date, shift, published_shift, published_start_time, published_end_time")
+      .select("employee_id, day_date, shift, published_shift")
       .eq("schedule_id", data.schedule_id);
     const keyOf = (s: { employee_id: string; day_date: string; shift: string }) =>
       `${s.employee_id}|${s.day_date}|${s.shift}`;
@@ -328,11 +320,7 @@ export const saveScheduleShifts = createServerFn({ method: "POST" })
     // Preserve published_shift snapshot across delete+insert (only meaningful for approved schedules)
     const pubMap = new Map<string, PublishedShiftSnapshot>();
     for (const s of existingShifts ?? []) {
-      pubMap.set(`${s.employee_id}|${s.day_date}`, {
-        published_shift: (s as any).published_shift ?? null,
-        published_start_time: (s as any).published_start_time ?? null,
-        published_end_time: (s as any).published_end_time ?? null,
-      });
+      pubMap.set(`${s.employee_id}|${s.day_date}`, (s as any).published_shift ?? null);
     }
 
     // Replace all shifts for the schedule (simpler + atomic-ish)
@@ -342,19 +330,14 @@ export const saveScheduleShifts = createServerFn({ method: "POST" })
       .eq("schedule_id", data.schedule_id);
     if (delErr) throw new Error(delErr.message);
     if (shiftsInput.length) {
-      const rows = shiftsInput.map((s) => {
-        const snap = pubMap.get(`${s.employee_id}|${s.day_date}`);
-        return {
-          ...s,
-          schedule_id: data.schedule_id,
-          published_shift:
-            isApproved || isPendingApproval ? (snap?.published_shift ?? null) : null,
-          published_start_time:
-            isApproved || isPendingApproval ? (snap?.published_start_time ?? null) : null,
-          published_end_time:
-            isApproved || isPendingApproval ? (snap?.published_end_time ?? null) : null,
-        };
-      });
+      const rows = shiftsInput.map((s) => ({
+        ...s,
+        schedule_id: data.schedule_id,
+        published_shift:
+          isApproved || isPendingApproval
+            ? (pubMap.get(`${s.employee_id}|${s.day_date}`) ?? null)
+            : null,
+      }));
       const { error: insErr } = await context.supabase.from("schedule_shifts").insert(rows);
       if (insErr) throw new Error(insErr.message);
     }
