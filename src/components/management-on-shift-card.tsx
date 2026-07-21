@@ -9,6 +9,7 @@ import { useAuth } from "@/lib/use-auth";
 import { ROLE_LABELS, type AppRole } from "@/lib/constants";
 import { toast } from "sonner";
 import { useActiveBranch } from "@/lib/use-active-branch";
+import { employeeNameInitial, formatEmployeeName } from "@/lib/employee-name";
 
 type Row = {
   id: string;
@@ -57,54 +58,14 @@ export function ManagementOnShiftCard() {
     enabled: !!profile && !!scopedBranchId,
     queryKey: ["management-on-shift", scopedBranchId],
     queryFn: async (): Promise<Row[]> => {
-      // 1) Shifts strictly filtered to the selected branch.
-      const { data: shifts, error } = await supabase
-        .from("management_on_shift")
-        .select("id, user_id, started_at, branch_id")
-        .eq("branch_id", scopedBranchId!)
-        .order("started_at", { ascending: true });
+      // SECURITY DEFINER RPC — employees cannot read manager profiles via RLS,
+      // but everyone in the branch should see who is on shift.
+      const { data, error } = await supabase.rpc("get_management_on_shift");
       if (error) throw error;
-      const rows = (shifts ?? []) as Array<{
-        id: string;
-        user_id: string;
-        started_at: string;
-      }>;
-      if (rows.length === 0) return [];
-
-      const userIds = [...new Set(rows.map((r) => r.user_id))];
-
-      // 2) Profiles for name / avatar / title.
-      const { data: profs } = await supabase
-        .from("profiles")
-        .select("id, full_name, avatar_url, job_title")
-        .in("id", userIds);
-      const profMap = new Map<string, any>((profs ?? []).map((p: any) => [p.id, p]));
-
-      // 3) Roles — pick manager > assistant_manager for label.
-      const { data: rolesData } = await (supabase as any)
-        .from("user_roles")
-        .select("user_id, role")
-        .in("user_id", userIds);
-      const roleMap = new Map<string, AppRole>();
-      for (const r of (rolesData ?? []) as Array<{ user_id: string; role: AppRole }>) {
-        const existing = roleMap.get(r.user_id);
-        const rank = (x: AppRole | undefined) =>
-          x === "branch_manager" ? 1 : x === "assistant_manager" ? 2 : 9;
-        if (!existing || rank(r.role) < rank(existing)) roleMap.set(r.user_id, r.role);
-      }
-
-      return rows.map((s) => {
-        const p = profMap.get(s.user_id);
-        return {
-          id: s.id,
-          user_id: s.user_id,
-          started_at: s.started_at,
-          full_name: p?.full_name ?? null,
-          avatar_url: p?.avatar_url ?? null,
-          job_title: p?.job_title ?? null,
-          role: roleMap.get(s.user_id) ?? null,
-        } satisfies Row;
-      });
+      return ((data ?? []) as Row[]).map((row) => ({
+        ...row,
+        full_name: formatEmployeeName({ full_name: row.full_name }),
+      }));
     },
   });
 
@@ -240,12 +201,12 @@ export function ManagementOnShiftCard() {
                 aria-hidden
                 className="absolute inset-y-0 left-0 w-1.5 bg-gradient-to-b from-red-500 to-red-600"
               />
-              <div className="flex items-start gap-3 p-4 pl-5">
+              <div className="flex flex-col items-center text-center gap-3 p-5 pl-6">
                 <div className="relative shrink-0">
-                  <Avatar className="size-14 ring-2 ring-background shadow">
+                  <Avatar className="size-16 ring-2 ring-background shadow-md">
                     <AvatarImage src={r.avatar_url ?? undefined} alt={r.full_name ?? ""} />
-                    <AvatarFallback className="font-semibold">
-                      {r.full_name?.charAt(0) ?? "?"}
+                    <AvatarFallback className="text-lg font-semibold">
+                      {employeeNameInitial({ full_name: r.full_name })}
                     </AvatarFallback>
                   </Avatar>
                   <span
@@ -255,18 +216,18 @@ export function ManagementOnShiftCard() {
                     <span className="absolute inset-0 rounded-full bg-emerald-500 animate-ping opacity-60" />
                   </span>
                 </div>
-                <div className="min-w-0 flex-1">
-                  <p className="font-bold text-sm truncate leading-tight">
-                    {r.full_name ?? "—"}
+                <div className="min-w-0 w-full">
+                  <p className="text-xl sm:text-2xl font-extrabold leading-tight tracking-tight text-foreground break-words">
+                    {r.full_name}
                   </p>
-                  <p className="text-[12px] font-medium text-red-600 dark:text-red-400 mt-0.5">
+                  <p className="text-sm font-semibold text-red-600 dark:text-red-400 mt-1">
                     {r.job_title ?? (r.role ? (ROLE_LABELS[r.role] ?? r.role) : "הנהלה")}
                   </p>
-                  <div className="flex items-center gap-1 mt-1.5 text-[11px] text-muted-foreground">
+                  <div className="flex items-center justify-center gap-1 mt-2 text-[11px] text-muted-foreground">
                     <CalendarDays className="size-3" />
                     <span>{dateDMY(r.started_at)}</span>
                   </div>
-                  <div className="flex items-center gap-1 mt-0.5 text-[11px] text-muted-foreground">
+                  <div className="flex items-center justify-center gap-1 mt-0.5 text-[11px] text-muted-foreground">
                     <Clock className="size-3" />
                     <span>שעת התחלה: {timeHM(r.started_at)}</span>
                   </div>
