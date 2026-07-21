@@ -64,7 +64,11 @@ import {
 } from "@/lib/schedules.functions";
 import { formatHeDate, formatHeDateTime } from "@/lib/date-format";
 import { isEmployeeOnLeaveOnDate, effectiveScheduleShift } from "@/lib/employee-leave";
-import { isScheduleCellModified, buildPublishedBaselineFromShifts, isScheduleTimeModified } from "@/lib/schedule-publish-diff";
+import {
+  isScheduleShiftModified,
+  buildPublishedBaselineFromShifts,
+  isScheduleTimeModified,
+} from "@/lib/schedule-publish-diff";
 import { useShiftDefinitions } from "@/lib/use-shift-definitions";
 import { Time24Input } from "@/components/ui/time24-input";
 
@@ -786,7 +790,6 @@ function SchedulesPage() {
     },
     onSuccess: () => {
       toast.success("נשמר");
-      reseedPublishedBaseline();
       qc.invalidateQueries({ queryKey: ["schedule", selectedDept, weekStart] });
       qc.invalidateQueries({ queryKey: ["schedule-shifts", visible?.id] });
       qc.invalidateQueries({ queryKey: ["schedule-decision"] });
@@ -1945,7 +1948,6 @@ function SchedulesPage() {
                       const pub = publishedMap[emp.id]?.[day] ?? null;
                       const baseline = publishedBaseline[`${emp.id}|${day}`];
                       const pubShift = baseline?.shift ?? pub;
-                      const pubDef = pubShift ? shiftDefsQ.map.get(pubShift as Shift) : undefined;
                       const def = cur ? shiftDefsQ.map.get(cur) : undefined;
                       const cellTimes = timeEdits[emp.id]?.[day];
                       const effStart =
@@ -1954,17 +1956,11 @@ function SchedulesPage() {
                       const effEnd =
                         cellTimes?.end ??
                         (def?.end_time ? String(def.end_time).slice(0, 5) : null);
-                      const isModified =
+                      const isShiftModified =
                         visible.status === "approved" &&
-                        isScheduleCellModified({
+                        isScheduleShiftModified({
                           currentShift: cur ?? null,
                           publishedShift: pubShift,
-                          currentStart: effStart,
-                          currentEnd: effEnd,
-                          publishedTimes: baseline
-                            ? { start: baseline.start, end: baseline.end }
-                            : undefined,
-                          publishedShiftDefaults: pubDef,
                         });
                       const isTimeModified =
                         visible.status === "approved" &&
@@ -1984,25 +1980,36 @@ function SchedulesPage() {
                                 <>
                                   <span
                                     className={`inline-block px-2 py-1 rounded-md text-xs font-medium border ${
-                                      isModified ? "ring-2 ring-orange-500 border-orange-500" : ""
+                                      isShiftModified ? "ring-2 ring-orange-500 border-orange-500" : ""
                                     }`}
                                     style={shiftStyle(cur)}
                                   >
                                     {shiftLabel(cur)}
                                   </span>
                                   {effStart && effEnd && cur !== "off" && (
-                                    <div className="text-[10px] text-muted-foreground mt-1 tabular-nums" dir="ltr">
+                                    <div
+                                      className={`relative inline-block text-[10px] text-muted-foreground mt-1 tabular-nums rounded px-0.5 ${
+                                        isTimeModified ? "ring-2 ring-orange-500" : ""
+                                      }`}
+                                      dir="ltr"
+                                    >
                                       {effStart}–{effEnd}
+                                      {isTimeModified && (
+                                        <RefreshCw
+                                          className="size-3 text-orange-600 absolute -top-1.5 -left-1.5 bg-background rounded-full p-0.5 box-content border border-orange-500"
+                                          aria-label="שעות עודכנו לאחר פרסום"
+                                        />
+                                      )}
                                     </div>
                                   )}
                                 </>
                               ) : (
                                 <span className="text-muted-foreground text-xs">—</span>
                               )}
-                              {isModified && (
+                              {isShiftModified && (
                                 <RefreshCw
                                   className="size-3 text-orange-600 absolute -top-1 -left-1 bg-background rounded-full p-0.5 box-content border border-orange-500"
-                                  aria-label="עודכן לאחר פרסום"
+                                  aria-label="משמרת עודכנה לאחר פרסום"
                                 />
                               )}
                             </div>
@@ -2018,7 +2025,7 @@ function SchedulesPage() {
                             >
                               <SelectTrigger
                                 className={`h-9 ${
-                                  isModified ? "ring-2 ring-orange-500 border-orange-500" : ""
+                                  isShiftModified ? "ring-2 ring-orange-500 border-orange-500" : ""
                                 }`}
                                 style={cur ? shiftStyle(cur) : undefined}
                               >
@@ -2037,31 +2044,38 @@ function SchedulesPage() {
                               </SelectContent>
                             </Select>
                             {cur && def?.start_time && def?.end_time && (
-                              <div
-                                className={`flex items-center gap-1 rounded-md ${
-                                  isTimeModified ? "ring-2 ring-orange-500 p-0.5" : ""
-                                }`}
-                                dir="ltr"
-                              >
-                                <Time24Input
-                                  aria-label="שעת התחלה"
-                                  value={effStart ?? ""}
-                                  onChange={(v) => setCellTime(emp.id, day, "start", v)}
-                                  className="h-7 w-full min-w-0 rounded-md border border-input bg-background px-1 text-[11px] focus:outline-none focus:ring-1 focus:ring-ring"
-                                />
-                                <span className="text-[10px] text-muted-foreground">–</span>
-                                <Time24Input
-                                  aria-label="שעת סיום"
-                                  value={effEnd ?? ""}
-                                  onChange={(v) => setCellTime(emp.id, day, "end", v)}
-                                  className="h-7 w-full min-w-0 rounded-md border border-input bg-background px-1 text-[11px] focus:outline-none focus:ring-1 focus:ring-ring"
-                                />
+                              <div className="relative" dir="ltr">
+                                <div
+                                  className={`flex items-center gap-1 rounded-md ${
+                                    isTimeModified ? "ring-2 ring-orange-500 p-0.5" : ""
+                                  }`}
+                                >
+                                  <Time24Input
+                                    aria-label="שעת התחלה"
+                                    value={effStart ?? ""}
+                                    onChange={(v) => setCellTime(emp.id, day, "start", v)}
+                                    className="h-7 w-full min-w-0 rounded-md border border-input bg-background px-1 text-[11px] focus:outline-none focus:ring-1 focus:ring-ring"
+                                  />
+                                  <span className="text-[10px] text-muted-foreground">–</span>
+                                  <Time24Input
+                                    aria-label="שעת סיום"
+                                    value={effEnd ?? ""}
+                                    onChange={(v) => setCellTime(emp.id, day, "end", v)}
+                                    className="h-7 w-full min-w-0 rounded-md border border-input bg-background px-1 text-[11px] focus:outline-none focus:ring-1 focus:ring-ring"
+                                  />
+                                </div>
+                                {isTimeModified && (
+                                  <RefreshCw
+                                    className="size-3 text-orange-600 absolute -top-1.5 -left-1.5 bg-background rounded-full p-0.5 box-content border border-orange-500"
+                                    aria-label="שעות עודכנו לאחר פרסום"
+                                  />
+                                )}
                               </div>
                             )}
-                            {isModified && (
+                            {isShiftModified && (
                               <RefreshCw
                                 className="size-3 text-orange-600 absolute -top-1 -left-1 bg-background rounded-full p-0.5 box-content border border-orange-500"
-                                aria-label="עודכן לאחר פרסום"
+                                aria-label="משמרת עודכנה לאחר פרסום"
                               />
                             )}
                           </div>

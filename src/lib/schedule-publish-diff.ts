@@ -12,6 +12,13 @@ export type PublishedCellTimes = {
   end: string | null;
 };
 
+export function isScheduleShiftModified(args: {
+  currentShift: string | null | undefined;
+  publishedShift: string | null;
+}): boolean {
+  return (args.currentShift ?? null) !== (args.publishedShift ?? null);
+}
+
 export function isScheduleCellModified(args: {
   currentShift: string | null | undefined;
   publishedShift: string | null;
@@ -20,9 +27,8 @@ export function isScheduleCellModified(args: {
   publishedTimes?: PublishedCellTimes;
   publishedShiftDefaults?: { start_time?: string | null; end_time?: string | null } | null;
 }): boolean {
+  if (isScheduleShiftModified(args)) return true;
   const cur = args.currentShift ?? null;
-  const pub = args.publishedShift ?? null;
-  if (cur !== pub) return true;
   if (!cur || cur === "off") return false;
 
   const pubStart =
