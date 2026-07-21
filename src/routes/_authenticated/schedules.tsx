@@ -573,7 +573,7 @@ function SchedulesPage() {
       if (isEmployee) {
         const { data, error } = await (supabase as any)
           .from("department_coworkers")
-          .select("id, full_name, is_active, excluded_from_schedule, on_leave, leave_start_date, leave_end_date")
+          .select("id, full_name, is_active, excluded_from_schedule, excluded_from_headcount, on_leave, leave_start_date, leave_end_date")
           .eq("department_id", selectedDept!)
           .eq("is_active", true)
           .order("full_name");
@@ -583,6 +583,7 @@ function SchedulesPage() {
           full_name: string;
           is_active: boolean;
           excluded_from_schedule: boolean;
+          excluded_from_headcount?: boolean;
           on_leave: boolean;
           leave_start_date: string | null;
           leave_end_date: string | null;
@@ -591,7 +592,7 @@ function SchedulesPage() {
       const [{ data, error }, { data: dept }] = await Promise.all([
         supabase
         .from("profiles")
-        .select("id, full_name, is_active, excluded_from_schedule")
+        .select("id, full_name, is_active, excluded_from_schedule, excluded_from_headcount")
         .eq("department_id", selectedDept!)
         .eq("is_active", true)
           .order("full_name"),
@@ -603,7 +604,7 @@ function SchedulesPage() {
       if (managerId && !rows.some((e: any) => e.id === managerId)) {
         const { data: mgr } = await supabase
           .from("profiles")
-          .select("id, full_name, is_active, excluded_from_schedule, on_leave, leave_start_date, leave_end_date")
+          .select("id, full_name, is_active, excluded_from_schedule, excluded_from_headcount, on_leave, leave_start_date, leave_end_date")
           .eq("id", managerId)
           .eq("is_active", true)
           .maybeSingle();
@@ -613,6 +614,36 @@ function SchedulesPage() {
       return rows;
     },
   });
+
+  const weekShiftEmployeeIds = useMemo(
+    () =>
+      Array.from(
+        new Set((weekSavedQ.data?.shifts ?? []).map((r) => r.employee_id).filter(Boolean)),
+      ),
+    [weekSavedQ.data],
+  );
+
+  const savedShiftHeadcountExcludedQ = useQuery({
+    enabled: weekShiftEmployeeIds.length > 0,
+    queryKey: ["schedule-saved-headcount-excluded", weekShiftEmployeeIds.slice().sort().join(",")],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("profiles")
+        .select("id")
+        .in("id", weekShiftEmployeeIds)
+        .eq("excluded_from_headcount", true);
+      if (error) throw error;
+      return (data ?? []).map((p) => p.id as string);
+    },
+  });
+
+  const headcountExcludedSet = useMemo(() => {
+    const set = new Set(savedShiftHeadcountExcludedQ.data ?? []);
+    for (const e of empsQ.data ?? []) {
+      if (e.excluded_from_headcount) set.add(e.id);
+    }
+    return set;
+  }, [savedShiftHeadcountExcludedQ.data, empsQ.data]);
 
   // Shifts (only if a schedule exists and is visible)
   const shiftsQ = useQuery({
@@ -1006,6 +1037,7 @@ function SchedulesPage() {
           const seen = new Set<string>();
           const add = (employeeId: string, departmentId: string) => {
             if (!employeeId || !departmentId || seen.has(employeeId)) return;
+            if (headcountExcludedSet.has(employeeId)) return;
             seen.add(employeeId);
             members.push({ employeeId, departmentId });
           };
@@ -1027,7 +1059,7 @@ function SchedulesPage() {
           return { ...s, count: members.length, members };
         }),
       })),
-    [days, activeShifts, empsQ.data, edits, weekSavedQ.data, selectedDept],
+    [days, activeShifts, empsQ.data, edits, weekSavedQ.data, selectedDept, headcountExcludedSet],
   );
 
   const [summaryShiftPick, setSummaryShiftPick] = useState<SummaryShiftPick | null>(null);
