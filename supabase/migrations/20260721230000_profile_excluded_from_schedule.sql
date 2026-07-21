@@ -7,6 +7,9 @@ COMMENT ON COLUMN public.profiles.excluded_from_schedule IS
   'When true, employee appears in schedule UI but receives no shifts. Viewing department schedules is unchanged.';
 
 -- Expose through department_coworkers for employee schedule viewers.
+DROP VIEW IF EXISTS public.department_coworkers;
+DROP FUNCTION IF EXISTS public.get_department_coworkers();
+
 CREATE OR REPLACE FUNCTION public.get_department_coworkers()
  RETURNS TABLE(
    id uuid,
@@ -37,7 +40,6 @@ AS $function$
     AND NOT public.is_platform_owner(p.id);
 $function$;
 
-DROP VIEW IF EXISTS public.department_coworkers;
 CREATE VIEW public.department_coworkers
 WITH (security_invoker = true)
 AS SELECT * FROM public.get_department_coworkers();
