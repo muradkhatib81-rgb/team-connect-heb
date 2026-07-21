@@ -1988,15 +1988,15 @@ function SchedulesPage() {
                                   </span>
                                   {effStart && effEnd && cur !== "off" && (
                                     <div
-                                      className={`relative inline-block text-[10px] text-muted-foreground mt-1 tabular-nums rounded px-0.5 ${
+                                      className={`inline-flex items-center justify-center gap-1 mt-1 text-[10px] text-muted-foreground tabular-nums rounded px-1 ${
                                         isTimeModified ? "ring-2 ring-orange-500" : ""
                                       }`}
                                       dir="ltr"
                                     >
-                                      {effStart}–{effEnd}
+                                      <span>{effStart}–{effEnd}</span>
                                       {isTimeModified && (
                                         <RefreshCw
-                                          className="size-3 text-orange-600 absolute -top-1.5 -left-1.5 bg-background rounded-full p-0.5 box-content border border-orange-500"
+                                          className="size-3 shrink-0 text-orange-600"
                                           aria-label="שעות עודכנו לאחר פרסום"
                                         />
                                       )}
@@ -2044,9 +2044,9 @@ function SchedulesPage() {
                               </SelectContent>
                             </Select>
                             {cur && def?.start_time && def?.end_time && (
-                              <div className="relative" dir="ltr">
+                              <div className="flex items-center gap-1" dir="ltr">
                                 <div
-                                  className={`flex items-center gap-1 rounded-md ${
+                                  className={`flex flex-1 items-center gap-1 rounded-md ${
                                     isTimeModified ? "ring-2 ring-orange-500 p-0.5" : ""
                                   }`}
                                 >
@@ -2066,7 +2066,7 @@ function SchedulesPage() {
                                 </div>
                                 {isTimeModified && (
                                   <RefreshCw
-                                    className="size-3 text-orange-600 absolute -top-1.5 -left-1.5 bg-background rounded-full p-0.5 box-content border border-orange-500"
+                                    className="size-3 shrink-0 text-orange-600"
                                     aria-label="שעות עודכנו לאחר פרסום"
                                   />
                                 )}
