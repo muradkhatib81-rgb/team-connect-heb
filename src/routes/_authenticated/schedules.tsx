@@ -58,6 +58,7 @@ import {
   getSchedulesForViewer,
   copyPreviousWeek,
   deleteSchedule,
+  publishAllWeekSchedules,
 } from "@/lib/schedules.functions";
 import { formatHeDate, formatHeDateTime } from "@/lib/date-format";
 import { useShiftDefinitions } from "@/lib/use-shift-definitions";
@@ -336,6 +337,14 @@ function SchedulesPage() {
   const switchableDepts = useMemo(
     () => deptsPendingSchedule.filter((d) => d.id !== selectedDept),
     [deptsPendingSchedule, selectedDept],
+  );
+
+  const savedUnpublishedCount = useMemo(
+    () =>
+      (weekSavedQ.data?.savedList ?? []).filter(
+        (s) => !(s.status === "approved" && s.published_at),
+      ).length,
+    [weekSavedQ.data],
   );
 
   const canSwitchDepartments =
@@ -643,28 +652,34 @@ function SchedulesPage() {
 
   // Realtime: keep schedule list synced
   useEffect(() => {
+    const invalidateSavedWeek = () => {
+      qc.invalidateQueries({ queryKey: ["schedules-week-saved"] });
+    };
     const ch = supabase
-      .channel("schedules-realtime")
+      .channel(`schedules-realtime-${weekStart}`)
       .on("postgres_changes", { event: "*", schema: "public", table: "schedules" }, () => {
         qc.invalidateQueries({ queryKey: ["schedule"] });
         qc.invalidateQueries({ queryKey: ["schedules-pending"] });
         qc.invalidateQueries({ queryKey: ["schedules-approved"] });
         qc.invalidateQueries({ queryKey: ["dashboard-schedules"] });
-      qc.invalidateQueries({ queryKey: ["week-schedules"] });
         qc.invalidateQueries({ queryKey: ["week-schedules"] });
-        qc.invalidateQueries({ queryKey: ["departments-list"] });
+        qc.invalidateQueries({ queryKey: ["dashboard-approved-list"] });
+        qc.invalidateQueries({ queryKey: ["emp-dash-schedule"] });
+        invalidateSavedWeek();
       })
-
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "schedule_shifts" },
-        () => qc.invalidateQueries({ queryKey: ["schedule-shifts"] }),
+        () => {
+          qc.invalidateQueries({ queryKey: ["schedule-shifts"] });
+          invalidateSavedWeek();
+        },
       )
       .subscribe();
     return () => {
       supabase.removeChannel(ch);
     };
-  }, [qc]);
+  }, [qc, weekStart]);
 
   // ---- Server fns ----
   const createFn = useServerFn(createOrGetSchedule);
@@ -672,6 +687,7 @@ function SchedulesPage() {
   const submitFn = useServerFn(submitSchedule);
   const approveFn = useServerFn(approveSchedule);
   const publishFn = useServerFn(publishSchedule);
+  const publishAllFn = useServerFn(publishAllWeekSchedules);
   
   const copyFn = useServerFn(copyPreviousWeek);
 
@@ -767,6 +783,32 @@ function SchedulesPage() {
       qc.invalidateQueries({ queryKey: ["emp-dash-schedule"] });
     },
     onError: (e: any) => toast.error(e?.message ?? "שגיאה"),
+  });
+
+  const [publishAllOpen, setPublishAllOpen] = useState(false);
+  const publishAllMut = useMutation({
+    mutationFn: () => publishAllFn({ data: { week_start: weekStart } }),
+    onSuccess: (res: any) => {
+      setPublishAllOpen(false);
+      if (res?.published > 0) {
+        toast.success(`פורסמו ${res.published} סידורי עבודה`);
+      } else {
+        toast.info("אין סידורים לפרסום");
+      }
+      if (res?.errors?.length) {
+        toast.warning(`לא פורסמו ${res.errors.length} סידורים`);
+      }
+      qc.invalidateQueries({ queryKey: ["schedule"] });
+      qc.invalidateQueries({ queryKey: ["schedules-pending"] });
+      qc.invalidateQueries({ queryKey: ["schedules-approved"] });
+      qc.invalidateQueries({ queryKey: ["schedule-decision"] });
+      qc.invalidateQueries({ queryKey: ["dashboard-schedules"] });
+      qc.invalidateQueries({ queryKey: ["week-schedules"] });
+      qc.invalidateQueries({ queryKey: ["dashboard-approved-list"] });
+      qc.invalidateQueries({ queryKey: ["schedules-week-saved", weekStart] });
+      qc.invalidateQueries({ queryKey: ["emp-dash-schedule"] });
+    },
+    onError: (e: any) => toast.error(e?.message ?? "שגיאה בפרסום"),
   });
 
   const [copyOpen, setCopyOpen] = useState(false);
@@ -1042,6 +1084,28 @@ function SchedulesPage() {
 
 
       {view === "saved" && !isEmployee ? (
+        <div className="space-y-4">
+          {canPublishDirect && savedUnpublishedCount > 0 && (
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <p className="text-sm text-muted-foreground">
+                שבוע {formatHeDate(weekStart)} – {formatHeDate(weekEnd)} · {savedUnpublishedCount}{" "}
+                סידורים לפרסום
+              </p>
+              <Button
+                size="sm"
+                className="gap-2"
+                onClick={() => setPublishAllOpen(true)}
+                disabled={publishAllMut.isPending}
+              >
+                {publishAllMut.isPending ? (
+                  <Loader2 className="size-4 animate-spin" />
+                ) : (
+                  <Send className="size-4" />
+                )}
+                פרסם את כל סידורי העבודה
+              </Button>
+            </div>
+          )}
         <Card className="card-elevated p-0 overflow-hidden">
           {weekSavedQ.isLoading ? (
             <div className="flex justify-center py-12">
@@ -1120,6 +1184,7 @@ function SchedulesPage() {
             </table>
           )}
         </Card>
+        </div>
       ) : canSeeScheduleQueues && view === "pending" ? (
 
         <Card className="card-elevated p-0 overflow-hidden">
@@ -1830,6 +1895,30 @@ function SchedulesPage() {
           <AlertDialogFooter>
             <AlertDialogCancel>ביטול</AlertDialogCancel>
             <AlertDialogAction onClick={() => copyMut.mutate()}>העתק</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={publishAllOpen} onOpenChange={setPublishAllOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>פרסום כל סידורי העבודה</AlertDialogTitle>
+            <AlertDialogDescription>
+              לפרסם {savedUnpublishedCount} סידורי עבודה שמורים לשבוע {formatHeDate(weekStart)} –{" "}
+              {formatHeDate(weekEnd)}? עובדים ואחראי מחלקות יוכלו לראות את הסידורים לאחר הפרסום.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>ביטול</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={(e) => {
+                e.preventDefault();
+                publishAllMut.mutate();
+              }}
+              disabled={publishAllMut.isPending}
+            >
+              {publishAllMut.isPending ? <Loader2 className="size-4 animate-spin" /> : "פרסם"}
+            </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
