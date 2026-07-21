@@ -4,7 +4,11 @@ import { useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { isPlatformOwner, type AppRole } from "@/lib/constants";
 import { todayJerusalemDate } from "@/lib/break-workflow";
-import { fetchShiftSelfServiceVisible, shiftVisibleQueryKey } from "@/lib/shift-visible-rpc";
+import {
+  fetchShiftSelfServiceVisible,
+  invalidateShiftVisibleQueries,
+  shiftVisibleQueryKey,
+} from "@/lib/shift-visible-rpc";
 
 export type CustodyItemType = {
   id: string;
@@ -416,7 +420,7 @@ export function invalidateCustodyQueries(qc: QueryClient, branchId: string | nul
   qc.invalidateQueries({ queryKey: custodySettingsQueryKey(branchId) });
   qc.invalidateQueries({ queryKey: custodyLogQueryKey(branchId) });
   if (userId) {
-    qc.invalidateQueries({ queryKey: ["custody-board-visible", userId] });
+    invalidateShiftVisibleQueries(qc, userId, branchId);
   }
 }
 
@@ -450,6 +454,16 @@ export function useCustodyRealtime(
           filter: `branch_id=eq.${branchId}`,
         },
         () => invalidateCustodyQueries(qc, branchId, userId),
+      )
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "management_on_shift",
+          filter: `branch_id=eq.${branchId}`,
+        },
+        () => invalidateShiftVisibleQueries(qc, userId, branchId),
       )
       .subscribe();
     return () => {

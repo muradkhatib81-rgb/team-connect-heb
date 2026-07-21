@@ -9,6 +9,11 @@ import { useAuth } from "@/lib/use-auth";
 import { ROLE_LABELS, type AppRole } from "@/lib/constants";
 import { toast } from "sonner";
 import { useActiveBranch } from "@/lib/use-active-branch";
+import {
+  invalidateShiftVisibleQueries,
+  shiftVisibleQueryKey,
+} from "@/lib/shift-visible-rpc";
+import { custodyQueryKey } from "@/lib/custody-workflow";
 import { employeeNameInitial, formatEmployeeName } from "@/lib/employee-name";
 
 type Row = {
@@ -105,7 +110,12 @@ export function ManagementOnShiftCard() {
     },
     onSuccess: () => {
       toast.success("סומנת כנמצא במשמרת");
+      const branchId = activeBranchId ?? profile?.branch_id ?? null;
       qc.invalidateQueries({ queryKey: ["management-on-shift"] });
+      if (profile?.id) {
+        invalidateShiftVisibleQueries(qc, profile.id, branchId);
+        qc.setQueryData(shiftVisibleQueryKey(profile.id, branchId), true);
+      }
     },
     onError: (e: any) => toast.error(e.message ?? "שגיאה בעדכון סטטוס משמרת"),
   });
@@ -120,7 +130,13 @@ export function ManagementOnShiftCard() {
     },
     onSuccess: () => {
       toast.success("סימנת סיום משמרת");
+      const branchId = activeBranchId ?? profile?.branch_id ?? null;
       qc.invalidateQueries({ queryKey: ["management-on-shift"] });
+      if (profile?.id) {
+        invalidateShiftVisibleQueries(qc, profile.id, branchId);
+        qc.setQueryData(shiftVisibleQueryKey(profile.id, branchId), false);
+        qc.removeQueries({ queryKey: custodyQueryKey(branchId) });
+      }
     },
     onError: (e: any) => toast.error(e.message ?? "שגיאה בעדכון סטטוס משמרת"),
   });

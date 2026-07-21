@@ -1,7 +1,18 @@
 import { supabase } from "@/integrations/supabase/client";
+import type { QueryClient } from "@tanstack/react-query";
 
 export function shiftVisibleQueryKey(userId: string | null, branchId?: string | null) {
   return ["custody-board-visible", userId, branchId ?? null] as const;
+}
+
+/** Refetch custody/break self-service gates after shift or management-on-shift changes. */
+export function invalidateShiftVisibleQueries(
+  qc: QueryClient,
+  userId: string,
+  branchId?: string | null,
+) {
+  qc.invalidateQueries({ queryKey: shiftVisibleQueryKey(userId, branchId) });
+  qc.invalidateQueries({ queryKey: ["custody-board-visible", userId] });
 }
 
 /**

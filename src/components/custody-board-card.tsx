@@ -18,6 +18,7 @@ import {
   invalidateCustodyQueries,
   returnCustodyItem,
 } from "@/lib/custody-workflow";
+import { invalidateShiftVisibleQueries } from "@/lib/shift-visible-rpc";
 import { CustodySettingsPanel } from "@/components/custody-settings-panel";
 import {
   Dialog,
@@ -86,12 +87,12 @@ export function CustodyBoardCard() {
           table: "management_on_shift",
           filter: `branch_id=eq.${scopedBranchId}`,
         },
-        () => qc.invalidateQueries({ queryKey: custodyVisibleQueryKey(profile.id, scopedBranchId) }),
+        () => invalidateShiftVisibleQueries(qc, profile.id, scopedBranchId),
       )
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "schedule_shifts" },
-        () => qc.invalidateQueries({ queryKey: custodyVisibleQueryKey(profile.id, scopedBranchId) }),
+        () => invalidateShiftVisibleQueries(qc, profile.id, scopedBranchId),
       )
       .subscribe();
     return () => {
