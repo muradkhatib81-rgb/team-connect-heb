@@ -1795,7 +1795,7 @@ function SchedulesPage() {
 
           {/* Actions bar */}
           <div className="flex flex-wrap gap-2">
-            {editable && (visible.status === "approved" || visible.status === "pending_approval") && (
+            {editable && canEditScheduleTimes && (visible.status === "approved" || visible.status === "pending_approval") && (
               <Button onClick={() => saveMut.mutate()} disabled={saveMut.isPending} size="sm">
                 {saveMut.isPending ? <Loader2 className="size-4 animate-spin" /> : <Save className="size-4" />}
                 שמור שינויים
@@ -1803,10 +1803,12 @@ function SchedulesPage() {
             )}
             {editable && visible.status !== "approved" && visible.status !== "pending_approval" && (
               <>
-                <Button onClick={() => saveMut.mutate()} disabled={saveMut.isPending} size="sm">
-                  {saveMut.isPending ? <Loader2 className="size-4 animate-spin" /> : <Save className="size-4" />}
-                  שמור טיוטה
-                </Button>
+                {canEditScheduleTimes && (
+                  <Button onClick={() => saveMut.mutate()} disabled={saveMut.isPending} size="sm">
+                    {saveMut.isPending ? <Loader2 className="size-4 animate-spin" /> : <Save className="size-4" />}
+                    שמור טיוטה
+                  </Button>
+                )}
                 <Button
                   onClick={() => submitMut.mutate()}
                   disabled={submitMut.isPending}
