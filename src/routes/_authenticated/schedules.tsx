@@ -207,6 +207,8 @@ function SchedulesPage() {
   });
   const canApprove = isMainAdmin || isBranchManager || !!permsQ.data?.can_approve_schedule;
   const canPublishDirect = isMainAdmin || isBranchManager || !!permsQ.data?.can_publish_schedule;
+  const canEditScheduleTimes =
+    isMainAdmin || isBranchMgr || canApprove || canPublishDirect;
   const canSeeScheduleQueues = canApprove || canPublishDirect;
   const canCreate =
     isMainAdmin || isBranchManager || isDeptMgr || !!permsQ.data?.can_create_schedule;
@@ -980,9 +982,16 @@ function SchedulesPage() {
 
   function setShift(empId: string, day: string, shift: Shift) {
     setEdits((prev) => ({ ...prev, [empId]: { ...(prev[empId] ?? {}), [day]: shift } }));
+    if (!canEditScheduleTimes) {
+      setTimeEdits((prev) => ({
+        ...prev,
+        [empId]: { ...(prev[empId] ?? {}), [day]: { start: null, end: null } },
+      }));
+    }
   }
 
   function setCellTime(empId: string, day: string, which: "start" | "end", value: string) {
+    if (!canEditScheduleTimes) return;
     setTimeEdits((prev) => {
       const cur = prev[empId]?.[day] ?? { start: null, end: null };
       const next = { ...cur, [which]: value ? value.slice(0, 5) : null };
@@ -1018,8 +1027,10 @@ function SchedulesPage() {
           employee_id: emp,
           day_date: day,
           shift: resolved,
-          start_time: resolved === "off" ? null : norm(t?.start ?? null),
-          end_time: resolved === "off" ? null : norm(t?.end ?? null),
+          start_time:
+            resolved === "off" || !canEditScheduleTimes ? null : norm(t?.start ?? null),
+          end_time:
+            resolved === "off" || !canEditScheduleTimes ? null : norm(t?.end ?? null),
         });
       }
     }
@@ -2044,33 +2055,43 @@ function SchedulesPage() {
                               </SelectContent>
                             </Select>
                             {cur && def?.start_time && def?.end_time && (
-                              <div className="flex items-center gap-1" dir="ltr">
-                                <div
-                                  className={`flex flex-1 items-center gap-1 rounded-md ${
-                                    isTimeModified ? "ring-2 ring-orange-500 p-0.5" : ""
-                                  }`}
-                                >
-                                  <Time24Input
-                                    aria-label="שעת התחלה"
-                                    value={effStart ?? ""}
-                                    onChange={(v) => setCellTime(emp.id, day, "start", v)}
-                                    className="h-7 w-full min-w-0 rounded-md border border-input bg-background px-1 text-[11px] focus:outline-none focus:ring-1 focus:ring-ring"
-                                  />
-                                  <span className="text-[10px] text-muted-foreground">–</span>
-                                  <Time24Input
-                                    aria-label="שעת סיום"
-                                    value={effEnd ?? ""}
-                                    onChange={(v) => setCellTime(emp.id, day, "end", v)}
-                                    className="h-7 w-full min-w-0 rounded-md border border-input bg-background px-1 text-[11px] focus:outline-none focus:ring-1 focus:ring-ring"
-                                  />
+                              canEditScheduleTimes ? (
+                                <div className="flex items-center gap-1" dir="ltr">
+                                  <div
+                                    className={`flex flex-1 items-center gap-1 rounded-md ${
+                                      isTimeModified ? "ring-2 ring-orange-500 p-0.5" : ""
+                                    }`}
+                                  >
+                                    <Time24Input
+                                      aria-label="שעת התחלה"
+                                      value={effStart ?? ""}
+                                      onChange={(v) => setCellTime(emp.id, day, "start", v)}
+                                      className="h-7 w-full min-w-0 rounded-md border border-input bg-background px-1 text-[11px] focus:outline-none focus:ring-1 focus:ring-ring"
+                                    />
+                                    <span className="text-[10px] text-muted-foreground">–</span>
+                                    <Time24Input
+                                      aria-label="שעת סיום"
+                                      value={effEnd ?? ""}
+                                      onChange={(v) => setCellTime(emp.id, day, "end", v)}
+                                      className="h-7 w-full min-w-0 rounded-md border border-input bg-background px-1 text-[11px] focus:outline-none focus:ring-1 focus:ring-ring"
+                                    />
+                                  </div>
+                                  {isTimeModified && (
+                                    <RefreshCw
+                                      className="size-3 shrink-0 text-orange-600"
+                                      aria-label="שעות עודכנו לאחר פרסום"
+                                    />
+                                  )}
                                 </div>
-                                {isTimeModified && (
-                                  <RefreshCw
-                                    className="size-3 shrink-0 text-orange-600"
-                                    aria-label="שעות עודכנו לאחר פרסום"
-                                  />
-                                )}
-                              </div>
+                              ) : (
+                                <div
+                                  className="text-[10px] text-muted-foreground text-center tabular-nums mt-0.5"
+                                  dir="ltr"
+                                >
+                                  {(effStart ?? String(def.start_time).slice(0, 5))}–
+                                  {(effEnd ?? String(def.end_time).slice(0, 5))}
+                                </div>
+                              )
                             )}
                             {isShiftModified && (
                               <RefreshCw

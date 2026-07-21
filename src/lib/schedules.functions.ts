@@ -30,6 +30,26 @@ async function getCaps(supabase: any, userId: string) {
   };
 }
 
+/** Custom shift hours — platform owner, branch/assistant managers, or granular approve/publish only. */
+function canEditScheduleTimes(caps: {
+  isMainAdmin: boolean;
+  isBranchMgr: boolean;
+  canApprove: boolean;
+  canPublishDirect: boolean;
+}) {
+  return caps.isMainAdmin || caps.isBranchMgr || caps.canApprove || caps.canPublishDirect;
+}
+
+function stripShiftCustomTimes<
+  T extends { shift: string; start_time?: string | null; end_time?: string | null },
+>(shifts: T[]): T[] {
+  return shifts.map((s) => ({
+    ...s,
+    start_time: null,
+    end_time: null,
+  }));
+}
+
 async function getDepartmentScheduleEmployees(supabase: any, departmentId: string) {
   const [{ data: emps }, { data: dept }] = await Promise.all([
     supabase
@@ -297,11 +317,14 @@ export const saveScheduleShifts = createServerFn({ method: "POST" })
     const schedulableIds = new Set(
       schedulableDepartmentEmployees(deptEmployees).map((e: any) => e.id as string),
     );
-    const shiftsInput = applyLeaveOffToShifts(
+    const shiftsInputRaw = applyLeaveOffToShifts(
       sched,
       deptEmployees,
       data.shifts.filter((s) => schedulableIds.has(s.employee_id)),
     );
+    const shiftsInput = canEditScheduleTimes(caps)
+      ? shiftsInputRaw
+      : stripShiftCustomTimes(shiftsInputRaw);
 
     // Snapshot existing shifts for change detection + preserve published_shift snapshot
     const { data: existingShifts } = await context.supabase
