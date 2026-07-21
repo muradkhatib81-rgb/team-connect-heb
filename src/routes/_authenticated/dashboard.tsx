@@ -2437,6 +2437,21 @@ function BreakShortcutCard({ userId }: { userId: string }) {
   const [, setTick] = useState(0);
   const shiftGate = useShiftSelfServiceVisible();
 
+  const canRequestQ = useQuery({
+    enabled: !!userId,
+    queryKey: ["can-request-break", userId],
+    queryFn: async () => {
+      const { data, error } = await (supabase as any).rpc("can_user_request_break", {
+        _user_id: userId,
+      });
+      if (error) return true;
+      return data !== false;
+    },
+    staleTime: 30_000,
+    retry: false,
+  });
+  const canRequestBreak = canRequestQ.data !== false;
+
   const breakQ = useQuery({
     enabled: !!userId,
     queryKey: ["my-break-shortcut", userId],
@@ -2499,7 +2514,8 @@ function BreakShortcutCard({ userId }: { userId: string }) {
   const hasBreakCards = !!activeBreak || upcomingBreaks.length > 0 || pendingBreaks.length > 0;
 
   if (!hasBreakCards) {
-    if (shiftGate.isLoading || !shiftGate.isVisible) return null;
+    if (shiftGate.isLoading || canRequestQ.isLoading) return null;
+    if (!shiftGate.isVisible || !canRequestBreak) return null;
     return (
       <Card
         role="button"

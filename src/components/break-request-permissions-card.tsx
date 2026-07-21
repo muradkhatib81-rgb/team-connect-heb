@@ -35,7 +35,7 @@ export function BreakRequestPermissionsCard() {
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["job-titles"] });
-      qc.invalidateQueries({ queryKey: ["my-can-request-break"] });
+      qc.invalidateQueries({ queryKey: ["can-request-break"] });
     },
     onError: (e: any) => toast.error(e?.message ?? "שגיאה בעדכון ההרשאה"),
   });
