@@ -86,6 +86,11 @@ interface ProfileRow {
   on_leave: boolean;
   avatar_url: string | null;
   deactivated_at: string | null;
+  excluded_from_headcount?: boolean;
+}
+
+function isCountedInHeadcount(e: Pick<ProfileRow, "excluded_from_headcount">) {
+  return !e.excluded_from_headcount;
 }
 
 const FILTER_LABELS: Record<FilterMode, string> = {
@@ -236,7 +241,7 @@ function EmployeesPage() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("profiles")
-        .select("id, first_name, last_name, full_name, department_id, job_title, is_active, on_leave, avatar_url, deactivated_at")
+        .select("id, first_name, last_name, full_name, department_id, job_title, is_active, on_leave, avatar_url, deactivated_at, excluded_from_headcount")
         .order("first_name")
         .order("last_name");
       if (error) throw error;
@@ -330,6 +335,11 @@ function EmployeesPage() {
     }));
   }, [employeesQuery.data, contactsQuery.data]);
 
+  const countedEmployees = useMemo(
+    () => employees.filter(isCountedInHeadcount),
+    [employees],
+  );
+
   const filtered = useMemo(() => {
     const term = searchTerm.trim().toLowerCase();
     return employees.filter((e) => {
@@ -357,7 +367,12 @@ function EmployeesPage() {
   const managerDeptStats = useMemo(() => {
     if (!isDeptManagerOnly || !me?.department_id) return null;
     const data = employeesQuery.data ?? [];
-    const dept = data.filter((e) => e.department_id === me.department_id && e.id !== me.id);
+    const dept = data.filter(
+      (e) =>
+        e.department_id === me.department_id &&
+        e.id !== me.id &&
+        isCountedInHeadcount(e),
+    );
     return {
       total: dept.length,
       active: dept.filter((e) => e.is_active && !e.on_leave).length,
@@ -386,7 +401,7 @@ function EmployeesPage() {
     let active = 0;
     let onLeave = 0;
     let inactive = 0;
-    employees.forEach((e) => {
+    countedEmployees.forEach((e) => {
       const r = roles[e.id] ?? [];
       const isManager = isOrgManagerRole(r);
       if (isManager) managers += 1;
@@ -395,16 +410,19 @@ function EmployeesPage() {
       if (e.on_leave) onLeave += 1;
       if (!e.is_active) inactive += 1;
     });
+    const excludedIds = new Set(
+      employees.filter((e) => e.excluded_from_headcount).map((e) => e.id),
+    );
     return {
-      total: employees.length,
+      total: countedEmployees.length,
       active,
       managers,
       workers,
       onLeave,
       inactive,
-      onBreak: onBreakSet.size,
+      onBreak: [...onBreakSet].filter((id) => !excludedIds.has(id)).length,
     };
-  }, [employees, rolesQuery.data, onBreakSet]);
+  }, [countedEmployees, employees, rolesQuery.data, onBreakSet]);
 
 
   if (meLoading) {
@@ -421,7 +439,7 @@ function EmployeesPage() {
     );
   }
 
-  const headerSubtitle = `${filtered.length} מתוך ${employees.length} עובדים · ${FILTER_LABELS[filterMode]}${deptFilter !== "all" && deptMap[deptFilter] ? ` · ${deptMap[deptFilter]}` : ""}`;
+  const headerSubtitle = `${filtered.filter(isCountedInHeadcount).length} מתוך ${countedEmployees.length} עובדים · ${FILTER_LABELS[filterMode]}${deptFilter !== "all" && deptMap[deptFilter] ? ` · ${deptMap[deptFilter]}` : ""}`;
 
   return (
     <div className="space-y-6">
