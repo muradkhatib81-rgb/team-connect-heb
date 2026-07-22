@@ -115,11 +115,13 @@ export async function fetchCustodyUserCaps(userId: string): Promise<CustodyUserC
   ]);
   const roleList = (roles ?? []).map((r: { role: AppRole }) => r.role);
   const owner = isPlatformOwner(roleList);
+  const isBranchManager = roleList.includes("branch_manager");
   const p = perm ?? {};
   const canCreate = owner || !!(p as any).can_create_custody;
   const canEdit = owner || !!(p as any).can_edit_custody;
   const canDelete = owner || !!(p as any).can_delete_custody;
-  const canReturnOthers = owner || !!(p as any).can_return_custody;
+  const canReturnOthers =
+    owner || isBranchManager || !!(p as any).can_return_custody;
   const canReceiveAlerts = owner || !!(p as any).can_receive_custody_alerts;
   const canConfigure = owner || !!(p as any).can_configure_custody;
   const canViewDailyLog = owner || !!(p as any).can_view_custody_daily_log;

@@ -514,6 +514,7 @@ function SentTab({
       {selected && (
         <MessageDetailDialog
           messageId={selected}
+          userId={userId}
           onClose={() => setSelected(null)}
           viewerMode="sent"
           canManage={canManage}
@@ -606,6 +607,7 @@ function MessageDetailDialog({
   messageId,
   onClose,
   viewerMode,
+  userId,
   canManage,
   canDelete,
   canViewReceipts,
@@ -613,6 +615,7 @@ function MessageDetailDialog({
   messageId: string;
   onClose: () => void;
   viewerMode: "inbox" | "sent";
+  userId?: string;
   canManage?: boolean;
   canDelete?: boolean;
   canViewReceipts?: boolean;
@@ -801,7 +804,7 @@ function MessageDetailDialog({
                   <Pencil className="size-4" /> ערוך
                 </Button>
               )}
-              {viewerMode === "sent" && canDelete && (
+              {viewerMode === "sent" && (canDelete || d.msg.sender_id === userId) && (
                 <Button
                   variant="ghost"
                   className="text-destructive gap-1.5"

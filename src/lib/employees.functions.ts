@@ -30,6 +30,42 @@ async function findAuthUserIdByEmail(supabaseAdmin: AdminClient, email: string):
   return null;
 }
 
+/** Keep Supabase Auth login (email = id_number@domain) in sync with profile id_number changes. */
+async function syncEmployeeAuthIdentity(
+  supabaseAdmin: AdminClient,
+  opts: {
+    userId: string;
+    idNumber: string;
+    firstName: string;
+    lastName: string;
+  },
+) {
+  const { error } = await (supabaseAdmin as any).rpc("sync_profile_auth_email", {
+    _user_id: opts.userId,
+    _id_number: opts.idNumber,
+    _first_name: opts.firstName,
+    _last_name: opts.lastName,
+  });
+  if (error) throw new Error(error.message || formatAuthError(error));
+}
+
+async function assertIdNumberAvailableInBranch(
+  supabase: any,
+  idNumber: string,
+  branchId: string,
+  excludeUserId: string,
+) {
+  const { data, error } = await supabase
+    .from("profiles")
+    .select("id")
+    .eq("id_number", idNumber)
+    .eq("branch_id", branchId)
+    .neq("id", excludeUserId)
+    .maybeSingle();
+  if (error) throw new Error(error.message);
+  if (data) throw new Error("כבר קיים עובד עם מספר זהות זה");
+}
+
 /**
  * When profile was archived but auth.users remained (delete blocked by FK/triggers),
  * reuse the existing auth row and insert a fresh profile instead of delete+create.
@@ -92,6 +128,8 @@ async function reprovisionOrphanEmployeeAuth(
       .eq("branch_id", branchId);
   }
 
+  await supabaseAdmin.rpc("sync_user_task_permissions", { _user_id: uid });
+
   return uid;
 }
 
@@ -118,6 +156,96 @@ const APP_ROLES = [
   "department_manager",
   "employee",
 ] as const;
+
+type ManagedAppRole = (typeof APP_ROLES)[number];
+
+const MANAGEMENT_ON_SHIFT_ROLES = new Set<ManagedAppRole | string>([
+  "branch_manager",
+  "assistant_manager",
+]);
+
+async function clearManagementOnShiftIfDemoted(
+  supabaseAdmin: any,
+  oldRoleSet: Set<string>,
+  newRole: ManagedAppRole,
+  targetUserId: string,
+) {
+  const wasManagerOnShift = [...oldRoleSet].some((r) => MANAGEMENT_ON_SHIFT_ROLES.has(r));
+  if (!wasManagerOnShift || MANAGEMENT_ON_SHIFT_ROLES.has(newRole)) return;
+  await supabaseAdmin.from("management_on_shift").delete().eq("user_id", targetUserId);
+}
+
+async function applyUserRoleChange(
+  supabase: any,
+  supabaseAdmin: any,
+  opts: {
+    targetUserId: string;
+    newRole: ManagedAppRole;
+    departmentId: string | null;
+    branchId: string;
+    caps: Awaited<ReturnType<typeof getEmployeeManagerCaps>>;
+  },
+) {
+  const { targetUserId, newRole, departmentId, branchId, caps } = opts;
+  assertAssignableRole(newRole, caps);
+
+  const { data: oldRoles, error: oldRolesErr } = await supabaseAdmin
+    .from("user_roles")
+    .select("role")
+    .eq("user_id", targetUserId);
+  if (oldRolesErr) throw new Error(oldRolesErr.message);
+  const oldRoleSet = new Set((oldRoles ?? []).map((r: any) => r.role as string));
+
+  if (oldRoleSet.has("department_manager") && newRole !== "department_manager") {
+    const { data: managedDepts, error: managedErr } = await supabaseAdmin
+      .from("departments")
+      .select("id")
+      .eq("manager_id", targetUserId)
+      .eq("branch_id", branchId);
+    if (managedErr) throw new Error(managedErr.message);
+    for (const dept of managedDepts ?? []) {
+      const { error } = await supabase.rpc("set_department_manager", {
+        _dept_id: dept.id,
+        _new_manager_id: null,
+      });
+      if (error) throw new Error(error.message);
+    }
+  }
+
+  if (newRole === "department_manager") {
+    if (!departmentId) throw new Error("יש לשייך מחלקה לפני הגדרת אחראי מחלקה");
+    await clearManagementOnShiftIfDemoted(supabaseAdmin, oldRoleSet, newRole, targetUserId);
+    const { error } = await supabase.rpc("set_department_manager", {
+      _dept_id: departmentId,
+      _new_manager_id: targetUserId,
+    });
+    if (error) throw new Error(error.message);
+    const { error: syncErr } = await supabaseAdmin.rpc("sync_user_task_permissions", {
+      _user_id: targetUserId,
+    });
+    if (syncErr) throw new Error(syncErr.message);
+    return;
+  }
+
+  await clearManagementOnShiftIfDemoted(supabaseAdmin, oldRoleSet, newRole, targetUserId);
+
+  await supabaseAdmin.from("user_roles").delete().eq("user_id", targetUserId);
+  const { error: roleErr } = await supabaseAdmin
+    .from("user_roles")
+    .insert({ user_id: targetUserId, role: newRole });
+  if (roleErr) throw new Error(roleErr.message);
+
+  await supabaseAdmin
+    .from("departments")
+    .update({ manager_id: null })
+    .eq("manager_id", targetUserId)
+    .eq("branch_id", branchId);
+
+  const { error: syncErr } = await supabaseAdmin.rpc("sync_user_task_permissions", {
+    _user_id: targetUserId,
+  });
+  if (syncErr) throw new Error(syncErr.message);
+}
 
 
 const createEmployeeSchema = z.object({
@@ -289,16 +417,13 @@ export const createEmployee = createServerFn({ method: "POST" })
         })
         .eq("id", newUserId);
 
-      await supabaseAdmin.from("user_roles").delete().eq("user_id", newUserId);
-      await supabaseAdmin.from("user_roles").insert({ user_id: newUserId, role: data.role });
-
-      if (data.role === "department_manager") {
-        await supabaseAdmin
-          .from("departments")
-          .update({ manager_id: newUserId })
-          .eq("id", data.department_id)
-          .eq("branch_id", branchId);
-      }
+      await applyUserRoleChange(context.supabase, supabaseAdmin, {
+        targetUserId: newUserId,
+        newRole: data.role,
+        departmentId: data.department_id,
+        branchId,
+        caps,
+      });
     }
 
     return { id: newUserId };
@@ -441,6 +566,47 @@ const updateEmployeeSchema = z.object({
   role_changed: z.boolean().optional().default(false),
 });
 
+const changeUserRoleSchema = z.object({
+  user_id: z.string().uuid(),
+  role: z.enum(APP_ROLES),
+});
+
+export const changeUserRole = createServerFn({ method: "POST" })
+  .middleware([requireBranchContext])
+  .inputValidator((data: unknown) => changeUserRoleSchema.parse(data))
+  .handler(async ({ data, context }) => {
+    if (!context.branchId) throw new Error("יש לבחור סניף פעיל");
+    const caps = await getEmployeeManagerCaps(context.supabase, context.userId);
+    if (!caps.isPlatformOwner && !caps.isBranchManager) {
+      throw new Error("אין הרשאה לשינוי תפקיד");
+    }
+    if (data.user_id === context.userId) {
+      throw new Error("לא ניתן לשנות את התפקיד של עצמך");
+    }
+
+    await assertProfileVisibleInActiveBranch(context.supabase, data.user_id);
+    await assertTargetIsNotProtectedManager(context.supabase, data.user_id, caps);
+
+    const { data: profile, error: profileErr } = await context.supabase
+      .from("profiles")
+      .select("department_id")
+      .eq("id", data.user_id)
+      .maybeSingle();
+    if (profileErr) throw new Error(profileErr.message);
+    if (!profile) throw new Error("עובד לא נמצא בסניף הפעיל");
+
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    await applyUserRoleChange(context.supabase, supabaseAdmin, {
+      targetUserId: data.user_id,
+      newRole: data.role,
+      departmentId: profile.department_id ?? null,
+      branchId: context.branchId,
+      caps,
+    });
+
+    return { ok: true };
+  });
+
 export const updateEmployee = createServerFn({ method: "POST" })
   .middleware([requireBranchContext])
   .inputValidator((data: unknown) => updateEmployeeSchema.parse(data))
@@ -489,12 +655,37 @@ export const updateEmployee = createServerFn({ method: "POST" })
     }
 
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+
+    const { data: existingProfile, error: existingProfileErr } = await supabaseAdmin
+      .from("profiles")
+      .select("id_number, first_name, last_name, full_name")
+      .eq("id", data.user_id)
+      .eq("branch_id", context.branchId)
+      .maybeSingle();
+    if (existingProfileErr) throw new Error(existingProfileErr.message);
+    if (!existingProfile) throw new Error("עובד לא נמצא בסניף הפעיל");
+
+    const trimmedFirst = data.first_name.trim();
+    const trimmedLast = data.last_name.trim();
+    const nextIdNumber = data.id_number?.trim() || null;
+
+    if (nextIdNumber) {
+      if (!ID_REGEX.test(nextIdNumber)) throw new Error("מספר זהות לא תקין");
+      await assertIdNumberAvailableInBranch(
+        context.supabase,
+        nextIdNumber,
+        context.branchId,
+        data.user_id,
+      );
+    }
+
     const { error: updErr } = await supabaseAdmin
       .from("profiles")
       .update({
-        first_name: data.first_name.trim(),
-        last_name: data.last_name.trim(),
-        id_number: data.id_number ?? null,
+        first_name: trimmedFirst,
+        last_name: trimmedLast,
+        full_name: `${trimmedFirst} ${trimmedLast}`.trim() || existingProfile.full_name,
+        id_number: nextIdNumber,
         department_id: data.department_id,
         phone: data.phone || null,
         on_leave: data.on_leave,
@@ -508,27 +699,23 @@ export const updateEmployee = createServerFn({ method: "POST" })
       .eq("branch_id", context.branchId);
     if (updErr) throw new Error(updErr.message);
 
-    if (data.role_changed && data.role) {
-      assertAssignableRole(data.role, caps);
-      await supabaseAdmin.from("user_roles").delete().eq("user_id", data.user_id);
-      const { error: roleErr } = await supabaseAdmin
-        .from("user_roles")
-        .insert({ user_id: data.user_id, role: data.role });
-      if (roleErr) throw new Error(roleErr.message);
+    if (nextIdNumber) {
+      await syncEmployeeAuthIdentity(supabaseAdmin, {
+        userId: data.user_id,
+        idNumber: nextIdNumber,
+        firstName: trimmedFirst,
+        lastName: trimmedLast,
+      });
+    }
 
-      if (data.role === "department_manager") {
-        await supabaseAdmin
-          .from("departments")
-          .update({ manager_id: data.user_id })
-          .eq("id", data.department_id)
-          .eq("branch_id", context.branchId);
-      } else {
-        await supabaseAdmin
-          .from("departments")
-          .update({ manager_id: null })
-          .eq("manager_id", data.user_id)
-          .eq("branch_id", context.branchId);
-      }
+    if (data.role_changed && data.role) {
+      await applyUserRoleChange(context.supabase, supabaseAdmin, {
+        targetUserId: data.user_id,
+        newRole: data.role,
+        departmentId: data.department_id,
+        branchId: context.branchId,
+        caps,
+      });
     }
 
     return { ok: true };

@@ -1,5 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
 import { requireBranchContext } from "@/integrations/supabase/active-branch.server";
+import { canExecuteTask, canEditTaskContent, canViewTask } from "@/lib/task-execution";
 import { z } from "zod";
 
 const PRIORITY = ["low", "medium", "high"] as const;
@@ -63,6 +64,33 @@ function canEditForDept(caps: Awaited<ReturnType<typeof getCallerCaps>>, deptId:
   );
 }
 
+function deptHeadOwnDepartmentId(caps: Awaited<ReturnType<typeof getCallerCaps>>) {
+  return caps.managedDeptIds[0] ?? caps.departmentId ?? null;
+}
+
+async function resolveTaskBranchId(
+  supabase: any,
+  userId: string,
+  departmentId: string | null | undefined,
+  fallbackBranchId: string | null,
+) {
+  if (departmentId) {
+    const { data: dept } = await supabase
+      .from("departments")
+      .select("branch_id")
+      .eq("id", departmentId)
+      .maybeSingle();
+    if (dept?.branch_id) return dept.branch_id as string;
+  }
+  if (fallbackBranchId) return fallbackBranchId;
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("branch_id")
+    .eq("id", userId)
+    .maybeSingle();
+  return (profile?.branch_id as string | null | undefined) ?? null;
+}
+
 // ---------- CREATE task ----------
 const TARGET_SCOPE = ["all_departments", "departments", "single_department"] as const;
 
@@ -80,6 +108,29 @@ const createSchema = z.object({
   notes: z.string().trim().max(2000).optional().nullable(),
 });
 
+type CreateTaskInput = z.infer<typeof createSchema>;
+
+function enforceDeptHeadCreateScope(
+  caps: Awaited<ReturnType<typeof getCallerCaps>>,
+  data: CreateTaskInput,
+): CreateTaskInput {
+  if (!caps.isDeptManager || caps.canCreateTasks) return data;
+  const ownDept = deptHeadOwnDepartmentId(caps);
+  if (!ownDept) throw new Error("לא נמצאה מחלקה משויכת לחשבון");
+  if (data.target_scope !== "single_department") {
+    throw new Error("רכז מחלקה יכול ליצור משימות רק למחלקה שלו");
+  }
+  if (data.department_id && data.department_id !== ownDept) {
+    throw new Error("ניתן ליצור משימה רק למחלקה שלך");
+  }
+  return {
+    ...data,
+    target_scope: "single_department",
+    department_id: ownDept,
+    department_ids: [],
+  };
+}
+
 async function notifyUsers(supabase: any, userIds: string[], message: string) {
   const ids = Array.from(new Set(userIds.filter(Boolean)));
   if (!ids.length) return;
@@ -87,11 +138,244 @@ async function notifyUsers(supabase: any, userIds: string[], message: string) {
   await supabase.from("schedule_notifications").insert(rows);
 }
 
+type TaskStatRow = {
+  id: string;
+  status: string;
+  due_at: string | null;
+  department_id: string | null;
+  branch_id: string | null;
+  created_at?: string;
+};
+
+function computeDashboardTaskStats(rows: TaskStatRow[]) {
+  const now = Date.now();
+  const overdueExcluded = new Set(["completed", "pending_closure", "closed"]);
+  const submittedStatuses = new Set(["pending_approval", "pending_closure", "completed"]);
+  return {
+    open: rows.filter((r) => r.status === "new").length,
+    in_progress: rows.filter((r) => r.status === "in_progress").length,
+    completed: rows.filter((r) => submittedStatuses.has(r.status)).length,
+    overdue: rows.filter(
+      (r) =>
+        r.due_at &&
+        !overdueExcluded.has(r.status) &&
+        new Date(r.due_at).getTime() < now,
+    ).length,
+  };
+}
+
+async function fetchScopedTasks(
+  supabase: any,
+  branchId: string | null,
+  departmentScope: string | null,
+  selectCols = "*",
+) {
+  if (!branchId) {
+    let q = supabase.from("tasks").select(selectCols).order("created_at", { ascending: false });
+    if (departmentScope) q = q.eq("department_id", departmentScope);
+    const { data, error } = await q;
+    if (error) throw new Error(error.message);
+    return data ?? [];
+  }
+
+  const [{ data: byBranch, error: branchErr }, { data: depts, error: deptErr }] =
+    await Promise.all([
+      supabase
+        .from("tasks")
+        .select(selectCols)
+        .eq("branch_id", branchId)
+        .order("created_at", { ascending: false }),
+      supabase.from("departments").select("id").eq("branch_id", branchId),
+    ]);
+  if (branchErr) throw new Error(branchErr.message);
+  if (deptErr) throw new Error(deptErr.message);
+
+  const deptIds = new Set((depts ?? []).map((d: { id: string }) => d.id));
+  const scoped = (byBranch ?? []).filter(
+    (row: TaskStatRow) => !departmentScope || row.department_id === departmentScope,
+  );
+
+  const { data: orphans, error: orphanErr } = await supabase
+    .from("tasks")
+    .select(selectCols)
+    .is("branch_id", null)
+    .order("created_at", { ascending: false });
+  if (orphanErr) throw new Error(orphanErr.message);
+
+  const legacy = (orphans ?? []).filter(
+    (row: TaskStatRow) => row.department_id && deptIds.has(row.department_id),
+  );
+  const filteredLegacy = departmentScope
+    ? legacy.filter((row: TaskStatRow) => row.department_id === departmentScope)
+    : legacy;
+
+  const byId = new Map<string, TaskStatRow>();
+  for (const row of [...scoped, ...filteredLegacy]) byId.set(row.id, row as TaskStatRow);
+  return Array.from(byId.values()).sort((a, b) => {
+    const ta = a.created_at ? new Date(a.created_at).getTime() : 0;
+    const tb = b.created_at ? new Date(b.created_at).getTime() : 0;
+    return tb - ta;
+  });
+}
+
+async function resolveTaskListScope(supabase: any, userId: string, branchId: string | null) {
+  const caps = await getCallerCaps(supabase, userId);
+  let resolvedBranchId = branchId;
+  if (!resolvedBranchId) {
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("branch_id")
+      .eq("id", userId)
+      .maybeSingle();
+    resolvedBranchId = (profile?.branch_id as string | null | undefined) ?? null;
+  }
+  const departmentScope =
+    caps.isDeptManager && !caps.canCreateTasks ? deptHeadOwnDepartmentId(caps) : null;
+  return { branchId: resolvedBranchId, departmentScope, caps };
+}
+
+async function loadMultiAssigneeMap(supabase: any, taskIds: string[]) {
+  const map = new Map<string, string[]>();
+  if (!taskIds.length) return map;
+  const { data, error } = await supabase
+    .from("task_assignees")
+    .select("task_id, user_id")
+    .in("task_id", taskIds);
+  if (error) throw new Error(error.message);
+  for (const row of data ?? []) {
+    const tid = (row as { task_id: string; user_id: string }).task_id;
+    const uid = (row as { task_id: string; user_id: string }).user_id;
+    const list = map.get(tid) ?? [];
+    list.push(uid);
+    map.set(tid, list);
+  }
+  return map;
+}
+
+async function filterTasksForViewer(
+  supabase: any,
+  userId: string,
+  caps: Awaited<ReturnType<typeof getCallerCaps>>,
+  rows: any[],
+) {
+  if (caps.canCreateTasks || caps.isMainAdmin) return rows;
+  if (caps.isDeptManager && !caps.canCreateTasks) {
+    const ownDept = deptHeadOwnDepartmentId(caps);
+    return ownDept ? rows.filter((r) => r.department_id === ownDept) : [];
+  }
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("department_id")
+    .eq("id", userId)
+    .maybeSingle();
+  const deptId = (profile?.department_id as string | null | undefined) ?? null;
+  const assigneeMap = await loadMultiAssigneeMap(
+    supabase,
+    rows.map((r) => r.id as string),
+  );
+  return rows.filter((task) =>
+    canViewTask(task, userId, deptId, assigneeMap.get(task.id) ?? []),
+  );
+}
+
+async function assertCanExecuteTask(
+  supabase: any,
+  userId: string,
+  taskId: string,
+) {
+  const { data: task, error } = await supabase
+    .from("tasks")
+    .select("id, assignee_id, department_id, status, requires_approval, created_by")
+    .eq("id", taskId)
+    .maybeSingle();
+  if (error) throw new Error(error.message);
+  if (!task) throw new Error("משימה לא נמצאה");
+  const assigneeMap = await loadMultiAssigneeMap(supabase, [taskId]);
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("department_id")
+    .eq("id", userId)
+    .maybeSingle();
+  const deptId = (profile?.department_id as string | null | undefined) ?? null;
+  if (!canExecuteTask(task, userId, deptId, assigneeMap.get(taskId) ?? [])) {
+    throw new Error("אין הרשאה לעדכן משימה זו");
+  }
+  return task;
+}
+
+const EXECUTION_PATCH_KEYS = new Set(["status", "notes", "employee_note"]);
+
+async function applyTaskExecutionUpdate(
+  supabase: any,
+  taskId: string,
+  status: "in_progress" | "pending_approval",
+  employeeNote?: string | null,
+) {
+  const { error } = await supabase.rpc("task_apply_execution", {
+    _task_id: taskId,
+    _status: status,
+    _employee_note: employeeNote ?? null,
+  });
+  if (error) throw new Error(error.message);
+}
+
+async function fetchTasksForDashboardStats(
+  supabase: any,
+  branchId: string | null,
+  departmentScope: string | null,
+) {
+  return fetchScopedTasks(
+    supabase,
+    branchId,
+    departmentScope,
+    "id, status, due_at, department_id, branch_id, created_at",
+  ) as Promise<TaskStatRow[]>;
+}
+
+export const listTasks = createServerFn({ method: "GET" })
+  .middleware([requireBranchContext])
+  .handler(async ({ context }) => {
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { branchId, departmentScope, caps } = await resolveTaskListScope(
+      supabaseAdmin,
+      context.userId,
+      context.branchId,
+    );
+    const rows = await fetchScopedTasks(supabaseAdmin, branchId, departmentScope);
+    return filterTasksForViewer(supabaseAdmin, context.userId, caps, rows);
+  });
+
+export const getDashboardTaskStats = createServerFn({ method: "GET" })
+  .middleware([requireBranchContext])
+  .handler(async ({ context }) => {
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { branchId, departmentScope, caps } = await resolveTaskListScope(
+      supabaseAdmin,
+      context.userId,
+      context.branchId,
+    );
+    const rows = (await fetchTasksForDashboardStats(
+      supabaseAdmin,
+      branchId,
+      departmentScope,
+    )) as TaskStatRow[];
+    const visible = await filterTasksForViewer(
+      supabaseAdmin,
+      context.userId,
+      caps,
+      rows,
+    );
+    return computeDashboardTaskStats(visible as TaskStatRow[]);
+  });
+
 export const createTask = createServerFn({ method: "POST" })
   .middleware([requireBranchContext])
   .inputValidator((d: unknown) => createSchema.parse(d))
-  .handler(async ({ data, context }) => {
-    const caps = await getCallerCaps(context.supabase, context.userId);
+  .handler(async ({ data: rawData, context }) => {
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const caps = await getCallerCaps(supabaseAdmin, context.userId);
+    const data = enforceDeptHeadCreateScope(caps, rawData);
+
     if (data.target_scope === "single_department") {
       if (!data.department_id) throw new Error("נדרשת מחלקה");
       if (!canCreateForDept(caps, data.department_id))
@@ -100,16 +384,26 @@ export const createTask = createServerFn({ method: "POST" })
       if (!caps.canCreateTasks)
         throw new Error("אין הרשאה ליצור משימה לכמה מחלקות / לכל הארגון");
     }
+
     const primaryDept =
       data.target_scope === "single_department"
         ? data.department_id
         : (data.department_ids?.[0] ?? null);
-    const { data: row, error } = await context.supabase
+    const branchId = await resolveTaskBranchId(
+      supabaseAdmin,
+      context.userId,
+      primaryDept,
+      context.branchId,
+    );
+    if (!branchId) throw new Error("לא ניתן לקבוע סניף למשימה");
+
+    const { data: row, error } = await supabaseAdmin
       .from("tasks")
       .insert({
         title: data.title,
         description: data.description ?? null,
         department_id: primaryDept,
+        branch_id: branchId,
         target_scope: data.target_scope,
         requires_approval: data.requires_approval ?? true,
         assignee_id: data.assignee_id ?? null,
@@ -123,23 +417,25 @@ export const createTask = createServerFn({ method: "POST" })
     if (error) throw new Error(error.message);
 
     if (data.target_scope === "departments" && data.department_ids?.length) {
-      await context.supabase
+      const { error: deptErr } = await supabaseAdmin
         .from("task_departments")
         .insert(data.department_ids.map((id) => ({ task_id: row.id, department_id: id })));
+      if (deptErr) throw new Error(deptErr.message);
     }
     if (data.assignee_ids?.length) {
-      await context.supabase
+      const { error: assigneeErr } = await supabaseAdmin
         .from("task_assignees")
         .insert(data.assignee_ids.map((uid) => ({ task_id: row.id, user_id: uid })));
+      if (assigneeErr) throw new Error(assigneeErr.message);
     }
 
     const notifyTargets = new Set<string>(data.assignee_ids ?? []);
     if (data.assignee_id) notifyTargets.add(data.assignee_id);
     if (data.target_scope === "all_departments") {
-      const { data: emps } = await context.supabase.from("profiles").select("id").eq("is_active", true);
+      const { data: emps } = await supabaseAdmin.from("profiles").select("id").eq("is_active", true);
       (emps ?? []).forEach((e: any) => notifyTargets.add(e.id));
     } else if (data.target_scope === "departments" && data.department_ids?.length) {
-      const { data: emps } = await context.supabase
+      const { data: emps } = await supabaseAdmin
         .from("profiles")
         .select("id")
         .in("department_id", data.department_ids);
@@ -150,7 +446,7 @@ export const createTask = createServerFn({ method: "POST" })
       !data.assignee_ids?.length &&
       !data.assignee_id
     ) {
-      const { data: emps } = await context.supabase
+      const { data: emps } = await supabaseAdmin
         .from("profiles")
         .select("id")
         .eq("department_id", primaryDept);
@@ -158,7 +454,7 @@ export const createTask = createServerFn({ method: "POST" })
     }
     notifyTargets.delete(context.userId);
     await notifyUsers(
-      context.supabase,
+      supabaseAdmin,
       Array.from(notifyTargets),
       `הוקצתה לך משימה חדשה: ${data.title}`,
     );
@@ -187,12 +483,52 @@ export const updateTask = createServerFn({ method: "POST" })
   .middleware([requireBranchContext])
   .inputValidator((d: unknown) => updateSchema.parse(d))
   .handler(async ({ data, context }) => {
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const { id, department_ids, assignee_ids, ...patch } = data;
     const cleaned: Record<string, any> = {};
     for (const [k, v] of Object.entries(patch)) if (v !== undefined) cleaned[k] = v;
+
     if (Object.keys(cleaned).length) {
-      const { error } = await context.supabase.from("tasks").update(cleaned as any).eq("id", id);
-      if (error) throw new Error(error.message);
+      const isExecutionOnly = Object.keys(cleaned).every((k) => EXECUTION_PATCH_KEYS.has(k));
+      if (isExecutionOnly) {
+        await assertCanExecuteTask(supabaseAdmin, context.userId, id);
+        if (
+          cleaned.status === "in_progress" ||
+          cleaned.status === "pending_approval"
+        ) {
+          await applyTaskExecutionUpdate(
+            context.supabase,
+            id,
+            cleaned.status,
+            cleaned.employee_note ?? null,
+          );
+          delete cleaned.status;
+          delete cleaned.employee_note;
+        }
+      } else {
+        const { data: task } = await supabaseAdmin
+          .from("tasks")
+          .select("created_by")
+          .eq("id", id)
+          .maybeSingle();
+        if (!canEditTaskContent(task ?? { created_by: null }, context.userId)) {
+          throw new Error("רק יוצר המשימה יכול לערוך אותה");
+        }
+      }
+      if (Object.keys(cleaned).length) {
+        const { error } = await context.supabase.from("tasks").update(cleaned as any).eq("id", id);
+        if (error) throw new Error(error.message);
+      }
+    }
+    if (department_ids !== undefined || assignee_ids !== undefined) {
+      const { data: task } = await supabaseAdmin
+        .from("tasks")
+        .select("created_by")
+        .eq("id", id)
+        .maybeSingle();
+      if (!canEditTaskContent(task ?? { created_by: null }, context.userId)) {
+        throw new Error("רק יוצר המשימה יכול לערוך אותה");
+      }
     }
     if (department_ids) {
       await context.supabase.from("task_departments").delete().eq("task_id", id);
@@ -670,10 +1006,17 @@ export const markTaskPendingApproval = createServerFn({ method: "POST" })
       .parse(d),
   )
   .handler(async ({ data, context }) => {
-    const patch: Record<string, any> = { status: "pending_approval" };
-    if (data.employee_note !== undefined) patch.employee_note = data.employee_note;
-    const { error } = await context.supabase.from("tasks").update(patch as any).eq("id", data.id);
-    if (error) throw new Error(error.message);
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const task = await assertCanExecuteTask(supabaseAdmin, context.userId, data.id);
+    if (!["new", "in_progress"].includes(task.status as string)) {
+      throw new Error("לא ניתן לשלוח משימה זו לאישור");
+    }
+    await applyTaskExecutionUpdate(
+      context.supabase,
+      data.id,
+      "pending_approval",
+      data.employee_note ?? null,
+    );
     return { ok: true };
   });
 
@@ -819,58 +1162,247 @@ const setPermsSchema = z.object({
   ),
 });
 
+const resetPermsSchema = z.object({
+  user_id: z.string().uuid(),
+  mode: z.enum(["role_default", "clear_all", "schedules_only", "tasks_only", "custody_only"]),
+});
+
+async function assertCanManageTargetPermissions(
+  supabase: any,
+  callerUserId: string,
+  targetUserId: string,
+  caps: Awaited<ReturnType<typeof getCallerCaps>>,
+) {
+  const { data: callerRoles } = await supabase
+    .from("user_roles")
+    .select("role")
+    .eq("user_id", callerUserId);
+  const callerRoleSet = new Set((callerRoles ?? []).map((r: any) => r.role));
+  const callerIsBranchManager = callerRoleSet.has("branch_manager");
+
+  if (!caps.isMainAdmin && !callerIsBranchManager) {
+    throw new Error("אין הרשאה לנהל הרשאות");
+  }
+
+  const { data: target, error: targetError } = await supabase
+    .from("profiles")
+    .select("id, branch_id")
+    .eq("id", targetUserId)
+    .maybeSingle();
+  if (targetError) throw new Error(targetError.message);
+  if (!target) throw new Error("המשתמש לא נמצא בסניף הפעיל");
+
+  if (callerIsBranchManager && !caps.isMainAdmin && targetUserId === callerUserId) {
+    throw new Error("לא ניתן לערוך את ההרשאות של עצמך");
+  }
+
+  return target as { id: string; branch_id: string | null };
+}
+
+export const resetUserPermissions = createServerFn({ method: "POST" })
+  .middleware([requireBranchContext])
+  .inputValidator((d: unknown) => resetPermsSchema.parse(d))
+  .handler(async ({ data, context }) => {
+    const caps = await getCallerCaps(context.supabase, context.userId);
+    const target = await assertCanManageTargetPermissions(
+      context.supabase,
+      context.userId,
+      data.user_id,
+      caps,
+    );
+
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+
+    if (data.mode === "role_default") {
+      const { error } = await supabaseAdmin.rpc("sync_user_task_permissions", {
+        _user_id: data.user_id,
+      });
+      if (error) throw new Error(error.message);
+      return { ok: true };
+    }
+
+    const { data: targetRoles, error: rolesError } = await supabaseAdmin
+      .from("user_roles")
+      .select("role")
+      .eq("user_id", data.user_id);
+    if (rolesError) throw new Error(rolesError.message);
+    const roles = (targetRoles ?? []).map((r: any) => r.role as string);
+    if (!roles.includes("assistant_manager")) {
+      const { error } = await supabaseAdmin.rpc("sync_user_task_permissions", {
+        _user_id: data.user_id,
+      });
+      if (error) throw new Error(error.message);
+      return { ok: true };
+    }
+
+    const {
+      emptyGranularPermissions,
+      SCHEDULE_PERMISSION_KEYS,
+      TASK_PERMISSION_KEYS,
+      CUSTODY_PERMISSION_KEYS,
+    } = await import("@/lib/role-permissions");
+
+    const { data: existing, error: existingErr } = await supabaseAdmin
+      .from("user_task_permissions")
+      .select("*")
+      .eq("user_id", data.user_id)
+      .maybeSingle();
+    if (existingErr) throw new Error(existingErr.message);
+
+    let next = emptyGranularPermissions();
+    if (
+      (data.mode === "schedules_only" ||
+        data.mode === "tasks_only" ||
+        data.mode === "custody_only") &&
+      existing
+    ) {
+      for (const key of PERMISSION_KEYS) {
+        next[key] = !!(existing as Record<string, boolean>)[key];
+      }
+      if (data.mode === "schedules_only") {
+        for (const key of SCHEDULE_PERMISSION_KEYS) next[key] = false;
+      }
+      if (data.mode === "tasks_only") {
+        for (const key of TASK_PERMISSION_KEYS) next[key] = false;
+      }
+      if (data.mode === "custody_only") {
+        for (const key of CUSTODY_PERMISSION_KEYS) next[key] = false;
+      }
+    }
+
+    const row: Record<string, any> = {
+      user_id: data.user_id,
+      branch_id: target.branch_id,
+      granted_by: context.userId,
+      updated_at: new Date().toISOString(),
+      ...next,
+    };
+    row.can_manage_tasks =
+      !!next.can_create_tasks && !!next.can_edit_tasks && !!next.can_delete_tasks;
+
+    const { error } = await supabaseAdmin
+      .from("user_task_permissions")
+      .upsert(row as any, { onConflict: "user_id" });
+    if (error) throw new Error(error.message);
+    return { ok: true };
+  });
+
 export const setUserPermissions = createServerFn({ method: "POST" })
   .middleware([requireBranchContext])
   .inputValidator((d: unknown) => setPermsSchema.parse(d))
   .handler(async ({ data, context }) => {
+    const caps = await getCallerCaps(context.supabase, context.userId);
+    const target = await assertCanManageTargetPermissions(
+      context.supabase,
+      context.userId,
+      data.user_id,
+      caps,
+    );
+
+    const { data: targetRoles, error: rolesError } = await context.supabase
+      .from("user_roles")
+      .select("role")
+      .eq("user_id", data.user_id);
+    if (rolesError) throw new Error(rolesError.message);
+    const roles = new Set((targetRoles ?? []).map((r: any) => r.role));
+    if (!roles.has("assistant_manager")) {
+      throw new Error("ניתן לערוך הרשאות מפורטות רק לסגן מנהל");
+    }
+
+    const row: Record<string, any> = {
+      user_id: data.user_id,
+      branch_id: target.branch_id,
+      granted_by: context.userId,
+      updated_at: new Date().toISOString(),
+      ...data.perms,
+    };
+    row.can_manage_tasks =
+      data.perms.can_create_tasks && data.perms.can_edit_tasks && data.perms.can_delete_tasks;
+
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { error } = await supabaseAdmin
+      .from("user_task_permissions")
+      .upsert(row as any, { onConflict: "user_id" });
+    if (error) throw new Error(error.message);
+    return { ok: true };
+  });
+
+export const listBranchPermissionOverrides = createServerFn({ method: "GET" })
+  .middleware([requireBranchContext])
+  .handler(async ({ context }) => {
     const caps = await getCallerCaps(context.supabase, context.userId);
     const { data: callerRoles } = await context.supabase
       .from("user_roles")
       .select("role")
       .eq("user_id", context.userId);
     const callerRoleSet = new Set((callerRoles ?? []).map((r: any) => r.role));
-    const callerIsBranchManager = callerRoleSet.has("branch_manager");
-
-    const { data: target, error: targetError } = await context.supabase
-      .from("profiles")
-      .select("id, branch_id")
-      .eq("id", data.user_id)
-      .maybeSingle();
-    if (targetError) throw new Error(targetError.message);
-    if (!target) throw new Error("המשתמש לא נמצא בסניף הפעיל");
-
-    if (!caps.isMainAdmin && !callerIsBranchManager) {
-      throw new Error("אין הרשאה לנהל הרשאות");
+    if (!caps.isMainAdmin && !callerRoleSet.has("branch_manager")) {
+      throw new Error("אין הרשאה");
     }
+    if (!context.branchId) throw new Error("יש לבחור סניף פעיל");
 
-    if (callerIsBranchManager && !caps.isMainAdmin) {
-      if (data.user_id === context.userId) throw new Error("לא ניתן לערוך את ההרשאות של עצמך");
-      const { data: targetRoles, error: rolesError } = await context.supabase
-        .from("user_roles")
-        .select("role")
-        .eq("user_id", data.user_id);
-      if (rolesError) throw new Error(rolesError.message);
-      const roles = new Set((targetRoles ?? []).map((r: any) => r.role));
-      if (!roles.has("assistant_manager")) {
-        throw new Error("מנהל סניף יכול לנהל הרשאות רק לסגן מנהל באותו סניף");
-      }
-    }
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { SCHEDULE_PERMISSION_KEYS, TASK_PERMISSION_KEYS, CUSTODY_PERMISSION_KEYS } =
+      await import("@/lib/role-permissions");
 
-    const row: Record<string, any> = {
-      user_id: data.user_id,
-      branch_id: (target as any).branch_id,
-      granted_by: context.userId,
-      updated_at: new Date().toISOString(),
-      ...data.perms,
-    };
-    // Maintain legacy can_manage_tasks consistent with full task control
-    row.can_manage_tasks =
-      data.perms.can_create_tasks && data.perms.can_edit_tasks && data.perms.can_delete_tasks;
-    const { error } = await context.supabase
-      .from("user_task_permissions")
-      .upsert(row as any, { onConflict: "user_id" });
-    if (error) throw new Error(error.message);
-    return { ok: true };
+    const [{ data: profiles, error: profilesErr }, { data: perms, error: permsErr }] =
+      await Promise.all([
+        supabaseAdmin
+          .from("profiles")
+          .select("id, full_name")
+          .eq("branch_id", context.branchId)
+          .eq("is_active", true),
+        supabaseAdmin.from("user_task_permissions").select("*").eq("branch_id", context.branchId),
+      ]);
+    if (profilesErr) throw new Error(profilesErr.message);
+    if (permsErr) throw new Error(permsErr.message);
+
+    const profileMap = new Map((profiles ?? []).map((p: any) => [p.id, p.full_name as string]));
+    const permUserIds = (perms ?? []).map((p: any) => p.user_id as string);
+    const allIds = [...new Set([...(profiles ?? []).map((p: any) => p.id), ...permUserIds])];
+    if (allIds.length === 0) return [];
+
+    const { data: roles, error: rolesErr } = await supabaseAdmin
+      .from("user_roles")
+      .select("user_id, role")
+      .in("user_id", allIds);
+    if (rolesErr) throw new Error(rolesErr.message);
+
+    const roleMap = new Map<string, string>();
+    (roles ?? []).forEach((r: any) => roleMap.set(r.user_id, r.role));
+
+    const permMap = new Map((perms ?? []).map((p: any) => [p.user_id, p]));
+
+    return allIds
+      .map((id) => {
+        const permRow: any = permMap.get(id);
+        const role = roleMap.get(id) ?? "employee";
+        const hasScheduleOverride =
+          !!permRow &&
+          SCHEDULE_PERMISSION_KEYS.some((key) => {
+            if (key === "can_view_schedule") return false;
+            return !!permRow[key];
+          });
+        const hasTaskOverride =
+          !!permRow &&
+          TASK_PERMISSION_KEYS.some((key) => !!permRow[key]);
+        const hasCustodyOverride =
+          !!permRow &&
+          CUSTODY_PERMISSION_KEYS.some((key) => !!permRow[key]);
+        const staleRole = !!permRow && role !== "assistant_manager";
+        if (!hasScheduleOverride && !hasTaskOverride && !hasCustodyOverride && !staleRole)
+          return null;
+        return {
+          id,
+          full_name: profileMap.get(id) ?? "—",
+          role,
+          hasScheduleOverride,
+          hasTaskOverride,
+          hasCustodyOverride,
+          staleRole,
+        };
+      })
+      .filter(Boolean);
   });
 
 // ---------- FINAL CLOSURE ----------

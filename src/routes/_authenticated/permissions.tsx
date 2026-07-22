@@ -69,10 +69,12 @@ import {
   Sun,
   Megaphone,
   Package,
+  RotateCcw,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useServerFn } from "@tanstack/react-start";
-import { setUserPermissions } from "@/lib/tasks.functions";
+import { setUserPermissions, resetUserPermissions, listBranchPermissionOverrides } from "@/lib/tasks.functions";
+import { changeUserRole } from "@/lib/employees.functions";
 import { useEffect, useMemo, useState } from "react";
 
 export const Route = createFileRoute("/_authenticated/permissions")({
@@ -202,7 +204,7 @@ const CATEGORIES: Category[] = [
       { key: "can_create_custody", label: "הוספת ציוד", description: "מאפשר להוסיף פריטי ציוד חדשים (לדוגמה: ציוד 1, ציוד 2). ניתן להעניק למנהל סניף או סגן מנהל." },
       { key: "can_edit_custody", label: "עריכת ציוד", description: "מאפשר לשנות שם, סדר ותזכורות של פריטי ציוד קיימים." },
       { key: "can_delete_custody", label: "השבתת/מחיקת ציוד", description: "מאפשר להשבית פריט ציוד שלא בשימוש." },
-      { key: "can_return_custody", label: "החזרת ציוד בשם עובד", description: "מאפשר להחזיר ציוד שעובד אחר לקח." },
+      { key: "can_return_custody", label: "החזרת ציוד בשם עובד", description: "מאפשר להחזיר ציוד שעובד אחר לקח. מנהל סניף תמיד יכול — הרשאה זו מיועדת בעיקר לסגן מנהל." },
       { key: "can_receive_custody_alerts", label: "קבלת התראות ציוד", description: "מקבל התראה כשעובד סיים משמרת ועדיין מחזיק ציוד, או לפני חצות." },
       { key: "can_configure_custody", label: "הגדרות מערכת ציוד", description: "מאפשר לעדכן זמני תזכורת, איפוס לוג יומי והתראות חצות." },
       { key: "can_view_custody_daily_log", label: "צפייה בלוג יומי", description: "מאפשר לצפות בלוג השימוש היומי בציוד (מתאפס לפי הגדרות הסניף)." },
@@ -276,12 +278,11 @@ export function PermissionsPage() {
     },
   });
 
+  const changeRoleFn = useServerFn(changeUserRole);
+
   const roleMutation = useMutation({
     mutationFn: async ({ userId, role }: { userId: string; role: AppRole }) => {
-      const { error: dErr } = await supabase.from("user_roles").delete().eq("user_id", userId);
-      if (dErr) throw dErr;
-      const { error: iErr } = await supabase.from("user_roles").insert({ user_id: userId, role });
-      if (iErr) throw iErr;
+      await changeRoleFn({ data: { user_id: userId, role } });
     },
     onSuccess: () => {
       toast.success("ההרשאה עודכנה");
@@ -289,6 +290,8 @@ export function PermissionsPage() {
       qc.invalidateQueries({ queryKey: ["all-roles"] });
       qc.invalidateQueries({ queryKey: ["auth", "me"] });
       qc.invalidateQueries({ queryKey: ["user-perms"] });
+      qc.invalidateQueries({ queryKey: ["departments"] });
+      qc.invalidateQueries({ queryKey: ["employees"] });
     },
     onError: (e: any) => toast.error(e?.message ?? "שגיאה"),
   });
@@ -306,6 +309,21 @@ export function PermissionsPage() {
     isMainAdmin
       ? r.role === "branch_manager" || r.role === "assistant_manager"
       : r.role === "assistant_manager",
+  );
+
+  const listOverridesFn = useServerFn(listBranchPermissionOverrides);
+  const overridesQ = useQuery({
+    enabled: allowed,
+    queryKey: ["permission-overrides"],
+    queryFn: () => listOverridesFn(),
+  });
+
+  const overrideRows = (overridesQ.data ?? []).filter(
+    (row) =>
+      row.staleRole ||
+      row.hasScheduleOverride ||
+      row.hasTaskOverride ||
+      row.hasCustodyOverride,
   );
 
   return (
@@ -326,7 +344,7 @@ export function PermissionsPage() {
         ) : (
           <div className="grid gap-3">
             {query.data?.filter((row) => isMainAdmin || (row.role !== "main_admin" && row.role !== "branch_manager")).map((row) => (
-              <Card key={row.id} className="card-elevated p-4 flex items-center gap-4">
+              <Card key={row.id} className="card-elevated p-4 flex flex-wrap items-center gap-4">
                 <div className="size-10 rounded-full bg-accent text-accent-foreground flex items-center justify-center font-semibold shrink-0">
                   {row.full_name?.charAt(0) || "?"}
                 </div>
@@ -349,13 +367,44 @@ export function PermissionsPage() {
                   </Select>
                   {row.id === me?.id ? (
                     <p className="text-[10px] text-muted-foreground mt-1 text-center">אינך יכול לערוך את עצמך</p>
-                  ) : !isMainAdmin ? (
-                    <p className="text-[10px] text-muted-foreground mt-1 text-center">מנהל סניף מנהל כאן הרשאות מפורטות בלבד</p>
                   ) : null}
                 </div>
+                {row.role === "assistant_manager" &&
+                  (isMainAdmin || isBranchManager) &&
+                  row.id !== me?.id && (
+                    <ResetPermissionsButtons userId={row.id} compact />
+                  )}
               </Card>
             ))}
           </div>
+        )}
+
+        {overrideRows.length > 0 && (
+          <section className="space-y-3">
+            <div>
+              <h2 className="text-xl font-bold">הרשאות נוספות פעילות</h2>
+              <p className="text-sm text-muted-foreground mt-1">
+                עובדים עם הרשאות ציוד, סידור או משימות (או הרשאות ישנות) שלא תואמות את תפקידם — ניתן להסיר מכאן.
+              </p>
+            </div>
+            <div className="grid gap-3">
+              {overrideRows.map((row) => (
+                <Card key={row.id} className="card-elevated p-4 flex flex-wrap items-center gap-3">
+                  <div className="flex-1 min-w-0">
+                    <p className="font-semibold truncate">{row.full_name}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {ROLE_LABELS[row.role as AppRole] ?? row.role}
+                      {row.staleRole ? " · הרשאות ישנות" : ""}
+                      {row.hasCustodyOverride ? " · הרשאות ציוד פעילות" : ""}
+                      {row.hasScheduleOverride ? " · הרשאות סידור פעילות" : ""}
+                      {row.hasTaskOverride ? " · הרשאות משימות פעילות" : ""}
+                    </p>
+                  </div>
+                  <ResetPermissionsButtons userId={row.id} compact />
+                </Card>
+              ))}
+            </div>
+          </section>
         )}
 
         {(isMainAdmin || isBranchManager) && (
@@ -387,6 +436,82 @@ export function PermissionsPage() {
         )}
       </div>
     </TooltipProvider>
+  );
+}
+
+function ResetPermissionsButtons({
+  userId,
+  onDone,
+  compact,
+}: {
+  userId: string;
+  onDone?: () => void;
+  compact?: boolean;
+}) {
+  const qc = useQueryClient();
+  const resetFn = useServerFn(resetUserPermissions);
+  const mut = useMutation({
+    mutationFn: (
+      mode: "role_default" | "clear_all" | "schedules_only" | "tasks_only" | "custody_only",
+    ) => resetFn({ data: { user_id: userId, mode } }),
+    onSuccess: () => {
+      toast.success("ההרשאות אופסו");
+      qc.invalidateQueries({ queryKey: ["user-perms", userId] });
+      qc.invalidateQueries({ queryKey: ["permission-overrides"] });
+      qc.invalidateQueries({ queryKey: ["task-perm"] });
+      qc.invalidateQueries({ queryKey: ["my-perms"] });
+      qc.invalidateQueries({ queryKey: ["custody-caps"] });
+      onDone?.();
+    },
+    onError: (e: any) => toast.error(e?.message ?? "שגיאה"),
+  });
+
+  return (
+    <div className={`flex flex-wrap gap-2 ${compact ? "justify-end" : "mb-3"}`}>
+      <Button
+        type="button"
+        size="sm"
+        variant="outline"
+        className="text-xs h-8"
+        disabled={mut.isPending}
+        onClick={() => mut.mutate("custody_only")}
+      >
+        <RotateCcw className="size-3.5 ml-1" />
+        הסרת הרשאות ציוד
+      </Button>
+      <Button
+        type="button"
+        size="sm"
+        variant="outline"
+        className="text-xs h-8"
+        disabled={mut.isPending}
+        onClick={() => mut.mutate("schedules_only")}
+      >
+        <RotateCcw className="size-3.5 ml-1" />
+        הסרת הרשאות סידור
+      </Button>
+      <Button
+        type="button"
+        size="sm"
+        variant="outline"
+        className="text-xs h-8"
+        disabled={mut.isPending}
+        onClick={() => mut.mutate("role_default")}
+      >
+        <RotateCcw className="size-3.5 ml-1" />
+        איפוס לברירת מחדל
+      </Button>
+      <Button
+        type="button"
+        size="sm"
+        variant="ghost"
+        className="text-xs h-8"
+        disabled={mut.isPending}
+        onClick={() => mut.mutate("clear_all")}
+      >
+        הסרת כל ההרשאות
+      </Button>
+    </div>
   );
 }
 
@@ -471,6 +596,8 @@ function ManagerPermsCard({
       toast.success("ההרשאות עודכנו");
       qc.invalidateQueries({ queryKey: ["user-perms", userId] });
       qc.invalidateQueries({ queryKey: ["task-perm"] });
+      qc.invalidateQueries({ queryKey: ["custody-caps"] });
+      qc.invalidateQueries({ queryKey: ["permission-overrides"] });
     },
     onError: (e: any) => {
       toast.error(e?.message ?? "שגיאה");
@@ -509,6 +636,8 @@ function ManagerPermsCard({
         </div>
         {mut.isPending && <Loader2 className="size-4 animate-spin text-primary" />}
       </div>
+
+      <ResetPermissionsButtons userId={userId} />
 
       <div className="relative mb-3">
         <Search className="size-4 absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />

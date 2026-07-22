@@ -25,8 +25,11 @@ import {
   addTaskComment,
   listTaskAssigneeIds,
   listTaskDepartmentIds,
+  listTasks,
 } from "@/lib/tasks.functions";
+import { useActiveBranch } from "@/lib/use-active-branch";
 import { formatHeDateTime, splitForInputs, combineToIso } from "@/lib/date-format";
+import { canExecuteTask, canEditTaskContent, EXECUTABLE_TASK_STATUSES } from "@/lib/task-execution";
 import { HebrewDateInput, HebrewTimeInput } from "@/components/hebrew-datetime";
 import { ImageLightbox, type LightboxImage } from "@/components/image-lightbox";
 import { TaskActivityComments } from "@/components/task-activity-comments";
@@ -101,6 +104,7 @@ interface TaskRow {
   rejection_note: string | null;
   rejected_at: string | null;
   recurrence_id: string | null;
+  requires_approval: boolean;
   created_at: string;
   updated_at: string;
 }
@@ -194,6 +198,8 @@ function TasksPage() {
   const search = useSearch({ from: "/_authenticated/tasks" }) as TasksSearch;
   const caps = useTaskCaps();
   const qc = useQueryClient();
+  const fetchTasks = useServerFn(listTasks);
+  const { activeBranchId } = useActiveBranch();
 
   // Realtime
   useEffect(() => {
@@ -229,22 +235,19 @@ function TasksPage() {
   });
 
   const tasksQuery = useQuery({
-    queryKey: ["tasks"],
+    queryKey: ["tasks", activeBranchId ?? "none"],
     refetchOnMount: "always",
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("tasks")
-        .select("*")
-        .order("created_at", { ascending: false });
-      if (error) throw error;
-      return (data ?? []) as TaskRow[];
-    },
+    queryFn: () => fetchTasks(),
   });
 
   const [openCreate, setOpenCreate] = useState(false);
   const [editTask, setEditTask] = useState<TaskRow | null>(null);
   const [statusFilter, setStatusFilter] = useState<string>(search.status ?? "all");
   const [search2, setSearch2] = useState("");
+
+  useEffect(() => {
+    if (search.status) setStatusFilter(search.status);
+  }, [search.status]);
 
   const filtered = useMemo(() => {
     let list = tasksQuery.data ?? [];
@@ -398,9 +401,8 @@ function TaskCard({
     task.due_at &&
     !["completed", "pending_closure", "closed"].includes(task.status) &&
     new Date(task.due_at).getTime() < Date.now();
-  const isDeptOfThis = caps.isDeptMgr && true;
-  const canEdit = caps.canEditTasks || isDeptOfThis;
-  const canDelete = caps.canDeleteTasks;
+  const canEdit = canEditTaskContent(task, caps.profile?.id ?? "");
+  const canDelete = caps.canDeleteTasks && canEdit;
 
   return (
     <>
@@ -534,8 +536,19 @@ function TaskDetailDialog({
   const approve = useServerFn(approveTask);
   const reject = useServerFn(rejectTask);
   const close = useServerFn(closeTask);
+  const loadAssignees = useServerFn(listTaskAssigneeIds);
 
-  const isMember = caps.profile?.department_id === task.department_id;
+  const multiAssigneeQuery = useQuery({
+    queryKey: ["task-assignees", task.id],
+    queryFn: () => loadAssignees({ data: { task_id: task.id } }),
+  });
+  const multiAssigneeIds = (multiAssigneeQuery.data ?? []) as string[];
+
+  const canExecute =
+    !!caps.profile &&
+    canExecuteTask(task, caps.profile.id, caps.profile.department_id, multiAssigneeIds) &&
+    EXECUTABLE_TASK_STATUSES.has(task.status);
+
   const approveRpc = useQuery({
     enabled: !!caps.profile && task.status === "pending_approval",
     queryKey: ["can-approve", task.id, caps.profile?.id],
@@ -548,9 +561,10 @@ function TaskDetailDialog({
     },
   });
   const canApprove = !!approveRpc.data;
-  // Employees in the same department can mark "done" — but not on already-pending/completed.
-  const canMarkDone =
-    isMember && (task.status === "new" || task.status === "in_progress");
+  const canMarkDone = canExecute;
+  const submitLabel = task.requires_approval
+    ? "סיימתי - שלח לאישור"
+    : "סיימתי - סגור משימה";
 
   const [employeeNote, setEmployeeNote] = useState(task.employee_note ?? "");
   const [rejectNote, setRejectNote] = useState("");
@@ -804,7 +818,7 @@ function TaskDetailDialog({
           {canMarkDone && (
             <Button onClick={() => submitDone.mutate()} disabled={submitDone.isPending}>
               {submitDone.isPending && <Loader2 className="size-4 animate-spin ml-2" />}
-              סיימתי - שלח לאישור
+              {submitLabel}
             </Button>
           )}
           {(task.status === "pending_closure" || task.status === "completed") && caps.canCloseTasks && (
@@ -1199,8 +1213,17 @@ function TaskFormDialog({
     (task as any)?.target_scope ?? "single_department",
   );
   const [departmentId, setDepartmentId] = useState(
-    task?.department_id ?? allowedDepartments[0]?.id ?? "",
+    task?.department_id ?? caps.profile?.department_id ?? allowedDepartments[0]?.id ?? "",
   );
+  useEffect(() => {
+    if (mode !== "create" || task?.department_id) return;
+    const fallback =
+      caps.profile?.department_id ?? allowedDepartments[0]?.id ?? "";
+    if (fallback && fallback !== departmentId) setDepartmentId(fallback);
+  }, [mode, task?.department_id, caps.profile?.department_id, allowedDepartments]);
+  useEffect(() => {
+    if (!canPickAnyDept) setTargetScope("single_department");
+  }, [canPickAnyDept]);
   const [departmentIds, setDepartmentIds] = useState<string[]>([]);
   const [executorMode, setExecutorMode] = useState<"all" | "single" | "multi">("all");
   const [singleAssignee, setSingleAssignee] = useState<string>(task?.assignee_id ?? "");
@@ -1246,6 +1269,13 @@ function TaskFormDialog({
 
   const submit = useMutation({
     mutationFn: async () => {
+      if (!title.trim()) throw new Error("כותרת חובה");
+      if (
+        targetScope === "single_department" &&
+        !departmentId
+      ) {
+        throw new Error("לא נמצאה מחלקה — ודא שהפרופיל שלך משויך למחלקה");
+      }
       const dueIso = dueDate && dueTime ? combineToIso(dueDate, dueTime) : null;
       const basePayload: any = {
         title,

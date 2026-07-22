@@ -48,19 +48,67 @@ export const Route = createFileRoute("/_authenticated/departments")({
   component: DepartmentsPage,
 });
 
+interface ManagerOption {
+  id: string;
+  first_name?: string;
+  last_name?: string;
+  full_name: string;
+}
+
 interface DepartmentRow {
   id: string;
   name: string;
   code: string;
   manager_id: string | null;
   is_active: boolean;
+  manager?: ManagerOption | null;
 }
 
-interface ManagerOption {
-  id: string;
-  first_name?: string;
-  last_name?: string;
-  full_name: string;
+async function fetchDepartmentsWithManagers(): Promise<DepartmentRow[]> {
+  const { data: depts, error } = await supabase
+    .from("departments")
+    .select("id, name, code, manager_id, is_active")
+    .order("name");
+  if (error) throw error;
+  const rows = (depts ?? []) as DepartmentRow[];
+
+  const managerIds = [...new Set(rows.map((d) => d.manager_id).filter(Boolean))] as string[];
+
+  const [{ data: managersById }, { data: roleRows }] = await Promise.all([
+    managerIds.length
+      ? supabase
+          .from("profiles")
+          .select("id, first_name, last_name, full_name")
+          .in("id", managerIds)
+      : Promise.resolve({ data: [] as ManagerOption[] }),
+    supabase.from("user_roles").select("user_id").eq("role", "department_manager"),
+  ]);
+
+  const managerById = new Map((managersById ?? []).map((m) => [m.id, m as ManagerOption]));
+
+  const roleUserIds = (roleRows ?? []).map((r) => r.user_id);
+  const managerByDeptId = new Map<string, ManagerOption>();
+  if (roleUserIds.length) {
+    const { data: roleProfiles, error: roleProfilesErr } = await supabase
+      .from("profiles")
+      .select("id, first_name, last_name, full_name, department_id")
+      .in("id", roleUserIds)
+      .not("department_id", "is", null);
+    if (roleProfilesErr) throw roleProfilesErr;
+    (roleProfiles ?? []).forEach((p: any) => {
+      if (p.department_id && !managerByDeptId.has(p.department_id)) {
+        managerByDeptId.set(p.department_id, p as ManagerOption);
+      }
+    });
+  }
+
+  return rows.map((d) => ({
+    ...d,
+    manager:
+      (d.manager_id ? managerById.get(d.manager_id) : null) ??
+      managerByDeptId.get(d.id) ??
+      null,
+  }));
 }
 
 function DepartmentsPage() {
@@ -94,14 +142,7 @@ function DepartmentsPage() {
   const deptsQuery = useQuery({
     enabled: !!me,
     queryKey: ["departments", "list"],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("departments")
-        .select("id, name, code, manager_id, is_active")
-        .order("name");
-      if (error) throw error;
-      return data as DepartmentRow[];
-    },
+    queryFn: fetchDepartmentsWithManagers,
   });
 
   const countsQuery = useQuery({
@@ -175,7 +216,6 @@ function DepartmentsPage() {
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {(deptsQuery.data ?? []).map((d) => {
             const c = countsQuery.data?.[d.id] ?? { total: 0, active: 0 };
-            const mgr = managersQuery.data?.find((m) => m.id === d.manager_id);
             return (
               <Card
                 key={d.id}
@@ -188,7 +228,7 @@ function DepartmentsPage() {
                     <p className="mt-1.5 leading-tight">
                       <span className="text-xs text-muted-foreground">אחראי מחלקה: </span>
                       <span className="text-base sm:text-lg font-bold">
-                        {mgr ? formatEmployeeName(mgr) : "לא הוגדר"}
+                        {d.manager ? formatEmployeeName(d.manager) : "לא הוגדר"}
                       </span>
                     </p>
                   </div>
@@ -345,15 +385,19 @@ function DeptEmployeesDialog({
       (roles ?? []).forEach((r: any) => {
         roleMap[r.user_id] = ROLE_LABELS[r.role as AppRole] ?? r.role;
       });
+      const fallbackManager = !manager
+        ? (emps ?? []).find((e: any) => roleMap[e.id] === ROLE_LABELS.department_manager)
+        : null;
+      const resolvedManager = manager ?? fallbackManager;
       return {
         dept,
         deptName: dept.name,
-        managerName: manager ? formatEmployeeName(manager) : null,
-        managerId: dept.manager_id,
+        managerName: resolvedManager ? formatEmployeeName(resolvedManager) : null,
+        managerId: dept.manager_id ?? fallbackManager?.id ?? null,
         employees: (emps ?? []).map((e: any) => ({
           ...e,
           roleLabel: roleMap[e.id] ?? "עובד",
-          isManager: e.id === dept.manager_id,
+          isManager: e.id === (dept.manager_id ?? fallbackManager?.id),
         })),
       };
     },

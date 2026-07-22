@@ -2,6 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { publishAllWeekSchedules, getWeekDepartmentStates } from "@/lib/schedules.functions";
+import { getDashboardTaskStats } from "@/lib/tasks.functions";
 import { useEffect, useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
@@ -60,6 +61,7 @@ import {
   useActivateDueBreaksPoll,
 } from "@/lib/break-workflow";
 import { useShiftSelfServiceVisible } from "@/lib/use-shift-self-service-visible";
+import { useActiveBranch } from "@/lib/use-active-branch";
 
 export const Route = createFileRoute("/_authenticated/dashboard")({
   component: DashboardPage,
@@ -69,9 +71,11 @@ type DeptRow = { id: string; name: string; is_active: boolean };
 
 function DashboardPage() {
   const { data: profile } = useAuth();
+  const { activeBranchId } = useActiveBranch();
   const admin = profile ? isAdmin(profile.roles) : false;
   const isDeptManager = profile ? profile.roles.includes("department_manager") : false;
   const queryClient = useQueryClient();
+  const fetchTaskStats = useServerFn(getDashboardTaskStats);
   const [deptDialogId, setDeptDialogId] = useState<string | null>(null);
   const [empDialogId, setEmpDialogId] = useState<string | null>(null);
 
@@ -162,29 +166,13 @@ function DashboardPage() {
   });
 
 
-  // Tasks stats (visible to anyone who can see at least their dept tasks)
+  // Tasks stats — server-side branch scope (client branch filter hid legacy/null rows).
   const tasksStatsQuery = useQuery({
-    enabled: !!profile,
-    queryKey: ["dashboard", "tasks-stats"],
+    enabled: !!profile && (admin || isDeptManager),
+    queryKey: ["dashboard", "tasks-stats", activeBranchId ?? profile?.branch_id ?? "none"],
     refetchOnMount: "always",
     retry: false,
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("tasks")
-        .select("id, status, due_at, completed_at");
-      if (error) {
-        console.warn("[dashboard] tasks-stats query failed", error.message);
-        return { open: 0, in_progress: 0, completed: 0, overdue: 0 };
-      }
-      const rows = (data ?? []) as { id: string; status: string; due_at: string | null; completed_at: string | null }[];
-      const now = Date.now();
-      return {
-        open: rows.filter((r) => r.status === "new").length,
-        in_progress: rows.filter((r) => r.status === "in_progress").length,
-        completed: rows.filter((r) => r.status === "completed").length,
-        overdue: rows.filter((r) => r.due_at && r.status !== "completed" && new Date(r.due_at).getTime() < now).length,
-      };
-    },
+    queryFn: () => fetchTaskStats(),
   });
 
   // Realtime: refresh when departments or profiles or tasks change
@@ -295,7 +283,7 @@ function TasksStatsSection({
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard label="פתוחות" value={stats.open} icon={ListTodo} tone="primary" onClick={() => go("new")} />
         <StatCard label="בביצוע" value={stats.in_progress} icon={Clock} tone="success" onClick={() => go("in_progress")} />
-        <StatCard label="הושלמו" value={stats.completed} icon={CheckCircle2} tone="muted" onClick={() => go("completed")} />
+        <StatCard label="הוגשו / הושלמו" value={stats.completed} icon={CheckCircle2} tone="muted" onClick={() => go("pending_approval")} />
         <StatCard label="באיחור" value={stats.overdue} icon={AlertTriangle} tone="warning" onClick={() => go("overdue")} />
       </div>
     </section>
@@ -768,10 +756,6 @@ function StatCard({
 
 function SchedulesStatsSection({ profile }: { profile: any }) {
   const navigate = useNavigate();
-  const isMainAdmin = profile.roles.includes("main_admin") || profile.roles.includes("system_admin");
-  const isBranchMgr =
-    profile.roles.includes("branch_manager") || profile.roles.includes("assistant_manager");
-  const isDeptMgr = profile.roles.includes("department_manager");
   const qc = useQueryClient();
   const [approvedOpen, setApprovedOpen] = useState(false);
   const [notSubmittedOpen, setNotSubmittedOpen] = useState(false);
@@ -790,15 +774,31 @@ function SchedulesStatsSection({ profile }: { profile: any }) {
       return data ?? { can_create_schedule: false, can_approve_schedule: false, can_publish_schedule: false };
     },
   });
+
+  const isMainAdmin = profile.roles.includes("main_admin") || profile.roles.includes("system_admin");
   const isBranchManager = profile.roles.includes("branch_manager");
-  const canApprove = isMainAdmin || !!permsQ.data?.can_approve_schedule;
-  const canPublishDirect = isMainAdmin || isBranchManager || !!permsQ.data?.can_publish_schedule;
-  const canManagePrePublishSchedules =
-    isMainAdmin ||
-    isBranchMgr ||
+  const isAssistantManager = profile.roles.includes("assistant_manager");
+  const isDeptMgr = profile.roles.includes("department_manager");
+  const hasSchedulePerm =
     !!permsQ.data?.can_create_schedule ||
     !!permsQ.data?.can_approve_schedule ||
     !!permsQ.data?.can_publish_schedule;
+  // Department heads never get branch-wide schedule overview — even if an old
+  // assistant_manager row was left behind during a role change.
+  const canViewBranchScheduleOverview =
+    !isDeptMgr &&
+    (isMainAdmin ||
+      isBranchManager ||
+      (isAssistantManager && hasSchedulePerm));
+  const canManageOwnDeptSchedule = isDeptMgr;
+  const canApprove =
+    isMainAdmin ||
+    isBranchManager ||
+    (isAssistantManager && !isDeptMgr && !!permsQ.data?.can_approve_schedule);
+  const canPublishDirect =
+    isMainAdmin ||
+    isBranchManager ||
+    (isAssistantManager && !isDeptMgr && !!permsQ.data?.can_publish_schedule);
 
   // Compute current week (Saturday-based) in Asia/Jerusalem-agnostic UTC slicing,
   // matching getWeekStart logic in schedules.tsx.
@@ -835,11 +835,19 @@ function SchedulesStatsSection({ profile }: { profile: any }) {
     onError: (e: any) => toast.error(e?.message ?? "שגיאה בפרסום"),
   });
 
-  const scopeFilter = canManagePrePublishSchedules ? null : profile.department_id ?? null;
+  const scopeFilter = canViewBranchScheduleOverview ? null : profile.department_id ?? null;
+  const showScheduleStats = canViewBranchScheduleOverview || canManageOwnDeptSchedule;
 
   const statsQ = useQuery({
     enabled: !!profile,
-    queryKey: ["dashboard-schedules", profile.id, weekStart, canApprove, canManagePrePublishSchedules],
+    queryKey: [
+      "dashboard-schedules",
+      profile.id,
+      weekStart,
+      canApprove,
+      canViewBranchScheduleOverview,
+      canManageOwnDeptSchedule,
+    ],
     queryFn: async () => {
       const [{ data: scheds }, { data: deptRows }] = await Promise.all([
         supabase.from("schedules").select("id, status, department_id, week_start, week_end, published_at, updated_at"),
@@ -854,11 +862,30 @@ function SchedulesStatsSection({ profile }: { profile: any }) {
         published_at: string | null;
         updated_at: string | null;
       }[];
-      const scoped = canManagePrePublishSchedules
+
+      let managedDeptIds: string[] | null = null;
+      if (canManageOwnDeptSchedule && !canViewBranchScheduleOverview) {
+        const { data: managedDepts } = await supabase
+          .from("departments")
+          .select("id")
+          .eq("manager_id", profile.id)
+          .eq("is_active", true);
+        managedDeptIds = (managedDepts ?? []).map((d) => d.id);
+        if (managedDeptIds.length === 0 && profile.department_id) {
+          managedDeptIds = [profile.department_id];
+        }
+      }
+
+      const scoped = canViewBranchScheduleOverview
         ? all
-        : isDeptMgr
-        ? all.filter((s) => s.department_id === profile.department_id && s.status === "approved" && !!s.published_at)
-        : all.filter((s) => s.department_id === profile.department_id && s.status === "approved" && !!s.published_at);
+        : managedDeptIds?.length
+          ? all.filter((s) => managedDeptIds!.includes(s.department_id))
+          : all.filter(
+              (s) =>
+                s.department_id === profile.department_id &&
+                s.status === "approved" &&
+                !!s.published_at,
+            );
       const currentWeekScoped = scoped.filter((s) => s.week_start <= weekEnd && weekStart <= s.week_end);
 
       const pending = currentWeekScoped.filter((s) => s.status === "pending_approval").length;
@@ -873,7 +900,11 @@ function SchedulesStatsSection({ profile }: { profile: any }) {
       const pendingFirst = pendingAllList[0] ?? null;
 
       // Three-state workflow for the current week (exact week_start match).
-      const allDepts = (deptRows ?? []) as { id: string; name: string }[];
+      let allDepts = (deptRows ?? []) as { id: string; name: string }[];
+      if (managedDeptIds?.length) {
+        const allowed = new Set(managedDeptIds);
+        allDepts = allDepts.filter((d) => allowed.has(d.id));
+      }
       const weekSchedules = all.filter((s) => s.week_start === weekStart);
       const schedByDept = new Map(weekSchedules.map((s) => [s.department_id, s]));
 
@@ -904,7 +935,7 @@ function SchedulesStatsSection({ profile }: { profile: any }) {
       const weekScheds = scoped.filter(
         (s) =>
           s.status === "approved" &&
-          (canManagePrePublishSchedules || !!s.published_at) &&
+          (canViewBranchScheduleOverview || canManageOwnDeptSchedule || !!s.published_at) &&
           s.week_start <= weekEnd &&
           weekStart <= s.week_end,
       );
@@ -996,12 +1027,12 @@ function SchedulesStatsSection({ profile }: { profile: any }) {
   // saved draft never leaks into "Departments without schedules".
   const getWeekDeptStatesFn = useServerFn(getWeekDepartmentStates);
   const deptStatesQ = useQuery({
-    enabled: canManagePrePublishSchedules,
-    queryKey: ["dashboard-dept-states", weekStart],
+    enabled: showScheduleStats,
+    queryKey: ["dashboard-dept-states", weekStart, profile.id, canViewBranchScheduleOverview],
     queryFn: () => getWeekDeptStatesFn({ data: { week_start: weekStart } }),
   });
   useEffect(() => {
-    if (!canManagePrePublishSchedules) return;
+    if (!showScheduleStats) return;
     const ch = supabase
       .channel(`dash-dept-states-${weekStart}`)
       .on("postgres_changes", { event: "*", schema: "public", table: "schedules" }, () => {
@@ -1014,7 +1045,7 @@ function SchedulesStatsSection({ profile }: { profile: any }) {
     return () => {
       supabase.removeChannel(ch);
     };
-  }, [canManagePrePublishSchedules, weekStart, qc]);
+  }, [showScheduleStats, weekStart, qc]);
 
   if (statsQ.isLoading || !statsQ.data) return null;
   const baseS = statsQ.data;
@@ -1059,7 +1090,7 @@ function SchedulesStatsSection({ profile }: { profile: any }) {
         </Link>
       </div>
 
-      {(canManagePrePublishSchedules || isDeptMgr) && (
+      {showScheduleStats && (
         <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
           <StatCard
             label="ממתינים לאישור"
@@ -1074,7 +1105,7 @@ function SchedulesStatsSection({ profile }: { profile: any }) {
         </div>
       )}
 
-      {canManagePrePublishSchedules && (
+      {showScheduleStats && (
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           <StatCard
             label="מחלקות שטרם הוכן להן סידור עבודה"
@@ -1102,8 +1133,12 @@ function SchedulesStatsSection({ profile }: { profile: any }) {
 
 
       <DailyScheduleOverview
-        scope={canManagePrePublishSchedules ? "branch" : "department"}
-        departmentId={canManagePrePublishSchedules ? undefined : profile.department_id}
+        scope={canViewBranchScheduleOverview ? "branch" : "department"}
+        departmentId={
+          canViewBranchScheduleOverview
+            ? undefined
+            : profile.department_id ?? undefined
+        }
         selfUserId={profile.id}
       />
 

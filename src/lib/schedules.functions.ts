@@ -17,15 +17,25 @@ async function getCaps(supabase: any, userId: string) {
   const isMainAdmin = set.has("main_admin");
   const isBranchManager = set.has("branch_manager");
   const isAssistantManager = set.has("assistant_manager");
-  const isBranchMgr = isBranchManager || isAssistantManager;
   const isDeptMgr = set.has("department_manager");
+  const isBranchMgr = (isBranchManager || isAssistantManager) && !isDeptMgr;
   return {
     isMainAdmin,
     isBranchMgr,
     isDeptMgr,
-    canCreate: isMainAdmin || isBranchManager || isDeptMgr || !!p.can_create_schedule,
-    canApprove: isMainAdmin || isBranchManager || !!p.can_approve_schedule,
-    canPublishDirect: isMainAdmin || isBranchManager || !!p.can_publish_schedule,
+    canCreate:
+      isMainAdmin ||
+      isBranchManager ||
+      isDeptMgr ||
+      (isAssistantManager && !isDeptMgr && !!p.can_create_schedule),
+    canApprove:
+      isMainAdmin ||
+      isBranchManager ||
+      (isAssistantManager && !isDeptMgr && !!p.can_approve_schedule),
+    canPublishDirect:
+      isMainAdmin ||
+      isBranchManager ||
+      (isAssistantManager && !isDeptMgr && !!p.can_publish_schedule),
     departmentId: profile?.department_id ?? null,
   };
 }
@@ -1277,7 +1287,23 @@ export const getWeekDepartmentStates = createServerFn({ method: "POST" })
     if (context.branchId) deptQ = deptQ.eq("branch_id", context.branchId);
     const { data: depts, error: dErr } = await deptQ;
     if (dErr) throw new Error(dErr.message);
-    const activeDepts = ((depts ?? []) as any[]).map((d) => ({ id: d.id, name: d.name }));
+    let activeDepts = ((depts ?? []) as any[]).map((d) => ({ id: d.id, name: d.name }));
+
+    if (caps.isDeptMgr && !caps.isMainAdmin && !caps.isBranchMgr) {
+      const { data: managedDepts, error: managedErr } = await supabaseAdmin
+        .from("departments")
+        .select("id, name, is_active")
+        .eq("manager_id", context.userId)
+        .eq("is_active", true)
+        .order("name");
+      if (managedErr) throw new Error(managedErr.message);
+      activeDepts = ((managedDepts ?? []) as any[]).map((d) => ({ id: d.id, name: d.name }));
+      if (activeDepts.length === 0 && caps.departmentId) {
+        const fallback = ((depts ?? []) as any[]).find((d) => d.id === caps.departmentId);
+        if (fallback) activeDepts = [{ id: fallback.id, name: fallback.name }];
+      }
+    }
+
     if (activeDepts.length === 0) {
       return {
         noSchedule: [] as { id: string; name: string }[],

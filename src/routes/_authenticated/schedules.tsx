@@ -177,18 +177,12 @@ function SchedulesPage() {
   };
 
   const isMainAdmin = !!me?.roles.includes("main_admin");
-  const isBranchMgr =
-    !!me?.roles.includes("branch_manager") || !!me?.roles.includes("assistant_manager");
   const isBranchManager = !!me?.roles.includes("branch_manager");
+  const isAssistantManager = !!me?.roles.includes("assistant_manager");
   const isDeptMgr = !!me?.roles.includes("department_manager");
+  const isBranchMgr =
+    (isBranchManager || isAssistantManager) && !isDeptMgr;
   const isEmployee = !isMainAdmin && !isBranchMgr && !isDeptMgr;
-
-  // Employees always see the current week only
-  useEffect(() => {
-    if (!meLoading && isEmployee) {
-      setWeekStart(getWeekStart(new Date()));
-    }
-  }, [meLoading, isEmployee]);
 
   // Granular flags from user_task_permissions
   const permsQ = useQuery({
@@ -209,19 +203,38 @@ function SchedulesPage() {
       );
     },
   });
-  const canApprove = isMainAdmin || isBranchManager || !!permsQ.data?.can_approve_schedule;
-  const canPublishDirect = isMainAdmin || isBranchManager || !!permsQ.data?.can_publish_schedule;
-  const canEditScheduleTimes =
-    isMainAdmin || isBranchMgr || canApprove || canPublishDirect;
-  const canSeeScheduleQueues = canApprove || canPublishDirect;
-  const canCreate =
-    isMainAdmin || isBranchManager || isDeptMgr || !!permsQ.data?.can_create_schedule;
-  const canViewPrePublishSummary =
-    isMainAdmin ||
-    isBranchMgr ||
+
+  const hasSchedulePerm =
     !!permsQ.data?.can_create_schedule ||
     !!permsQ.data?.can_approve_schedule ||
     !!permsQ.data?.can_publish_schedule;
+  const canApprove =
+    isMainAdmin ||
+    isBranchManager ||
+    (isAssistantManager && !isDeptMgr && !!permsQ.data?.can_approve_schedule);
+  const canPublishDirect =
+    isMainAdmin ||
+    isBranchManager ||
+    (isAssistantManager && !isDeptMgr && !!permsQ.data?.can_publish_schedule);
+  const canEditScheduleTimes =
+    isMainAdmin || isBranchMgr || isDeptMgr || canApprove || canPublishDirect;
+  const canSeeScheduleQueues = canApprove || canPublishDirect;
+  const canCreate =
+    isMainAdmin ||
+    isBranchManager ||
+    isDeptMgr ||
+    (isAssistantManager && !isDeptMgr && !!permsQ.data?.can_create_schedule);
+  const canViewPrePublishSummary =
+    isMainAdmin ||
+    isBranchManager ||
+    (isAssistantManager && !isDeptMgr && hasSchedulePerm);
+
+  // Employees always see the current week only
+  useEffect(() => {
+    if (!meLoading && isEmployee) {
+      setWeekStart(getWeekStart(new Date()));
+    }
+  }, [meLoading, isEmployee]);
 
 
   // Department selection
@@ -364,7 +377,7 @@ function SchedulesPage() {
   const canSwitchDepartments =
     !isEmployee &&
     !isDeptMgr &&
-    (isMainAdmin || isBranchMgr || !!permsQ.data?.can_create_schedule);
+    (isMainAdmin || isBranchMgr || (isAssistantManager && !!permsQ.data?.can_create_schedule));
 
 
 
