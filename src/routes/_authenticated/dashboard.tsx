@@ -36,9 +36,10 @@ import {
 } from "@/lib/constants";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Users, UserCheck, UserX, Building2, Loader2, Plane, ListTodo, Clock, CheckCircle2, AlertTriangle, CalendarDays, Sun, Moon, User, Coffee, RefreshCw, Send, UserPlus } from "lucide-react";
+import { Users, UserCheck, UserX, Building2, Loader2, Plane, ListTodo, Clock, CheckCircle2, AlertTriangle, CalendarDays, User, Coffee, Send, UserPlus } from "lucide-react";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { EmployeeOfMonthSection } from "@/components/employee-of-month-section";
+import { DailyScheduleOverview } from "@/components/daily-schedule-overview";
 import { formatHeDateTime } from "@/lib/date-format";
 import { CreateEmployeeDialog } from "./employees";
 import { ManagementOnShiftCard } from "@/components/management-on-shift-card";
@@ -342,8 +343,8 @@ function DeptManagerDashboard({
   const active = emps.filter((e) => e.is_active && !e.on_leave).length;
   const onLeave = emps.filter((e) => e.on_leave).length;
   const inactive = emps.filter((e) => !e.is_active).length;
-  const go = () =>
-    navigate({ to: "/employees", search: { filter: "all", dept: data.dept!.id } as any });
+  const go = (filter: "all" | "active" | "inactive" | "on_leave" | "on_break" = "all") =>
+    navigate({ to: "/employees", search: { filter, dept: data.dept!.id } as any });
   const mgr = data.manager;
   const mgrInitial = (mgr?.full_name || "?").charAt(0);
 
@@ -375,10 +376,10 @@ function DeptManagerDashboard({
       )}
 
       <section className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard label="עובדי המחלקה" value={total} icon={Users} tone="primary" onClick={go} />
-        <StatCard label="פעילים" value={active} icon={UserCheck} tone="success" onClick={go} />
-        <StatCard label="בחופש" value={onLeave} icon={Plane} tone="warning" onClick={go} />
-        <StatCard label="לא פעילים" value={inactive} icon={UserX} tone="muted" onClick={go} />
+        <StatCard label="עובדי המחלקה" value={total} icon={Users} tone="primary" onClick={() => go("all")} />
+        <StatCard label="פעילים" value={active} icon={UserCheck} tone="success" onClick={() => go("active")} />
+        <StatCard label="בחופש" value={onLeave} icon={Plane} tone="warning" onClick={() => go("on_leave")} />
+        <StatCard label="לא פעילים" value={inactive} icon={UserX} tone="muted" onClick={() => go("inactive")} />
       </section>
 
 
@@ -547,224 +548,15 @@ function EmployeeDashboard({ profile }: { profile: any }) {
   return (
     <div className="space-y-6">
       <BreakShortcutCard userId={profile.id} />
-      <EmployeeScheduleCard profile={profile} />
+      <DailyScheduleOverview
+        scope="department"
+        departmentId={profile.department_id}
+        selfUserId={profile.id}
+        useCoworkersView
+      />
       <EmployeeNotificationsCard userId={profile.id} />
       <EmployeeNewMessagesCard userId={profile.id} />
-      
     </div>
-  );
-}
-
-function getCurrentWeek() {
-  const now = new Date();
-  const d = new Date(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate()));
-  const dowFromSat = (d.getUTCDay() + 1) % 7;
-  d.setUTCDate(d.getUTCDate() - dowFromSat);
-  const start = d.toISOString().slice(0, 10);
-  const days = Array.from({ length: 7 }, (_, i) => {
-    const x = new Date(d);
-    x.setUTCDate(d.getUTCDate() + i);
-    return x.toISOString().slice(0, 10);
-  });
-  return { weekStart: start, weekEnd: days[6], weekDays: days };
-}
-
-function EmployeeScheduleCard({ profile }: { profile: any }) {
-  const qc = useQueryClient();
-  const { weekStart, weekEnd, weekDays } = useMemo(() => getCurrentWeek(), []);
-  const DAY_NAMES = ["שבת", "ראשון", "שני", "שלישי", "רביעי", "חמישי", "שישי"];
-  const heDate = (iso: string) =>
-    new Intl.DateTimeFormat("he-IL", {
-      timeZone: "Asia/Jerusalem",
-      day: "2-digit",
-      month: "2-digit",
-      numberingSystem: "latn",
-      calendar: "gregory",
-    }).format(new Date(iso + "T00:00:00Z"));
-
-  const q = useQuery({
-    enabled: !!profile?.department_id,
-    queryKey: ["emp-dash-schedule", profile.id, weekStart],
-    queryFn: async () => {
-      const { data: sched, error: schedErr } = await supabase
-        .from("schedules")
-        .select(
-          "id, status, week_start, week_end, published_at, updated_at, approved_at, approved_by, submitted_at, created_by, updated_by",
-        )
-        .eq("department_id", profile.department_id)
-        .lte("week_start", weekEnd)
-        .gte("week_end", weekStart)
-        .eq("status", "approved")
-        .not("published_at", "is", null)
-        .order("published_at", { ascending: false })
-        .limit(1)
-        .maybeSingle();
-      if (schedErr) throw schedErr;
-      if (!sched) return { sched: null, shifts: [] as any[], approver: null as any, editedBeforeApproval: false, scheduleModified: false };
-      const { data: shifts, error: shiftsErr } = await supabase
-        .from("schedule_shifts")
-        .select("employee_id, day_date, shift, published_shift")
-        .eq("schedule_id", sched.id)
-        .eq("employee_id", profile.id);
-      if (shiftsErr) throw shiftsErr;
-      const scheduleModified =
-        !!sched.published_at &&
-        !!sched.updated_at &&
-        new Date(sched.updated_at).getTime() > new Date(sched.published_at).getTime();
-
-      let approver: any = null;
-      let editedBeforeApproval = false;
-      if (sched.approved_by) {
-        const [{ data: prof }, { data: roles }, { data: auditRows }] = await Promise.all([
-          supabase.from("profiles").select("id, full_name, job_title").eq("id", sched.approved_by).maybeSingle(),
-          supabase.from("user_roles").select("role").eq("user_id", sched.approved_by),
-          supabase
-            .from("schedule_audit_log")
-            .select("actor_id, action, created_at")
-            .eq("schedule_id", sched.id),
-        ]);
-        const roleLabels: Record<string, string> = {
-          main_admin: "בעל המערכת",
-          branch_manager: "מנהל סניף",
-          assistant_manager: "סגן מנהל",
-          department_manager: "אחראי מחלקה",
-          employee: "עובד",
-        };
-        const order = ["main_admin", "branch_manager", "assistant_manager", "department_manager", "employee"];
-        const list = (roles ?? []).map((r: any) => r.role);
-        list.sort((a: string, b: string) => order.indexOf(a) - order.indexOf(b));
-        const topRole = list[0] ?? null;
-        approver = {
-          full_name: prof?.full_name ?? "—",
-          job_title: prof?.job_title ?? null,
-          role_label: topRole ? roleLabels[topRole] ?? topRole : null,
-        };
-        if (sched.submitted_at && sched.approved_at && auditRows) {
-          const subT = new Date(sched.submitted_at).getTime();
-          const appT = new Date(sched.approved_at).getTime();
-          editedBeforeApproval = (auditRows as any[]).some((r) => {
-            const t = new Date(r.created_at).getTime();
-            return (
-              r.action === "updated" &&
-              t >= subT &&
-              t <= appT &&
-              r.actor_id && r.actor_id !== sched.created_by
-            );
-          });
-        }
-      }
-      return {
-        sched,
-        shifts: (shifts ?? []) as any[],
-        approver,
-        editedBeforeApproval,
-        scheduleModified,
-      };
-    },
-  });
-
-  useEffect(() => {
-    if (!profile?.department_id) return;
-    const ch = supabase
-      .channel(`emp-dash-sched-${profile.id}`)
-      .on("postgres_changes", { event: "*", schema: "public", table: "schedules" }, () =>
-        qc.invalidateQueries({ queryKey: ["emp-dash-schedule"] }),
-      )
-      .on("postgres_changes", { event: "*", schema: "public", table: "schedule_shifts" }, () =>
-        qc.invalidateQueries({ queryKey: ["emp-dash-schedule"] }),
-      )
-      .subscribe();
-    return () => {
-      supabase.removeChannel(ch);
-    };
-  }, [profile?.id, profile?.department_id, qc]);
-
-  const sched = q.data?.sched as any;
-  const shifts = (q.data?.shifts ?? []) as any[];
-  const shiftByDay = new Map<string, { shift: string; published_shift: string | null }>();
-  for (const s of shifts) shiftByDay.set(s.day_date, s);
-
-  const SHIFT_LABEL: Record<string, string> = { morning: "בוקר", evening: "ערב", off: "חופש" };
-
-  return (
-    <Card className="card-elevated p-4 relative">
-      <div className="flex items-center justify-between mb-3">
-        <h2 className="font-semibold text-base flex items-center gap-2">
-          <CalendarDays className="size-5 text-primary" />
-          סידור העבודה
-        </h2>
-        <Link to="/schedules" className="text-sm text-primary hover:underline">
-          לסידור המלא ←
-        </Link>
-      </div>
-
-      <p className="text-xs text-muted-foreground mb-3">
-        {heDate(weekStart)} – {heDate(weekEnd)}
-      </p>
-
-      {sched && q.data?.approver && (
-        <div
-          className={`mb-3 p-2 rounded text-xs border ${
-            q.data.editedBeforeApproval
-              ? "bg-amber-500/10 border-amber-500/30 text-amber-900 dark:text-amber-200"
-              : "bg-emerald-500/10 border-emerald-500/30 text-emerald-900 dark:text-emerald-200"
-          }`}
-        >
-          <p className="font-semibold">
-            {q.data.editedBeforeApproval ? "✏️ נערך ואושר על ידי" : "✅ אושר על ידי"}
-          </p>
-          <p className="mt-0.5">
-            👤 <span className="font-medium">{q.data.approver.full_name}</span>
-            {q.data.approver.role_label && <span> · 💼 {q.data.approver.role_label}</span>}
-            {q.data.approver.job_title && <span> ({q.data.approver.job_title})</span>}
-          </p>
-          <p>
-            📅🕒{" "}
-            <span className="font-medium">
-              {formatHeDateTime(sched.approved_at ?? sched.published_at ?? sched.updated_at)}
-            </span>
-          </p>
-        </div>
-      )}
-
-      {!sched ? (
-        <p className="text-sm text-muted-foreground py-4">
-          טרם פורסם סידור עבודה מאושר לשבוע זה.
-        </p>
-      ) : (
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-          {weekDays.map((d, i) => {
-            const cell = shiftByDay.get(d);
-            const sh = cell?.shift ?? "off";
-            const isModified = !!cell && (cell.shift ?? null) !== (cell.published_shift ?? null);
-            const tone =
-              sh === "morning"
-                ? "bg-amber-50 text-amber-900"
-                : sh === "evening"
-                  ? "bg-sky-50 text-sky-900"
-                  : "bg-emerald-50 text-emerald-900";
-            return (
-              <div
-                key={d}
-                className={`relative rounded-md p-2 text-center ${tone} ${
-                  isModified ? "ring-2 ring-orange-500 border border-orange-500" : ""
-                }`}
-              >
-                <div className="text-xs font-medium">{DAY_NAMES[i]}</div>
-                <div className="text-[11px] text-muted-foreground">{heDate(d)}</div>
-                <div className="font-semibold mt-1">{SHIFT_LABEL[sh] ?? sh}</div>
-                {isModified && (
-                  <RefreshCw
-                    className="size-3 text-orange-600 absolute -top-1 -left-1 bg-background rounded-full p-0.5 box-content border border-orange-500"
-                    aria-label="עודכן לאחר פרסום"
-                  />
-                )}
-              </div>
-            );
-          })}
-        </div>
-      )}
-    </Card>
   );
 }
 
@@ -985,7 +777,6 @@ function SchedulesStatsSection({ profile }: { profile: any }) {
   const [notSubmittedOpen, setNotSubmittedOpen] = useState(false);
   const [draftOpen, setDraftOpen] = useState(false);
   const [publishedOpen, setPublishedOpen] = useState(false);
-  const [shiftCell, setShiftCell] = useState<null | { day: string; shift: "morning" | "evening" | "off" }>(null);
   const publishAllFn = useServerFn(publishAllWeekSchedules);
 
   const permsQ = useQuery({
@@ -1179,6 +970,7 @@ function SchedulesStatsSection({ profile }: { profile: any }) {
           qc.invalidateQueries({ queryKey: ["dashboard-schedules"] });
           qc.invalidateQueries({ queryKey: ["dashboard-approved-list"] });
           qc.invalidateQueries({ queryKey: ["emp-dash-schedule"] });
+          qc.invalidateQueries({ queryKey: ["daily-schedule-overview"] });
           qc.invalidateQueries({ queryKey: ["week-schedules"] });
           qc.invalidateQueries({ queryKey: ["departments-list"] });
         },
@@ -1187,6 +979,7 @@ function SchedulesStatsSection({ profile }: { profile: any }) {
         {
           qc.invalidateQueries({ queryKey: ["dashboard-schedules"] });
           qc.invalidateQueries({ queryKey: ["emp-dash-schedule"] });
+          qc.invalidateQueries({ queryKey: ["daily-schedule-overview"] });
         },
       )
       .on("postgres_changes", { event: "*", schema: "public", table: "departments" }, () =>
@@ -1254,18 +1047,6 @@ function SchedulesStatsSection({ profile }: { profile: any }) {
     navigate({ to: "/schedules", search: { view: "pending" } as any });
   };
 
-  const DAY_NAMES = ["שבת", "ראשון", "שני", "שלישי", "רביעי", "חמישי", "שישי"];
-  const heDate = (iso: string) => {
-    const d = new Date(iso + "T00:00:00Z");
-    return new Intl.DateTimeFormat("he-IL", {
-      timeZone: "Asia/Jerusalem",
-      day: "2-digit",
-      month: "2-digit",
-      numberingSystem: "latn",
-      calendar: "gregory",
-    }).format(d);
-  };
-
   return (
     <section className="space-y-4">
       <div className="flex items-center justify-between">
@@ -1320,71 +1101,11 @@ function SchedulesStatsSection({ profile }: { profile: any }) {
       )}
 
 
-      <Card className="card-elevated p-0 overflow-auto relative">
-        <div className="px-4 pt-4 pb-2 flex items-center justify-between">
-          <p className="font-semibold text-sm">סיכום שבועי</p>
-          <p className="text-xs text-muted-foreground">
-            {heDate(weekStart)} – {heDate(weekEnd)}
-          </p>
-        </div>
-        {!s.hasAnyApproved ? (
-          <p className="px-4 pb-4 text-sm text-muted-foreground">
-            אין סידור עבודה מאושר לשבוע הנוכחי.
-          </p>
-        ) : (
-          <table className="w-full text-sm">
-            <thead>
-              <tr>
-                <th className="text-right p-3">יום</th>
-                <th className="p-3 text-center bg-amber-50"><span className="inline-flex items-center gap-1"><Sun className="size-4" /> בוקר</span></th>
-                <th className="p-3 text-center bg-sky-50"><span className="inline-flex items-center gap-1"><Moon className="size-4" /> ערב</span></th>
-                <th className="p-3 text-center bg-emerald-50"><span className="inline-flex items-center gap-1"><Plane className="size-4" /> חופש</span></th>
-              </tr>
-            </thead>
-            <tbody>
-              {weekDays.map((d, i) => {
-                const c = s.weekCounts[d];
-                const m = s.modifiedCells?.[d];
-                return (
-                  <tr key={d} className="border-t">
-                    <td className="p-3 font-medium">
-                      <div>{DAY_NAMES[i]}</div>
-                      <div className="text-xs text-muted-foreground">{heDate(d)}</div>
-                    </td>
-                    {(["morning", "evening", "off"] as const).map((sh) => {
-                      const shiftBg =
-                        sh === "morning" ? "bg-amber-50" : sh === "evening" ? "bg-sky-50" : "bg-emerald-50";
-                      const isModified = !!m?.[sh];
-                      return (
-                        <td key={sh} className={`p-2 text-center ${shiftBg}`}>
-                          <div className={`relative inline-block ${isModified ? "" : ""}`}>
-                            <button
-                              type="button"
-                              onClick={() => setShiftCell({ day: d, shift: sh })}
-                              className={`relative inline-flex min-w-12 px-3 py-1.5 rounded-md hover:bg-accent/40 font-semibold ${
-                                isModified ? "ring-2 ring-orange-500 border border-orange-500" : ""
-                              }`}
-                            >
-                              {c[sh]}
-                              {isModified && (
-                                <RefreshCw
-                                  className="size-3 text-orange-600 absolute -top-1 -left-1 bg-background rounded-full p-0.5 box-content border border-orange-500"
-                                  aria-label="עודכן לאחר פרסום"
-                                />
-                              )}
-                            </button>
-                          </div>
-                        </td>
-                      );
-                    })}
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        )}
-      </Card>
-
+      <DailyScheduleOverview
+        scope={canManagePrePublishSchedules ? "branch" : "department"}
+        departmentId={canManagePrePublishSchedules ? undefined : profile.department_id}
+        selfUserId={profile.id}
+      />
 
       <ApprovedSchedulesDialog
         open={approvedOpen}
@@ -1512,11 +1233,6 @@ function SchedulesStatsSection({ profile }: { profile: any }) {
         </DialogContent>
       </Dialog>
 
-      <ShiftCellDialog
-        cell={shiftCell}
-        onOpenChange={(v) => !v && setShiftCell(null)}
-        scopeFilter={scopeFilter}
-      />
     </section>
   );
 }
@@ -1637,134 +1353,6 @@ function ApprovedSchedulesDialog({
                     </span>
                   </div>
                 </button>
-              </li>
-            ))}
-          </ul>
-        )}
-      </DialogContent>
-    </Dialog>
-  );
-}
-
-function ShiftCellDialog({
-  cell,
-  onOpenChange,
-  scopeFilter,
-}: {
-  cell: { day: string; shift: "morning" | "evening" | "off" } | null;
-  onOpenChange: (v: boolean) => void;
-  scopeFilter: string | null;
-}) {
-  const open = cell !== null;
-  const q = useQuery({
-    enabled: open,
-    queryKey: ["dashboard-shift-cell", cell?.day, cell?.shift, scopeFilter],
-    queryFn: async () => {
-      let sq = supabase
-        .from("schedules")
-        .select("id, department_id")
-        .eq("status", "approved")
-        .lte("week_start", cell!.day)
-        .gte("week_end", cell!.day);
-      if (scopeFilter) sq = sq.eq("department_id", scopeFilter);
-      const { data: scheds } = await sq;
-      const ids = (scheds ?? []).map((s: any) => s.id);
-      if (!ids.length) return [];
-      const { data: shifts } = await supabase
-        .from("schedule_shifts")
-        .select("employee_id, start_time, end_time")
-        .in("schedule_id", ids)
-        .eq("day_date", cell!.day)
-        .eq("shift", cell!.shift);
-      const timesByEmp = new Map<string, { start: string | null; end: string | null }>();
-      for (const s of shifts ?? []) {
-        timesByEmp.set(s.employee_id, {
-          start: s.start_time ? String(s.start_time).slice(0, 5) : null,
-          end: s.end_time ? String(s.end_time).slice(0, 5) : null,
-        });
-      }
-      const empIds = Array.from(timesByEmp.keys());
-      if (!empIds.length) return [];
-      const [{ data: emps }, { data: shiftDef }] = await Promise.all([
-        supabase
-          .from("profiles")
-          .select("id, full_name, department_id")
-          .in("id", empIds)
-          .order("full_name"),
-        cell!.shift !== "off"
-          ? supabase
-              .from("shift_definitions")
-              .select("start_time, end_time")
-              .eq("code", cell!.shift)
-              .maybeSingle()
-          : Promise.resolve({ data: null as { start_time?: string | null; end_time?: string | null } | null }),
-      ]);
-      const defaultStart = shiftDef?.start_time ? String(shiftDef.start_time).slice(0, 5) : null;
-      const defaultEnd = shiftDef?.end_time ? String(shiftDef.end_time).slice(0, 5) : null;
-      const deptIds = Array.from(
-        new Set((emps ?? []).map((e: any) => e.department_id).filter(Boolean)),
-      );
-      const { data: depts } = deptIds.length
-        ? await supabase.from("departments").select("id, name").in("id", deptIds)
-        : { data: [] as any[] };
-      const dm: Record<string, string> = {};
-      (depts ?? []).forEach((d: any) => (dm[d.id] = d.name));
-      return (emps ?? []).map((e: any) => {
-        const t = timesByEmp.get(e.id);
-        const start = t?.start ?? defaultStart;
-        const end = t?.end ?? defaultEnd;
-        return {
-          ...e,
-          department_name: dm[e.department_id] ?? "—",
-          time_range:
-            cell!.shift !== "off" && start && end ? `${start}–${end}` : null,
-        };
-      });
-    },
-  });
-
-  const SHIFT_LABEL: Record<"morning" | "evening" | "off", string> = {
-    morning: "בוקר",
-    evening: "ערב",
-    off: "חופש",
-  };
-  const DAY_NAMES = ["ראשון", "שני", "שלישי", "רביעי", "חמישי", "שישי", "שבת"];
-  const title = cell
-    ? `יום ${DAY_NAMES[new Date(cell.day + "T00:00:00Z").getUTCDay()]} — ${SHIFT_LABEL[cell.shift]}`
-    : "";
-
-  return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>{title}</DialogTitle>
-        </DialogHeader>
-        {q.isLoading ? (
-          <div className="flex justify-center py-8">
-            <Loader2 className="size-5 animate-spin text-primary" />
-          </div>
-        ) : !q.data || q.data.length === 0 ? (
-          <p className="text-sm text-muted-foreground py-6 text-center">
-            אין עובדים משובצים.
-          </p>
-        ) : (
-          <ul className="divide-y max-h-[60vh] overflow-auto">
-            {q.data.map((e: any) => (
-              <li key={e.id} className="flex items-center justify-between py-3 gap-3">
-                <div className="min-w-0">
-                  <p className="font-medium truncate flex items-center gap-2 flex-wrap">
-                    <span>{e.full_name}</span>
-                    {e.time_range && (
-                      <span className="text-xs font-normal text-muted-foreground tabular-nums" dir="ltr">
-                        {e.time_range}
-                      </span>
-                    )}
-                  </p>
-                  <p className="text-xs text-muted-foreground truncate">{e.department_name}</p>
-                </div>
-                <Badge variant="outline" className="shrink-0">
-                  {SHIFT_LABEL[cell!.shift]}
-                </Badge>
               </li>
             ))}
           </ul>
@@ -2740,8 +2328,6 @@ function OnBreakSection({ profile }: { profile: any }) {
     },
   });
   const canSee = isMainAdmin || !!permQ.data;
-
-  useActivateDueBreaksPoll(profile.id, qc);
 
   const onBreakQ = useQuery({
     enabled: canSee,

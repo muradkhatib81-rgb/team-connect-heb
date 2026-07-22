@@ -8,7 +8,7 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Textarea } from "@/components/ui/textarea";
+import { Input } from "@/components/ui/input";
 import {
   Select,
   SelectContent,
@@ -48,6 +48,7 @@ import {
   Trash2,
   RefreshCw,
   UserX,
+  MessageSquare,
 } from "lucide-react";
 import { toast } from "sonner";
 import {
@@ -68,9 +69,12 @@ import {
   isScheduleShiftModified,
   buildPublishedBaselineFromShifts,
   isScheduleTimeModified,
+  isScheduleNoteModified,
 } from "@/lib/schedule-publish-diff";
 import { useShiftDefinitions } from "@/lib/use-shift-definitions";
 import { Time24Input } from "@/components/ui/time24-input";
+
+const SCHEDULE_NOTE_MAX = 10;
 
 type SchedulesView = "pending" | "editor" | "approved" | "saved";
 type SchedulesSearch = { dept?: string; week?: string; view?: SchedulesView };
@@ -659,7 +663,7 @@ function SchedulesPage() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("schedule_shifts")
-        .select("employee_id, day_date, shift, published_shift, start_time, end_time")
+        .select("employee_id, day_date, shift, published_shift, published_note, start_time, end_time, note")
         .eq("schedule_id", visible!.id);
       if (error) throw error;
       return data ?? [];
@@ -672,10 +676,12 @@ function SchedulesPage() {
   const [timeEdits, setTimeEdits] = useState<
     Record<string, Record<string, { start: string | null; end: string | null }>>
   >({});
+  const [noteEdits, setNoteEdits] = useState<Record<string, Record<string, string | null>>>({});
 
   useEffect(() => {
     const next: Record<string, Record<string, Shift>> = {};
     const t: Record<string, Record<string, { start: string | null; end: string | null }>> = {};
+    const n: Record<string, Record<string, string | null>> = {};
     for (const s of shiftsQ.data ?? []) {
       next[s.employee_id] ??= {};
       next[s.employee_id][s.day_date] = s.shift as Shift;
@@ -683,6 +689,9 @@ function SchedulesPage() {
       const st = (s as any).start_time ? String((s as any).start_time).slice(0, 5) : null;
       const en = (s as any).end_time ? String((s as any).end_time).slice(0, 5) : null;
       t[s.employee_id][s.day_date] = { start: st, end: en };
+      n[s.employee_id] ??= {};
+      const rawNote = (s as any).note ? String((s as any).note).trim().slice(0, SCHEDULE_NOTE_MAX) : "";
+      n[s.employee_id][s.day_date] = rawNote || null;
     }
     for (const emp of empsQ.data ?? []) {
       for (const day of days) {
@@ -694,6 +703,7 @@ function SchedulesPage() {
     }
     setEdits(next);
     setTimeEdits(t);
+    setNoteEdits(n);
   }, [shiftsQ.data, empsQ.data, days]);
 
   // Published-snapshot map (from DB) — drives the "modified after publish" marker
@@ -709,7 +719,7 @@ function SchedulesPage() {
 
   // Frozen baseline for change markers — captured once when opening an approved schedule.
   const [publishedBaseline, setPublishedBaseline] = useState<
-    Record<string, { shift: string | null; start: string | null; end: string | null }>
+    Record<string, { shift: string | null; start: string | null; end: string | null; note: string | null }>
   >({});
   const publishedBaselineScheduleIdRef = useRef<string | null>(null);
 
@@ -719,15 +729,17 @@ function SchedulesPage() {
 
   useEffect(() => {
     if (!visible?.id || visible.status !== "approved") {
-      publishedBaselineScheduleIdRef.current = null;
-      setPublishedBaseline({});
+      if (publishedBaselineScheduleIdRef.current !== null) {
+        publishedBaselineScheduleIdRef.current = null;
+        setPublishedBaseline({});
+      }
       return;
     }
     if (!shiftsQ.data?.length || !shiftDefsQ.isSuccess) return;
     if (publishedBaselineScheduleIdRef.current === visible.id) return;
     publishedBaselineScheduleIdRef.current = visible.id;
     setPublishedBaseline(buildPublishedBaselineFromShifts(shiftsQ.data, shiftDefsQ.map));
-  }, [visible?.id, visible?.status, shiftsQ.data, shiftDefsQ.isSuccess, shiftDefsQ.map]);
+  }, [visible?.id, visible?.status, shiftsQ.data, shiftDefsQ.isSuccess, shiftDefsQ.data]);
 
   // Realtime: keep schedule list synced
   useEffect(() => {
@@ -999,12 +1011,22 @@ function SchedulesPage() {
     });
   }
 
+  function setCellNote(empId: string, day: string, value: string) {
+    if (!canEditScheduleTimes) return;
+    const trimmed = value.trim().slice(0, SCHEDULE_NOTE_MAX);
+    setNoteEdits((prev) => ({
+      ...prev,
+      [empId]: { ...(prev[empId] ?? {}), [day]: trimmed || null },
+    }));
+  }
+
   function buildShiftPayload(): {
     employee_id: string;
     day_date: string;
     shift: Shift;
     start_time: string | null;
     end_time: string | null;
+    note: string | null;
   }[] {
     const list: {
       employee_id: string;
@@ -1012,6 +1034,7 @@ function SchedulesPage() {
       shift: Shift;
       start_time: string | null;
       end_time: string | null;
+      note: string | null;
     }[] = [];
     for (const [emp, m] of Object.entries(edits)) {
       const empRow = empsQ.data?.find((e) => e.id === emp);
@@ -1031,6 +1054,10 @@ function SchedulesPage() {
             resolved === "off" || !canEditScheduleTimes ? null : norm(t?.start ?? null),
           end_time:
             resolved === "off" || !canEditScheduleTimes ? null : norm(t?.end ?? null),
+          note:
+            resolved === "off" || !canEditScheduleTimes
+              ? null
+              : noteEdits[emp]?.[day]?.trim().slice(0, SCHEDULE_NOTE_MAX) || null,
         });
       }
     }
@@ -1969,6 +1996,10 @@ function SchedulesPage() {
                       const effEnd =
                         cellTimes?.end ??
                         (def?.end_time ? String(def.end_time).slice(0, 5) : null);
+                      const effNote = noteEdits[emp.id]?.[day] ?? null;
+                      const shiftRow = shiftsQ.data?.find(
+                        (s) => s.employee_id === emp.id && s.day_date === day,
+                      );
                       const isShiftModified =
                         visible.status === "approved" &&
                         isScheduleShiftModified({
@@ -1984,6 +2015,13 @@ function SchedulesPage() {
                           currentStart: effStart,
                           currentEnd: effEnd,
                           publishedTimes: { start: baseline.start, end: baseline.end },
+                        });
+                      const isNoteModified =
+                        visible.status === "approved" &&
+                        isScheduleNoteModified({
+                          currentNote: effNote,
+                          publishedNote:
+                            baseline?.note ?? (shiftRow as any)?.published_note ?? null,
                         });
                       if (!editable || excluded || onLeaveDay) {
                         return (
@@ -2015,6 +2053,11 @@ function SchedulesPage() {
                                       )}
                                     </div>
                                   )}
+                                  <ScheduleShiftNote
+                                    note={effNote}
+                                    editable={false}
+                                    modified={isNoteModified}
+                                  />
                                 </>
                               ) : (
                                 <span className="text-muted-foreground text-xs">—</span>
@@ -2095,6 +2138,12 @@ function SchedulesPage() {
                                 </div>
                               )
                             )}
+                            <ScheduleShiftNote
+                              note={effNote}
+                              editable={canEditScheduleTimes && !!cur && cur !== "off"}
+                              modified={isNoteModified}
+                              onChange={(v) => setCellNote(emp.id, day, v)}
+                            />
                             {isShiftModified && (
                               <RefreshCw
                                 className="size-3 text-orange-600 absolute -top-1 -left-1 bg-background rounded-full p-0.5 box-content border border-orange-500"
@@ -2215,5 +2264,77 @@ function SchedulesPage() {
         </DialogContent>
       </Dialog>
     </div>
+  );
+}
+
+function ScheduleShiftNote({
+  note,
+  editable,
+  modified = false,
+  onChange,
+}: {
+  note: string | null | undefined;
+  editable: boolean;
+  modified?: boolean;
+  onChange?: (value: string) => void;
+}) {
+  const trimmed = note?.trim() ?? "";
+  const modifiedRing = modified ? "ring-2 ring-orange-500 rounded px-0.5" : "";
+  if (!editable && !trimmed) return null;
+  if (!editable) {
+    return (
+      <p
+        className={`text-[10px] text-red-600 mt-0.5 truncate max-w-[5.5rem] mx-auto text-center font-medium ${modifiedRing}`}
+        title={trimmed}
+      >
+        {trimmed}
+      </p>
+    );
+  }
+  if (!trimmed) {
+    return (
+      <Popover>
+        <PopoverTrigger asChild>
+          <button
+            type="button"
+            className="mt-0.5 flex justify-center w-full text-muted-foreground hover:text-foreground"
+            aria-label="הוסף הערה"
+          >
+            <MessageSquare className="size-3" />
+          </button>
+        </PopoverTrigger>
+        <PopoverContent className="w-44 p-2" align="center">
+          <Input
+            maxLength={SCHEDULE_NOTE_MAX}
+            value=""
+            onChange={(e) => onChange?.(e.target.value.slice(0, SCHEDULE_NOTE_MAX))}
+            placeholder="הערה (עד 10)"
+            className="h-8 text-xs"
+          />
+        </PopoverContent>
+      </Popover>
+    );
+  }
+  return (
+    <Popover>
+      <PopoverTrigger asChild>
+        <button
+          type="button"
+          className={`mt-0.5 w-full text-[10px] text-red-600 hover:text-red-700 font-medium truncate max-w-[5.5rem] mx-auto block text-center ${modifiedRing}`}
+          title={trimmed}
+        >
+          {trimmed}
+        </button>
+      </PopoverTrigger>
+      <PopoverContent className="w-44 p-2" align="center">
+        <Input
+          maxLength={SCHEDULE_NOTE_MAX}
+          value={trimmed}
+          onChange={(e) => onChange?.(e.target.value.slice(0, SCHEDULE_NOTE_MAX))}
+          placeholder="הערה (עד 10)"
+          className="h-8 text-xs"
+        />
+      </PopoverContent>
+    </Popover>
   );
 }

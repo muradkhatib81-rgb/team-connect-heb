@@ -1,7 +1,8 @@
 import { useQuery } from "@tanstack/react-query";
-import { useEffect } from "react";
+import { useEffect, useMemo } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useQueryClient } from "@tanstack/react-query";
+import { retainSharedRealtimeChannel } from "@/lib/realtime-shared-channel";
 
 export type ShiftDef = {
   id: string;
@@ -32,29 +33,38 @@ export function useShiftDefinitions(opts: { activeOnly?: boolean } = {}) {
   });
 
   useEffect(() => {
-    const ch = supabase
-      .channel("shift-definitions-rt")
-      .on(
+    return retainSharedRealtimeChannel("shift-definitions-rt", (channel) =>
+      channel.on(
         "postgres_changes",
         { event: "*", schema: "public", table: "shift_definitions" },
         () => qc.invalidateQueries({ queryKey: ["shift-definitions"] }),
-      )
-      .subscribe();
-    return () => {
-      supabase.removeChannel(ch);
-    };
+      ),
+    );
   }, [qc]);
 
   const all = query.data ?? [];
-  const list = opts.activeOnly ? all.filter((s) => s.is_active) : all;
-  const map = new Map(all.map((s) => [s.code, s] as const));
-  function label(code: string | null | undefined, fallback = "—") {
-    if (!code) return fallback;
-    return map.get(code)?.name ?? code;
-  }
-  function color(code: string | null | undefined) {
-    if (!code) return undefined;
-    return map.get(code)?.color;
-  }
+  const list = useMemo(
+    () => (opts.activeOnly ? all.filter((s) => s.is_active) : all),
+    [all, opts.activeOnly],
+  );
+  const map = useMemo(
+    () => new Map(all.map((s) => [s.code, s] as const)),
+    [all],
+  );
+  const label = useMemo(
+    () =>
+      (code: string | null | undefined, fallback = "—") => {
+        if (!code) return fallback;
+        return map.get(code)?.name ?? code;
+      },
+    [map],
+  );
+  const color = useMemo(
+    () => (code: string | null | undefined) => {
+      if (!code) return undefined;
+      return map.get(code)?.color;
+    },
+    [map],
+  );
   return { ...query, list, all, map, label, color };
 }

@@ -42,7 +42,7 @@ export function isScheduleCellModified(args: {
   return curStart !== pubStart || curEnd !== pubEnd;
 }
 
-export type PublishedCellBaseline = PublishedCellTimes & { shift: string | null };
+export type PublishedCellBaseline = PublishedCellTimes & { shift: string | null; note: string | null };
 
 /** Build frozen baseline for change markers (published shift + effective times at open). */
 export function buildPublishedBaselineFromShifts(
@@ -52,6 +52,7 @@ export function buildPublishedBaselineFromShifts(
     published_shift?: string | null;
     start_time?: string | null;
     end_time?: string | null;
+    published_note?: string | null;
   }[],
   shiftDefs?: Map<string, { start_time?: string | null; end_time?: string | null }>,
 ): Record<string, PublishedCellBaseline> {
@@ -64,6 +65,7 @@ export function buildPublishedBaselineFromShifts(
       start:
         normScheduleTimeHm(s.start_time) ?? normScheduleTimeHm(pubDef?.start_time),
       end: normScheduleTimeHm(s.end_time) ?? normScheduleTimeHm(pubDef?.end_time),
+      note: normScheduleNote((s as { published_note?: string | null }).published_note),
     };
   }
   return m;
@@ -79,4 +81,16 @@ export function isScheduleTimeModified(args: {
   const curStart = normScheduleTimeHm(args.currentStart);
   const curEnd = normScheduleTimeHm(args.currentEnd);
   return curStart !== pubStart || curEnd !== pubEnd;
+}
+
+export function normScheduleNote(value: string | null | undefined): string | null {
+  const s = value?.trim().slice(0, 10) ?? "";
+  return s.length > 0 ? s : null;
+}
+
+export function isScheduleNoteModified(args: {
+  currentNote: string | null | undefined;
+  publishedNote: string | null | undefined;
+}): boolean {
+  return normScheduleNote(args.currentNote) !== normScheduleNote(args.publishedNote);
 }

@@ -1,43 +1,13 @@
 import { useEffect } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import type { RealtimeChannel } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/use-auth";
 import { useActiveBranch } from "@/lib/use-active-branch";
+import { retainSharedRealtimeChannel } from "@/lib/realtime-shared-channel";
 import {
   fetchShiftSelfServiceVisible,
   shiftVisibleQueryKey,
 } from "@/lib/shift-visible-rpc";
-
-/** Supabase throws if `.on()` is called after `subscribe()` on an existing channel name. */
-const sharedChannelRefs = new Map<string, number>();
-const sharedChannels = new Map<string, RealtimeChannel>();
-
-function retainSharedChannel(
-  channelName: string,
-  setup: (channel: RealtimeChannel) => RealtimeChannel,
-): () => void {
-  const nextRefs = (sharedChannelRefs.get(channelName) ?? 0) + 1;
-  sharedChannelRefs.set(channelName, nextRefs);
-  if (nextRefs === 1) {
-    const channel = setup(supabase.channel(channelName));
-    channel.subscribe();
-    sharedChannels.set(channelName, channel);
-  }
-  return () => {
-    const remaining = (sharedChannelRefs.get(channelName) ?? 1) - 1;
-    if (remaining <= 0) {
-      sharedChannelRefs.delete(channelName);
-      const channel = sharedChannels.get(channelName);
-      if (channel) {
-        void supabase.removeChannel(channel);
-        sharedChannels.delete(channelName);
-      }
-    } else {
-      sharedChannelRefs.set(channelName, remaining);
-    }
-  };
-}
 
 /** Open break statuses — inlined to avoid circular imports from break-workflow. */
 const OPEN_BREAK_NAV_STATUSES = new Set([
@@ -73,7 +43,7 @@ export function useShiftSelfServiceVisible() {
     if (!userId || !scopedBranchId) return;
     const invalidate = () =>
       qc.invalidateQueries({ queryKey: shiftVisibleQueryKey(userId, scopedBranchId) });
-    return retainSharedChannel(`shift-self-service-visible-${userId}`, (channel) =>
+    return retainSharedRealtimeChannel(`shift-self-service-visible-${userId}`, (channel) =>
       channel
         .on(
           "postgres_changes",
@@ -108,7 +78,7 @@ export function useShiftSelfServiceVisible() {
     if (!userId) return;
     const invalidateOpen = () =>
       qc.invalidateQueries({ queryKey: ["my-open-break-nav", userId] });
-    return retainSharedChannel(`open-break-nav-rt-${userId}`, (channel) =>
+    return retainSharedRealtimeChannel(`open-break-nav-rt-${userId}`, (channel) =>
       channel.on(
         "postgres_changes",
         {

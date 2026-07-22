@@ -380,8 +380,10 @@ function EmployeesPage() {
       total: dept.length,
       active: dept.filter((e) => e.is_active && !e.on_leave).length,
       onLeave: dept.filter((e) => e.on_leave).length,
+      inactive: dept.filter((e) => !e.is_active).length,
+      onBreak: dept.filter((e) => onBreakSet.has(e.id)).length,
     };
-  }, [employeesQuery.data, isDeptManagerOnly, me?.id, me?.department_id]);
+  }, [employeesQuery.data, isDeptManagerOnly, me?.id, me?.department_id, onBreakSet]);
 
   // Ensure manager's own avatar is signed too
   const managerAvatarQ = useSignedAvatarUrls(
@@ -509,6 +511,56 @@ function EmployeesPage() {
             </div>
           </div>
         </Card>
+      )}
+
+      {isDeptManagerOnly && managerDeptStats && (
+        <section className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+          <SummaryStatCard
+            label="עובדי המחלקה"
+            value={managerDeptStats.total}
+            icon={<Users className="size-5" />}
+            tone="primary"
+            emoji="👥"
+            active={filterMode === "all"}
+            onClick={() => setFilter("all")}
+          />
+          <SummaryStatCard
+            label="עובדים פעילים"
+            value={managerDeptStats.active}
+            icon={<UserCheck className="size-5" />}
+            tone="green"
+            emoji="🟢"
+            active={filterMode === "active"}
+            onClick={() => setFilter("active")}
+          />
+          <SummaryStatCard
+            label="בחופשה"
+            value={managerDeptStats.onLeave}
+            icon={<Plane className="size-5" />}
+            tone="sky"
+            emoji="🏖️"
+            active={filterMode === "on_leave"}
+            onClick={() => setFilter("on_leave")}
+          />
+          <SummaryStatCard
+            label="בהפסקה"
+            value={managerDeptStats.onBreak}
+            icon={<Coffee className="size-5" />}
+            tone="amber"
+            emoji="☕"
+            active={filterMode === "on_break"}
+            onClick={() => setFilter("on_break")}
+          />
+          <SummaryStatCard
+            label="לא פעילים"
+            value={managerDeptStats.inactive}
+            icon={<UserX className="size-5" />}
+            tone="red"
+            emoji="❌"
+            active={filterMode === "inactive"}
+            onClick={() => setFilter("inactive")}
+          />
+        </section>
       )}
 
 

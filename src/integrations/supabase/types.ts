@@ -1437,7 +1437,9 @@ export type Database = {
           employee_id: string
           end_time: string | null
           id: string
+          note: string | null
           published_shift: string | null
+          published_note: string | null
           published_start_time: string | null
           published_end_time: string | null
           schedule_id: string
@@ -1452,7 +1454,9 @@ export type Database = {
           employee_id: string
           end_time?: string | null
           id?: string
+          note?: string | null
           published_shift?: string | null
+          published_note?: string | null
           published_start_time?: string | null
           published_end_time?: string | null
           schedule_id: string
@@ -1467,7 +1471,9 @@ export type Database = {
           employee_id?: string
           end_time?: string | null
           id?: string
+          note?: string | null
           published_shift?: string | null
+          published_note?: string | null
           published_start_time?: string | null
           published_end_time?: string | null
           schedule_id?: string

@@ -57,7 +57,8 @@ export function canAccessRoute(input: RouteAccessInput): boolean {
   }
 
   if (pathname === "/employees") {
-    return canManageEmployees(input);
+    // Department heads may open a read-only, RLS-scoped view of their department.
+    return canManageEmployees(input) || roles.includes("department_manager");
   }
 
   if (pathname === "/permissions") {

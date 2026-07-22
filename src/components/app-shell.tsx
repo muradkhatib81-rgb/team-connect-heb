@@ -234,9 +234,9 @@ export function AppShell({ children }: { children: ReactNode }) {
 
     {
       to: "/employees",
-      label: "ניהול עובדים",
+      label: isDeptManager && !admin ? "עובדי המחלקה" : "ניהול עובדים",
       icon: Users,
-      visible: admin,
+      visible: admin || isDeptManager,
       section: branchSection,
     },
     {
@@ -768,10 +768,12 @@ function RealtimeBridge({ uid }: { uid: string }) {
         qc.invalidateQueries({ queryKey: ["dashboard-schedules"] });
         qc.invalidateQueries({ queryKey: ["dashboard-approved-list"] });
         qc.invalidateQueries({ queryKey: ["emp-dash-schedule"] });
+        qc.invalidateQueries({ queryKey: ["daily-schedule-overview"] });
       })
       .on("postgres_changes", { event: "*", schema: "public", table: "schedule_shifts" }, () => {
         qc.invalidateQueries({ queryKey: ["schedule-shifts"] });
         qc.invalidateQueries({ queryKey: ["emp-dash-schedule"] });
+        qc.invalidateQueries({ queryKey: ["daily-schedule-overview"] });
       })
       .on("postgres_changes", { event: "*", schema: "public", table: "shift_definitions" }, () => {
         qc.invalidateQueries({ queryKey: ["shift-definitions"] });
