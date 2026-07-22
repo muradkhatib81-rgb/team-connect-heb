@@ -126,7 +126,6 @@ function DashboardPage() {
   const deptManagerQuery = useQuery({
     enabled: !admin && isDeptManager && !!profile,
     queryKey: ["dashboard", "dept-manager", profile?.id],
-    refetchOnMount: "always",
     queryFn: async () => {
       const { data: dept, error: dErr } = await supabase
         .from("departments")
@@ -170,34 +169,9 @@ function DashboardPage() {
   const tasksStatsQuery = useQuery({
     enabled: !!profile && (admin || isDeptManager),
     queryKey: ["dashboard", "tasks-stats", activeBranchId ?? profile?.branch_id ?? "none"],
-    refetchOnMount: "always",
     retry: false,
     queryFn: () => fetchTaskStats(),
   });
-
-  // Realtime: refresh when departments or profiles or tasks change
-  useEffect(() => {
-    if (!admin && !isDeptManager && !profile) return;
-    const channel = supabase
-      .channel("dashboard-realtime")
-      .on("postgres_changes", { event: "*", schema: "public", table: "departments" }, () => {
-        queryClient.invalidateQueries({ queryKey: ["dashboard"] });
-        queryClient.invalidateQueries({ queryKey: ["departments"] });
-      })
-      .on("postgres_changes", { event: "*", schema: "public", table: "profiles" }, () => {
-        queryClient.invalidateQueries({ queryKey: ["dashboard"] });
-      })
-      .on("postgres_changes", { event: "*", schema: "public", table: "tasks" }, () => {
-        queryClient.invalidateQueries({ queryKey: ["dashboard", "tasks-stats"] });
-      })
-      .on("postgres_changes", { event: "*", schema: "public", table: "break_requests" }, () => {
-        queryClient.invalidateQueries({ queryKey: ["dashboard", "stats"] });
-      })
-      .subscribe();
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, [admin, isDeptManager, profile, queryClient]);
 
   if (!profile) return null;
   const top = highestRole(profile.roles);
@@ -549,7 +523,6 @@ function EmployeeDashboard({ profile }: { profile: any }) {
 }
 
 function EmployeeNotificationsCard({ userId }: { userId: string }) {
-  const qc = useQueryClient();
   const q = useQuery({
     queryKey: ["emp-dash-notif", userId],
     queryFn: async () => {
@@ -562,19 +535,6 @@ function EmployeeNotificationsCard({ userId }: { userId: string }) {
       return data ?? [];
     },
   });
-  useEffect(() => {
-    const ch = supabase
-      .channel(`emp-dash-notif-${userId}`)
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "schedule_notifications", filter: `user_id=eq.${userId}` },
-        () => qc.invalidateQueries({ queryKey: ["emp-dash-notif", userId] }),
-      )
-      .subscribe();
-    return () => {
-      supabase.removeChannel(ch);
-    };
-  }, [userId, qc]);
   const items = q.data ?? [];
   return (
     <Card className="card-elevated p-4">
@@ -601,7 +561,6 @@ function EmployeeNotificationsCard({ userId }: { userId: string }) {
 }
 
 function EmployeeNewMessagesCard({ userId }: { userId: string }) {
-  const qc = useQueryClient();
   const q = useQuery({
     queryKey: ["emp-dash-msgs", userId],
     queryFn: async () => {
@@ -617,30 +576,6 @@ function EmployeeNewMessagesCard({ userId }: { userId: string }) {
       return ((data ?? []) as any[]).filter((r) => !r.message?.deleted_at);
     },
   });
-  useEffect(() => {
-    const invalidateMessages = () => qc.invalidateQueries({ queryKey: ["emp-dash-msgs", userId] });
-    const ch = supabase
-      .channel(`emp-dash-msg-${userId}`)
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "message_recipients", filter: `user_id=eq.${userId}` },
-        invalidateMessages,
-      )
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "messages" },
-        invalidateMessages,
-      )
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "message_targets" },
-        invalidateMessages,
-      )
-      .subscribe();
-    return () => {
-      supabase.removeChannel(ch);
-    };
-  }, [userId, qc]);
   const items = q.data ?? [];
   const navigate = useNavigate();
   return (
@@ -993,35 +928,6 @@ function SchedulesStatsSection({ profile }: { profile: any }) {
     },
   });
 
-  useEffect(() => {
-    const ch = supabase
-      .channel("dash-schedules-rt")
-      .on("postgres_changes", { event: "*", schema: "public", table: "schedules" }, () =>
-        {
-          qc.invalidateQueries({ queryKey: ["dashboard-schedules"] });
-          qc.invalidateQueries({ queryKey: ["dashboard-approved-list"] });
-          qc.invalidateQueries({ queryKey: ["emp-dash-schedule"] });
-          qc.invalidateQueries({ queryKey: ["daily-schedule-overview"] });
-          qc.invalidateQueries({ queryKey: ["week-schedules"] });
-          qc.invalidateQueries({ queryKey: ["departments-list"] });
-        },
-      )
-      .on("postgres_changes", { event: "*", schema: "public", table: "schedule_shifts" }, () =>
-        {
-          qc.invalidateQueries({ queryKey: ["dashboard-schedules"] });
-          qc.invalidateQueries({ queryKey: ["emp-dash-schedule"] });
-          qc.invalidateQueries({ queryKey: ["daily-schedule-overview"] });
-        },
-      )
-      .on("postgres_changes", { event: "*", schema: "public", table: "departments" }, () =>
-        qc.invalidateQueries({ queryKey: ["dashboard-schedules"] }),
-      )
-      .subscribe();
-    return () => {
-      supabase.removeChannel(ch);
-    };
-  }, [qc]);
-
   // Authoritative dept state list (bypasses per-viewer RLS quirks): drafts and
   // published schedules always come from the service-role admin path so a
   // saved draft never leaks into "Departments without schedules".
@@ -1031,21 +937,6 @@ function SchedulesStatsSection({ profile }: { profile: any }) {
     queryKey: ["dashboard-dept-states", weekStart, profile.id, canViewBranchScheduleOverview],
     queryFn: () => getWeekDeptStatesFn({ data: { week_start: weekStart } }),
   });
-  useEffect(() => {
-    if (!showScheduleStats) return;
-    const ch = supabase
-      .channel(`dash-dept-states-${weekStart}`)
-      .on("postgres_changes", { event: "*", schema: "public", table: "schedules" }, () => {
-        qc.invalidateQueries({ queryKey: ["dashboard-dept-states", weekStart] });
-      })
-      .on("postgres_changes", { event: "*", schema: "public", table: "departments" }, () => {
-        qc.invalidateQueries({ queryKey: ["dashboard-dept-states", weekStart] });
-      })
-      .subscribe();
-    return () => {
-      supabase.removeChannel(ch);
-    };
-  }, [showScheduleStats, weekStart, qc]);
 
   if (statsQ.isLoading || !statsQ.data) return null;
   const baseS = statsQ.data;
@@ -1651,20 +1542,9 @@ function MyActiveBreakCard({ userId }: { userId: string }) {
   });
 
   useEffect(() => {
-    const ch = supabase
-      .channel(`my-break-rt-${userId}`)
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "break_requests", filter: `user_id=eq.${userId}` },
-        () => qc.invalidateQueries({ queryKey: ["my-active-break", userId] }),
-      )
-      .subscribe();
     const id = setInterval(() => setTick((t) => t + 1), 1000);
-    return () => {
-      supabase.removeChannel(ch);
-      clearInterval(id);
-    };
-  }, [qc, userId]);
+    return () => clearInterval(id);
+  }, []);
 
   const endMut = useMutation({
     mutationFn: async (id: string) => {
@@ -2131,23 +2011,9 @@ function BreakShortcutCard({ userId }: { userId: string }) {
   });
 
   useEffect(() => {
-    const ch = supabase
-      .channel(`my-break-shortcut-rt-${userId}`)
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "break_requests", filter: `user_id=eq.${userId}` },
-        () => {
-          qc.invalidateQueries({ queryKey: ["my-break-shortcut", userId] });
-          qc.invalidateQueries({ queryKey: ["my-breaks-today"] });
-        },
-      )
-      .subscribe();
     const id = setInterval(() => setTick((t) => t + 1), 1000);
-    return () => {
-      supabase.removeChannel(ch);
-      clearInterval(id);
-    };
-  }, [qc, userId]);
+    return () => clearInterval(id);
+  }, []);
 
   const endMut = useMutation({
     mutationFn: async (id: string) => {
@@ -2599,23 +2465,12 @@ function OnBreakSection({ profile }: { profile: any }) {
 
   const [, setOnBreakTick] = useState(0);
 
-  // Realtime + second tick for live countdowns
+  // Live countdown tick for on-break admin cards.
   useEffect(() => {
     if (!canSee) return;
-    const ch = supabase
-      .channel("dash-on-break-rt")
-      .on("postgres_changes", { event: "*", schema: "public", table: "break_requests" }, () => {
-        qc.invalidateQueries({ queryKey: ["dashboard-on-break"] });
-        qc.invalidateQueries({ queryKey: ["dashboard-pending-breaks"] });
-        qc.invalidateQueries({ queryKey: ["dashboard-daily-breaks"] });
-      })
-      .subscribe();
     const t = setInterval(() => setOnBreakTick((n) => n + 1), 1000);
-    return () => {
-      supabase.removeChannel(ch);
-      clearInterval(t);
-    };
-  }, [qc, canSee]);
+    return () => clearInterval(t);
+  }, [canSee]);
 
   if (!canSee) return null;
   const list = onBreakQ.data ?? [];

@@ -269,7 +269,7 @@ function SchedulesPage() {
 
   const getSchedulesFn = useServerFn(getSchedulesForViewer);
   const weekSchedulesQ = useQuery({
-    enabled: !!me?.id,
+    enabled: !!me?.id && view === "editor",
     queryKey: ["week-schedules", weekStart, me?.id],
     queryFn: async () => {
       const rows = await getSchedulesFn({ data: { week_start: weekStart } });
@@ -313,6 +313,7 @@ function SchedulesPage() {
   //    OTHER departments + current unsaved edits from the selected dept.
   //  - The "סידורי עבודה שמורים" card listing saved departments.
   const weekSavedQ = useQuery({
+    enabled: view === "editor" || view === "saved",
     queryKey: ["schedules-week-saved", weekStart],
     queryFn: async () => {
       const { data: scheds, error } = await supabase
@@ -392,7 +393,7 @@ function SchedulesPage() {
   }, [canSeeScheduleQueues, canApprove]);
 
   const pendingQ = useQuery({
-    enabled: canSeeScheduleQueues,
+    enabled: canSeeScheduleQueues && view === "pending",
     queryKey: ["schedules-pending"],
     queryFn: async () => {
       const { data, error } = await supabase
@@ -408,7 +409,7 @@ function SchedulesPage() {
   });
 
   const approvedQ = useQuery({
-    enabled: canSeeScheduleQueues,
+    enabled: canSeeScheduleQueues && view === "approved",
     queryKey: ["schedules-approved"],
     queryFn: async () => {
       const { data, error } = await supabase
@@ -452,7 +453,7 @@ function SchedulesPage() {
 
   // Schedule for selected dept+week
   const schedQ = useQuery({
-    enabled: !!selectedDept && !!me?.id,
+    enabled: !!selectedDept && !!me?.id && view === "editor",
     queryKey: ["schedule", selectedDept, weekStart, me?.id],
     queryFn: async () => {
       const rows = await getSchedulesFn({
@@ -591,7 +592,7 @@ function SchedulesPage() {
   // of coworkers in their own department; managers/admins read from profiles
   // directly under their existing RLS policies.
   const empsQ = useQuery({
-    enabled: !!selectedDept,
+    enabled: !!selectedDept && view === "editor",
     queryKey: ["dept-employees", selectedDept, isEmployee],
     queryFn: async () => {
       if (isEmployee) {
@@ -671,7 +672,7 @@ function SchedulesPage() {
 
   // Shifts (only if a schedule exists and is visible)
   const shiftsQ = useQuery({
-    enabled: !!visible?.id,
+    enabled: !!visible?.id && view === "editor",
     queryKey: ["schedule-shifts", visible?.id],
     queryFn: async () => {
       const { data, error } = await supabase
@@ -754,39 +755,7 @@ function SchedulesPage() {
     setPublishedBaseline(buildPublishedBaselineFromShifts(shiftsQ.data, shiftDefsQ.map));
   }, [visible?.id, visible?.status, shiftsQ.data, shiftDefsQ.isSuccess, shiftDefsQ.data]);
 
-  // Realtime: keep schedule list synced
-  useEffect(() => {
-    const invalidateSavedWeek = () => {
-      qc.invalidateQueries({ queryKey: ["schedules-week-saved"] });
-    };
-    const ch = supabase
-      .channel(`schedules-realtime-${weekStart}`)
-      .on("postgres_changes", { event: "*", schema: "public", table: "schedules" }, () => {
-        qc.invalidateQueries({ queryKey: ["schedule"] });
-        qc.invalidateQueries({ queryKey: ["schedules-pending"] });
-        qc.invalidateQueries({ queryKey: ["schedules-approved"] });
-        qc.invalidateQueries({ queryKey: ["dashboard-schedules"] });
-        qc.invalidateQueries({ queryKey: ["week-schedules"] });
-        qc.invalidateQueries({ queryKey: ["dashboard-approved-list"] });
-        qc.invalidateQueries({ queryKey: ["emp-dash-schedule"] });
-        invalidateSavedWeek();
-      })
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "schedule_shifts" },
-        () => {
-          qc.invalidateQueries({ queryKey: ["schedule-shifts"] });
-          invalidateSavedWeek();
-        },
-      )
-      .on("postgres_changes", { event: "*", schema: "public", table: "profiles" }, () => {
-        qc.invalidateQueries({ queryKey: ["dept-employees"] });
-      })
-      .subscribe();
-    return () => {
-      supabase.removeChannel(ch);
-    };
-  }, [qc, weekStart]);
+  // Realtime: global RealtimeBridge in app-shell keeps schedule queries fresh.
 
   // ---- Server fns ----
   const createFn = useServerFn(createOrGetSchedule);

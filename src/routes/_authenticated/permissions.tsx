@@ -575,20 +575,6 @@ function ManagerPermsCard({
     setState(next);
   }, [q.data]);
 
-  useEffect(() => {
-    const ch = supabase
-      .channel(`user-perms-${userId}`)
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "user_task_permissions", filter: `user_id=eq.${userId}` },
-        () => qc.invalidateQueries({ queryKey: ["user-perms", userId] }),
-      )
-      .subscribe();
-    return () => {
-      supabase.removeChannel(ch);
-    };
-  }, [userId, qc]);
-
   const mut = useMutation({
     mutationFn: (next: Record<string, boolean>) =>
       save({ data: { user_id: userId, perms: next as any } }),

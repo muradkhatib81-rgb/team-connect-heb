@@ -201,25 +201,6 @@ function TasksPage() {
   const fetchTasks = useServerFn(listTasks);
   const { activeBranchId } = useActiveBranch();
 
-  // Realtime
-  useEffect(() => {
-    const ch = supabase
-      .channel("tasks-realtime")
-      .on("postgres_changes", { event: "*", schema: "public", table: "tasks" }, () =>
-        qc.invalidateQueries({ queryKey: ["tasks"] }),
-      )
-      .on("postgres_changes", { event: "*", schema: "public", table: "task_recurrences" }, () =>
-        qc.invalidateQueries({ queryKey: ["recurrences"] }),
-      )
-      .on("postgres_changes", { event: "*", schema: "public", table: "task_images" }, () =>
-        qc.invalidateQueries({ queryKey: ["task-images"] }),
-      )
-      .subscribe();
-    return () => {
-      supabase.removeChannel(ch);
-    };
-  }, [qc]);
-
   const depsQuery = useQuery({
     queryKey: ["task-deps"],
     queryFn: async () => {
@@ -236,7 +217,6 @@ function TasksPage() {
 
   const tasksQuery = useQuery({
     queryKey: ["tasks", activeBranchId ?? "none"],
-    refetchOnMount: "always",
     queryFn: () => fetchTasks(),
   });
 

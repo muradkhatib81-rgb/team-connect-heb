@@ -108,7 +108,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   const commUnreadQ = useQuery({
     enabled: !!profile?.id,
     queryKey: ["shell-comm-unread", profile?.id],
-    refetchInterval: 60_000,
+    staleTime: 60_000,
     queryFn: async () => {
       const uid = profile!.id;
       const { count: msgCount } = await supabase
@@ -714,6 +714,7 @@ function RealtimeBridge({ uid }: { uid: string }) {
             qc.invalidateQueries({ queryKey: ["shell-can-manage-breaks"] });
           }
           qc.invalidateQueries({ queryKey: ["user-perms"] });
+          qc.invalidateQueries({ queryKey: ["route-guard"] });
         },
       )
       .on(
@@ -728,6 +729,7 @@ function RealtimeBridge({ uid }: { uid: string }) {
             qc.invalidateQueries({ queryKey: ["auth", "me"] });
             qc.invalidateQueries({ queryKey: ["shell-can-manage-breaks", uid] });
           }
+          qc.invalidateQueries({ queryKey: ["route-guard"] });
         },
       )
       .on(
@@ -738,11 +740,15 @@ function RealtimeBridge({ uid }: { uid: string }) {
           if (!affected || affected === uid) qc.invalidateQueries({ queryKey: ["auth", "me"] });
           qc.invalidateQueries({ queryKey: ["employees"] });
           qc.invalidateQueries({ queryKey: ["departments"] });
+          qc.invalidateQueries({ queryKey: ["dashboard"] });
+          qc.invalidateQueries({ queryKey: ["dept-employees"] });
         },
       )
       .on("postgres_changes", { event: "*", schema: "public", table: "departments" }, () => {
         qc.invalidateQueries({ queryKey: ["auth", "me"] });
         qc.invalidateQueries({ queryKey: ["departments"] });
+        qc.invalidateQueries({ queryKey: ["dashboard"] });
+        qc.invalidateQueries({ queryKey: ["departments-list"] });
       })
       .on("postgres_changes", { event: "*", schema: "public", table: "job_titles" }, () => {
         qc.invalidateQueries({ queryKey: ["job-titles"] });
@@ -761,6 +767,17 @@ function RealtimeBridge({ uid }: { uid: string }) {
       .on("postgres_changes", { event: "*", schema: "public", table: "task_activity_log" }, () =>
         qc.invalidateQueries({ queryKey: ["task-activity"] }),
       )
+      .on("postgres_changes", { event: "*", schema: "public", table: "tasks" }, () => {
+        qc.invalidateQueries({ queryKey: ["tasks"] });
+        qc.invalidateQueries({ queryKey: ["dashboard"] });
+        qc.invalidateQueries({ queryKey: ["dashboard", "tasks-stats"] });
+      })
+      .on("postgres_changes", { event: "*", schema: "public", table: "task_recurrences" }, () =>
+        qc.invalidateQueries({ queryKey: ["recurrences"] }),
+      )
+      .on("postgres_changes", { event: "*", schema: "public", table: "task_images" }, () =>
+        qc.invalidateQueries({ queryKey: ["task-images"] }),
+      )
       .on("postgres_changes", { event: "*", schema: "public", table: "schedules" }, () => {
         qc.invalidateQueries({ queryKey: ["schedule"] });
         qc.invalidateQueries({ queryKey: ["schedules-pending"] });
@@ -769,11 +786,16 @@ function RealtimeBridge({ uid }: { uid: string }) {
         qc.invalidateQueries({ queryKey: ["dashboard-approved-list"] });
         qc.invalidateQueries({ queryKey: ["emp-dash-schedule"] });
         qc.invalidateQueries({ queryKey: ["daily-schedule-overview"] });
+        qc.invalidateQueries({ queryKey: ["week-schedules"] });
+        qc.invalidateQueries({ queryKey: ["schedules-week-saved"] });
+        qc.invalidateQueries({ queryKey: ["dashboard-dept-states"] });
+        qc.invalidateQueries({ queryKey: ["departments-list"] });
       })
       .on("postgres_changes", { event: "*", schema: "public", table: "schedule_shifts" }, () => {
         qc.invalidateQueries({ queryKey: ["schedule-shifts"] });
         qc.invalidateQueries({ queryKey: ["emp-dash-schedule"] });
         qc.invalidateQueries({ queryKey: ["daily-schedule-overview"] });
+        qc.invalidateQueries({ queryKey: ["schedules-week-saved"] });
       })
       .on("postgres_changes", { event: "*", schema: "public", table: "shift_definitions" }, () => {
         qc.invalidateQueries({ queryKey: ["shift-definitions"] });
@@ -784,6 +806,13 @@ function RealtimeBridge({ uid }: { uid: string }) {
         qc.invalidateQueries({ queryKey: ["breaks-admin"] });
         qc.invalidateQueries({ queryKey: ["dashboard-breaks"] });
         qc.invalidateQueries({ queryKey: ["break-stats"] });
+        qc.invalidateQueries({ queryKey: ["dashboard"] });
+        qc.invalidateQueries({ queryKey: ["my-active-break"] });
+        qc.invalidateQueries({ queryKey: ["my-break-shortcut"] });
+        qc.invalidateQueries({ queryKey: ["my-breaks-today"] });
+        qc.invalidateQueries({ queryKey: ["dashboard-on-break"] });
+        qc.invalidateQueries({ queryKey: ["dashboard-pending-breaks"] });
+        qc.invalidateQueries({ queryKey: ["dashboard-daily-breaks"] });
       })
       .on("postgres_changes", { event: "*", schema: "public", table: "break_settings" }, () =>
         qc.invalidateQueries({ queryKey: ["break-settings"] }),
@@ -791,11 +820,27 @@ function RealtimeBridge({ uid }: { uid: string }) {
       .on("postgres_changes", { event: "*", schema: "public", table: "messages" }, () => {
         qc.invalidateQueries({ queryKey: ["communications"] });
         qc.invalidateQueries({ queryKey: ["shell-comm-unread", uid] });
+        qc.invalidateQueries({ queryKey: ["notif", "messages"] });
+        qc.invalidateQueries({ queryKey: ["emp-dash-msgs"] });
       })
       .on("postgres_changes", { event: "*", schema: "public", table: "message_recipients" }, () => {
         qc.invalidateQueries({ queryKey: ["communications"] });
         qc.invalidateQueries({ queryKey: ["shell-comm-unread", uid] });
+        qc.invalidateQueries({ queryKey: ["notif", "messages"] });
+        qc.invalidateQueries({ queryKey: ["emp-dash-msgs"] });
       })
+      .on("postgres_changes", { event: "*", schema: "public", table: "message_targets" }, () => {
+        qc.invalidateQueries({ queryKey: ["communications"] });
+        qc.invalidateQueries({ queryKey: ["emp-dash-msgs"] });
+      })
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "schedule_notifications" },
+        () => {
+          qc.invalidateQueries({ queryKey: ["notif", "schedule"] });
+          qc.invalidateQueries({ queryKey: ["emp-dash-notif"] });
+        },
+      )
       .on("postgres_changes", { event: "*", schema: "public", table: "company_settings" }, () =>
         qc.invalidateQueries({ queryKey: ["company-settings"] }),
       )

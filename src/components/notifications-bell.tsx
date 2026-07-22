@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from "react";
+import { useMemo } from "react";
 import { Bell, CalendarDays, MessageSquare } from "lucide-react";
 import { Link } from "@tanstack/react-router";
 import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
@@ -32,7 +32,7 @@ export function NotificationsBell() {
   const schedQ = useQuery({
     queryKey: ["notif", "schedule", userId],
     enabled: !!userId,
-    refetchInterval: 60_000,
+    staleTime: 60_000,
     queryFn: async () => {
       try {
         const { data } = await supabase
@@ -51,7 +51,7 @@ export function NotificationsBell() {
   const msgQ = useQuery({
     queryKey: ["notif", "messages", userId],
     enabled: !!userId,
-    refetchInterval: 60_000,
+    staleTime: 60_000,
     queryFn: async () => {
       const { data } = await supabase
         .from("message_recipients")
@@ -67,36 +67,7 @@ export function NotificationsBell() {
     },
   });
 
-  // Realtime invalidations across both sources
-  useEffect(() => {
-    if (!userId) return;
-    const inv = (key: string) => () => qc.invalidateQueries({ queryKey: ["notif", key, userId] });
-    const ch = supabase
-      .channel(`bell-${userId}-${Math.random().toString(36).slice(2, 8)}`)
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "schedule_notifications", filter: `user_id=eq.${userId}` },
-        inv("schedule"),
-      )
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "message_recipients", filter: `user_id=eq.${userId}` },
-        inv("messages"),
-      )
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "messages" },
-        inv("messages"),
-      )
-      .subscribe();
-    return () => {
-      try {
-        supabase.removeChannel(ch);
-      } catch {
-        /* noop */
-      }
-    };
-  }, [userId, qc]);
+  // Realtime invalidations handled by global RealtimeBridge in app-shell.
 
   const items: UnifiedItem[] = useMemo(() => {
     const out: UnifiedItem[] = [];

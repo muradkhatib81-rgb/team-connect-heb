@@ -8,6 +8,7 @@ export const getRouter = () => {
       queries: {
         throwOnError: false,
         retry: 1,
+        staleTime: 30_000,
       },
     },
   });
@@ -16,7 +17,7 @@ export const getRouter = () => {
     routeTree,
     context: { queryClient },
     scrollRestoration: true,
-    defaultPreloadStaleTime: 0,
+    defaultPreloadStaleTime: 30_000,
   });
 
   return router;
