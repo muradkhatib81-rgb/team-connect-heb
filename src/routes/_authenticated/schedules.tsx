@@ -220,7 +220,7 @@ function SchedulesPage() {
     isBranchManager ||
     (isAssistantManager && !isDeptMgr && !!permsQ.data?.can_publish_schedule);
   const canEditScheduleTimes =
-    isMainAdmin || isBranchMgr || isDeptMgr || canApprove || canPublishDirect;
+    isMainAdmin || isBranchMgr || canApprove || canPublishDirect;
   const canSeeScheduleQueues = canApprove || canPublishDirect;
   const canCreate =
     isMainAdmin ||
@@ -1860,12 +1860,10 @@ function SchedulesPage() {
             )}
             {editable && visible.status !== "approved" && visible.status !== "pending_approval" && (
               <>
-                {canEditScheduleTimes && (
-                  <Button onClick={() => saveMut.mutate()} disabled={saveMut.isPending} size="sm">
-                    {saveMut.isPending ? <Loader2 className="size-4 animate-spin" /> : <Save className="size-4" />}
-                    שמור טיוטה
-                  </Button>
-                )}
+                <Button onClick={() => saveMut.mutate()} disabled={saveMut.isPending} size="sm">
+                  {saveMut.isPending ? <Loader2 className="size-4 animate-spin" /> : <Save className="size-4" />}
+                  שמור טיוטה
+                </Button>
                 <Button
                   onClick={() => submitMut.mutate()}
                   disabled={submitMut.isPending}
