@@ -34,6 +34,7 @@ import {
   type ScheduleChangeBaselineKind,
 } from "@/lib/schedule-publish-diff";
 import { canViewScheduleContent, type ScheduleViewerCaps } from "@/lib/schedule-visibility";
+import { resolveScheduleManagerCaps } from "@/lib/schedule-manager-caps";
 import { useAuth } from "@/lib/use-auth";
 import { useShiftDefinitions, type ShiftDef } from "@/lib/use-shift-definitions";
 import { cn } from "@/lib/utils";
@@ -469,31 +470,18 @@ function buildViewerCapsFromProfile(
     can_create_schedule: boolean;
     can_approve_schedule: boolean;
     can_publish_schedule: boolean;
+    can_manage_schedule?: boolean;
   },
 ): ScheduleViewerCaps {
-  const isMainAdmin = profile.roles.includes("main_admin");
-  const isBranchManager = profile.roles.includes("branch_manager");
-  const isAssistantManager = profile.roles.includes("assistant_manager");
-  const isDeptMgr = profile.roles.includes("department_manager");
-  const isBranchMgr = (isBranchManager || isAssistantManager) && !isDeptMgr;
+  const caps = resolveScheduleManagerCaps(profile.roles, perms);
   return {
     userId: profile.id,
-    isMainAdmin,
-    isBranchMgr,
-    isDeptMgr,
-    canCreate:
-      isMainAdmin ||
-      isBranchManager ||
-      isDeptMgr ||
-      (isAssistantManager && !isDeptMgr && !!perms.can_create_schedule),
-    canApprove:
-      isMainAdmin ||
-      isBranchManager ||
-      (isAssistantManager && !isDeptMgr && !!perms.can_approve_schedule),
-    canPublishDirect:
-      isMainAdmin ||
-      isBranchManager ||
-      (isAssistantManager && !isDeptMgr && !!perms.can_publish_schedule),
+    isMainAdmin: caps.isMainAdmin,
+    isBranchMgr: caps.isBranchMgr,
+    isDeptMgr: caps.isDeptMgr,
+    canCreate: caps.canCreate,
+    canApprove: caps.canApprove,
+    canPublishDirect: caps.canPublishDirect,
     departmentId: profile.department_id,
   };
 }

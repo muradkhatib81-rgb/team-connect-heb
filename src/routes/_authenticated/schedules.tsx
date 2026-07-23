@@ -58,6 +58,7 @@ import {
   approveSchedule,
   publishSchedule,
   getSchedulesForViewer,
+  getDepartmentWeekScheduleFlags,
   copyPreviousWeek,
   deleteSchedule,
   publishAllWeekSchedules,
@@ -74,6 +75,9 @@ import {
   canViewScheduleContent,
   type ScheduleViewerCaps,
 } from "@/lib/schedule-visibility";
+import {
+  resolveScheduleManagerCaps,
+} from "@/lib/schedule-manager-caps";
 import { useShiftDefinitions } from "@/lib/use-shift-definitions";
 import { Time24Input } from "@/components/ui/time24-input";
 
@@ -179,22 +183,15 @@ function SchedulesPage() {
     return { backgroundColor: `${c}22`, color: c, borderColor: `${c}66` };
   };
 
-  const isMainAdmin = !!me?.roles.includes("main_admin");
-  const isBranchManager = !!me?.roles.includes("branch_manager");
-  const isAssistantManager = !!me?.roles.includes("assistant_manager");
-  const isDeptMgr = !!me?.roles.includes("department_manager");
-  const isBranchMgr =
-    (isBranchManager || isAssistantManager) && !isDeptMgr;
-  const isEmployee = !isMainAdmin && !isBranchMgr && !isDeptMgr;
-
-  // Granular flags from user_task_permissions
   const permsQ = useQuery({
     enabled: !!me?.id,
     queryKey: ["my-perms", me?.id],
     queryFn: async () => {
       const { data } = await supabase
         .from("user_task_permissions")
-        .select("can_create_schedule, can_approve_schedule, can_publish_schedule")
+        .select(
+          "can_create_schedule, can_approve_schedule, can_publish_schedule, can_manage_schedule",
+        )
         .eq("user_id", me!.id)
         .maybeSingle();
       return (
@@ -202,37 +199,33 @@ function SchedulesPage() {
           can_create_schedule: false,
           can_approve_schedule: false,
           can_publish_schedule: false,
+          can_manage_schedule: false,
         }
       );
     },
   });
 
-  const hasSchedulePerm =
-    !!permsQ.data?.can_create_schedule ||
-    !!permsQ.data?.can_approve_schedule ||
-    !!permsQ.data?.can_publish_schedule;
-  const canApprove =
-    isMainAdmin ||
-    isBranchManager ||
-    (isAssistantManager && !isDeptMgr && !!permsQ.data?.can_approve_schedule);
-  const canPublishDirect =
-    isMainAdmin ||
-    isBranchManager ||
-    (isAssistantManager && !isDeptMgr && !!permsQ.data?.can_publish_schedule);
+  const managerCaps = useMemo(
+    () => resolveScheduleManagerCaps(me?.roles ?? [], permsQ.data),
+    [me?.roles, permsQ.data],
+  );
+  const {
+    isMainAdmin,
+    isDeptMgr,
+    isBranchMgr,
+    isDeptHeadOnly,
+    canCreate,
+    canApprove,
+    canPublishDirect,
+  } = managerCaps;
+  const isEmployee = !isMainAdmin && !isBranchMgr && !isDeptMgr;
+
   const canEditScheduleTimes =
     isMainAdmin || isBranchMgr || canApprove || canPublishDirect;
   /** Dept heads submit for approval only; no standalone draft save. */
-  const canSaveScheduleDraft = !(isDeptMgr && !isMainAdmin && !isBranchMgr);
+  const canSaveScheduleDraft = !isDeptHeadOnly;
   const canSeeScheduleQueues = canApprove || canPublishDirect;
-  const canCreate =
-    isMainAdmin ||
-    isBranchManager ||
-    isDeptMgr ||
-    (isAssistantManager && !isDeptMgr && !!permsQ.data?.can_create_schedule);
-  const canViewPrePublishSummary =
-    isMainAdmin ||
-    isBranchManager ||
-    (isAssistantManager && !isDeptMgr && hasSchedulePerm);
+  const canViewPrePublishSummary = isBranchMgr;
 
   const myDeptId = me?.department_id ?? null;
 
@@ -260,11 +253,11 @@ function SchedulesPage() {
   ]);
 
   const managedDeptIds = useMemo(() => {
-    if (!isDeptMgr || isMainAdmin || isBranchMgr) return undefined;
+    if (!isDeptHeadOnly) return undefined;
     const ids = new Set<string>();
     if (myDeptId) ids.add(myDeptId);
     return [...ids];
-  }, [isDeptMgr, isMainAdmin, isBranchMgr, myDeptId]);
+  }, [isDeptHeadOnly, myDeptId]);
 
   // Default view for approvers = pending approvals list across all departments they can see.
   const [view, setView] = useState<SchedulesView>(
@@ -309,6 +302,7 @@ function SchedulesPage() {
   );
 
   const getSchedulesFn = useServerFn(getSchedulesForViewer);
+  const deptWeekFlagsFn = useServerFn(getDepartmentWeekScheduleFlags);
   const weekSchedulesQ = useQuery({
     enabled: !!me?.id && view === "editor",
     queryKey: ["week-schedules", weekStart, me?.id],
@@ -336,11 +330,11 @@ function SchedulesPage() {
   useEffect(() => {
     if (selectedDept) return;
     if (search.dept) setSelectedDept(search.dept);
-    else if (isDeptMgr && !isMainAdmin && !isBranchMgr && myDeptId) setSelectedDept(myDeptId);
+    else if (isDeptHeadOnly && myDeptId) setSelectedDept(myDeptId);
     else if (isEmployee && myDeptId) setSelectedDept(myDeptId);
     else if (deptsWithoutSchedule.length) setSelectedDept(deptsWithoutSchedule[0].id);
     else if (deptsQ.data?.length) setSelectedDept(deptsQ.data[0].id);
-  }, [deptsQ.data, deptsWithoutSchedule, myDeptId, selectedDept, isDeptMgr, isMainAdmin, isBranchMgr, isEmployee, search.dept]);
+  }, [deptsQ.data, deptsWithoutSchedule, myDeptId, selectedDept, isDeptHeadOnly, isEmployee, search.dept]);
   const weekEnd = addDaysISO(weekStart, 6);
   const days = useMemo(
     () => Array.from({ length: 7 }, (_, i) => addDaysISO(weekStart, i)),
@@ -422,10 +416,7 @@ function SchedulesPage() {
     [weekSavedQ.data],
   );
 
-  const canSwitchDepartments =
-    !isEmployee &&
-    !isDeptMgr &&
-    (isMainAdmin || isBranchMgr || (isAssistantManager && !!permsQ.data?.can_create_schedule));
+  const canSwitchDepartments = !isEmployee && isBranchMgr;
 
 
 
@@ -504,6 +495,41 @@ function SchedulesPage() {
       return (rows ?? [])[0] ?? null;
     },
   });
+
+  const deptWeekFlagsQ = useQuery({
+    enabled: !!selectedDept && !!me?.id && view === "editor",
+    queryKey: ["dept-schedule-flags", selectedDept, weekStart, me?.id],
+    queryFn: () =>
+      deptWeekFlagsFn({
+        data: { department_id: selectedDept!, week_start: weekStart },
+      }),
+  });
+
+  const blockedCreatorId = deptWeekFlagsQ.data?.awaitingPublish?.created_by ?? null;
+  const blockedCreatorQ = useQuery({
+    enabled: !!blockedCreatorId,
+    queryKey: ["schedule-blocked-creator", blockedCreatorId],
+    queryFn: async () => {
+      const { data } = await (supabase as any).rpc("get_profiles_basic_info", {
+        user_ids: [blockedCreatorId],
+      });
+      return (data?.[0]?.full_name as string | undefined) ?? "לא ידוע";
+    },
+  });
+
+  useEffect(() => {
+    if (!selectedDept || view !== "editor") return;
+    const ch = supabase
+      .channel(`schedules-dept-flags-${selectedDept}-${weekStart}`)
+      .on("postgres_changes", { event: "*", schema: "public", table: "schedules" }, () => {
+        qc.invalidateQueries({ queryKey: ["dept-schedule-flags", selectedDept, weekStart] });
+        qc.invalidateQueries({ queryKey: ["schedule", selectedDept, weekStart] });
+      })
+      .subscribe();
+    return () => {
+      supabase.removeChannel(ch);
+    };
+  }, [selectedDept, weekStart, view, qc]);
 
   // Creator / Editor / Approver details for the visible schedule.
   const decisionPersonQ = useQuery({
@@ -1145,6 +1171,14 @@ function SchedulesPage() {
     !isBranchMgr &&
     visible.created_by !== me?.id;
 
+  const managerSavedDraftBlocksMe =
+    !visible &&
+    !!deptWeekFlagsQ.data?.hasSavedAwaitingPublish &&
+    isDeptHeadOnly;
+  const blockedAwaitingStatus =
+    deptWeekFlagsQ.data?.awaitingPublish?.status ??
+    (visible?.status as string | undefined);
+
   const editable =
     !!visible &&
     !isEmployee &&
@@ -1615,7 +1649,7 @@ function SchedulesPage() {
         )}
 
         <div className="flex-1">
-          {isDeptMgr && !isMainAdmin && !isBranchMgr ? (
+          {isDeptHeadOnly ? (
             <div className="text-sm font-medium px-3 py-2 bg-muted rounded-md">
               {deptsQ.data?.find((d) => d.id === selectedDept)?.name ?? "—"}
             </div>
@@ -1702,10 +1736,42 @@ function SchedulesPage() {
       </Card>
 
       {/* No schedule yet */}
-      {schedQ.isLoading ? (
+      {schedQ.isLoading || (isDeptHeadOnly && deptWeekFlagsQ.isLoading) ? (
         <div className="flex justify-center py-12">
           <Loader2 className="size-6 animate-spin text-primary" />
         </div>
+      ) : managerSavedDraftBlocksMe ? (
+        <Card className="card-elevated p-6 border-primary/30 bg-primary/5">
+          <div className="flex gap-3 items-start">
+            <AlertTriangle className="size-5 text-primary mt-0.5 shrink-0" />
+            <div className="space-y-1.5 text-sm">
+              <p className="font-semibold text-base">
+                כבר קיים סידור עבודה שמור למחלקה זו
+              </p>
+              <p className="text-muted-foreground">
+                הסידור נשמר על־ידי ההנהלה וממתין לפרסום. לא ניתן ליצור סידור חדש
+                עד לפרסום או מחיקת הסידור הקיים.
+              </p>
+              <p>
+                נשמר על־ידי:{" "}
+                <span className="font-medium">
+                  {blockedCreatorQ.isLoading
+                    ? "נטען..."
+                    : (blockedCreatorQ.data ?? "לא ידוע")}
+                </span>
+              </p>
+              {blockedAwaitingStatus && (
+                <p>
+                  סטטוס:{" "}
+                  <span className="font-medium">
+                    {STATUS_LABEL[blockedAwaitingStatus as keyof typeof STATUS_LABEL] ??
+                      blockedAwaitingStatus}
+                  </span>
+                </p>
+              )}
+            </div>
+          </div>
+        </Card>
       ) : !visible ? (
         <Card className="card-elevated p-8 text-center space-y-3">
           <p className="text-sm text-muted-foreground">
@@ -1713,7 +1779,7 @@ function SchedulesPage() {
               ? "אין סידור מאושר לשבוע זה."
               : "לא קיים סידור לשבוע זה במחלקה זו."}
           </p>
-          {canCreate && !isEmployee && (
+          {canCreate && !isEmployee && !deptWeekFlagsQ.data?.hasSavedAwaitingPublish && (
             <Button onClick={() => createMut.mutate()} disabled={createMut.isPending}>
               {createMut.isPending && <Loader2 className="size-4 animate-spin" />}
               צור טיוטה

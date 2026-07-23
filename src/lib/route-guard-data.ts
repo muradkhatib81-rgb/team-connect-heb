@@ -10,6 +10,10 @@ export type RouteGuardPermissions = {
   can_reset_employee_password: boolean | null;
   can_manage_departments: boolean | null;
   can_manage_employee_of_month: boolean | null;
+  can_create_schedule: boolean | null;
+  can_approve_schedule: boolean | null;
+  can_publish_schedule: boolean | null;
+  can_manage_schedule: boolean | null;
 };
 
 export async function fetchRouteGuardRoles(userId: string): Promise<AppRole[]> {
@@ -24,7 +28,7 @@ export async function fetchRouteGuardPermissions(
   const { data, error } = await supabase
     .from("user_task_permissions")
     .select(
-      "can_add_employee, can_edit_employee, can_delete_employee, can_reset_employee_password, can_manage_departments, can_manage_employee_of_month",
+      "can_add_employee, can_edit_employee, can_delete_employee, can_reset_employee_password, can_manage_departments, can_manage_employee_of_month, can_create_schedule, can_approve_schedule, can_publish_schedule, can_manage_schedule",
     )
     .eq("user_id", userId)
     .maybeSingle();

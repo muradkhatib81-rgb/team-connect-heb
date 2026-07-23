@@ -48,6 +48,7 @@ import {
   isEmployeeCurrentlyOnLeave,
 } from "@/lib/employee-leave";
 import { formatScheduleDayHe } from "@/lib/schedule-week";
+import { resolveScheduleManagerCaps } from "@/lib/schedule-manager-caps";
 import { CreateEmployeeDialog } from "./employees";
 import { ManagementOnShiftCard } from "@/components/management-on-shift-card";
 import { CustodyDashboardSection } from "@/components/custody-dashboard-section";
@@ -751,38 +752,34 @@ function SchedulesStatsSection({ profile }: { profile: any }) {
     queryFn: async () => {
       const { data } = await supabase
         .from("user_task_permissions")
-        .select("can_create_schedule, can_approve_schedule, can_publish_schedule")
+        .select(
+          "can_create_schedule, can_approve_schedule, can_publish_schedule, can_manage_schedule",
+        )
         .eq("user_id", profile.id)
         .maybeSingle();
-      return data ?? { can_create_schedule: false, can_approve_schedule: false, can_publish_schedule: false };
+      return (
+        data ?? {
+          can_create_schedule: false,
+          can_approve_schedule: false,
+          can_publish_schedule: false,
+          can_manage_schedule: false,
+        }
+      );
     },
   });
 
-  const isMainAdmin = profile.roles.includes("main_admin") || profile.roles.includes("system_admin");
-  const isBranchManager = profile.roles.includes("branch_manager");
-  const isAssistantManager = profile.roles.includes("assistant_manager");
-  const isDeptMgr = profile.roles.includes("department_manager");
-  const hasSchedulePerm =
-    !!permsQ.data?.can_create_schedule ||
-    !!permsQ.data?.can_approve_schedule ||
-    !!permsQ.data?.can_publish_schedule;
-  // Department heads never get branch-wide schedule overview — even if an old
-  // assistant_manager row was left behind during a role change.
-  const canViewBranchScheduleOverview =
-    !isDeptMgr &&
-    (isMainAdmin ||
-      isBranchManager ||
-      (isAssistantManager && hasSchedulePerm));
+  const scheduleCaps = resolveScheduleManagerCaps(profile.roles, permsQ.data);
+  const {
+    isMainAdmin,
+    isDeptMgr,
+    isBranchMgr,
+    isDeptHeadOnly,
+    canApprove,
+    canPublishDirect,
+  } = scheduleCaps;
+  const canViewBranchScheduleOverview = isBranchMgr;
   const canManageOwnDeptSchedule = isDeptMgr;
-  const deptHeadOnly = canManageOwnDeptSchedule && !canViewBranchScheduleOverview;
-  const canApprove =
-    isMainAdmin ||
-    isBranchManager ||
-    (isAssistantManager && !isDeptMgr && !!permsQ.data?.can_approve_schedule);
-  const canPublishDirect =
-    isMainAdmin ||
-    isBranchManager ||
-    (isAssistantManager && !isDeptMgr && !!permsQ.data?.can_publish_schedule);
+  const deptHeadOnly = isDeptHeadOnly;
 
   // Compute current week (Saturday-based) in Asia/Jerusalem-agnostic UTC slicing,
   // matching getWeekStart logic in schedules.tsx.

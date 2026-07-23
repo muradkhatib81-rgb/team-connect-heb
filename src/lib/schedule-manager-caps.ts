@@ -1,0 +1,87 @@
+/** Branch-level vs dept-head-only schedule operators (granular platform permissions). */
+
+export type ScheduleTaskPermissions = {
+  can_create_schedule?: boolean | null;
+  can_approve_schedule?: boolean | null;
+  can_publish_schedule?: boolean | null;
+  can_manage_schedule?: boolean | null;
+};
+
+export function hasAnyScheduleManagementPerm(
+  perms?: ScheduleTaskPermissions | null,
+): boolean {
+  if (!perms) return false;
+  return !!(
+    perms.can_create_schedule ||
+    perms.can_approve_schedule ||
+    perms.can_publish_schedule ||
+    perms.can_manage_schedule
+  );
+}
+
+/** Main admin, branch manager, or assistant with any schedule workflow permission. */
+export function isBranchLevelScheduleManager(
+  roles: readonly string[],
+  perms?: ScheduleTaskPermissions | null,
+): boolean {
+  if (roles.includes("main_admin") || roles.includes("system_admin")) return true;
+  if (roles.includes("branch_manager")) return true;
+  if (roles.includes("assistant_manager") && hasAnyScheduleManagementPerm(perms)) {
+    return true;
+  }
+  return false;
+}
+
+/** Department head scoped to own dept — not a branch-level schedule operator. */
+export function isDepartmentHeadOnlyScope(
+  roles: readonly string[],
+  perms?: ScheduleTaskPermissions | null,
+): boolean {
+  return roles.includes("department_manager") && !isBranchLevelScheduleManager(roles, perms);
+}
+
+export type ResolvedScheduleManagerCaps = {
+  isMainAdmin: boolean;
+  isBranchManager: boolean;
+  isAssistantManager: boolean;
+  isDeptMgr: boolean;
+  isBranchMgr: boolean;
+  isDeptHeadOnly: boolean;
+  canCreate: boolean;
+  canApprove: boolean;
+  canPublishDirect: boolean;
+};
+
+export function resolveScheduleManagerCaps(
+  roles: readonly string[],
+  perms?: ScheduleTaskPermissions | null,
+): ResolvedScheduleManagerCaps {
+  const p = perms ?? {};
+  const isMainAdmin = roles.includes("main_admin") || roles.includes("system_admin");
+  const isBranchManager = roles.includes("branch_manager");
+  const isAssistantManager = roles.includes("assistant_manager");
+  const isDeptMgr = roles.includes("department_manager");
+  const branchLevel = isBranchLevelScheduleManager(roles, p);
+
+  return {
+    isMainAdmin,
+    isBranchManager,
+    isAssistantManager,
+    isDeptMgr,
+    isBranchMgr: branchLevel,
+    isDeptHeadOnly: isDepartmentHeadOnlyScope(roles, p),
+    canCreate:
+      isMainAdmin ||
+      isBranchManager ||
+      (isAssistantManager && !!p.can_create_schedule) ||
+      (isDeptMgr && !branchLevel),
+    canApprove:
+      isMainAdmin ||
+      isBranchManager ||
+      (isAssistantManager && !!p.can_approve_schedule),
+    canPublishDirect:
+      isMainAdmin ||
+      isBranchManager ||
+      (isAssistantManager && !!p.can_publish_schedule),
+  };
+}

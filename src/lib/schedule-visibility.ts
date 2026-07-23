@@ -19,6 +19,19 @@ export type ScheduleVisibilityRow = {
   department_id: string;
 };
 
+/** Saved workflow row that is not yet published to employees / dept heads. */
+export function isSavedScheduleAwaitingPublish(
+  schedule: Pick<ScheduleVisibilityRow, "status" | "published_at"> | null | undefined,
+): boolean {
+  if (!schedule) return false;
+  if (schedule.status === "approved" && schedule.published_at) return false;
+  return (
+    schedule.status === "draft" ||
+    schedule.status === "pending_approval" ||
+    (schedule.status === "approved" && !schedule.published_at)
+  );
+}
+
 /** Branch-level schedule managers (not department heads acting on their own dept). */
 function isBranchLevelScheduleViewer(caps: ScheduleViewerCaps): boolean {
   if (caps.isMainAdmin || caps.isBranchMgr) return true;

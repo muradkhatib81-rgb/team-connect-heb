@@ -2,8 +2,10 @@ import { createServerFn } from "@tanstack/react-start";
 import { requireBranchContext } from "@/integrations/supabase/active-branch.server";
 import { z } from "zod";
 import { isEmployeeOnLeaveOnDate } from "@/lib/employee-leave";
+import { resolveScheduleManagerCaps } from "@/lib/schedule-manager-caps";
 import {
   canViewScheduleContent,
+  isSavedScheduleAwaitingPublish,
   type ScheduleViewerCaps,
 } from "@/lib/schedule-visibility";
 
@@ -16,30 +18,10 @@ async function getCaps(supabase: any, userId: string) {
     supabase.from("user_task_permissions").select("*").eq("user_id", userId).maybeSingle(),
     supabase.from("profiles").select("department_id").eq("id", userId).maybeSingle(),
   ]);
-  const set = new Set((roles ?? []).map((r: any) => r.role));
+  const roleList = (roles ?? []).map((r: any) => r.role as string);
   const p: any = perm ?? {};
-  const isMainAdmin = set.has("main_admin");
-  const isBranchManager = set.has("branch_manager");
-  const isAssistantManager = set.has("assistant_manager");
-  const isDeptMgr = set.has("department_manager");
-  const isBranchMgr = (isBranchManager || isAssistantManager) && !isDeptMgr;
   return {
-    isMainAdmin,
-    isBranchMgr,
-    isDeptMgr,
-    canCreate:
-      isMainAdmin ||
-      isBranchManager ||
-      isDeptMgr ||
-      (isAssistantManager && !isDeptMgr && !!p.can_create_schedule),
-    canApprove:
-      isMainAdmin ||
-      isBranchManager ||
-      (isAssistantManager && !isDeptMgr && !!p.can_approve_schedule),
-    canPublishDirect:
-      isMainAdmin ||
-      isBranchManager ||
-      (isAssistantManager && !isDeptMgr && !!p.can_publish_schedule),
+    ...resolveScheduleManagerCaps(roleList, p),
     departmentId: profile?.department_id ?? null,
   };
 }
@@ -268,7 +250,7 @@ async function getManagedDepartmentIds(
   caps: ScheduleViewerCaps,
   userId: string,
 ): Promise<string[]> {
-  if (!caps.isDeptMgr || caps.isMainAdmin || caps.isBranchMgr) return [];
+  if (!caps.isDeptHeadOnly) return [];
   const { data: managedDepts } = await supabase
     .from("departments")
     .select("id")
@@ -331,7 +313,7 @@ export const createOrGetSchedule = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     const caps = await getCaps(context.supabase, context.userId);
     if (!caps.canCreate) throw new Error("אין הרשאה ליצור סידור עבודה");
-    if (caps.isDeptMgr && !caps.isMainAdmin && !caps.isBranchMgr) {
+    if (caps.isDeptHeadOnly) {
       if (data.department_id !== caps.departmentId) {
         throw new Error("ניתן ליצור סידור רק עבור המחלקה שלך");
       }
@@ -344,6 +326,20 @@ export const createOrGetSchedule = createServerFn({ method: "POST" })
       .eq("week_start", start)
       .maybeSingle();
     if (existing.data) return existing.data;
+
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { data: hiddenRow } = await supabaseAdmin
+      .from("schedules")
+      .select("id, status, published_at")
+      .eq("department_id", data.department_id)
+      .eq("week_start", start)
+      .maybeSingle();
+    if (hiddenRow && isSavedScheduleAwaitingPublish(hiddenRow)) {
+      throw new Error("כבר קיים סידור עבודה שמור למחלקה זו — ממתין לפרסום");
+    }
+    if (hiddenRow) {
+      throw new Error("כבר קיים סידור עבודה לשבוע זה במחלקה זו");
+    }
     const { data: settings } = await context.supabase
       .from("company_settings")
       .select("schedule_type")
@@ -1148,7 +1144,7 @@ export const setEmployeeScheduleExclusion = createServerFn({ method: "POST" })
     if (context.branchId && profile.branch_id !== context.branchId) {
       throw new Error("עובד לא נמצא בסניף הפעיל");
     }
-    if (caps.isDeptMgr && !caps.isMainAdmin && !caps.isBranchMgr) {
+    if (caps.isDeptHeadOnly) {
       if (profile.department_id !== caps.departmentId) {
         throw new Error("אין הרשאה לעדכן עובד מחלקה אחרת");
       }
@@ -1243,7 +1239,7 @@ export const deleteSchedule = createServerFn({ method: "POST" })
     if (!sched) throw new Error("סידור לא נמצא");
 
     const isOwnDeptMgrDraft =
-      caps.isDeptMgr &&
+      caps.isDeptHeadOnly &&
       sched.department_id === caps.departmentId &&
       (sched.status === "draft" || sched.status === "rejected");
 
@@ -1400,7 +1396,7 @@ export const getWeekDepartmentStates = createServerFn({ method: "POST" })
     if (dErr) throw new Error(dErr.message);
     let activeDepts = ((depts ?? []) as any[]).map((d) => ({ id: d.id, name: d.name }));
 
-    if (caps.isDeptMgr && !caps.isMainAdmin && !caps.isBranchMgr) {
+    if (caps.isDeptHeadOnly) {
       const { data: managedDepts, error: managedErr } = await supabaseAdmin
         .from("departments")
         .select("id, name, is_active")
@@ -1488,41 +1484,17 @@ export const getDepartmentWeekScheduleFlags = createServerFn({ method: "POST" })
       .maybeSingle();
     if (error) throw new Error(error.message);
 
-    const scheduleRow = sched
-      ? {
-          status: sched.status,
-          published_at: sched.published_at,
-          submitted_at: sched.submitted_at,
-          created_by: sched.created_by,
-          department_id: sched.department_id,
-        }
-      : null;
-
-    const viewerCaps = {
-      userId: context.userId,
-      isMainAdmin: caps.isMainAdmin,
-      isBranchMgr: caps.isBranchMgr,
-      isDeptMgr: caps.isDeptMgr,
-      canCreate: caps.canCreate,
-      canApprove: caps.canApprove,
-      canPublishDirect: caps.canPublishDirect,
-      departmentId: caps.departmentId,
-    };
-    const managedDeptIds = await getManagedDepartmentIds(
-      supabaseAdmin,
-      viewerCaps,
-      context.userId,
-    );
-    const canViewContent = canViewScheduleContent(scheduleRow, viewerCaps, managedDeptIds);
-
     const hasPublished = sched?.status === "approved" && !!sched?.published_at;
-    const hasSavedAwaitingPublish =
-      !!sched &&
-      canViewContent &&
-      !hasPublished &&
-      (sched.status === "draft" ||
-        sched.status === "pending_approval" ||
-        (sched.status === "approved" && !sched.published_at));
+    const hasSavedAwaitingPublish = isSavedScheduleAwaitingPublish(sched);
 
-    return { hasPublished, hasSavedAwaitingPublish };
+    return {
+      hasPublished,
+      hasSavedAwaitingPublish,
+      awaitingPublish: hasSavedAwaitingPublish
+        ? {
+            status: sched!.status as string,
+            created_by: (sched!.created_by as string | null) ?? null,
+          }
+        : null,
+    };
   });

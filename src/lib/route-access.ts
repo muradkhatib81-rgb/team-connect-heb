@@ -6,6 +6,8 @@
  * URL access to obtain data outside the caller's scope.
  */
 
+import { hasAnyScheduleManagementPerm } from "@/lib/schedule-manager-caps";
+
 type RouteAccessInput = {
   pathname: string;
   roles: readonly string[];
@@ -16,6 +18,10 @@ type RouteAccessInput = {
     can_reset_employee_password?: boolean;
     can_manage_departments?: boolean;
     can_manage_employee_of_month?: boolean;
+    can_create_schedule?: boolean;
+    can_approve_schedule?: boolean;
+    can_publish_schedule?: boolean;
+    can_manage_schedule?: boolean;
   } | null;
 };
 
@@ -41,6 +47,14 @@ function canManageEmployees(input: RouteAccessInput): boolean {
   );
 }
 
+function hasScheduleDirectoryAccess(input: RouteAccessInput): boolean {
+  const { permissions, roles } = input;
+  return (
+    isPlatformOrBranchManager(roles) ||
+    (roles.includes("assistant_manager") && hasAnyScheduleManagementPerm(permissions))
+  );
+}
+
 /**
  * Returns whether a sensitive branch route can be opened by the current user.
  * Routes not listed here are regular self-service/workflow routes and defer
@@ -58,7 +72,12 @@ export function canAccessRoute(input: RouteAccessInput): boolean {
 
   if (pathname === "/employees") {
     // Department heads may open a read-only, RLS-scoped view of their department.
-    return canManageEmployees(input) || roles.includes("department_manager");
+    // Branch schedule operators need employee directory access to build schedules.
+    return (
+      canManageEmployees(input) ||
+      roles.includes("department_manager") ||
+      hasScheduleDirectoryAccess(input)
+    );
   }
 
   if (pathname === "/permissions") {
@@ -69,7 +88,8 @@ export function canAccessRoute(input: RouteAccessInput): boolean {
     return (
       isPlatformOrBranchManager(roles) ||
       roles.includes("department_manager") ||
-      (roles.includes("assistant_manager") && !!permissions?.can_manage_departments)
+      (roles.includes("assistant_manager") && !!permissions?.can_manage_departments) ||
+      hasScheduleDirectoryAccess(input)
     );
   }
 
