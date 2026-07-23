@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/use-auth";
@@ -221,6 +221,8 @@ function SchedulesPage() {
     (isAssistantManager && !isDeptMgr && !!permsQ.data?.can_publish_schedule);
   const canEditScheduleTimes =
     isMainAdmin || isBranchMgr || canApprove || canPublishDirect;
+  /** Dept heads submit for approval only; no standalone draft save. */
+  const canSaveScheduleDraft = !(isDeptMgr && !isMainAdmin && !isBranchMgr);
   const canSeeScheduleQueues = canApprove || canPublishDirect;
   const canCreate =
     isMainAdmin ||
@@ -773,35 +775,11 @@ function SchedulesPage() {
     setNoteEdits(n);
   }, [shiftsQ.data, empsQ.data, days]);
 
-  // Frozen baseline for change markers — captured once when opening a viewable schedule.
-  const [changeBaseline, setChangeBaseline] = useState<
-    Record<string, { shift: string | null; start: string | null; end: string | null; note: string | null }>
-  >({});
-  const changeBaselineScheduleIdRef = useRef<string | null>(null);
-
-  const reseedPublishedBaseline = () => {
-    changeBaselineScheduleIdRef.current = null;
-  };
-
-  useEffect(() => {
-    if (!visible?.id || !changeBaselineKind) {
-      if (changeBaselineScheduleIdRef.current !== null) {
-        changeBaselineScheduleIdRef.current = null;
-        setChangeBaseline({});
-      }
-      return;
-    }
-    if (!shiftsQ.data?.length || !shiftDefsQ.isSuccess) return;
-    if (changeBaselineScheduleIdRef.current === visible.id) return;
-    changeBaselineScheduleIdRef.current = visible.id;
-    setChangeBaseline(buildChangeBaselineMap(shiftsQ.data, changeBaselineKind, shiftDefsQ.map));
-  }, [
-    visible?.id,
-    changeBaselineKind,
-    shiftsQ.data,
-    shiftDefsQ.isSuccess,
-    shiftDefsQ.map,
-  ]);
+  // Compare live cells against submitted/published snapshot columns from the DB.
+  const changeBaseline = useMemo(() => {
+    if (!changeBaselineKind || !shiftsQ.data?.length || !shiftDefsQ.isSuccess) return {};
+    return buildChangeBaselineMap(shiftsQ.data, changeBaselineKind, shiftDefsQ.map);
+  }, [changeBaselineKind, shiftsQ.data, shiftDefsQ.isSuccess, shiftDefsQ.map]);
 
   // Realtime: global RealtimeBridge in app-shell keeps schedule queries fresh.
 
@@ -854,7 +832,6 @@ function SchedulesPage() {
     },
     onSuccess: (r: any) => {
       toast.success(r?.published ? "סידור העבודה פורסם" : r?.approved ? "הסידור אושר וממתין לפרסום" : "נשלח לאישור");
-      reseedPublishedBaseline();
       qc.invalidateQueries({ queryKey: ["schedule"] });
       qc.invalidateQueries({ queryKey: ["schedule-shifts", visible?.id] });
       qc.invalidateQueries({ queryKey: ["schedules-pending"] });
@@ -877,7 +854,6 @@ function SchedulesPage() {
     },
     onSuccess: (r: any) => {
       toast.success(r?.published ? "סידור העבודה פורסם" : "הסידור אושר וממתין לפרסום");
-      reseedPublishedBaseline();
       qc.invalidateQueries({ queryKey: ["schedule"] });
       qc.invalidateQueries({ queryKey: ["schedule-shifts", visible?.id] });
       qc.invalidateQueries({ queryKey: ["schedules-pending"] });
@@ -899,7 +875,6 @@ function SchedulesPage() {
     },
     onSuccess: () => {
       toast.success("סידור העבודה פורסם");
-      reseedPublishedBaseline();
       qc.invalidateQueries({ queryKey: ["schedule"] });
       qc.invalidateQueries({ queryKey: ["schedule-shifts", visible?.id] });
       qc.invalidateQueries({ queryKey: ["schedules-approved"] });
@@ -999,7 +974,6 @@ function SchedulesPage() {
     onSuccess: () => {
       toast.success("סידור העבודה נמחק");
       setDeleteOpen(false);
-      reseedPublishedBaseline();
       qc.invalidateQueries({ queryKey: ["schedule"] });
       qc.invalidateQueries({ queryKey: ["schedule", selectedDept, weekStart] });
       qc.invalidateQueries({ queryKey: ["schedules-pending"] });
@@ -1860,10 +1834,12 @@ function SchedulesPage() {
             )}
             {editable && visible.status !== "approved" && visible.status !== "pending_approval" && (
               <>
-                <Button onClick={() => saveMut.mutate()} disabled={saveMut.isPending} size="sm">
-                  {saveMut.isPending ? <Loader2 className="size-4 animate-spin" /> : <Save className="size-4" />}
-                  שמור טיוטה
-                </Button>
+                {canSaveScheduleDraft && (
+                  <Button onClick={() => saveMut.mutate()} disabled={saveMut.isPending} size="sm">
+                    {saveMut.isPending ? <Loader2 className="size-4 animate-spin" /> : <Save className="size-4" />}
+                    שמור טיוטה
+                  </Button>
+                )}
                 <Button
                   onClick={() => submitMut.mutate()}
                   disabled={submitMut.isPending}
