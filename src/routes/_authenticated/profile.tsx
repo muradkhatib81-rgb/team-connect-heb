@@ -5,6 +5,13 @@ import { Button } from "@/components/ui/button";
 import { Loader2, KeyRound, User } from "lucide-react";
 import { ROLE_LABELS, isPlatformOwner } from "@/lib/constants";
 import { EmployeeOfMonthSection } from "@/components/employee-of-month-section";
+import { Badge } from "@/components/ui/badge";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Plane } from "lucide-react";
+import {
+  formatLeaveDateRange,
+  isEmployeeCurrentlyOnLeave,
+} from "@/lib/employee-leave";
 
 
 export const Route = createFileRoute("/_authenticated/profile")({
@@ -23,6 +30,8 @@ function ProfilePage() {
   }
 
   const roleLabel = me.roles?.[0] ? ROLE_LABELS[me.roles[0]] : "—";
+  const onLeaveNow = isEmployeeCurrentlyOnLeave(me);
+  const leaveRange = formatLeaveDateRange(me.leave_start_date, me.leave_end_date);
 
   return (
     <div className="space-y-6">
@@ -36,6 +45,17 @@ function ProfilePage() {
         </div>
       </div>
 
+      {onLeaveNow && (
+        <Alert className="border-amber-200 bg-amber-50/80">
+          <Plane className="size-4 text-amber-700" />
+          <AlertDescription className="text-amber-900">
+            <span className="font-semibold">את/ה בחופש כרגע.</span>
+            {leaveRange ? ` (${leaveRange})` : null}
+            {" "}לפרטים נוספים פנה/י להנהלה.
+          </AlertDescription>
+        </Alert>
+      )}
+
       <Card className="p-6 space-y-4">
         <Row label="שם פרטי" value={me.first_name || "—"} />
         <Row label="שם משפחה" value={me.last_name || "—"} />
@@ -43,6 +63,24 @@ function ProfilePage() {
         <Row label="טלפון" value={me.phone ?? "—"} />
         {!isPlatformOwner(me.roles) && <Row label="מחלקה" value={me.department_name ?? "—"} />}
         <Row label="תפקיד" value={roleLabel} />
+        <div className="flex items-center justify-between gap-3 border-b border-border/60 pb-3 last:border-0 last:pb-0">
+          <span className="text-sm text-muted-foreground">סטטוס</span>
+          <span className="text-sm font-medium flex items-center gap-2">
+            {onLeaveNow ? (
+              <>
+                בחופש
+                <Badge variant="secondary" className="rounded-full text-xs">🏖️</Badge>
+              </>
+            ) : me.is_active ? (
+              "פעיל"
+            ) : (
+              "לא פעיל"
+            )}
+          </span>
+        </div>
+        {leaveRange && (
+          <Row label="תאריכי חופשה" value={leaveRange} />
+        )}
       </Card>
 
       <Card className="p-6 flex items-center justify-between gap-3">

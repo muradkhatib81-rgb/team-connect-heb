@@ -17,6 +17,9 @@ export interface AuthProfile {
   job_title: string | null;
   phone: string | null;
   is_active: boolean;
+  on_leave: boolean;
+  leave_start_date: string | null;
+  leave_end_date: string | null;
   must_change_password: boolean;
   roles: AppRole[];
   branch_id: string | null;
@@ -39,7 +42,7 @@ async function fetchSessionAndProfile(): Promise<AuthProfile | null> {
   const profilesFrom = unscopedFrom("profiles") as ReturnType<typeof supabase.from>;
   const [{ data: profile }, { data: roles }, { data: contactRows }] = await Promise.all([
     profilesFrom
-      .select("id, first_name, last_name, full_name, department_id, job_title, is_active, branch_id, departments(name)")
+      .select("id, first_name, last_name, full_name, department_id, job_title, is_active, on_leave, leave_start_date, leave_end_date, branch_id, departments(name)")
       .eq("id", user.id)
       .maybeSingle(),
     supabase.from("user_roles").select("role").eq("user_id", user.id),
@@ -60,6 +63,9 @@ async function fetchSessionAndProfile(): Promise<AuthProfile | null> {
     job_title: p.job_title ?? null,
     phone: contact.phone ?? null,
     is_active: p.is_active ?? true,
+    on_leave: p.on_leave ?? false,
+    leave_start_date: p.leave_start_date ?? null,
+    leave_end_date: p.leave_end_date ?? null,
     must_change_password: contact.must_change_password ?? false,
     roles: (roles ?? []).map((r) => r.role as AppRole),
     branch_id: p.branch_id ?? null,

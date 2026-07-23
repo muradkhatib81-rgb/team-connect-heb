@@ -6,6 +6,10 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/use-auth";
 import { canManageUsers, ROLE_LABELS, type AppRole } from "@/lib/constants";
 import {
+  formatLeaveDateRange,
+  isEmployeeCurrentlyOnLeave,
+} from "@/lib/employee-leave";
+import {
   createDepartment,
   updateDepartment,
   deleteDepartment,
@@ -367,7 +371,7 @@ function DeptEmployeesDialog({
       if (dErr) throw dErr;
       const { data: emps, error: eErr } = await supabase
         .from("profiles")
-        .select("id, first_name, last_name, full_name, is_active, on_leave, avatar_url, department_id")
+        .select("id, first_name, last_name, full_name, is_active, on_leave, leave_start_date, leave_end_date, avatar_url, department_id")
         .eq("department_id", deptId)
         .order("first_name")
         .order("last_name");
@@ -578,10 +582,10 @@ function EmployeeListItem({ emp }: { emp: any }) {
         {!emp.is_active && (
           <Badge variant="destructive" className="rounded-full text-xs">לא פעיל</Badge>
         )}
-        {emp.on_leave && (
+        {isEmployeeCurrentlyOnLeave(emp) && (
           <Badge variant="secondary" className="rounded-full text-xs">בחופש</Badge>
         )}
-        {emp.is_active && !emp.on_leave && (
+        {emp.is_active && !isEmployeeCurrentlyOnLeave(emp) && (
           <Badge variant="outline" className="rounded-full text-xs">פעיל</Badge>
         )}
       </div>
@@ -604,7 +608,7 @@ function EmpProfileDialog({
       if (!employeeId) return null;
       const { data: profile, error: pErr } = await supabase
         .from("profiles")
-        .select("id, first_name, last_name, full_name, department_id, job_title, is_active, on_leave, avatar_url, departments(name)")
+        .select("id, first_name, last_name, full_name, department_id, job_title, is_active, on_leave, leave_start_date, leave_end_date, avatar_url, departments(name)")
         .eq("id", employeeId)
         .maybeSingle();
       if (pErr) throw pErr;
@@ -670,8 +674,8 @@ function EmpProfileDialog({
               <ProfileRow
                 label="סטטוס"
                 value={
-                  q.data.on_leave
-                    ? "בחופש"
+                  isEmployeeCurrentlyOnLeave(q.data)
+                    ? `בחופש${formatLeaveDateRange(q.data.leave_start_date, q.data.leave_end_date) ? ` (${formatLeaveDateRange(q.data.leave_start_date, q.data.leave_end_date)})` : ""}`
                     : q.data.is_active
                     ? "פעיל"
                     : "לא פעיל"

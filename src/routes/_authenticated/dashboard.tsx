@@ -37,11 +37,17 @@ import {
 } from "@/lib/constants";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Users, UserCheck, UserX, Building2, Loader2, Plane, ListTodo, Clock, CheckCircle2, AlertTriangle, CalendarDays, User, Coffee, Send, UserPlus } from "lucide-react";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { EmployeeOfMonthSection } from "@/components/employee-of-month-section";
 import { DailyScheduleOverview } from "@/components/daily-schedule-overview";
 import { formatHeDateTime } from "@/lib/date-format";
+import {
+  formatLeaveDateRange,
+  isEmployeeCurrentlyOnLeave,
+} from "@/lib/employee-leave";
+import { formatScheduleDayHe } from "@/lib/schedule-week";
 import { CreateEmployeeDialog } from "./employees";
 import { ManagementOnShiftCard } from "@/components/management-on-shift-card";
 import { CustodyDashboardSection } from "@/components/custody-dashboard-section";
@@ -90,7 +96,7 @@ function DashboardPage() {
         { data: depts, error: dErr },
         { data: breaks, error: bErr },
       ] = await Promise.all([
-        supabase.from("profiles").select("id, is_active, on_leave, department_id, excluded_from_headcount"),
+        supabase.from("profiles").select("id, is_active, on_leave, leave_start_date, leave_end_date, department_id, excluded_from_headcount"),
         supabase.from("departments").select("id, name, is_active").order("name"),
         supabase.from("break_requests").select("user_id").eq("status", "active"),
       ]);
@@ -101,8 +107,8 @@ function DashboardPage() {
       // are not counted in any headcount statistic (totals, by-department, etc.).
       const counted = profs!.filter((d: any) => !d.excluded_from_headcount);
       const total = counted.length;
-      const onLeave = counted.filter((d: any) => d.on_leave).length;
-      const active = counted.filter((d: any) => d.is_active && !d.on_leave).length;
+      const onLeave = counted.filter((d: any) => isEmployeeCurrentlyOnLeave(d)).length;
+      const active = counted.filter((d: any) => d.is_active && !isEmployeeCurrentlyOnLeave(d)).length;
       const inactive = counted.filter((d: any) => !d.is_active).length;
       const excludedIds = new Set(profs!.filter((d: any) => d.excluded_from_headcount).map((d: any) => d.id));
       const onBreak = new Set(
@@ -145,7 +151,7 @@ function DashboardPage() {
       if (dept?.id) {
         const { data: emps, error: eErr } = await supabase
           .from("profiles")
-          .select("id, full_name, is_active, on_leave, avatar_url, department_id, job_title")
+          .select("id, full_name, is_active, on_leave, leave_start_date, leave_end_date, avatar_url, department_id, job_title")
           .eq("department_id", dept.id)
           .neq("id", profile!.id) // exclude the department manager themselves
           .order("full_name");
@@ -154,7 +160,7 @@ function DashboardPage() {
 
         const { data: mgr } = await supabase
           .from("profiles")
-          .select("id, full_name, job_title, avatar_url")
+          .select("id, full_name, job_title, avatar_url, is_active, on_leave, leave_start_date, leave_end_date")
           .eq("id", profile!.id)
           .maybeSingle();
         if (mgr) manager = mgr as NonNullable<typeof manager>;
@@ -196,6 +202,8 @@ function DashboardPage() {
         </div>
       </header>
 
+      <DashboardLeaveBanner profile={profile} />
+
       <EmployeeOfMonthSection />
 
 
@@ -230,6 +238,32 @@ function DashboardPage() {
         onClose={() => setEmpDialogId(null)}
       />
     </div>
+  );
+}
+
+function DashboardLeaveBanner({ profile }: { profile: { leave_start_date?: string | null; leave_end_date?: string | null } & Parameters<typeof isEmployeeCurrentlyOnLeave>[0] }) {
+  if (!isEmployeeCurrentlyOnLeave(profile)) return null;
+
+  const start = profile.leave_start_date?.slice(0, 10) ?? null;
+  const end = profile.leave_end_date?.slice(0, 10) ?? null;
+  const rangeLabel =
+    start && end
+      ? `${formatScheduleDayHe(start)} – ${formatScheduleDayHe(end)}`
+      : formatLeaveDateRange(start, end);
+
+  return (
+    <Alert className="border-amber-300 bg-gradient-to-l from-amber-50 to-orange-50/80 shadow-sm">
+      <Plane className="size-5 text-amber-700" />
+      <AlertTitle className="text-amber-950 font-semibold text-base">את/ה בחופש כרגע</AlertTitle>
+      <AlertDescription className="text-amber-900 space-y-1">
+        {rangeLabel && (
+          <p>
+            תקופת החופשה: <span className="font-semibold">{rangeLabel}</span>
+          </p>
+        )}
+        <p className="font-medium">מאחלים לך חזרה מהירה — מקווים שתחזור/תחזרי אלינו בהקדם האפשרי.</p>
+      </AlertDescription>
+    </Alert>
   );
 }
 
@@ -269,6 +303,8 @@ type DeptEmp = {
   full_name: string;
   is_active: boolean;
   on_leave: boolean;
+  leave_start_date?: string | null;
+  leave_end_date?: string | null;
   avatar_url: string | null;
   department_id: string | null;
 };
@@ -301,9 +337,11 @@ function DeptManagerDashboard({
   }
   // Manager is already excluded at the Query level (see deptManagerQuery).
   const emps = data.employees;
+  const mgrOnLeave = data.manager ? isEmployeeCurrentlyOnLeave(data.manager as DeptEmp) : false;
   const total = emps.length;
-  const active = emps.filter((e) => e.is_active && !e.on_leave).length;
-  const onLeave = emps.filter((e) => e.on_leave).length;
+  const active = emps.filter((e) => e.is_active && !isEmployeeCurrentlyOnLeave(e)).length;
+  const onLeave =
+    emps.filter((e) => isEmployeeCurrentlyOnLeave(e)).length + (mgrOnLeave ? 1 : 0);
   const inactive = emps.filter((e) => !e.is_active).length;
   const go = (filter: "all" | "active" | "inactive" | "on_leave" | "on_break" = "all") =>
     navigate({ to: "/employees", search: { filter, dept: data.dept!.id } as any });
@@ -325,10 +363,20 @@ function DeptManagerDashboard({
             <div className="flex-1 min-w-0">
               <div className="text-xs text-muted-foreground">👤 אחראי המחלקה</div>
               <div className="font-semibold truncate">{mgr.full_name}</div>
-              <div className="text-sm text-muted-foreground truncate">
-                {data.dept.name}
-                {mgr.job_title ? ` · ${mgr.job_title}` : ""}
+              <div className="text-sm text-muted-foreground truncate flex items-center gap-2 flex-wrap">
+                <span>
+                  {data.dept.name}
+                  {mgr.job_title ? ` · ${mgr.job_title}` : ""}
+                </span>
+                {mgrOnLeave && (
+                  <Badge variant="secondary" className="rounded-full text-xs">בחופש</Badge>
+                )}
               </div>
+              {mgrOnLeave && formatLeaveDateRange((mgr as DeptEmp).leave_start_date, (mgr as DeptEmp).leave_end_date) && (
+                <p className="text-xs text-muted-foreground mt-1">
+                  {formatLeaveDateRange((mgr as DeptEmp).leave_start_date, (mgr as DeptEmp).leave_end_date)}
+                </p>
+              )}
             </div>
             <div className="text-sm text-muted-foreground whitespace-nowrap">
               עובדים במחלקה: <span className="font-semibold text-foreground">{total}</span>
@@ -373,7 +421,7 @@ function DeptManagerDashboard({
                       {!e.is_active && (
                         <Badge variant="destructive" className="rounded-full text-xs">לא פעיל</Badge>
                       )}
-                      {e.on_leave && (
+                      {isEmployeeCurrentlyOnLeave(e) && (
                         <Badge variant="secondary" className="rounded-full text-xs">בחופש</Badge>
                       )}
                     </div>
@@ -1349,7 +1397,7 @@ function DepartmentEmployeesDialog({
       if (dErr) throw dErr;
       const { data: emps, error: eErr } = await supabase
         .from("profiles")
-        .select("id, full_name, is_active, on_leave, avatar_url, department_id")
+        .select("id, full_name, is_active, on_leave, leave_start_date, leave_end_date, avatar_url, department_id")
         .eq("department_id", deptId)
         .order("full_name");
       if (eErr) throw eErr;
@@ -1414,10 +1462,10 @@ function DepartmentEmployeesDialog({
                       {!emp.is_active && (
                         <Badge variant="destructive" className="rounded-full text-xs">לא פעיל</Badge>
                       )}
-                      {emp.on_leave && (
+                      {isEmployeeCurrentlyOnLeave(emp) && (
                         <Badge variant="secondary" className="rounded-full text-xs">בחופש</Badge>
                       )}
-                      {emp.is_active && !emp.on_leave && (
+                      {emp.is_active && !isEmployeeCurrentlyOnLeave(emp) && (
                         <Badge variant="outline" className="rounded-full text-xs">פעיל</Badge>
                       )}
                     </div>
@@ -1447,7 +1495,7 @@ function EmployeeProfileDialog({
       if (!employeeId) return null;
       const { data: profile, error: pErr } = await supabase
         .from("profiles")
-        .select("id, full_name, department_id, job_title, is_active, on_leave, avatar_url, departments(name)")
+        .select("id, full_name, department_id, job_title, is_active, on_leave, leave_start_date, leave_end_date, avatar_url, departments(name)")
         .eq("id", employeeId)
         .maybeSingle();
       if (pErr) throw pErr;
@@ -1508,8 +1556,8 @@ function EmployeeProfileDialog({
               <ProfileRow
                 label="סטטוס"
                 value={
-                  q.data.on_leave
-                    ? "בחופש"
+                  isEmployeeCurrentlyOnLeave(q.data)
+                    ? `בחופש${formatLeaveDateRange(q.data.leave_start_date, q.data.leave_end_date) ? ` (${formatLeaveDateRange(q.data.leave_start_date, q.data.leave_end_date)})` : ""}`
                     : q.data.is_active
                     ? "פעיל"
                     : "לא פעיל"

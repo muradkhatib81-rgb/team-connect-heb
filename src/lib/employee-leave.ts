@@ -10,19 +10,36 @@ function dayOnly(value: string | null | undefined): string | null {
   return value.slice(0, 10);
 }
 
+function todayIsoJerusalem(): string {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Jerusalem",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(new Date());
+}
+
 /** True when the employee should be treated as on leave (חופש) for schedule purposes on `dayDate`. */
 export function isEmployeeOnLeaveOnDate(
   emp: EmployeeLeaveFields,
   dayDate: string,
 ): boolean {
-  if (!emp.on_leave) return false;
   const start = dayOnly(emp.leave_start_date);
   const end = dayOnly(emp.leave_end_date);
   if (start && end) return dayDate >= start && dayDate <= end;
+  if (!emp.on_leave) return false;
   if (start) return dayDate >= start;
   if (end) return dayDate <= end;
   // Legacy rows: on_leave without dates → treat whole schedule week as leave.
   return true;
+}
+
+/** True when the employee is on leave today (date-aware; uses Jerusalem calendar day). */
+export function isEmployeeCurrentlyOnLeave(
+  emp: EmployeeLeaveFields,
+  dayDate?: string,
+): boolean {
+  return isEmployeeOnLeaveOnDate(emp, dayDate ?? todayIsoJerusalem());
 }
 
 /** Override stored shift with חופש when the employee is on leave that day. */

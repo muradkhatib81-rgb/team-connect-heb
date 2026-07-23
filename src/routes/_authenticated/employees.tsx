@@ -5,7 +5,7 @@ import { useState, useMemo, useRef, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { createEmployee, resetEmployeePassword, deleteEmployee, setEmployeeActive, updateEmployee } from "@/lib/employees.functions";
 import { extractServerFnErrorMessage } from "@/lib/server-fn-error";
-import { formatLeaveDateRange } from "@/lib/employee-leave";
+import { formatLeaveDateRange, isEmployeeCurrentlyOnLeave } from "@/lib/employee-leave";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -346,12 +346,12 @@ function EmployeesPage() {
   const filtered = useMemo(() => {
     const term = searchTerm.trim().toLowerCase();
     return employees.filter((e) => {
-      // Hide department manager from their own employees list
-      if (isDeptManagerOnly && e.id === me?.id) return false;
+      // Hide department manager from their own list — except when viewing who is on leave.
+      if (isDeptManagerOnly && e.id === me?.id && filterMode !== "on_leave") return false;
       if (deptFilter !== "all" && e.department_id !== deptFilter) return false;
       if (filterMode === "active" && !e.is_active) return false;
       if (filterMode === "inactive" && e.is_active) return false;
-      if (filterMode === "on_leave" && !e.on_leave) return false;
+      if (filterMode === "on_leave" && !isEmployeeCurrentlyOnLeave(e)) return false;
       if (filterMode === "on_break" && !onBreakSet.has(e.id)) return false;
       if (filterMode === "managers" && !isManagerRole(e.id)) return false;
       if (filterMode === "workers" && isManagerRole(e.id)) return false;
@@ -376,14 +376,18 @@ function EmployeesPage() {
         e.id !== me.id &&
         isCountedInHeadcount(e),
     );
+    const selfRow = data.find((e) => e.id === me.id);
+    const selfOnLeave = selfRow
+      ? isEmployeeCurrentlyOnLeave(selfRow)
+      : isEmployeeCurrentlyOnLeave(me);
     return {
       total: dept.length,
-      active: dept.filter((e) => e.is_active && !e.on_leave).length,
-      onLeave: dept.filter((e) => e.on_leave).length,
+      active: dept.filter((e) => e.is_active && !isEmployeeCurrentlyOnLeave(e)).length,
+      onLeave: dept.filter((e) => isEmployeeCurrentlyOnLeave(e)).length + (selfOnLeave ? 1 : 0),
       inactive: dept.filter((e) => !e.is_active).length,
       onBreak: dept.filter((e) => onBreakSet.has(e.id)).length,
     };
-  }, [employeesQuery.data, isDeptManagerOnly, me?.id, me?.department_id, onBreakSet]);
+  }, [employeesQuery.data, isDeptManagerOnly, me, onBreakSet]);
 
   // Ensure manager's own avatar is signed too
   const managerAvatarQ = useSignedAvatarUrls(
@@ -410,8 +414,8 @@ function EmployeesPage() {
     let inactive = 0;
     countedEmployees.forEach((e) => {
       if (!isOrgManagerRole(roles[e.id] ?? [])) workers += 1;
-      if (e.is_active) active += 1;
-      if (e.on_leave) onLeave += 1;
+      if (e.is_active && !isEmployeeCurrentlyOnLeave(e)) active += 1;
+      if (isEmployeeCurrentlyOnLeave(e)) onLeave += 1;
       if (!e.is_active) inactive += 1;
     });
     const excludedIds = new Set(
@@ -497,9 +501,14 @@ function EmployeesPage() {
             <div className="flex-1 min-w-0">
               <div className="text-xs text-muted-foreground">👤 אחראי המחלקה</div>
               <div className="font-semibold truncate">{me.full_name}</div>
-              <div className="text-sm text-muted-foreground truncate">
-                {me.department_name ?? (me.department_id ? deptMap[me.department_id] : "")}
-                {me.job_title ? ` · ${me.job_title}` : ""}
+              <div className="text-sm text-muted-foreground truncate flex items-center gap-2 flex-wrap">
+                <span>
+                  {me.department_name ?? (me.department_id ? deptMap[me.department_id] : "")}
+                  {me.job_title ? ` · ${me.job_title}` : ""}
+                </span>
+                {isEmployeeCurrentlyOnLeave(me) && (
+                  <Badge variant="secondary" className="rounded-full text-xs">בחופש</Badge>
+                )}
               </div>
             </div>
             <div className="flex flex-wrap gap-2 justify-end">
@@ -1264,9 +1273,9 @@ function EmployeeRow({
               <span className="font-medium">{deptName ?? "ללא מחלקה"}</span>
             </p>
             {!emp.is_active && <Badge variant="destructive" className="rounded-full text-xs">לא פעיל</Badge>}
-            {emp.on_leave && <Badge variant="secondary" className="rounded-full text-xs">בחופש</Badge>}
+            {isEmployeeCurrentlyOnLeave(emp) && <Badge variant="secondary" className="rounded-full text-xs">בחופש</Badge>}
           </div>
-          {emp.on_leave && formatLeaveDateRange(emp.leave_start_date, emp.leave_end_date) && (
+          {isEmployeeCurrentlyOnLeave(emp) && formatLeaveDateRange(emp.leave_start_date, emp.leave_end_date) && (
             <p className="text-xs text-muted-foreground mt-0.5">
               {formatLeaveDateRange(emp.leave_start_date, emp.leave_end_date)}
             </p>
