@@ -252,3 +252,53 @@ export function diffScheduleCellAgainstBaseline(args: {
     isAnyModified: isShiftModified || isTimeModified || isNoteModified,
   };
 }
+
+/** Managers / dept heads also see cells changed during approval vs the submitted snapshot. */
+export function diffScheduleCellForViewer(args: {
+  currentShift: string | null | undefined;
+  currentStart: string | null;
+  currentEnd: string | null;
+  currentNote: string | null | undefined;
+  baselineKind: ScheduleChangeBaselineKind;
+  submittedBaseline?: PublishedCellBaseline | null;
+  publishedBaseline?: PublishedCellBaseline | null;
+  currentShiftDef?: { start_time?: string | null; end_time?: string | null } | null;
+  includeSubmittedDiffWhenPublished: boolean;
+}): ScheduleCellChangeFlags {
+  const cellArgs = {
+    currentShift: args.currentShift,
+    currentStart: args.currentStart,
+    currentEnd: args.currentEnd,
+    currentNote: args.currentNote,
+    currentShiftDef: args.currentShiftDef,
+  };
+
+  if (args.baselineKind === "published") {
+    const publishedDiff = diffScheduleCellAgainstBaseline({
+      ...cellArgs,
+      baseline: args.publishedBaseline,
+    });
+    if (publishedDiff.isAnyModified) return publishedDiff;
+    if (args.includeSubmittedDiffWhenPublished) {
+      return diffScheduleCellAgainstBaseline({
+        ...cellArgs,
+        baseline: args.submittedBaseline,
+      });
+    }
+    return publishedDiff;
+  }
+
+  if (args.baselineKind === "submitted") {
+    return diffScheduleCellAgainstBaseline({
+      ...cellArgs,
+      baseline: args.submittedBaseline,
+    });
+  }
+
+  return {
+    isShiftModified: false,
+    isTimeModified: false,
+    isNoteModified: false,
+    isAnyModified: false,
+  };
+}

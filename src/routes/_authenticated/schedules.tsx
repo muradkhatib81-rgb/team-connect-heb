@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/use-auth";
@@ -67,7 +67,7 @@ import { formatHeDate, formatHeDateTime } from "@/lib/date-format";
 import { isEmployeeOnLeaveOnDate, effectiveScheduleShift } from "@/lib/employee-leave";
 import {
   buildChangeBaselineMap,
-  diffScheduleCellAgainstBaseline,
+  diffScheduleCellForViewer,
   resolveScheduleChangeBaselineKind,
 } from "@/lib/schedule-publish-diff";
 import {
@@ -746,12 +746,24 @@ function SchedulesPage() {
     Record<string, Record<string, { start: string | null; end: string | null }>>
   >({});
   const [noteEdits, setNoteEdits] = useState<Record<string, Record<string, string | null>>>({});
+  const editsDirtyRef = useRef(false);
+  const editsScheduleIdRef = useRef<string | null>(null);
+  const submittedBaselineRef = useRef<{
+    key: string;
+    map: Record<
+      string,
+      { shift: string | null; start: string | null; end: string | null; note: string | null }
+    >;
+  }>({ key: "", map: {} });
 
-  useEffect(() => {
+  const reseedEditsFromShifts = (
+    rows: NonNullable<typeof shiftsQ.data>,
+    emps: NonNullable<typeof empsQ.data>,
+  ) => {
     const next: Record<string, Record<string, Shift>> = {};
     const t: Record<string, Record<string, { start: string | null; end: string | null }>> = {};
     const n: Record<string, Record<string, string | null>> = {};
-    for (const s of shiftsQ.data ?? []) {
+    for (const s of rows) {
       next[s.employee_id] ??= {};
       next[s.employee_id][s.day_date] = s.shift as Shift;
       t[s.employee_id] ??= {};
@@ -762,7 +774,7 @@ function SchedulesPage() {
       const rawNote = (s as any).note ? String((s as any).note).trim().slice(0, SCHEDULE_NOTE_MAX) : "";
       n[s.employee_id][s.day_date] = rawNote || null;
     }
-    for (const emp of empsQ.data ?? []) {
+    for (const emp of emps) {
       for (const day of days) {
         if (isEmployeeOnLeaveOnDate(emp, day)) {
           next[emp.id] ??= {};
@@ -773,13 +785,51 @@ function SchedulesPage() {
     setEdits(next);
     setTimeEdits(t);
     setNoteEdits(n);
-  }, [shiftsQ.data, empsQ.data, days]);
+    editsDirtyRef.current = false;
+  };
 
-  // Compare live cells against submitted/published snapshot columns from the DB.
-  const changeBaseline = useMemo(() => {
-    if (!changeBaselineKind || !shiftsQ.data?.length || !shiftDefsQ.isSuccess) return {};
-    return buildChangeBaselineMap(shiftsQ.data, changeBaselineKind, shiftDefsQ.map);
-  }, [changeBaselineKind, shiftsQ.data, shiftDefsQ.isSuccess, shiftDefsQ.map]);
+  useEffect(() => {
+    if (!visible?.id || !shiftsQ.data || !empsQ.data) return;
+    if (editsScheduleIdRef.current !== visible.id) {
+      editsScheduleIdRef.current = visible.id;
+      editsDirtyRef.current = false;
+      submittedBaselineRef.current = { key: "", map: {} };
+      reseedEditsFromShifts(shiftsQ.data, empsQ.data);
+      return;
+    }
+    if (!editsDirtyRef.current) {
+      reseedEditsFromShifts(shiftsQ.data, empsQ.data);
+    }
+  }, [visible?.id, shiftsQ.data, empsQ.data, days]);
+
+  const changeBaselineSubmitted = useMemo(() => {
+    if (!visible?.submitted_at || !shiftsQ.data?.length || !shiftDefsQ.isSuccess) return {};
+    const key = `${visible.id}|${visible.submitted_at}`;
+    const fresh = buildChangeBaselineMap(shiftsQ.data, "submitted", shiftDefsQ.map);
+    const freshHasEntries = Object.keys(fresh).length > 0;
+    const frozenHasEntries = Object.keys(submittedBaselineRef.current.map).length > 0;
+    if (
+      submittedBaselineRef.current.key !== key ||
+      (!frozenHasEntries && freshHasEntries)
+    ) {
+      submittedBaselineRef.current = { key, map: fresh };
+    }
+    return submittedBaselineRef.current.map;
+  }, [
+    visible?.id,
+    visible?.submitted_at,
+    shiftsQ.data,
+    shiftDefsQ.isSuccess,
+    shiftDefsQ.map,
+  ]);
+
+  const changeBaselinePublished = useMemo(() => {
+    if (!shiftsQ.data?.length || !shiftDefsQ.isSuccess) return {};
+    return buildChangeBaselineMap(shiftsQ.data, "published", shiftDefsQ.map);
+  }, [shiftsQ.data, shiftDefsQ.isSuccess, shiftDefsQ.map]);
+
+  const includeSubmittedDiffWhenPublished =
+    isMainAdmin || isBranchMgr || isDeptMgr || canApprove || canPublishDirect;
 
   // Realtime: global RealtimeBridge in app-shell keeps schedule queries fresh.
 
@@ -812,12 +862,15 @@ function SchedulesPage() {
     },
     onSuccess: () => {
       toast.success("נשמר");
+      editsDirtyRef.current = false;
       qc.invalidateQueries({ queryKey: ["schedule", selectedDept, weekStart] });
       qc.invalidateQueries({ queryKey: ["schedule-shifts", visible?.id] });
       qc.invalidateQueries({ queryKey: ["schedule-decision"] });
       qc.invalidateQueries({ queryKey: ["dashboard-schedules"] });
       qc.invalidateQueries({ queryKey: ["schedules-week-saved", weekStart] });
       qc.invalidateQueries({ queryKey: ["week-schedules"] });
+      qc.invalidateQueries({ queryKey: ["daily-schedule-overview"] });
+      qc.invalidateQueries({ queryKey: ["dept-schedule-flags"] });
     },
 
     onError: (e: any) => toast.error(e?.message ?? "שגיאה"),
@@ -832,6 +885,7 @@ function SchedulesPage() {
     },
     onSuccess: (r: any) => {
       toast.success(r?.published ? "סידור העבודה פורסם" : r?.approved ? "הסידור אושר וממתין לפרסום" : "נשלח לאישור");
+      editsDirtyRef.current = false;
       qc.invalidateQueries({ queryKey: ["schedule"] });
       qc.invalidateQueries({ queryKey: ["schedule-shifts", visible?.id] });
       qc.invalidateQueries({ queryKey: ["schedules-pending"] });
@@ -840,6 +894,8 @@ function SchedulesPage() {
       qc.invalidateQueries({ queryKey: ["week-schedules"] });
       qc.invalidateQueries({ queryKey: ["dashboard-approved-list"] });
       qc.invalidateQueries({ queryKey: ["schedules-week-saved", weekStart] });
+      qc.invalidateQueries({ queryKey: ["daily-schedule-overview"] });
+      qc.invalidateQueries({ queryKey: ["dept-schedule-flags"] });
     },
     onError: (e: any) => toast.error(e?.message ?? "שגיאה"),
   });
@@ -854,6 +910,7 @@ function SchedulesPage() {
     },
     onSuccess: (r: any) => {
       toast.success(r?.published ? "סידור העבודה פורסם" : "הסידור אושר וממתין לפרסום");
+      editsDirtyRef.current = false;
       qc.invalidateQueries({ queryKey: ["schedule"] });
       qc.invalidateQueries({ queryKey: ["schedule-shifts", visible?.id] });
       qc.invalidateQueries({ queryKey: ["schedules-pending"] });
@@ -864,6 +921,8 @@ function SchedulesPage() {
       qc.invalidateQueries({ queryKey: ["dashboard-approved-list"] });
       qc.invalidateQueries({ queryKey: ["schedules-week-saved", weekStart] });
       qc.invalidateQueries({ queryKey: ["emp-dash-schedule"] });
+      qc.invalidateQueries({ queryKey: ["daily-schedule-overview"] });
+      qc.invalidateQueries({ queryKey: ["dept-schedule-flags"] });
     },
     onError: (e: any) => toast.error(e?.message ?? "שגיאה"),
   });
@@ -875,6 +934,7 @@ function SchedulesPage() {
     },
     onSuccess: () => {
       toast.success("סידור העבודה פורסם");
+      editsDirtyRef.current = false;
       qc.invalidateQueries({ queryKey: ["schedule"] });
       qc.invalidateQueries({ queryKey: ["schedule-shifts", visible?.id] });
       qc.invalidateQueries({ queryKey: ["schedules-approved"] });
@@ -884,6 +944,8 @@ function SchedulesPage() {
       qc.invalidateQueries({ queryKey: ["dashboard-approved-list"] });
       qc.invalidateQueries({ queryKey: ["schedules-week-saved", weekStart] });
       qc.invalidateQueries({ queryKey: ["emp-dash-schedule"] });
+      qc.invalidateQueries({ queryKey: ["daily-schedule-overview"] });
+      qc.invalidateQueries({ queryKey: ["dept-schedule-flags"] });
     },
     onError: (e: any) => toast.error(e?.message ?? "שגיאה"),
   });
@@ -910,6 +972,8 @@ function SchedulesPage() {
       qc.invalidateQueries({ queryKey: ["dashboard-approved-list"] });
       qc.invalidateQueries({ queryKey: ["schedules-week-saved", weekStart] });
       qc.invalidateQueries({ queryKey: ["emp-dash-schedule"] });
+      qc.invalidateQueries({ queryKey: ["daily-schedule-overview"] });
+      qc.invalidateQueries({ queryKey: ["dept-schedule-flags"] });
     },
     onError: (e: any) => toast.error(e?.message ?? "שגיאה בפרסום"),
   });
@@ -997,6 +1061,7 @@ function SchedulesPage() {
         visible.created_by === me?.id));
 
   function setShift(empId: string, day: string, shift: Shift) {
+    editsDirtyRef.current = true;
     setEdits((prev) => ({ ...prev, [empId]: { ...(prev[empId] ?? {}), [day]: shift } }));
     if (!canEditScheduleTimes) {
       setTimeEdits((prev) => ({
@@ -1008,6 +1073,7 @@ function SchedulesPage() {
 
   function setCellTime(empId: string, day: string, which: "start" | "end", value: string) {
     if (!canEditScheduleTimes) return;
+    editsDirtyRef.current = true;
     setTimeEdits((prev) => {
       const cur = prev[empId]?.[day] ?? { start: null, end: null };
       const next = { ...cur, [which]: value ? value.slice(0, 5) : null };
@@ -1017,6 +1083,7 @@ function SchedulesPage() {
 
   function setCellNote(empId: string, day: string, value: string) {
     if (!canEditScheduleTimes) return;
+    editsDirtyRef.current = true;
     const trimmed = value.trim().slice(0, SCHEDULE_NOTE_MAX);
     setNoteEdits((prev) => ({
       ...prev,
@@ -1989,7 +2056,7 @@ function SchedulesPage() {
                       const cur = effectiveScheduleShift(emp, day, edits[emp.id]?.[day]) as
                         | Shift
                         | undefined;
-                      const baseline = changeBaseline[`${emp.id}|${day}`];
+                      const baselineKey = `${emp.id}|${day}`;
                       const def = cur ? shiftDefsQ.map.get(cur) : undefined;
                       const cellTimes = timeEdits[emp.id]?.[day];
                       const effStart =
@@ -2003,13 +2070,16 @@ function SchedulesPage() {
                         isShiftModified,
                         isTimeModified,
                         isNoteModified,
-                      } = diffScheduleCellAgainstBaseline({
+                      } = diffScheduleCellForViewer({
                         currentShift: cur ?? null,
                         currentStart: effStart,
                         currentEnd: effEnd,
                         currentNote: effNote,
-                        baseline,
+                        baselineKind: changeBaselineKind,
+                        submittedBaseline: changeBaselineSubmitted[baselineKey],
+                        publishedBaseline: changeBaselinePublished[baselineKey],
                         currentShiftDef: def,
+                        includeSubmittedDiffWhenPublished,
                       });
                       if (!editable || excluded || onLeaveDay) {
                         return (

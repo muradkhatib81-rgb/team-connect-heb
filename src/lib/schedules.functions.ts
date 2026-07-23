@@ -479,19 +479,44 @@ export const saveScheduleShifts = createServerFn({ method: "POST" })
     };
     const snapshotMap = new Map<string, SnapshotCell>();
     const noteMap = new Map<string, string | null>();
+    const schedSubmittedAt = (sched as { submitted_at?: string | null }).submitted_at ?? null;
     for (const s of existingShifts ?? []) {
       const key = `${s.employee_id}|${s.day_date}`;
+      const row = s as {
+        shift: string;
+        start_time?: string | null;
+        end_time?: string | null;
+        note?: string | null;
+        submitted_shift?: string | null;
+        submitted_note?: string | null;
+        submitted_start_time?: string | null;
+        submitted_end_time?: string | null;
+        published_shift?: string | null;
+        published_note?: string | null;
+        published_start_time?: string | null;
+        published_end_time?: string | null;
+      };
+      // If submit snapshot columns are missing, seed submitted baseline from the
+      // pre-save row so manager edits remain comparable to the dept-head version.
+      const submittedShift =
+        row.submitted_shift ?? (schedSubmittedAt ? row.shift : null);
+      const submittedStart =
+        row.submitted_start_time ?? (schedSubmittedAt ? row.start_time ?? null : null);
+      const submittedEnd =
+        row.submitted_end_time ?? (schedSubmittedAt ? row.end_time ?? null : null);
+      const submittedNote =
+        row.submitted_note ?? (schedSubmittedAt ? row.note ?? null : null);
       snapshotMap.set(key, {
-        published_shift: (s as any).published_shift ?? null,
-        published_note: (s as any).published_note ?? null,
-        published_start_time: (s as any).published_start_time ?? null,
-        published_end_time: (s as any).published_end_time ?? null,
-        submitted_shift: (s as any).submitted_shift ?? null,
-        submitted_note: (s as any).submitted_note ?? null,
-        submitted_start_time: (s as any).submitted_start_time ?? null,
-        submitted_end_time: (s as any).submitted_end_time ?? null,
+        published_shift: row.published_shift ?? null,
+        published_note: row.published_note ?? null,
+        published_start_time: row.published_start_time ?? null,
+        published_end_time: row.published_end_time ?? null,
+        submitted_shift: submittedShift,
+        submitted_note: submittedNote,
+        submitted_start_time: submittedStart,
+        submitted_end_time: submittedEnd,
       });
-      noteMap.set(key, (s as any).note ?? null);
+      noteMap.set(key, row.note ?? null);
     }
     const canEditNotes = canEditScheduleTimes(caps);
 

@@ -29,7 +29,7 @@ import {
 } from "@/lib/schedule-week";
 import {
   buildChangeBaselineFromShiftRow,
-  diffScheduleCellAgainstBaseline,
+  diffScheduleCellForViewer,
   resolveScheduleChangeBaselineKind,
   type ScheduleChangeBaselineKind,
 } from "@/lib/schedule-publish-diff";
@@ -262,27 +262,47 @@ async function fetchDailySchedulePayload(
 
   const { data: scheds, error: schedErr } = await supabase
     .from("schedules")
-    .select("id, department_id, status, published_at, submitted_at, created_by")
+    .select("id, department_id, status, published_at, submitted_at, created_by, week_start, week_end")
     .in("department_id", deptIds)
-    .eq("week_start", weekStart);
+    .lte("week_start", weekEnd)
+    .gte("week_end", weekStart);
   if (schedErr) throw schedErr;
 
   const schedByDept = new Map<string, DeptScheduleRow>();
+  const candidatesByDept = new Map<string, DeptScheduleRow[]>();
   for (const s of (scheds ?? []) as DeptScheduleRow[]) {
-    const row = {
-      status: s.status,
-      published_at: s.published_at,
-      submitted_at: s.submitted_at,
-      created_by: s.created_by,
-      department_id: s.department_id,
-    };
+    const list = candidatesByDept.get(s.department_id) ?? [];
+    list.push(s);
+    candidatesByDept.set(s.department_id, list);
+  }
+
+  for (const [deptId, candidates] of candidatesByDept) {
     if (useCoworkersView) {
-      if (s.status === "approved" && s.published_at) schedByDept.set(s.department_id, s);
+      const published = candidates.find(
+        (s) => s.status === "approved" && s.published_at,
+      );
+      if (published) schedByDept.set(deptId, published);
       continue;
     }
-    if (viewerCaps && canViewScheduleContent(row, viewerCaps, managedDeptIds)) {
-      schedByDept.set(s.department_id, s);
-    }
+    const visible = candidates.filter((s) =>
+      viewerCaps
+        ? canViewScheduleContent(
+            {
+              status: s.status,
+              published_at: s.published_at,
+              submitted_at: s.submitted_at,
+              created_by: s.created_by,
+              department_id: s.department_id,
+            },
+            viewerCaps,
+            managedDeptIds,
+          )
+        : false,
+    );
+    if (!visible.length) continue;
+    const picked =
+      visible.find((s) => s.status === "approved" && s.published_at) ?? visible[0]!;
+    schedByDept.set(deptId, picked);
   }
 
   departments = departments.map((d) => {
@@ -296,7 +316,7 @@ async function fetchDailySchedulePayload(
       : null;
     return {
       ...d,
-      hasPublishedSchedule: !!sched?.id,
+      hasPublishedSchedule: !!(sched?.status === "approved" && sched?.published_at),
       scheduleId: sched?.id ?? null,
       hasSavedAwaitingPublish: false,
       changeBaselineKind,
@@ -336,9 +356,18 @@ function buildDepartmentBlocks(args: {
   shiftDefs: Map<string, ShiftDef>;
   selfId?: string;
   shiftFilter: ScheduleShiftCode | null;
+  includeSubmittedDiffWhenPublished: boolean;
 }): DailyScheduleDepartmentBlock[] {
-  const { departments, employeesByDept, shifts, selectedDay, shiftDefs, selfId, shiftFilter } =
-    args;
+  const {
+    departments,
+    employeesByDept,
+    shifts,
+    selectedDay,
+    shiftDefs,
+    selfId,
+    shiftFilter,
+    includeSubmittedDiffWhenPublished,
+  } = args;
 
   const shiftsBySchedEmpDay = new Map<string, ShiftRow>();
   for (const s of shifts) {
@@ -366,19 +395,24 @@ function buildDepartmentBlocks(args: {
       const shift = normalizeShift(emp, selectedDay, raw?.shift);
       const def = shiftDefs.get(shift);
       const rawNote = raw?.note ? String(raw.note).trim().slice(0, 10) : "";
-      const baseline =
-        raw && dept.changeBaselineKind
-          ? buildChangeBaselineFromShiftRow(raw, dept.changeBaselineKind, shiftDefs)
-          : null;
+      const submittedBaseline = raw
+        ? buildChangeBaselineFromShiftRow(raw, "submitted", shiftDefs)
+        : null;
+      const publishedBaseline = raw
+        ? buildChangeBaselineFromShiftRow(raw, "published", shiftDefs)
+        : null;
       const start = normHm(raw?.start_time) ?? normHm(def?.start_time);
       const end = normHm(raw?.end_time) ?? normHm(def?.end_time);
-      const { isShiftModified, isNoteModified, isTimeModified } = diffScheduleCellAgainstBaseline({
+      const { isShiftModified, isNoteModified, isTimeModified } = diffScheduleCellForViewer({
         currentShift: shift,
         currentStart: start,
         currentEnd: end,
         currentNote: rawNote || null,
-        baseline,
+        baselineKind: dept.changeBaselineKind,
+        submittedBaseline,
+        publishedBaseline,
         currentShiftDef: def,
+        includeSubmittedDiffWhenPublished,
       });
       return {
         id: emp.id,
@@ -618,6 +652,17 @@ export function DailyScheduleOverview({
 
   const selectedCounts = dayCounts[selectedDay] ?? { morning: 0, evening: 0, off: 0 };
 
+  const includeSubmittedDiffWhenPublished = useMemo(() => {
+    if (useCoworkersView || !viewerCaps) return false;
+    return (
+      viewerCaps.isMainAdmin ||
+      viewerCaps.isBranchMgr ||
+      viewerCaps.isDeptMgr ||
+      viewerCaps.canApprove ||
+      viewerCaps.canPublishDirect
+    );
+  }, [useCoworkersView, viewerCaps]);
+
   const departmentBlocks = useMemo(
     () =>
       buildDepartmentBlocks({
@@ -628,6 +673,7 @@ export function DailyScheduleOverview({
         shiftDefs: shiftDefsQ.map,
         selfId: selfUserId,
         shiftFilter,
+        includeSubmittedDiffWhenPublished,
       }),
     [
       departments,
@@ -637,6 +683,7 @@ export function DailyScheduleOverview({
       shiftDefsQ.map,
       selfUserId,
       shiftFilter,
+      includeSubmittedDiffWhenPublished,
     ],
   );
 
