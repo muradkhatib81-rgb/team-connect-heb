@@ -2,6 +2,10 @@ import { createServerFn } from "@tanstack/react-start";
 import { requireBranchContext } from "@/integrations/supabase/active-branch.server";
 import { z } from "zod";
 import { isEmployeeOnLeaveOnDate } from "@/lib/employee-leave";
+import {
+  canViewScheduleContent,
+  type ScheduleViewerCaps,
+} from "@/lib/schedule-visibility";
 
 // Shift codes are dynamic — validated against public.shift_definitions at runtime.
 const shiftCode = z.string().min(1).max(64);
@@ -153,8 +157,6 @@ function applyLeaveOffToShiftMap(
 }
 
 
-type PublishedShiftSnapshot = string | null;
-
 function scheduleCellSaveSignature(s: {
   employee_id: string;
   day_date: string;
@@ -212,6 +214,24 @@ async function notifyScheduleDepartment(
   );
 }
 
+async function snapshotSubmittedShifts(supabase: any, scheduleId: string) {
+  const { data: cur } = await supabase
+    .from("schedule_shifts")
+    .select("id, shift, start_time, end_time, note")
+    .eq("schedule_id", scheduleId);
+  for (const row of cur ?? []) {
+    await supabase
+      .from("schedule_shifts")
+      .update({
+        submitted_shift: row.shift,
+        submitted_start_time: row.start_time ?? null,
+        submitted_end_time: row.end_time ?? null,
+        submitted_note: row.note ?? null,
+      })
+      .eq("id", row.id);
+  }
+}
+
 async function snapshotPublishedShifts(supabase: any, scheduleId: string) {
   const { data: cur } = await supabase
     .from("schedule_shifts")
@@ -243,11 +263,30 @@ function weekStartOf(dateStr: string): { start: string; end: string } {
   return { start: iso(start), end: iso(end) };
 }
 
-function isScheduleVisibleToCaps(schedule: any, caps: any) {
-  if (caps.isMainAdmin || caps.isBranchMgr) return true;
-  if (!caps.isDeptMgr) return true;
-  if (!["draft", "rejected"].includes(schedule?.status)) return true;
-  return schedule?.department_id === caps.departmentId;
+async function getManagedDepartmentIds(
+  supabase: any,
+  caps: ScheduleViewerCaps,
+  userId: string,
+): Promise<string[]> {
+  if (!caps.isDeptMgr || caps.isMainAdmin || caps.isBranchMgr) return [];
+  const { data: managedDepts } = await supabase
+    .from("departments")
+    .select("id")
+    .eq("manager_id", userId)
+    .eq("is_active", true);
+  const ids = new Set<string>((managedDepts ?? []).map((d: any) => d.id as string));
+  if (caps.departmentId) ids.add(caps.departmentId);
+  return [...ids];
+}
+
+async function isScheduleVisibleToCaps(
+  schedule: any,
+  caps: ScheduleViewerCaps,
+  userId: string,
+  supabase: any,
+) {
+  const managedDeptIds = await getManagedDepartmentIds(supabase, caps, userId);
+  return canViewScheduleContent(schedule, { ...caps, userId }, managedDeptIds);
 }
 
 // ---------- LIST schedules visible to the current user ----------
@@ -271,7 +310,13 @@ export const getSchedulesForViewer = createServerFn({ method: "POST" })
 
     const { data: rows, error } = await query;
     if (error) throw new Error(error.message);
-    return (rows ?? []).filter((schedule: any) => isScheduleVisibleToCaps(schedule, caps));
+    const visible: any[] = [];
+    for (const schedule of rows ?? []) {
+      if (await isScheduleVisibleToCaps(schedule, caps, context.userId, context.supabase)) {
+        visible.push(schedule);
+      }
+    }
+    return visible;
   });
 
 // ---------- CREATE / GET-OR-CREATE schedule ----------
@@ -411,7 +456,7 @@ export const saveScheduleShifts = createServerFn({ method: "POST" })
     const { data: existingShifts } = await context.supabase
       .from("schedule_shifts")
       .select(
-        "employee_id, day_date, shift, published_shift, published_note, note, start_time, end_time, branch_id",
+        "employee_id, day_date, shift, published_shift, published_note, published_start_time, published_end_time, submitted_shift, submitted_note, submitted_start_time, submitted_end_time, note, start_time, end_time, branch_id",
       )
       .eq("schedule_id", data.schedule_id);
     const beforeSigs = new Set((existingShifts ?? []).map(scheduleCellSaveSignature));
@@ -421,14 +466,31 @@ export const saveScheduleShifts = createServerFn({ method: "POST" })
       [...beforeSigs].some((k) => !afterSigs.has(k)) ||
       [...afterSigs].some((k) => !beforeSigs.has(k));
 
-    // Preserve published snapshot across delete+insert (approved / pending approval).
-    const pubMap = new Map<string, PublishedShiftSnapshot>();
-    const pubNoteMap = new Map<string, string | null>();
+    // Preserve submitted/published snapshots across delete+insert.
+    type SnapshotCell = {
+      published_shift: string | null;
+      published_note: string | null;
+      published_start_time: string | null;
+      published_end_time: string | null;
+      submitted_shift: string | null;
+      submitted_note: string | null;
+      submitted_start_time: string | null;
+      submitted_end_time: string | null;
+    };
+    const snapshotMap = new Map<string, SnapshotCell>();
     const noteMap = new Map<string, string | null>();
     for (const s of existingShifts ?? []) {
       const key = `${s.employee_id}|${s.day_date}`;
-      pubMap.set(key, (s as any).published_shift ?? null);
-      pubNoteMap.set(key, (s as any).published_note ?? null);
+      snapshotMap.set(key, {
+        published_shift: (s as any).published_shift ?? null,
+        published_note: (s as any).published_note ?? null,
+        published_start_time: (s as any).published_start_time ?? null,
+        published_end_time: (s as any).published_end_time ?? null,
+        submitted_shift: (s as any).submitted_shift ?? null,
+        submitted_note: (s as any).submitted_note ?? null,
+        submitted_start_time: (s as any).submitted_start_time ?? null,
+        submitted_end_time: (s as any).submitted_end_time ?? null,
+      });
       noteMap.set(key, (s as any).note ?? null);
     }
     const canEditNotes = canEditScheduleTimes(caps);
@@ -442,14 +504,20 @@ export const saveScheduleShifts = createServerFn({ method: "POST" })
     if (shiftsInput.length) {
       const rows = shiftsInput.map((s) => {
         const key = `${s.employee_id}|${s.day_date}`;
+        const snap = snapshotMap.get(key);
+        const preserveSnapshots = isApproved || isPendingApproval;
         return {
           ...s,
           schedule_id: data.schedule_id,
           note: canEditNotes ? ((s as any).note ?? null) : (noteMap.get(key) ?? null),
-          published_shift:
-            isApproved || isPendingApproval ? (pubMap.get(key) ?? null) : null,
-          published_note:
-            isApproved || isPendingApproval ? (pubNoteMap.get(key) ?? null) : null,
+          published_shift: preserveSnapshots ? (snap?.published_shift ?? null) : null,
+          published_note: preserveSnapshots ? (snap?.published_note ?? null) : null,
+          published_start_time: preserveSnapshots ? (snap?.published_start_time ?? null) : null,
+          published_end_time: preserveSnapshots ? (snap?.published_end_time ?? null) : null,
+          submitted_shift: preserveSnapshots ? (snap?.submitted_shift ?? null) : null,
+          submitted_note: preserveSnapshots ? (snap?.submitted_note ?? null) : null,
+          submitted_start_time: preserveSnapshots ? (snap?.submitted_start_time ?? null) : null,
+          submitted_end_time: preserveSnapshots ? (snap?.submitted_end_time ?? null) : null,
         };
       });
       const { error: insErr } = await context.supabase.from("schedule_shifts").insert(rows);
@@ -463,6 +531,12 @@ export const saveScheduleShifts = createServerFn({ method: "POST" })
               shift: s.shift,
               published_shift: s.published_shift ?? null,
               published_note: s.published_note ?? null,
+              published_start_time: s.published_start_time ?? null,
+              published_end_time: s.published_end_time ?? null,
+              submitted_shift: s.submitted_shift ?? null,
+              submitted_note: s.submitted_note ?? null,
+              submitted_start_time: s.submitted_start_time ?? null,
+              submitted_end_time: s.submitted_end_time ?? null,
               start_time: s.start_time ?? null,
               end_time: s.end_time ?? null,
               branch_id: s.branch_id ?? null,
@@ -634,8 +708,8 @@ export const submitSchedule = createServerFn({ method: "POST" })
     if (error) throw new Error(error.message);
 
     // Snapshot current shifts as the submitted baseline so we can detect
-    // edits made by the approver before approval.
-    await snapshotPublishedShifts(context.supabase, data.schedule_id);
+    // edits made by the approver before approval/publish.
+    await snapshotSubmittedShifts(context.supabase, data.schedule_id);
 
     await context.supabase
       .from("schedule_audit_log")
@@ -1191,20 +1265,32 @@ export const getUnpublishedWeekSummary = createServerFn({ method: "POST" })
     // All unpublished schedules for the week
     const { data: scheds, error: sErr } = await context.supabase
       .from("schedules")
-      .select("id, department_id, status, published_at")
+      .select("id, department_id, status, published_at, submitted_at, created_by")
       .eq("week_start", start);
     if (sErr) throw new Error(sErr.message);
+    const viewerCaps = {
+      userId: context.userId,
+      isMainAdmin: caps.isMainAdmin,
+      isBranchMgr: caps.isBranchMgr,
+      isDeptMgr: caps.isDeptMgr,
+      canCreate: caps.canCreate,
+      canApprove: caps.canApprove,
+      canPublishDirect: caps.canPublishDirect,
+      departmentId: caps.departmentId,
+    };
+    const managedDeptIds = await getManagedDepartmentIds(
+      context.supabase,
+      viewerCaps,
+      context.userId,
+    );
     const unpublished = (scheds ?? []).filter(
       (s: any) =>
-        s.status === "draft" ||
-        s.status === "pending_approval" ||
-        (s.status === "approved" && !s.published_at),
+        (s.status === "draft" ||
+          s.status === "pending_approval" ||
+          (s.status === "approved" && !s.published_at)) &&
+        canViewScheduleContent(s, viewerCaps, managedDeptIds),
     );
-    const visibleUnpublished = (caps.isDeptMgr && !caps.isMainAdmin && !caps.isBranchMgr
-      ? unpublished.filter(
-          (s: any) => !["draft", "rejected"].includes(s.status) || s.department_id === caps.departmentId,
-        )
-      : unpublished);
+    const visibleUnpublished = unpublished;
     if (visibleUnpublished.length === 0) {
       return { week_start: start, totals: {} as Record<string, number>, departments: [] as { id: string; status: string }[], total_assignments: 0 };
     }
@@ -1371,15 +1457,43 @@ export const getDepartmentWeekScheduleFlags = createServerFn({ method: "POST" })
 
     const { data: sched, error } = await supabaseAdmin
       .from("schedules")
-      .select("status, published_at")
+      .select("status, published_at, submitted_at, created_by, department_id")
       .eq("department_id", data.department_id)
       .eq("week_start", start)
       .maybeSingle();
     if (error) throw new Error(error.message);
 
+    const scheduleRow = sched
+      ? {
+          status: sched.status,
+          published_at: sched.published_at,
+          submitted_at: sched.submitted_at,
+          created_by: sched.created_by,
+          department_id: sched.department_id,
+        }
+      : null;
+
+    const viewerCaps = {
+      userId: context.userId,
+      isMainAdmin: caps.isMainAdmin,
+      isBranchMgr: caps.isBranchMgr,
+      isDeptMgr: caps.isDeptMgr,
+      canCreate: caps.canCreate,
+      canApprove: caps.canApprove,
+      canPublishDirect: caps.canPublishDirect,
+      departmentId: caps.departmentId,
+    };
+    const managedDeptIds = await getManagedDepartmentIds(
+      supabaseAdmin,
+      viewerCaps,
+      context.userId,
+    );
+    const canViewContent = canViewScheduleContent(scheduleRow, viewerCaps, managedDeptIds);
+
     const hasPublished = sched?.status === "approved" && !!sched?.published_at;
     const hasSavedAwaitingPublish =
       !!sched &&
+      canViewContent &&
       !hasPublished &&
       (sched.status === "draft" ||
         sched.status === "pending_approval" ||

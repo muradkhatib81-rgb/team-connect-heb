@@ -1445,6 +1445,10 @@ export type Database = {
           schedule_id: string
           shift: string
           start_time: string | null
+          submitted_shift: string | null
+          submitted_note: string | null
+          submitted_start_time: string | null
+          submitted_end_time: string | null
           updated_at: string
         }
         Insert: {
@@ -1462,6 +1466,10 @@ export type Database = {
           schedule_id: string
           shift: string
           start_time?: string | null
+          submitted_shift?: string | null
+          submitted_note?: string | null
+          submitted_start_time?: string | null
+          submitted_end_time?: string | null
           updated_at?: string
         }
         Update: {
@@ -1477,6 +1485,10 @@ export type Database = {
           published_start_time?: string | null
           published_end_time?: string | null
           schedule_id?: string
+          submitted_shift?: string | null
+          submitted_note?: string | null
+          submitted_start_time?: string | null
+          submitted_end_time?: string | null
           shift?: string
           start_time?: string | null
           updated_at?: string

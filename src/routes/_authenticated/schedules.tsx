@@ -66,11 +66,14 @@ import {
 import { formatHeDate, formatHeDateTime } from "@/lib/date-format";
 import { isEmployeeOnLeaveOnDate, effectiveScheduleShift } from "@/lib/employee-leave";
 import {
-  isScheduleShiftModified,
-  buildPublishedBaselineFromShifts,
-  isScheduleTimeModified,
-  isScheduleNoteModified,
+  buildChangeBaselineMap,
+  diffScheduleCellAgainstBaseline,
+  resolveScheduleChangeBaselineKind,
 } from "@/lib/schedule-publish-diff";
+import {
+  canViewScheduleContent,
+  type ScheduleViewerCaps,
+} from "@/lib/schedule-visibility";
 import { useShiftDefinitions } from "@/lib/use-shift-definitions";
 import { Time24Input } from "@/components/ui/time24-input";
 
@@ -229,6 +232,38 @@ function SchedulesPage() {
     isBranchManager ||
     (isAssistantManager && !isDeptMgr && hasSchedulePerm);
 
+  const myDeptId = me?.department_id ?? null;
+
+  const scheduleViewerCaps = useMemo((): ScheduleViewerCaps | null => {
+    if (!me?.id) return null;
+    return {
+      userId: me.id,
+      isMainAdmin,
+      isBranchMgr,
+      isDeptMgr,
+      canCreate,
+      canApprove,
+      canPublishDirect,
+      departmentId: myDeptId,
+    };
+  }, [
+    me?.id,
+    isMainAdmin,
+    isBranchMgr,
+    isDeptMgr,
+    canCreate,
+    canApprove,
+    canPublishDirect,
+    myDeptId,
+  ]);
+
+  const managedDeptIds = useMemo(() => {
+    if (!isDeptMgr || isMainAdmin || isBranchMgr) return undefined;
+    const ids = new Set<string>();
+    if (myDeptId) ids.add(myDeptId);
+    return [...ids];
+  }, [isDeptMgr, isMainAdmin, isBranchMgr, myDeptId]);
+
   // Default view for approvers = pending approvals list across all departments they can see.
   const [view, setView] = useState<SchedulesView>(
     search.view ?? (search.dept || search.week ? "editor" : canApprove ? "pending" : canPublishDirect ? "approved" : "editor"),
@@ -265,7 +300,6 @@ function SchedulesPage() {
 
 
 
-  const myDeptId = me?.department_id ?? null;
   const [selectedDept, setSelectedDept] = useState<string | null>(search.dept ?? null);
 
   const [weekStart, setWeekStart] = useState(() =>
@@ -318,12 +352,12 @@ function SchedulesPage() {
   //    OTHER departments + current unsaved edits from the selected dept.
   //  - The "סידורי עבודה שמורים" card listing saved departments.
   const weekSavedQ = useQuery({
-    enabled: view === "editor" || view === "saved",
-    queryKey: ["schedules-week-saved", weekStart],
+    enabled: (view === "editor" || view === "saved") && !!scheduleViewerCaps,
+    queryKey: ["schedules-week-saved", weekStart, me?.id],
     queryFn: async () => {
       const { data: scheds, error } = await supabase
         .from("schedules")
-        .select("id, department_id, status, published_at, updated_at")
+        .select("id, department_id, status, published_at, updated_at, submitted_at, created_by")
         .eq("week_start", weekStart);
       if (error) throw error;
       if (!scheds?.length)
@@ -345,8 +379,14 @@ function SchedulesPage() {
       }));
       const withShiftsIds = new Set(shifts.map((r) => r.schedule_id));
       const savedScheds = (scheds as any[]).filter((s) => withShiftsIds.has(s.id));
-      const deptIdsWithSaved = Array.from(new Set(savedScheds.map((s) => s.department_id)));
-      const savedList = savedScheds.map((s) => ({
+      const visibleSavedScheds =
+        scheduleViewerCaps == null
+          ? savedScheds
+          : savedScheds.filter((s) =>
+              canViewScheduleContent(s, scheduleViewerCaps, managedDeptIds),
+            );
+      const deptIdsWithSaved = Array.from(new Set(visibleSavedScheds.map((s) => s.department_id)));
+      const savedList = visibleSavedScheds.map((s) => ({
         schedule_id: s.id,
         department_id: s.department_id,
         status: s.status,
@@ -579,13 +619,24 @@ function SchedulesPage() {
   });
 
 
-  // For employees: only show schedule if approved
-  const visible =
-    isEmployee
-      ? schedQ.data?.status === "approved" && !!(schedQ.data as any)?.published_at
-        ? schedQ.data
-        : null
-      : schedQ.data;
+  const visible = useMemo(() => {
+    const s = schedQ.data as any;
+    if (!s || !scheduleViewerCaps) return null;
+    if (!canViewScheduleContent(s, scheduleViewerCaps, managedDeptIds)) return null;
+    return s;
+  }, [schedQ.data, scheduleViewerCaps, managedDeptIds]);
+
+  const changeBaselineKind = useMemo(
+    () =>
+      visible
+        ? resolveScheduleChangeBaselineKind({
+            status: visible.status,
+            published_at: (visible as any).published_at ?? null,
+            submitted_at: (visible as any).submitted_at ?? null,
+          })
+        : null,
+    [visible],
+  );
 
   // Employees in this department.
   // Plain employees query a safe view that exposes only non-sensitive fields
@@ -677,7 +728,9 @@ function SchedulesPage() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("schedule_shifts")
-        .select("employee_id, day_date, shift, published_shift, published_note, start_time, end_time, note")
+        .select(
+          "employee_id, day_date, shift, published_shift, published_note, published_start_time, published_end_time, submitted_shift, submitted_note, submitted_start_time, submitted_end_time, start_time, end_time, note",
+        )
         .eq("schedule_id", visible!.id);
       if (error) throw error;
       return data ?? [];
@@ -720,40 +773,35 @@ function SchedulesPage() {
     setNoteEdits(n);
   }, [shiftsQ.data, empsQ.data, days]);
 
-  // Published-snapshot map (from DB) — drives the "modified after publish" marker
-  // and persists across refreshes for all viewers of an approved schedule.
-  const publishedMap = useMemo(() => {
-    const m: Record<string, Record<string, Shift | null>> = {};
-    for (const s of shiftsQ.data ?? []) {
-      m[s.employee_id] ??= {};
-      m[s.employee_id][s.day_date] = ((s as any).published_shift ?? null) as Shift | null;
-    }
-    return m;
-  }, [shiftsQ.data]);
-
-  // Frozen baseline for change markers — captured once when opening an approved schedule.
-  const [publishedBaseline, setPublishedBaseline] = useState<
+  // Frozen baseline for change markers — captured once when opening a viewable schedule.
+  const [changeBaseline, setChangeBaseline] = useState<
     Record<string, { shift: string | null; start: string | null; end: string | null; note: string | null }>
   >({});
-  const publishedBaselineScheduleIdRef = useRef<string | null>(null);
+  const changeBaselineScheduleIdRef = useRef<string | null>(null);
 
   const reseedPublishedBaseline = () => {
-    publishedBaselineScheduleIdRef.current = null;
+    changeBaselineScheduleIdRef.current = null;
   };
 
   useEffect(() => {
-    if (!visible?.id || visible.status !== "approved") {
-      if (publishedBaselineScheduleIdRef.current !== null) {
-        publishedBaselineScheduleIdRef.current = null;
-        setPublishedBaseline({});
+    if (!visible?.id || !changeBaselineKind) {
+      if (changeBaselineScheduleIdRef.current !== null) {
+        changeBaselineScheduleIdRef.current = null;
+        setChangeBaseline({});
       }
       return;
     }
     if (!shiftsQ.data?.length || !shiftDefsQ.isSuccess) return;
-    if (publishedBaselineScheduleIdRef.current === visible.id) return;
-    publishedBaselineScheduleIdRef.current = visible.id;
-    setPublishedBaseline(buildPublishedBaselineFromShifts(shiftsQ.data, shiftDefsQ.map));
-  }, [visible?.id, visible?.status, shiftsQ.data, shiftDefsQ.isSuccess, shiftDefsQ.data]);
+    if (changeBaselineScheduleIdRef.current === visible.id) return;
+    changeBaselineScheduleIdRef.current = visible.id;
+    setChangeBaseline(buildChangeBaselineMap(shiftsQ.data, changeBaselineKind, shiftDefsQ.map));
+  }, [
+    visible?.id,
+    changeBaselineKind,
+    shiftsQ.data,
+    shiftDefsQ.isSuccess,
+    shiftDefsQ.map,
+  ]);
 
   // Realtime: global RealtimeBridge in app-shell keeps schedule queries fresh.
 
@@ -1967,9 +2015,7 @@ function SchedulesPage() {
                       const cur = effectiveScheduleShift(emp, day, edits[emp.id]?.[day]) as
                         | Shift
                         | undefined;
-                      const pub = publishedMap[emp.id]?.[day] ?? null;
-                      const baseline = publishedBaseline[`${emp.id}|${day}`];
-                      const pubShift = baseline?.shift ?? pub;
+                      const baseline = changeBaseline[`${emp.id}|${day}`];
                       const def = cur ? shiftDefsQ.map.get(cur) : undefined;
                       const cellTimes = timeEdits[emp.id]?.[day];
                       const effStart =
@@ -1979,32 +2025,18 @@ function SchedulesPage() {
                         cellTimes?.end ??
                         (def?.end_time ? String(def.end_time).slice(0, 5) : null);
                       const effNote = noteEdits[emp.id]?.[day] ?? null;
-                      const shiftRow = shiftsQ.data?.find(
-                        (s) => s.employee_id === emp.id && s.day_date === day,
-                      );
-                      const isShiftModified =
-                        visible.status === "approved" &&
-                        isScheduleShiftModified({
-                          currentShift: cur ?? null,
-                          publishedShift: pubShift,
-                        });
-                      const isTimeModified =
-                        visible.status === "approved" &&
-                        !!cur &&
-                        cur !== "off" &&
-                        !!baseline &&
-                        isScheduleTimeModified({
-                          currentStart: effStart,
-                          currentEnd: effEnd,
-                          publishedTimes: { start: baseline.start, end: baseline.end },
-                        });
-                      const isNoteModified =
-                        visible.status === "approved" &&
-                        isScheduleNoteModified({
-                          currentNote: effNote,
-                          publishedNote:
-                            baseline?.note ?? (shiftRow as any)?.published_note ?? null,
-                        });
+                      const {
+                        isShiftModified,
+                        isTimeModified,
+                        isNoteModified,
+                      } = diffScheduleCellAgainstBaseline({
+                        currentShift: cur ?? null,
+                        currentStart: effStart,
+                        currentEnd: effEnd,
+                        currentNote: effNote,
+                        baseline,
+                        currentShiftDef: def,
+                      });
                       if (!editable || excluded || onLeaveDay) {
                         return (
                           <td key={day} className="p-2 text-center align-top">
