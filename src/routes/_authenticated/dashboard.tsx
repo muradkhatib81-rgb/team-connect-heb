@@ -726,6 +726,7 @@ function SchedulesStatsSection({ profile }: { profile: any }) {
       isBranchManager ||
       (isAssistantManager && hasSchedulePerm));
   const canManageOwnDeptSchedule = isDeptMgr;
+  const deptHeadOnly = canManageOwnDeptSchedule && !canViewBranchScheduleOverview;
   const canApprove =
     isMainAdmin ||
     isBranchManager ||
@@ -771,10 +772,24 @@ function SchedulesStatsSection({ profile }: { profile: any }) {
   });
 
   const scopeFilter = canViewBranchScheduleOverview ? null : profile.department_id ?? null;
-  const showScheduleStats = canViewBranchScheduleOverview || canManageOwnDeptSchedule;
+
+  const managedDeptQ = useQuery({
+    enabled: deptHeadOnly && !!profile?.id,
+    queryKey: ["managed-dept-id", profile?.id],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("departments")
+        .select("id")
+        .eq("manager_id", profile.id)
+        .eq("is_active", true)
+        .maybeSingle();
+      if (error) throw error;
+      return data?.id ?? profile.department_id ?? null;
+    },
+  });
 
   const statsQ = useQuery({
-    enabled: !!profile,
+    enabled: !!profile && canViewBranchScheduleOverview,
     queryKey: [
       "dashboard-schedules",
       profile.id,
@@ -933,11 +948,34 @@ function SchedulesStatsSection({ profile }: { profile: any }) {
   // saved draft never leaks into "Departments without schedules".
   const getWeekDeptStatesFn = useServerFn(getWeekDepartmentStates);
   const deptStatesQ = useQuery({
-    enabled: showScheduleStats,
+    enabled: canViewBranchScheduleOverview,
     queryKey: ["dashboard-dept-states", weekStart, profile.id, canViewBranchScheduleOverview],
     queryFn: () => getWeekDeptStatesFn({ data: { week_start: weekStart } }),
   });
 
+  if (deptHeadOnly) {
+    const deptId = managedDeptQ.data ?? profile.department_id ?? undefined;
+    return (
+      <section className="space-y-4">
+        <div className="flex items-center justify-between">
+          <h2 className="text-lg font-semibold flex items-center gap-2">
+            <CalendarDays className="size-5 text-primary" />
+            סידורי עבודה
+          </h2>
+          <Link to="/schedules" className="text-sm text-primary hover:underline">
+            לסידורי העבודה ←
+          </Link>
+        </div>
+        <DailyScheduleOverview
+          scope="department"
+          departmentId={deptId}
+          selfUserId={profile.id}
+        />
+      </section>
+    );
+  }
+
+  if (!canViewBranchScheduleOverview) return null;
   if (statsQ.isLoading || !statsQ.data) return null;
   const baseS = statsQ.data;
   const s = deptStatesQ.data
@@ -981,7 +1019,7 @@ function SchedulesStatsSection({ profile }: { profile: any }) {
         </Link>
       </div>
 
-      {showScheduleStats && (
+      {canViewBranchScheduleOverview && (
         <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
           <StatCard
             label="ממתינים לאישור"
@@ -996,7 +1034,7 @@ function SchedulesStatsSection({ profile }: { profile: any }) {
         </div>
       )}
 
-      {showScheduleStats && (
+      {canViewBranchScheduleOverview && (
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           <StatCard
             label="מחלקות שטרם הוכן להן סידור עבודה"

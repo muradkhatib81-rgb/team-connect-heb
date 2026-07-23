@@ -229,6 +229,11 @@ function SchedulesPage() {
     isBranchManager ||
     (isAssistantManager && !isDeptMgr && hasSchedulePerm);
 
+  // Default view for approvers = pending approvals list across all departments they can see.
+  const [view, setView] = useState<SchedulesView>(
+    search.view ?? (search.dept || search.week ? "editor" : canApprove ? "pending" : canPublishDirect ? "approved" : "editor"),
+  );
+
   // Employees always see the current week only
   useEffect(() => {
     if (!meLoading && isEmployee) {
@@ -381,11 +386,6 @@ function SchedulesPage() {
     (isMainAdmin || isBranchMgr || (isAssistantManager && !!permsQ.data?.can_create_schedule));
 
 
-
-  // Default view for approvers = pending approvals list across all departments they can see.
-  const [view, setView] = useState<SchedulesView>(
-    search.view ?? (search.dept || search.week ? "editor" : canApprove ? "pending" : canPublishDirect ? "approved" : "editor"),
-  );
 
   useEffect(() => {
     if (canSeeScheduleQueues && view === "editor" && !selectedDept) setView(canApprove ? "pending" : "approved");

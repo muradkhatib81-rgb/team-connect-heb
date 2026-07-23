@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useServerFn } from "@tanstack/react-start";
 import {
   Building2,
   CalendarDays,
@@ -14,6 +15,7 @@ import {
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import { supabase } from "@/integrations/supabase/client";
 import {
   effectiveScheduleShift,
@@ -31,6 +33,7 @@ import {
 } from "@/lib/schedule-publish-diff";
 import { useShiftDefinitions, type ShiftDef } from "@/lib/use-shift-definitions";
 import { cn } from "@/lib/utils";
+import { getDepartmentWeekScheduleFlags } from "@/lib/schedules.functions";
 
 export type DailyScheduleScope = "branch" | "department";
 
@@ -58,6 +61,7 @@ type DeptScheduleMeta = {
   name: string;
   hasPublishedSchedule: boolean;
   scheduleId: string | null;
+  hasSavedAwaitingPublish: boolean;
 };
 
 export type DailyScheduleEmployeeRow = {
@@ -65,7 +69,6 @@ export type DailyScheduleEmployeeRow = {
   full_name: string;
   shift: ScheduleShiftCode;
   timeRange: string | null;
-  note: string | null;
   note: string | null;
   isModified: boolean;
   isNoteModified: boolean;
@@ -77,6 +80,7 @@ export type DailyScheduleDepartmentBlock = {
   name: string;
   state: "no_weekly_schedule" | "no_day_schedule" | "has_rows";
   employees: DailyScheduleEmployeeRow[];
+  hasSavedAwaitingPublish: boolean;
 };
 
 type DailySchedulePayload = {
@@ -146,6 +150,7 @@ async function fetchBranchDepartments(): Promise<DeptScheduleMeta[]> {
     name: d.name,
     hasPublishedSchedule: false,
     scheduleId: null,
+    hasSavedAwaitingPublish: false,
   }));
 }
 
@@ -213,7 +218,7 @@ async function fetchDailySchedulePayload(
       .maybeSingle();
     if (error) throw error;
     departments = dept
-      ? [{ id: dept.id, name: dept.name, hasPublishedSchedule: false, scheduleId: null }]
+      ? [{ id: dept.id, name: dept.name, hasPublishedSchedule: false, scheduleId: null, hasSavedAwaitingPublish: false }]
       : [];
   } else {
     departments = await fetchBranchDepartments();
@@ -226,26 +231,27 @@ async function fetchDailySchedulePayload(
 
   const { data: scheds, error: schedErr } = await supabase
     .from("schedules")
-    .select("id, department_id")
+    .select("id, department_id, status, published_at")
     .in("department_id", deptIds)
-    .eq("status", "approved")
-    .not("published_at", "is", null)
-    .lte("week_start", weekEnd)
-    .gte("week_end", weekStart);
+    .eq("week_start", weekStart);
   if (schedErr) throw schedErr;
 
-  const schedByDept = new Map<string, string>();
+  const publishedSchedByDept = new Map<string, string>();
   for (const s of scheds ?? []) {
-    schedByDept.set(s.department_id, s.id);
+    const isPublished = s.status === "approved" && !!s.published_at;
+    if (isPublished) {
+      publishedSchedByDept.set(s.department_id, s.id);
+    }
   }
 
   departments = departments.map((d) => ({
     ...d,
-    hasPublishedSchedule: schedByDept.has(d.id),
-    scheduleId: schedByDept.get(d.id) ?? null,
+    hasPublishedSchedule: publishedSchedByDept.has(d.id),
+    scheduleId: publishedSchedByDept.get(d.id) ?? null,
+    hasSavedAwaitingPublish: false,
   }));
 
-  const scheduleIds = [...schedByDept.values()];
+  const scheduleIds = [...publishedSchedByDept.values()];
   let shifts: ShiftRow[] = [];
   if (scheduleIds.length) {
     const { data: shiftRows, error: shiftErr } = await supabase
@@ -294,6 +300,7 @@ function buildDepartmentBlocks(args: {
         name: dept.name,
         state: "no_weekly_schedule" as const,
         employees: [],
+        hasSavedAwaitingPublish: dept.hasSavedAwaitingPublish,
       };
     }
 
@@ -349,6 +356,7 @@ function buildDepartmentBlocks(args: {
       name: dept.name,
       state,
       employees: filtered,
+      hasSavedAwaitingPublish: dept.hasSavedAwaitingPublish,
     };
   });
 }
@@ -371,6 +379,7 @@ export function DailyScheduleOverview({
   className,
 }: DailyScheduleOverviewProps) {
   const qc = useQueryClient();
+  const getDeptFlagsFn = useServerFn(getDepartmentWeekScheduleFlags);
   const shiftDefsQ = useShiftDefinitions({ activeOnly: true });
   const { weekStart, weekEnd, weekDays } = useMemo(() => getScheduleWeek(), []);
 
@@ -411,11 +420,21 @@ export function DailyScheduleOverview({
     enabled: scope === "branch" || !!departmentId,
   });
 
+  const deptFlagsQ = useQuery({
+    queryKey: ["dept-schedule-flags", departmentId, weekStart],
+    queryFn: () =>
+      getDeptFlagsFn({
+        data: { department_id: departmentId!, week_start: weekStart },
+      }),
+    enabled: scope === "department" && !!departmentId,
+  });
+
   useEffect(() => {
     const ch = supabase
       .channel(`daily-schedule-ov-${scope}-${departmentId ?? "branch"}-${weekStart}`)
       .on("postgres_changes", { event: "*", schema: "public", table: "schedules" }, () => {
         qc.invalidateQueries({ queryKey: ["daily-schedule-overview"] });
+        qc.invalidateQueries({ queryKey: ["dept-schedule-flags"] });
       })
       .on("postgres_changes", { event: "*", schema: "public", table: "schedule_shifts" }, () => {
         qc.invalidateQueries({ queryKey: ["daily-schedule-overview"] });
@@ -429,7 +448,14 @@ export function DailyScheduleOverview({
     };
   }, [scope, departmentId, weekStart, qc]);
 
-  const departments = q.data?.departments ?? [];
+  const departments = useMemo(() => {
+    const base = q.data?.departments ?? [];
+    if (scope !== "department" || !deptFlagsQ.data) return base;
+    return base.map((d) => ({
+      ...d,
+      hasSavedAwaitingPublish: deptFlagsQ.data!.hasSavedAwaitingPublish,
+    }));
+  }, [q.data?.departments, scope, deptFlagsQ.data]);
   const employeesByDept = q.data?.employeesByDept ?? {};
   const shifts = q.data?.shifts ?? [];
 
@@ -664,7 +690,15 @@ export function DailyScheduleOverview({
                 </div>
 
                 {dept.state === "no_weekly_schedule" ? (
-                  <p className="text-sm text-muted-foreground ps-6">אין סידור שבועי שפורסם</p>
+                  dept.hasSavedAwaitingPublish ? (
+                    <Alert className="ms-6 border-amber-200 bg-amber-50/80">
+                      <AlertDescription className="text-sm text-amber-900">
+                        יש סידור עבודה למחלקה זו שמור ובהמתנה לפרסום.
+                      </AlertDescription>
+                    </Alert>
+                  ) : (
+                    <p className="text-sm text-muted-foreground ps-6">אין סידור שבועי שפורסם</p>
+                  )
                 ) : dept.employees.length === 0 ? (
                   <p className="text-sm text-muted-foreground ps-6">
                     {shiftFilter
@@ -737,7 +771,10 @@ export function DailyScheduleOverview({
               </p>
             )}
 
-            {scope === "department" && !hasAnyPublished && departmentBlocks.length > 0 && (
+            {scope === "department" &&
+              !hasAnyPublished &&
+              departmentBlocks.length > 0 &&
+              !departments.some((d) => d.hasSavedAwaitingPublish) && (
               <p className="px-4 pb-4 text-sm text-muted-foreground border-t pt-4">
                 טרם פורסם סידור עבודה מאושר לשבוע זה.
               </p>

@@ -1336,3 +1336,54 @@ export const getWeekDepartmentStates = createServerFn({ method: "POST" })
     }
     return { noSchedule, draft, published };
   });
+
+/** Returns publish-state flags for one department/week (no shift data). */
+export const getDepartmentWeekScheduleFlags = createServerFn({ method: "POST" })
+  .middleware([requireBranchContext])
+  .inputValidator((d: unknown) =>
+    z.object({ department_id: z.string().uuid(), week_start: z.string() }).parse(d),
+  )
+  .handler(async ({ data, context }) => {
+    const caps = await getCaps(context.supabase, context.userId);
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { start } = weekStartOf(data.week_start);
+
+    let canView =
+      caps.isMainAdmin ||
+      caps.isBranchMgr ||
+      caps.canCreate ||
+      caps.canApprove ||
+      caps.canPublishDirect ||
+      caps.departmentId === data.department_id;
+
+    if (!canView && caps.isDeptMgr) {
+      const { data: managed } = await supabaseAdmin
+        .from("departments")
+        .select("id")
+        .eq("id", data.department_id)
+        .eq("manager_id", context.userId)
+        .eq("is_active", true)
+        .maybeSingle();
+      canView = !!managed;
+    }
+
+    if (!canView) throw new Error("אין הרשאה");
+
+    const { data: sched, error } = await supabaseAdmin
+      .from("schedules")
+      .select("status, published_at")
+      .eq("department_id", data.department_id)
+      .eq("week_start", start)
+      .maybeSingle();
+    if (error) throw new Error(error.message);
+
+    const hasPublished = sched?.status === "approved" && !!sched?.published_at;
+    const hasSavedAwaitingPublish =
+      !!sched &&
+      !hasPublished &&
+      (sched.status === "draft" ||
+        sched.status === "pending_approval" ||
+        (sched.status === "approved" && !sched.published_at));
+
+    return { hasPublished, hasSavedAwaitingPublish };
+  });
