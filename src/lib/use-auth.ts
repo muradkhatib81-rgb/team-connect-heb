@@ -73,9 +73,17 @@ async function fetchSessionAndProfile(): Promise<AuthProfile | null> {
  * everyone else. Used by `/auth` and the `/` root redirect so every entry
  * point into the app agrees on the same landing rule.
  */
-export async function resolveLandingPath(userId: string): Promise<"/platform" | "/dashboard"> {
-  const { data } = await supabase.from("user_roles").select("role").eq("user_id", userId);
-  const roles = (data ?? []).map((r) => r.role as AppRole);
+export async function resolveLandingPath(
+  userId: string,
+): Promise<"/platform" | "/dashboard" | "/inactive"> {
+  const { unscopedFrom } = await import("@/integrations/supabase/branch-scope");
+  const profilesFrom = unscopedFrom("profiles") as ReturnType<typeof supabase.from>;
+  const [{ data: rolesData }, { data: profile }] = await Promise.all([
+    supabase.from("user_roles").select("role").eq("user_id", userId),
+    profilesFrom.select("is_active").eq("id", userId).maybeSingle(),
+  ]);
+  if (!(profile?.is_active ?? false)) return "/inactive";
+  const roles = (rolesData ?? []).map((r) => r.role as AppRole);
   return isPlatformOwner(roles) ? "/platform" : "/dashboard";
 }
 

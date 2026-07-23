@@ -123,12 +123,16 @@ export function AppShell({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (!profile) return;
+    if (!profile.is_active) {
+      navigate({ to: "/inactive", replace: true });
+      return;
+    }
     if (profile.must_change_password && pathname !== "/change-password") {
       navigate({ to: "/change-password", replace: true });
       return;
     }
     // Plain employees may now access /dashboard directly (clean employee view).
-  }, [profile?.must_change_password, profile, pathname, navigate]);
+  }, [profile?.is_active, profile?.must_change_password, profile, pathname, navigate]);
 
   const breakSelfServiceNav = useBreakSelfServiceNavVisible();
 

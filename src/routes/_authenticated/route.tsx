@@ -1,10 +1,11 @@
-import { createFileRoute, Outlet, redirect } from "@tanstack/react-router";
+import { createFileRoute, Outlet, redirect, useRouterState } from "@tanstack/react-router";
 import { supabase } from "@/integrations/supabase/client";
 import { AppShell } from "@/components/app-shell";
 import { ActiveBranchProvider } from "@/lib/use-active-branch";
 import { canAccessRoute } from "@/lib/route-access";
 import {
   fetchRouteGuardPermissions,
+  fetchRouteGuardProfileActive,
   fetchRouteGuardRoles,
   routeGuardStaleTime,
 } from "@/lib/route-guard-data";
@@ -35,6 +36,20 @@ export const Route = createFileRoute("/_authenticated")({
     } catch {
       throw redirect({ to: "/auth", search: { redirect: location.href } });
     }
+
+    const isActive = await context.queryClient.ensureQueryData({
+      queryKey: ["route-guard", "is-active", userId],
+      queryFn: () => fetchRouteGuardProfileActive(userId),
+      staleTime: routeGuardStaleTime,
+    });
+    const onInactivePage = location.pathname === "/inactive";
+    if (!isActive && !onInactivePage) {
+      throw redirect({ to: "/inactive" });
+    }
+    if (isActive && onInactivePage) {
+      throw redirect({ to: "/dashboard" });
+    }
+
     if (
       !canAccessRoute({
         pathname: location.pathname,
@@ -50,6 +65,13 @@ export const Route = createFileRoute("/_authenticated")({
 });
 
 function AuthenticatedLayout() {
+  const pathname = useRouterState({ select: (s) => s.location.pathname });
+  const onInactivePage = pathname === "/inactive";
+
+  if (onInactivePage) {
+    return <Outlet />;
+  }
+
   // The shell is inside every hierarchy context so its navigation is driven
   // by the same Platform -> Company -> Branch state as the routed content.
   return (

@@ -32,4 +32,12 @@ export async function fetchRouteGuardPermissions(
   return data;
 }
 
+export async function fetchRouteGuardProfileActive(userId: string): Promise<boolean> {
+  const { unscopedFrom } = await import("@/integrations/supabase/branch-scope");
+  const profilesFrom = unscopedFrom("profiles") as ReturnType<typeof supabase.from>;
+  const { data, error } = await profilesFrom.select("is_active").eq("id", userId).maybeSingle();
+  if (error) throw error;
+  return data?.is_active ?? false;
+}
+
 export const routeGuardStaleTime = ROUTE_GUARD_STALE_MS;
