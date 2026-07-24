@@ -933,7 +933,7 @@ function SchedulesPage() {
 
   const saveMut = useMutation({
     mutationFn: () => {
-      return saveFn({ data: { schedule_id: visible!.id, shifts: buildShiftPayload() } });
+      return saveFn({ data: { schedule_id: visible!.id, shifts: prepareShiftPayloadForPersist() } });
     },
     onSuccess: () => {
       toast.success("נשמר");
@@ -955,7 +955,7 @@ function SchedulesPage() {
     mutationFn: async () => {
       // Persist any unsaved local edits before validating on the server,
       // so the validator sees the actual on-screen schedule.
-      await saveFn({ data: { schedule_id: visible!.id, shifts: buildShiftPayload() } });
+      await saveFn({ data: { schedule_id: visible!.id, shifts: prepareShiftPayloadForPersist() } });
       return submitFn({ data: { schedule_id: visible!.id } });
     },
     onSuccess: (r: any) => {
@@ -980,7 +980,7 @@ function SchedulesPage() {
     mutationFn: async () => {
       // Persist any current edits made by the approver before publishing,
       // so the published version reflects exactly what's on screen.
-      await saveFn({ data: { schedule_id: visible!.id, shifts: buildShiftPayload() } });
+      await saveFn({ data: { schedule_id: visible!.id, shifts: prepareShiftPayloadForPersist() } });
       return approveFn({ data: { schedule_id: visible!.id } });
     },
     onSuccess: (r: any) => {
@@ -1004,7 +1004,7 @@ function SchedulesPage() {
 
   const publishMut = useMutation({
     mutationFn: async () => {
-      await saveFn({ data: { schedule_id: visible!.id, shifts: buildShiftPayload() } });
+      await saveFn({ data: { schedule_id: visible!.id, shifts: prepareShiftPayloadForPersist() } });
       return publishFn({ data: { schedule_id: visible!.id } });
     },
     onSuccess: () => {
@@ -1166,7 +1166,26 @@ function SchedulesPage() {
     }));
   }
 
-  function buildShiftPayload(): {
+  /** Empty cells (—) → חופש on save/publish; chosen morning/evening/off stay as-is. */
+  function editsWithEmptyAsOff(
+    base: Record<string, Record<string, Shift>>,
+  ): Record<string, Record<string, Shift>> {
+    const next: Record<string, Record<string, Shift>> = {};
+    for (const emp of empsQ.data ?? []) {
+      if (emp.excluded_from_schedule) continue;
+      next[emp.id] = { ...(base[emp.id] ?? {}) };
+      for (const day of days) {
+        if (!next[emp.id][day] || isEmployeeOnLeaveOnDate(emp, day)) {
+          next[emp.id][day] = "off";
+        }
+      }
+    }
+    return next;
+  }
+
+  function buildShiftPayload(
+    sourceEdits: Record<string, Record<string, Shift>> = edits,
+  ): {
     employee_id: string;
     day_date: string;
     shift: Shift;
@@ -1174,6 +1193,7 @@ function SchedulesPage() {
     end_time: string | null;
     note: string | null;
   }[] {
+    const filled = editsWithEmptyAsOff(sourceEdits);
     const list: {
       employee_id: string;
       day_date: string;
@@ -1182,7 +1202,7 @@ function SchedulesPage() {
       end_time: string | null;
       note: string | null;
     }[] = [];
-    for (const [emp, m] of Object.entries(edits)) {
+    for (const [emp, m] of Object.entries(filled)) {
       const empRow = empsQ.data?.find((e) => e.id === emp);
       if (empRow?.excluded_from_schedule) continue;
       for (const [day, shift] of Object.entries(m)) {
@@ -1208,6 +1228,14 @@ function SchedulesPage() {
       }
     }
     return list;
+  }
+
+  /** Fill empty cells as off in UI + return payload for save/publish. */
+  function prepareShiftPayloadForPersist() {
+    const filled = editsWithEmptyAsOff(edits);
+    setEdits(filled);
+    editsDirtyRef.current = true;
+    return buildShiftPayload(filled);
   }
 
   // Draft ownership lock: a Department Manager who did NOT create the draft

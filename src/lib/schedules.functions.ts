@@ -123,6 +123,40 @@ function applyLeaveOffToShifts(
   return [...byCell.values()];
 }
 
+/** Unset cells → חופש (off). Chosen morning/evening/off are kept. */
+function applyEmptyOffToShifts(
+  sched: { week_start: string },
+  deptEmployees: any[],
+  shifts: {
+    employee_id: string;
+    day_date: string;
+    shift: string;
+    start_time?: string | null;
+    end_time?: string | null;
+    note?: string | null;
+  }[],
+) {
+  const schedulable = schedulableDepartmentEmployees(deptEmployees);
+  const days = weekDaysOfSchedule(sched);
+  const byCell = new Map<string, (typeof shifts)[number]>();
+  for (const s of shifts) byCell.set(`${s.employee_id}|${s.day_date}`, s);
+  for (const emp of schedulable) {
+    for (const day of days) {
+      const key = `${emp.id}|${day}`;
+      if (byCell.has(key)) continue;
+      byCell.set(key, {
+        employee_id: emp.id,
+        day_date: day,
+        shift: "off",
+        start_time: null,
+        end_time: null,
+        note: null,
+      });
+    }
+  }
+  return [...byCell.values()];
+}
+
 function applyLeaveOffToShiftMap(
   sched: { week_start: string },
   deptEmployees: any[],
@@ -458,10 +492,14 @@ export const saveScheduleShifts = createServerFn({ method: "POST" })
     const schedulableIds = new Set(
       schedulableDepartmentEmployees(deptEmployees).map((e: any) => e.id as string),
     );
-    const shiftsInputRaw = applyLeaveOffToShifts(
+    const shiftsInputRaw = applyEmptyOffToShifts(
       sched,
       deptEmployees,
-      data.shifts.filter((s) => schedulableIds.has(s.employee_id)),
+      applyLeaveOffToShifts(
+        sched,
+        deptEmployees,
+        data.shifts.filter((s) => schedulableIds.has(s.employee_id)),
+      ),
     );
     const shiftsInput = canEditScheduleTimes(caps)
       ? shiftsInputRaw
