@@ -32,6 +32,7 @@ type EmployeeInfo = {
   id: string;
   full_name: string;
   job_title: string | null;
+  department_name: string | null;
 };
 
 type DisplayEmployee = EmployeeInfo & { start: string | null; end: string | null };
@@ -138,10 +139,16 @@ export function LiveShiftCardsSection() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("profiles")
-        .select("id, full_name, job_title")
+        .select("id, full_name, job_title, departments(name)")
         .in("id", empIds);
       if (error) throw error;
-      return (data ?? []) as EmployeeInfo[];
+      return ((data ?? []) as any[]).map((row) => ({
+        id: row.id as string,
+        full_name: row.full_name as string,
+        job_title: (row.job_title as string | null) ?? null,
+        department_name:
+          (row.departments?.name as string | null | undefined) ?? null,
+      }));
     },
     staleTime: 60_000,
   });
@@ -200,6 +207,7 @@ export function LiveShiftCardsSection() {
         id: r.employee_id,
         full_name: info?.full_name ?? "עובד",
         job_title: info?.job_title ?? null,
+        department_name: info?.department_name ?? null,
         start: start ? formatHHMM(start) : null,
         end: end ? formatHHMM(end) : null,
       });
@@ -267,8 +275,13 @@ export function LiveShiftCardsSection() {
                   <li key={e.id} className="py-2 flex items-center justify-between gap-3">
                     <div className="min-w-0">
                       <div className="font-medium truncate">{e.full_name}</div>
-                      {e.job_title && (
+                      {e.department_name && (
                         <div className="text-xs text-muted-foreground truncate">
+                          {e.department_name}
+                        </div>
+                      )}
+                      {e.job_title && (
+                        <div className="text-[11px] text-muted-foreground/80 truncate">
                           {e.job_title}
                         </div>
                       )}
