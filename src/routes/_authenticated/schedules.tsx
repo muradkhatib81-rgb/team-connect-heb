@@ -497,7 +497,7 @@ function SchedulesPage() {
   });
 
   const deptWeekFlagsQ = useQuery({
-    enabled: !!selectedDept && !!me?.id && view === "editor",
+    enabled: !!selectedDept && !!me?.id && (view === "editor" || isDeptHeadOnly),
     queryKey: ["dept-schedule-flags", selectedDept, weekStart, me?.id],
     queryFn: () =>
       deptWeekFlagsFn({
@@ -653,6 +653,34 @@ function SchedulesPage() {
     if (!canViewScheduleContent(s, scheduleViewerCaps, managedDeptIds)) return null;
     return s;
   }, [schedQ.data, scheduleViewerCaps, managedDeptIds]);
+
+  /** Dept head: published schedule for the week being viewed → hide draft/edit nav. */
+  const deptHeadHasPublishedThisWeek = useMemo(() => {
+    if (!isDeptHeadOnly) return false;
+    if (deptWeekFlagsQ.data?.hasPublished) return true;
+    if (visible?.status === "approved" && !!(visible as any).published_at) return true;
+    const deptId = selectedDept ?? myDeptId;
+    if (!deptId) return false;
+    return (weekSavedQ.data?.savedList ?? []).some(
+      (s) =>
+        s.department_id === deptId &&
+        s.status === "approved" &&
+        !!s.published_at,
+    );
+  }, [
+    isDeptHeadOnly,
+    deptWeekFlagsQ.data?.hasPublished,
+    visible,
+    selectedDept,
+    myDeptId,
+    weekSavedQ.data?.savedList,
+  ]);
+
+  useEffect(() => {
+    if (deptHeadHasPublishedThisWeek && view === "saved") {
+      setView("editor");
+    }
+  }, [deptHeadHasPublishedThisWeek, view]);
 
   const changeBaselineKind = useMemo(
     () =>
@@ -1301,7 +1329,9 @@ function SchedulesPage() {
         </div>
       </header>
 
-      {(canSeeScheduleQueues || canCreate) && !isEmployee && (
+      {((canSeeScheduleQueues || canCreate) &&
+        !isEmployee &&
+        (canSeeScheduleQueues || !deptHeadHasPublishedThisWeek)) && (
         <div className="flex gap-2 flex-wrap">
           {canSeeScheduleQueues && (
             <Button
@@ -1317,18 +1347,20 @@ function SchedulesPage() {
               )}
             </Button>
           )}
-          <Button
-            size="sm"
-            variant={view === "saved" ? "default" : "outline"}
-            onClick={() => setView("saved")}
-          >
-            סידורי עבודה שמורים
-            {weekSavedQ.data && weekSavedQ.data.savedList.length > 0 && (
-              <Badge variant="secondary" className="mr-2">
-                {weekSavedQ.data.savedList.length}
-              </Badge>
-            )}
-          </Button>
+          {!deptHeadHasPublishedThisWeek && (
+            <Button
+              size="sm"
+              variant={view === "saved" ? "default" : "outline"}
+              onClick={() => setView("saved")}
+            >
+              סידורי עבודה שמורים
+              {weekSavedQ.data && weekSavedQ.data.savedList.length > 0 && (
+                <Badge variant="secondary" className="mr-2">
+                  {weekSavedQ.data.savedList.length}
+                </Badge>
+              )}
+            </Button>
+          )}
           {canSeeScheduleQueues && (
             <Button
               size="sm"
@@ -1343,13 +1375,15 @@ function SchedulesPage() {
               )}
             </Button>
           )}
-          <Button
-            size="sm"
-            variant={view === "editor" ? "default" : "outline"}
-            onClick={() => setView("editor")}
-          >
-            עריכת סידור שבועי
-          </Button>
+          {!deptHeadHasPublishedThisWeek && (
+            <Button
+              size="sm"
+              variant={view === "editor" ? "default" : "outline"}
+              onClick={() => setView("editor")}
+            >
+              עריכת סידור שבועי
+            </Button>
+          )}
         </div>
       )}
 
