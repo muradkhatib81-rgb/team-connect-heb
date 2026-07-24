@@ -121,11 +121,12 @@ async function reprovisionOrphanEmployeeAuth(
   if (roleErr) throw new Error(roleErr.message);
 
   if (data.role === "department_manager") {
-    await supabaseAdmin
+    const { error: mgrErr } = await supabaseAdmin
       .from("departments")
       .update({ manager_id: uid })
       .eq("id", data.department_id)
       .eq("branch_id", branchId);
+    if (mgrErr) throw new Error(mgrErr.message);
   }
 
   await supabaseAdmin.rpc("sync_user_task_permissions", { _user_id: uid });
@@ -175,6 +176,48 @@ async function clearManagementOnShiftIfDemoted(
   await supabaseAdmin.from("management_on_shift").delete().eq("user_id", targetUserId);
 }
 
+/**
+ * Keep departments.manager_id aligned with a department_manager role.
+ * Does not grant/revoke roles or permissions — only the department ownership link.
+ */
+async function ensureDepartmentManagerAssignment(
+  supabaseAdmin: any,
+  opts: { userId: string; departmentId: string; branchId: string },
+) {
+  const { error: clearErr } = await supabaseAdmin
+    .from("departments")
+    .update({ manager_id: null })
+    .eq("manager_id", opts.userId)
+    .eq("branch_id", opts.branchId)
+    .neq("id", opts.departmentId);
+  if (clearErr) throw new Error(clearErr.message);
+
+  const { data: dept, error: deptErr } = await supabaseAdmin
+    .from("departments")
+    .select("id, manager_id")
+    .eq("id", opts.departmentId)
+    .eq("branch_id", opts.branchId)
+    .maybeSingle();
+  if (deptErr) throw new Error(deptErr.message);
+  if (!dept) throw new Error("מחלקה לא נמצאה בסניף הפעיל");
+
+  if ((dept as { manager_id: string | null }).manager_id === opts.userId) return;
+
+  if (
+    (dept as { manager_id: string | null }).manager_id &&
+    (dept as { manager_id: string | null }).manager_id !== opts.userId
+  ) {
+    throw new Error("למחלקה שנבחרה כבר קיים אחראי מחלקה");
+  }
+
+  const { error: assignErr } = await supabaseAdmin
+    .from("departments")
+    .update({ manager_id: opts.userId })
+    .eq("id", opts.departmentId)
+    .eq("branch_id", opts.branchId);
+  if (assignErr) throw new Error(assignErr.message);
+}
+
 async function applyUserRoleChange(
   supabase: any,
   supabaseAdmin: any,
@@ -220,6 +263,13 @@ async function applyUserRoleChange(
       _new_manager_id: targetUserId,
     });
     if (error) throw new Error(error.message);
+    // RPC may early-return when manager_id already matches; still repair any
+    // missing ownership link without changing roles/permissions further.
+    await ensureDepartmentManagerAssignment(supabaseAdmin, {
+      userId: targetUserId,
+      departmentId,
+      branchId,
+    });
     const { error: syncErr } = await supabaseAdmin.rpc("sync_user_task_permissions", {
       _user_id: targetUserId,
     });
@@ -752,15 +802,6 @@ export const updateEmployee = createServerFn({ method: "POST" })
         .eq("branch_id", context.branchId)
         .neq("id", data.department_id);
       if (clearOldDeptErr) throw new Error(clearOldDeptErr.message);
-
-      if (resultingRole === "department_manager" && !data.role_changed) {
-        const { error: assignNewDeptErr } = await supabaseAdmin
-          .from("departments")
-          .update({ manager_id: data.user_id })
-          .eq("id", data.department_id)
-          .eq("branch_id", context.branchId);
-        if (assignNewDeptErr) throw new Error(assignNewDeptErr.message);
-      }
     }
 
     if (data.role_changed && data.role) {
@@ -770,6 +811,24 @@ export const updateEmployee = createServerFn({ method: "POST" })
         departmentId: data.department_id,
         branchId: context.branchId,
         caps,
+      });
+    }
+
+    // Repair/keep department ownership in sync whenever the resulting role is
+    // department_manager (including saves that did not change the role).
+    const { data: finalRoleRows, error: finalRolesErr } = await supabaseAdmin
+      .from("user_roles")
+      .select("role")
+      .eq("user_id", data.user_id);
+    if (finalRolesErr) throw new Error(finalRolesErr.message);
+    const isDeptManager = (finalRoleRows ?? []).some(
+      (row: { role: string }) => row.role === "department_manager",
+    );
+    if (isDeptManager) {
+      await ensureDepartmentManagerAssignment(supabaseAdmin, {
+        userId: data.user_id,
+        departmentId: data.department_id,
+        branchId: context.branchId,
       });
     }
 

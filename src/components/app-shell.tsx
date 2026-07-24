@@ -846,6 +846,7 @@ function RealtimeBridge({ uid }: { uid: string }) {
         qc.invalidateQueries({ queryKey: ["my-break-shortcut"] });
         qc.invalidateQueries({ queryKey: ["my-breaks-today"] });
         qc.invalidateQueries({ queryKey: ["dashboard-on-break"] });
+        qc.invalidateQueries({ queryKey: ["dashboard-dept-on-break"] });
         qc.invalidateQueries({ queryKey: ["dashboard-pending-breaks"] });
         qc.invalidateQueries({ queryKey: ["dashboard-daily-breaks"] });
       })

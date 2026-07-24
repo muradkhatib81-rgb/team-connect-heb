@@ -245,8 +245,9 @@ function DashboardPage() {
       {admin || isDeptManager ? (
         <>
           <BreakShortcutCard userId={profile.id} />
-          <TasksStatsSection stats={tasksStatsQuery.data} loading={tasksStatsQuery.isLoading} />
           <SchedulesStatsSection profile={profile} />
+          {!admin && isDeptManager && <DeptHeadOnBreakSection />}
+          <TasksStatsSection stats={tasksStatsQuery.data} loading={tasksStatsQuery.isLoading} />
           {canViewBreaks && <OnBreakSection profile={profile} />}
 
           {admin ? (
@@ -343,6 +344,131 @@ type DeptEmp = {
   avatar_url: string | null;
   department_id: string | null;
 };
+
+function DeptHeadOnBreakSection() {
+  const qc = useQueryClient();
+  const [open, setOpen] = useState(false);
+  const [, setTick] = useState(0);
+
+  const onBreakQ = useQuery({
+    queryKey: ["dashboard-dept-on-break"],
+    queryFn: async () => {
+      const { data, error } = await (supabase as any).rpc(
+        "list_managed_department_active_breaks",
+      );
+      if (error) throw error;
+      return (data ?? []) as {
+        id: string;
+        user_id: string;
+        full_name: string;
+        break_type: string;
+        duration_minutes: number;
+        started_at: string | null;
+        ends_at: string | null;
+        department_id: string;
+        department_name: string;
+      }[];
+    },
+    refetchInterval: 30_000,
+  });
+
+  useEffect(() => {
+    const ch = supabase
+      .channel("dashboard-dept-on-break-rt")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "break_requests" },
+        () => {
+          qc.invalidateQueries({ queryKey: ["dashboard-dept-on-break"] });
+        },
+      )
+      .subscribe();
+    return () => {
+      supabase.removeChannel(ch);
+    };
+  }, [qc]);
+
+  useEffect(() => {
+    if (!open) return;
+    const t = setInterval(() => setTick((n) => n + 1), 1000);
+    return () => clearInterval(t);
+  }, [open]);
+
+  const list = onBreakQ.data ?? [];
+  const fmtT = (iso: string | null) => fmtBreakTime(iso) || "—";
+
+  return (
+    <>
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+        <StatCard
+          label="עובדים בהפסקה כעת"
+          value={list.length}
+          icon={Coffee}
+          tone={list.length > 0 ? "warning" : "primary"}
+          onClick={() => setOpen(true)}
+          badge={list.length}
+          pulse={list.length > 0}
+        />
+      </div>
+
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Coffee className="size-5 text-primary" />
+              עובדים בהפסקה כעת
+            </DialogTitle>
+          </DialogHeader>
+
+          {onBreakQ.isLoading ? (
+            <div className="flex justify-center py-8">
+              <Loader2 className="size-5 animate-spin text-primary" />
+            </div>
+          ) : list.length === 0 ? (
+            <p className="text-sm text-muted-foreground py-6 text-center">
+              אין עובדים בהפסקה במחלקה כרגע.
+            </p>
+          ) : (
+            <div className="space-y-3 max-h-[60vh] overflow-y-auto">
+              {list.map((r) => {
+                const now = Date.now();
+                const endsTs = r.ends_at ? new Date(r.ends_at).getTime() : 0;
+                const overrunMs = endsTs && now > endsTs ? now - endsTs : 0;
+                return (
+                  <Card
+                    key={r.id}
+                    className={
+                      "p-4 border " +
+                      (overrunMs > 0
+                        ? "border-red-500 bg-red-50 dark:bg-red-950/30"
+                        : "border-border")
+                    }
+                  >
+                    <div className="space-y-1">
+                      <p className="font-semibold truncate">{r.full_name}</p>
+                      <p className="text-sm text-muted-foreground">
+                        סוג הפסקה: {r.break_type}
+                        {r.duration_minutes ? ` · ${r.duration_minutes} דק׳` : ""}
+                      </p>
+                      <p className="text-sm text-muted-foreground">
+                        יצא: {fmtT(r.started_at)} · חזרה: {fmtT(r.ends_at)}
+                      </p>
+                      {overrunMs > 0 && (
+                        <Badge variant="destructive" className="mt-1">
+                          חריגה +{fmtHMS(overrunMs)}
+                        </Badge>
+                      )}
+                    </div>
+                  </Card>
+                );
+              })}
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+    </>
+  );
+}
 
 function DeptManagerDashboard({
   data,

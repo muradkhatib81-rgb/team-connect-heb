@@ -1611,6 +1611,8 @@ function EditEmployeeDialog({
       qc.invalidateQueries({ queryKey: ["all-roles"] });
       qc.invalidateQueries({ queryKey: ["departments"] });
       qc.invalidateQueries({ queryKey: ["dashboard", "stats"] });
+      qc.invalidateQueries({ queryKey: ["dashboard", "dept-manager"] });
+      qc.invalidateQueries({ queryKey: ["dashboard-dept-on-break"] });
       qc.invalidateQueries({ queryKey: ["dept-employees"] });
       qc.invalidateQueries({ queryKey: ["schedule-shifts"] });
       onClose();
