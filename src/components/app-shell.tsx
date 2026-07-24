@@ -794,6 +794,7 @@ function RealtimeBridge({ uid }: { uid: string }) {
         qc.invalidateQueries({ queryKey: ["dashboard-approved-list"] });
         qc.invalidateQueries({ queryKey: ["emp-dash-schedule"] });
         qc.invalidateQueries({ queryKey: ["daily-schedule-overview"] });
+        qc.invalidateQueries({ queryKey: ["dashboard-shift-cards"] });
         qc.invalidateQueries({ queryKey: ["week-schedules"] });
         qc.invalidateQueries({ queryKey: ["schedules-week-saved"] });
         qc.invalidateQueries({ queryKey: ["dashboard-dept-states"] });
@@ -803,6 +804,7 @@ function RealtimeBridge({ uid }: { uid: string }) {
         qc.invalidateQueries({ queryKey: ["schedule-shifts"] });
         qc.invalidateQueries({ queryKey: ["emp-dash-schedule"] });
         qc.invalidateQueries({ queryKey: ["daily-schedule-overview"] });
+        qc.invalidateQueries({ queryKey: ["dashboard-shift-cards"] });
         qc.invalidateQueries({ queryKey: ["schedules-week-saved"] });
       })
       .on("postgres_changes", { event: "*", schema: "public", table: "shift_definitions" }, () => {
@@ -847,6 +849,13 @@ function RealtimeBridge({ uid }: { uid: string }) {
         () => {
           qc.invalidateQueries({ queryKey: ["notif", "schedule"] });
           qc.invalidateQueries({ queryKey: ["emp-dash-notif"] });
+          // Published/updated schedules: refresh dashboard overview for recipients
+          // (works even when schedules RLS blocked realtime before publish).
+          qc.invalidateQueries({ queryKey: ["daily-schedule-overview"] });
+          qc.invalidateQueries({ queryKey: ["dashboard-shift-cards"] });
+          qc.invalidateQueries({ queryKey: ["dashboard-schedules"] });
+          qc.invalidateQueries({ queryKey: ["dept-schedule-flags"] });
+          qc.invalidateQueries({ queryKey: ["dashboard-dept-states"] });
         },
       )
       .on("postgres_changes", { event: "*", schema: "public", table: "company_settings" }, () =>

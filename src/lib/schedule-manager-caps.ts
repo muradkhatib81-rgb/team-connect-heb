@@ -85,3 +85,38 @@ export function resolveScheduleManagerCaps(
       (isAssistantManager && !!p.can_publish_schedule),
   };
 }
+
+export type DashboardScheduleScope =
+  | { kind: "branch" }
+  | { kind: "department"; departmentId: string; useCoworkersView: boolean }
+  | { kind: "none" };
+
+/** Maps viewer caps to dashboard daily-overview scope (branch / own dept / none). */
+export function resolveDashboardScheduleScope(args: {
+  caps: ResolvedScheduleManagerCaps;
+  departmentId?: string | null;
+  managedDepartmentId?: string | null;
+}): DashboardScheduleScope {
+  const { caps, departmentId, managedDepartmentId } = args;
+
+  if (caps.isBranchMgr) {
+    return { kind: "branch" };
+  }
+
+  if (caps.isDeptHeadOnly) {
+    const deptId = managedDepartmentId ?? departmentId ?? null;
+    if (!deptId) return { kind: "none" };
+    return { kind: "department", departmentId: deptId, useCoworkersView: false };
+  }
+
+  if (departmentId) {
+    return { kind: "department", departmentId, useCoworkersView: true };
+  }
+
+  return { kind: "none" };
+}
+
+/** Roles whose branch-level schedule access depends on loaded task permissions. */
+export function scheduleScopeNeedsLoadedPermissions(roles: readonly string[]): boolean {
+  return roles.includes("assistant_manager");
+}

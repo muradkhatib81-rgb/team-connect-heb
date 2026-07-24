@@ -19,6 +19,13 @@ export type ScheduleVisibilityRow = {
   department_id: string;
 };
 
+/** הנהלה — branch-managed; no department-head workflow or manager_id injection. */
+export function isManagementDepartment(
+  dept: { code?: string | null } | null | undefined,
+): boolean {
+  return dept?.code === "management";
+}
+
 /** Saved workflow row that is not yet published to employees / dept heads. */
 export function isSavedScheduleAwaitingPublish(
   schedule: Pick<ScheduleVisibilityRow, "status" | "published_at"> | null | undefined,
@@ -33,7 +40,7 @@ export function isSavedScheduleAwaitingPublish(
 }
 
 /** Branch-level schedule managers (not department heads acting on their own dept). */
-function isBranchLevelScheduleViewer(caps: ScheduleViewerCaps): boolean {
+export function isBranchLevelScheduleViewer(caps: ScheduleViewerCaps): boolean {
   if (caps.isMainAdmin || caps.isBranchMgr) return true;
   if (caps.isDeptMgr) return false;
   return caps.canCreate || caps.canApprove || caps.canPublishDirect;

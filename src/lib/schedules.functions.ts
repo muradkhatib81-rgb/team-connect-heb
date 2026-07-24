@@ -5,9 +5,11 @@ import { isEmployeeOnLeaveOnDate } from "@/lib/employee-leave";
 import { resolveScheduleManagerCaps } from "@/lib/schedule-manager-caps";
 import {
   canViewScheduleContent,
+  isBranchLevelScheduleViewer,
   isSavedScheduleAwaitingPublish,
   type ScheduleViewerCaps,
 } from "@/lib/schedule-visibility";
+import { resolveScheduleChangeBaselineKind } from "@/lib/schedule-publish-diff";
 
 // Shift codes are dynamic — validated against public.shift_definitions at runtime.
 const shiftCode = z.string().min(1).max(64);
@@ -55,13 +57,15 @@ async function getDepartmentScheduleEmployees(supabase: any, departmentId: strin
       .eq("is_active", true),
     supabase
       .from("departments")
-      .select("manager_id")
+      .select("manager_id, code")
       .eq("id", departmentId)
       .maybeSingle(),
   ]);
 
   const rows = [...(emps ?? [])];
-  if (dept?.manager_id && !rows.some((e: any) => e.id === dept.manager_id)) {
+  const includeDeptHead =
+    !!dept?.manager_id && dept?.code !== "management";
+  if (includeDeptHead && !rows.some((e: any) => e.id === dept!.manager_id)) {
     const { data: mgr } = await supabase
       .from("profiles")
       .select("id, full_name, is_active, excluded_from_schedule, on_leave, leave_start_date, leave_end_date")
@@ -166,10 +170,10 @@ async function getScheduleDepartmentRecipientIds(
       .select("id")
       .eq("department_id", departmentId)
       .eq("is_active", true),
-    supabase.from("departments").select("manager_id").eq("id", departmentId).maybeSingle(),
+    supabase.from("departments").select("manager_id, code").eq("id", departmentId).maybeSingle(),
   ]);
   const ids = new Set<string>((emps ?? []).map((e: any) => e.id as string));
-  if (dept?.manager_id) ids.add(dept.manager_id as string);
+  if (dept?.manager_id && dept.code !== "management") ids.add(dept.manager_id as string);
   if (excludeUserId) ids.delete(excludeUserId);
   return [...ids];
 }
@@ -250,7 +254,7 @@ async function getManagedDepartmentIds(
   caps: ScheduleViewerCaps,
   userId: string,
 ): Promise<string[]> {
-  if (!caps.isDeptHeadOnly) return [];
+  if (!caps.isDeptMgr) return [];
   const { data: managedDepts } = await supabase
     .from("departments")
     .select("id")
@@ -1091,12 +1095,12 @@ export const rejectSchedule = createServerFn({ method: "POST" })
     // Notify the department manager / creator so they know to fix and resubmit.
     const { data: dept } = await context.supabase
       .from("departments")
-      .select("manager_id")
+      .select("manager_id, code")
       .eq("id", sched.department_id)
       .maybeSingle();
     const recipients = new Set<string>();
     if (sched.created_by) recipients.add(sched.created_by);
-    if (dept?.manager_id) recipients.add(dept.manager_id);
+    if (dept?.manager_id && dept.code !== "management") recipients.add(dept.manager_id);
     if (recipients.size) {
       await context.supabase.from("schedule_notifications").insert(
         [...recipients].map((uid) => ({
@@ -1496,5 +1500,280 @@ export const getDepartmentWeekScheduleFlags = createServerFn({ method: "POST" })
             created_by: (sched!.created_by as string | null) ?? null,
           }
         : null,
+    };
+  });
+
+async function enrichOverviewEmployeesFromShifts(
+  supabaseAdmin: any,
+  departments: { id: string; scheduleId: string | null }[],
+  employeesByDept: Record<string, any[]>,
+  shifts: { schedule_id: string; employee_id: string }[],
+) {
+  const result: Record<string, any[]> = {};
+  for (const dept of departments) {
+    result[dept.id] = [...(employeesByDept[dept.id] ?? [])];
+  }
+
+  const missingIds = new Set<string>();
+  for (const dept of departments) {
+    if (!dept.scheduleId) continue;
+    const known = new Set((result[dept.id] ?? []).map((e: any) => e.id as string));
+    for (const row of shifts.filter((s) => s.schedule_id === dept.scheduleId)) {
+      if (!known.has(row.employee_id)) missingIds.add(row.employee_id);
+    }
+  }
+  if (!missingIds.size) return result;
+
+  const { data: profiles, error } = await supabaseAdmin
+    .from("profiles")
+    .select(
+      "id, full_name, excluded_from_schedule, excluded_from_headcount, on_leave, leave_start_date, leave_end_date",
+    )
+    .in("id", [...missingIds])
+    .eq("is_active", true);
+  if (error) throw new Error(error.message);
+
+  for (const dept of departments) {
+    if (!dept.scheduleId) continue;
+    const known = new Set((result[dept.id] ?? []).map((e: any) => e.id as string));
+    const shiftIds = new Set(
+      shifts.filter((s) => s.schedule_id === dept.scheduleId).map((s) => s.employee_id),
+    );
+    for (const row of profiles ?? []) {
+      if (known.has(row.id)) continue;
+      if (shiftIds.has(row.id)) {
+        result[dept.id] = [...(result[dept.id] ?? []), row];
+        known.add(row.id);
+      }
+    }
+    result[dept.id]?.sort((a: any, b: any) =>
+      String(a.full_name).localeCompare(String(b.full_name), "he"),
+    );
+  }
+  return result;
+}
+
+/** Dashboard daily overview — same visibility rules as the schedule editor, admin-backed reads. */
+export const getDailyScheduleOverview = createServerFn({ method: "POST" })
+  .middleware([requireBranchContext])
+  .inputValidator((d: unknown) =>
+    z
+      .object({
+        week_start: z.string(),
+        scope: z.enum(["branch", "department"]),
+        department_id: z.string().uuid().optional(),
+        use_coworkers_view: z.boolean().optional(),
+      })
+      .parse(d),
+  )
+  .handler(async ({ data, context }) => {
+    const capsRaw = await getCaps(context.supabase, context.userId);
+    const caps: ScheduleViewerCaps = {
+      userId: context.userId,
+      isMainAdmin: capsRaw.isMainAdmin,
+      isBranchMgr: capsRaw.isBranchMgr,
+      isDeptMgr: capsRaw.isDeptMgr,
+      canCreate: capsRaw.canCreate,
+      canApprove: capsRaw.canApprove,
+      canPublishDirect: capsRaw.canPublishDirect,
+      departmentId: capsRaw.departmentId,
+    };
+    const managedDeptIds = await getManagedDepartmentIds(
+      context.supabase,
+      capsRaw,
+      context.userId,
+    );
+    const useCoworkersView = !!data.use_coworkers_view;
+    const { start, end } = weekStartOf(data.week_start);
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+
+    let departments: { id: string; name: string }[] = [];
+    if (data.scope === "department") {
+      const targetDeptId = data.department_id ?? caps.departmentId;
+      if (!targetDeptId) {
+        return { departments: [], employeesByDept: {}, shifts: [] };
+      }
+      let allowed =
+        isBranchLevelScheduleViewer(caps) ||
+        (useCoworkersView && caps.departmentId === targetDeptId) ||
+        managedDeptIds.includes(targetDeptId);
+      if (!allowed) {
+        allowed = await isScheduleVisibleToCaps(
+          {
+            department_id: targetDeptId,
+            status: "approved",
+            published_at: new Date().toISOString(),
+          },
+          caps,
+          context.userId,
+          context.supabase,
+        ).catch(() => false);
+      }
+      if (!allowed) throw new Error("אין הרשאה");
+
+      const { data: dept, error } = await supabaseAdmin
+        .from("departments")
+        .select("id, name")
+        .eq("id", targetDeptId)
+        .eq("is_active", true)
+        .maybeSingle();
+      if (error) throw new Error(error.message);
+      departments = dept ? [{ id: dept.id, name: dept.name }] : [];
+    } else {
+      if (!isBranchLevelScheduleViewer(caps)) {
+        throw new Error("אין הרשאה");
+      }
+      let deptQ = supabaseAdmin
+        .from("departments")
+        .select("id, name")
+        .eq("is_active", true)
+        .order("name");
+      if (context.branchId) deptQ = deptQ.eq("branch_id", context.branchId);
+      const { data: depts, error } = await deptQ;
+      if (error) throw new Error(error.message);
+      departments = (depts ?? []) as { id: string; name: string }[];
+    }
+
+    if (!departments.length) {
+      return { departments: [], employeesByDept: {}, shifts: [] };
+    }
+
+    const deptIds = departments.map((d) => d.id);
+    const { data: schedRows, error: schedErr } = await supabaseAdmin
+      .from("schedules")
+      .select(
+        "id, department_id, status, published_at, submitted_at, created_by, week_start, week_end",
+      )
+      .eq("week_start", start)
+      .in("department_id", deptIds);
+    if (schedErr) throw new Error(schedErr.message);
+
+    const candidatesByDept = new Map<string, any[]>();
+    for (const s of schedRows ?? []) {
+      const list = candidatesByDept.get(s.department_id) ?? [];
+      list.push(s);
+      candidatesByDept.set(s.department_id, list);
+    }
+
+    const schedByDept = new Map<string, any>();
+    const branchLevelViewer = isBranchLevelScheduleViewer(caps);
+    for (const dept of departments) {
+      const candidates = candidatesByDept.get(dept.id) ?? [];
+      if (!candidates.length) continue;
+
+      if (useCoworkersView) {
+        const published = candidates.find(
+          (s) => s.status === "approved" && s.published_at,
+        );
+        if (published) schedByDept.set(dept.id, published);
+        continue;
+      }
+
+      if (branchLevelViewer) {
+        const picked =
+          candidates.find((s) => s.status === "approved" && s.published_at) ??
+          candidates[0]!;
+        schedByDept.set(dept.id, picked);
+        continue;
+      }
+
+      if (
+        !useCoworkersView &&
+        caps.isDeptMgr &&
+        managedDeptIds.includes(dept.id)
+      ) {
+        const visible: any[] = [];
+        for (const s of candidates) {
+          if (
+            await isScheduleVisibleToCaps(
+              s,
+              caps,
+              context.userId,
+              context.supabase,
+            )
+          ) {
+            visible.push(s);
+          }
+        }
+        const picked =
+          visible.find((s) => s.status === "approved" && s.published_at) ??
+          visible[0] ??
+          candidates.find((s) => s.status === "approved" && s.published_at) ??
+          candidates[0];
+        if (picked) schedByDept.set(dept.id, picked);
+        continue;
+      }
+
+      const visible: any[] = [];
+      for (const s of candidates) {
+        if (
+          await isScheduleVisibleToCaps(s, caps, context.userId, context.supabase)
+        ) {
+          visible.push(s);
+        }
+      }
+      if (!visible.length) continue;
+      const picked =
+        visible.find((s) => s.status === "approved" && s.published_at) ?? visible[0]!;
+      schedByDept.set(dept.id, picked);
+    }
+
+    const departmentMeta = departments.map((d) => {
+      const sched = schedByDept.get(d.id);
+      const changeBaselineKind = sched
+        ? resolveScheduleChangeBaselineKind({
+            status: sched.status,
+            published_at: sched.published_at,
+            submitted_at: sched.submitted_at,
+          })
+        : null;
+      return {
+        id: d.id,
+        name: d.name,
+        hasPublishedSchedule: !!(sched?.status === "approved" && sched?.published_at),
+        scheduleId: sched?.id ?? null,
+        hasSavedAwaitingPublish: isSavedScheduleAwaitingPublish(sched),
+        changeBaselineKind,
+      };
+    });
+
+    const scheduleIds = [...schedByDept.values()].map((s) => s.id as string);
+    let shifts: any[] = [];
+    if (scheduleIds.length) {
+      const { data: shiftRows, error: shiftErr } = await supabaseAdmin
+        .from("schedule_shifts")
+        .select(
+          "employee_id, day_date, shift, published_shift, published_note, published_start_time, published_end_time, submitted_shift, submitted_note, submitted_start_time, submitted_end_time, start_time, end_time, note, schedule_id",
+        )
+        .in("schedule_id", scheduleIds)
+        .gte("day_date", start)
+        .lte("day_date", end);
+      if (shiftErr) throw new Error(shiftErr.message);
+      shifts = shiftRows ?? [];
+    }
+
+    const employeesByDept: Record<string, any[]> = {};
+    await Promise.all(
+      departmentMeta.map(async (d) => {
+        employeesByDept[d.id] = await getDepartmentScheduleEmployees(
+          supabaseAdmin,
+          d.id,
+        );
+      }),
+    );
+
+    const enrichedEmployees = await enrichOverviewEmployeesFromShifts(
+      supabaseAdmin,
+      departmentMeta.map((d) => ({ id: d.id, scheduleId: d.scheduleId })),
+      employeesByDept,
+      shifts,
+    );
+
+    return {
+      departments: departmentMeta,
+      employeesByDept: enrichedEmployees,
+      shifts,
+      weekStart: start,
+      weekEnd: end,
     };
   });

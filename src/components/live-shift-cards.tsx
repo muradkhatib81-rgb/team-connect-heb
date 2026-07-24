@@ -10,12 +10,15 @@ import {
 import { Users } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useShiftDefinitions } from "@/lib/use-shift-definitions";
+import { formatHHMM, usePlatformNow } from "@/lib/platform-time";
+import { getScheduleWeek } from "@/lib/schedule-week";
+import { useActiveBranch } from "@/lib/use-active-branch";
+import { useAuth } from "@/lib/use-auth";
 import {
-  formatHHMM,
-  isWithinShiftWindow,
-  parseHHMMToMinutes,
-  usePlatformNow,
-} from "@/lib/platform-time";
+  resolveScheduleManagerCaps,
+  scheduleScopeNeedsLoadedPermissions,
+} from "@/lib/schedule-manager-caps";
+import { isBranchLevelScheduleViewer } from "@/lib/schedule-visibility";
 
 type TodayRow = {
   employee_id: string;
@@ -34,39 +37,82 @@ type EmployeeInfo = {
 type DisplayEmployee = EmployeeInfo & { start: string | null; end: string | null };
 
 /**
- * Dynamic real-time shift cards for the Main Dashboard.
+ * Dynamic shift summary cards for the Main Dashboard (branch-level viewers).
  *
  * - One card per active shift definition (ordered by sort_order).
- * - Cards remain visible even when the count is zero; they only disappear
- *   when the shift definition itself is deactivated or deleted.
- * - Counts are the employees whose today's assignment falls within the
- *   effective `[start, end]` window in the platform time zone.
- * - Realtime subscriptions on `schedule_shifts`, `schedules`, and
- *   `shift_definitions` scoped invalidations keep the cards live without
- *   polling and without reloads.
+ * - Counts = employees assigned to that shift **today** in published schedules
+ *   for the current schedule week (בוקר / ערב / חופש — including חופש with no hours).
+ * - Realtime on schedule_shifts / schedules / shift_definitions.
  */
 export function LiveShiftCardsSection() {
   const qc = useQueryClient();
+  const { data: profile } = useAuth();
+  const { activeBranchId } = useActiveBranch();
   const shiftDefsQ = useShiftDefinitions({ activeOnly: true });
-  const { dateISO, minutesOfDay } = usePlatformNow(
-    // Boundary set = every distinct start/end used today (definition defaults +
-    // per-row overrides). Computed inside the ticker after data loads via key
-    // — falling back to the safety 60s tick until then is fine.
-    shiftDefsQ.list.flatMap((s) => [
-      s.start_time ? String(s.start_time).slice(0, 5) : null,
-      s.end_time ? String(s.end_time).slice(0, 5) : null,
-    ]),
+  const { dateISO } = usePlatformNow();
+
+  const needsLoadedPerms = profile
+    ? scheduleScopeNeedsLoadedPermissions(profile.roles)
+    : false;
+
+  const permsQ = useQuery({
+    enabled: !!profile?.id,
+    queryKey: ["my-perms", profile?.id],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("user_task_permissions")
+        .select(
+          "can_create_schedule, can_approve_schedule, can_publish_schedule, can_manage_schedule",
+        )
+        .eq("user_id", profile!.id)
+        .maybeSingle();
+      return data ?? {};
+    },
+  });
+
+  const permsReady = !needsLoadedPerms || !permsQ.isLoading;
+  const scheduleCaps = useMemo(
+    () =>
+      resolveScheduleManagerCaps(
+        profile?.roles ?? [],
+        permsReady ? permsQ.data : undefined,
+      ),
+    [profile?.roles, permsQ.data, permsReady],
   );
 
-  // Today's published assignments (RLS auto-scopes to the active branch).
+  const canView = useMemo(() => {
+    if (!profile) return false;
+    return isBranchLevelScheduleViewer({
+      userId: profile.id,
+      isMainAdmin: scheduleCaps.isMainAdmin,
+      isBranchMgr: scheduleCaps.isBranchMgr,
+      isDeptMgr: scheduleCaps.isDeptMgr,
+      canCreate: scheduleCaps.canCreate,
+      canApprove: scheduleCaps.canApprove,
+      canPublishDirect: scheduleCaps.canPublishDirect,
+      departmentId: profile.department_id,
+    });
+  }, [profile, scheduleCaps]);
+
+  const weekStart = useMemo(
+    () => getScheduleWeek(new Date(`${dateISO}T12:00:00Z`)).weekStart,
+    [dateISO],
+  );
+
+  // Today's published assignments for the current schedule week.
   const rowsQ = useQuery<TodayRow[]>({
-    queryKey: ["dashboard-shift-cards", "today", dateISO],
+    enabled: canView && permsReady && !!dateISO,
+    queryKey: ["dashboard-shift-cards", "today", dateISO, weekStart, activeBranchId ?? "all"],
     queryFn: async () => {
-      const { data: scheds } = await supabase
+      let schedQ = supabase
         .from("schedules")
         .select("id")
         .eq("status", "approved")
-        .not("published_at", "is", null);
+        .not("published_at", "is", null)
+        .eq("week_start", weekStart);
+      if (activeBranchId) schedQ = schedQ.eq("branch_id", activeBranchId);
+      const { data: scheds, error: schedErr } = await schedQ;
+      if (schedErr) throw schedErr;
       const ids = (scheds ?? []).map((s: any) => s.id as string);
       if (ids.length === 0) return [];
       const { data, error } = await supabase
@@ -77,7 +123,8 @@ export function LiveShiftCardsSection() {
       if (error) throw error;
       return (data ?? []) as TodayRow[];
     },
-    staleTime: 30_000,
+    staleTime: 0,
+    refetchOnMount: "always",
   });
 
   const empIds = useMemo(
@@ -115,6 +162,11 @@ export function LiveShiftCardsSection() {
       )
       .on(
         "postgres_changes",
+        { event: "*", schema: "public", table: "schedule_notifications" },
+        () => qc.invalidateQueries({ queryKey: ["dashboard-shift-cards", "today"] }),
+      )
+      .on(
+        "postgres_changes",
         { event: "*", schema: "public", table: "shift_definitions" },
         () => qc.invalidateQueries({ queryKey: ["shift-definitions"] }),
       )
@@ -124,29 +176,32 @@ export function LiveShiftCardsSection() {
     };
   }, [qc]);
 
-  // Group employees by shift code, filtered by the live window.
+  // Group employees by shift code — all assignments today (deduped per employee).
   const { byShift, empMap } = useMemo(() => {
     const empMap = new Map<string, EmployeeInfo>();
     for (const e of empsQ.data ?? []) empMap.set(e.id, e);
     const byShift = new Map<string, DisplayEmployee[]>();
-    for (const def of shiftDefsQ.list) byShift.set(def.code, []);
+    const seenByShift = new Map<string, Set<string>>();
+    for (const def of shiftDefsQ.list) {
+      byShift.set(def.code, []);
+      seenByShift.set(def.code, new Set());
+    }
     for (const r of rowsQ.data ?? []) {
       const def = shiftDefsQ.map.get(r.shift);
       if (!def || !def.is_active) continue;
+      const seen = seenByShift.get(r.shift);
+      if (!seen || seen.has(r.employee_id)) continue;
+      seen.add(r.employee_id);
       const start = r.start_time ?? def.start_time ?? null;
       const end = r.end_time ?? def.end_time ?? null;
-      const startMin = parseHHMMToMinutes(start);
-      const endMin = parseHHMMToMinutes(end);
-      if (startMin == null || endMin == null) continue;
-      if (!isWithinShiftWindow(startMin, endMin, minutesOfDay)) continue;
       const info = empMap.get(r.employee_id);
       const list = byShift.get(r.shift) ?? [];
       list.push({
         id: r.employee_id,
         full_name: info?.full_name ?? "עובד",
         job_title: info?.job_title ?? null,
-        start: formatHHMM(start),
-        end: formatHHMM(end),
+        start: start ? formatHHMM(start) : null,
+        end: end ? formatHHMM(end) : null,
       });
       byShift.set(r.shift, list);
     }
@@ -154,17 +209,18 @@ export function LiveShiftCardsSection() {
       list.sort((a, b) => a.full_name.localeCompare(b.full_name, "he"));
     }
     return { byShift, empMap };
-  }, [rowsQ.data, empsQ.data, shiftDefsQ.list, shiftDefsQ.map, minutesOfDay]);
+  }, [rowsQ.data, empsQ.data, shiftDefsQ.list, shiftDefsQ.map]);
 
   void empMap;
 
   const [openShift, setOpenShift] = useState<string | null>(null);
 
+  if (!canView || !permsReady) return null;
   if (shiftDefsQ.list.length === 0) return null;
 
   return (
     <section className="space-y-3">
-      <h2 className="text-lg font-semibold">משמרות פעילות עכשיו</h2>
+      <h2 className="text-lg font-semibold">משמרות היום</h2>
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
         {shiftDefsQ.list.map((def) => {
           const list = byShift.get(def.code) ?? [];
@@ -201,7 +257,7 @@ export function LiveShiftCardsSection() {
             if (list.length === 0) {
               return (
                 <p className="text-sm text-muted-foreground py-4 text-center">
-                  אין עובדים במשמרת זו כרגע
+                  אין עובדים במשמרת זו היום
                 </p>
               );
             }

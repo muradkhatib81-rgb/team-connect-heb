@@ -30,15 +30,16 @@ import {
 import {
   buildChangeBaselineFromShiftRow,
   diffScheduleCellForViewer,
-  resolveScheduleChangeBaselineKind,
   type ScheduleChangeBaselineKind,
 } from "@/lib/schedule-publish-diff";
-import { canViewScheduleContent, type ScheduleViewerCaps } from "@/lib/schedule-visibility";
 import { resolveScheduleManagerCaps } from "@/lib/schedule-manager-caps";
 import { useAuth } from "@/lib/use-auth";
 import { useShiftDefinitions, type ShiftDef } from "@/lib/use-shift-definitions";
 import { cn } from "@/lib/utils";
-import { getDepartmentWeekScheduleFlags } from "@/lib/schedules.functions";
+import {
+  getDailyScheduleOverview,
+  getDepartmentWeekScheduleFlags,
+} from "@/lib/schedules.functions";
 
 export type DailyScheduleScope = "branch" | "department";
 
@@ -67,15 +68,6 @@ type ShiftRow = {
   schedule_id: string;
 };
 
-type DeptScheduleRow = {
-  id: string;
-  department_id: string;
-  status: string;
-  published_at: string | null;
-  submitted_at: string | null;
-  created_by: string | null;
-};
-
 type DeptScheduleMeta = {
   id: string;
   name: string;
@@ -97,31 +89,19 @@ export type DailyScheduleEmployeeRow = {
   isSelf: boolean;
 };
 
-export type DailyScheduleDepartmentBlock = {
-  id: string;
-  name: string;
-  state: "no_weekly_schedule" | "no_day_schedule" | "has_rows";
-  employees: DailyScheduleEmployeeRow[];
-  hasSavedAwaitingPublish: boolean;
-};
-
-type DailySchedulePayload = {
-  departments: DeptScheduleMeta[];
-  employeesByDept: Record<string, DeptEmployee[]>;
-  shifts: ShiftRow[];
-};
-
 const SHIFT_ORDER: Record<ScheduleShiftCode, number> = {
   morning: 0,
   evening: 1,
   off: 2,
 };
 
-const FILTER_LABEL: Record<ScheduleShiftCode, string> = {
-  morning: "משמרת בוקר בלבד",
-  evening: "משמרת ערב בלבד",
-  off: "חופש בלבד",
+const SHIFT_LABEL: Record<ScheduleShiftCode, string> = {
+  morning: "בוקר",
+  evening: "ערב",
+  off: "חופש",
 };
+
+type DeptShiftFilter = { deptId: string; shift: ScheduleShiftCode };
 
 function normHm(value: string | null | undefined): string | null {
   if (!value) return null;
@@ -160,295 +140,114 @@ function isCountedInDailySummary(emp: DeptEmployee): boolean {
   return !emp.excluded_from_headcount;
 }
 
-async function fetchBranchDepartments(): Promise<DeptScheduleMeta[]> {
-  const { data, error } = await supabase
-    .from("departments")
-    .select("id, name")
-    .eq("is_active", true)
-    .order("name");
-  if (error) throw error;
-  return (data ?? []).map((d) => ({
-    id: d.id,
-    name: d.name,
-    hasPublishedSchedule: false,
-    scheduleId: null,
-    hasSavedAwaitingPublish: false,
-    changeBaselineKind: null,
-  }));
-}
+function computeDeptDayCounts(
+  dept: DeptScheduleMeta,
+  employeesByDept: Record<string, DeptEmployee[]>,
+  shifts: ShiftRow[],
+  selectedDay: string,
+): Record<ScheduleShiftCode, number> {
+  const counts: Record<ScheduleShiftCode, number> = { morning: 0, evening: 0, off: 0 };
+  if (!dept.scheduleId) return counts;
 
-async function fetchDepartmentEmployees(
-  departmentId: string,
-  useCoworkersView: boolean,
-): Promise<DeptEmployee[]> {
-  if (useCoworkersView) {
-    const { data, error } = await (supabase as any)
-      .from("department_coworkers")
-      .select(
-        "id, full_name, excluded_from_schedule, excluded_from_headcount, on_leave, leave_start_date, leave_end_date",
-      )
-      .eq("department_id", departmentId)
-      .eq("is_active", true)
-      .order("full_name");
-    if (error) throw error;
-    return (data ?? []) as DeptEmployee[];
-  }
-
-  const [{ data, error }, { data: dept }] = await Promise.all([
-    supabase
-      .from("profiles")
-      .select(
-        "id, full_name, excluded_from_schedule, excluded_from_headcount, on_leave, leave_start_date, leave_end_date",
-      )
-      .eq("department_id", departmentId)
-      .eq("is_active", true)
-      .order("full_name"),
-    supabase.from("departments").select("manager_id").eq("id", departmentId).maybeSingle(),
-  ]);
-  if (error) throw error;
-  const rows = [...(data ?? [])] as DeptEmployee[];
-  if (dept?.manager_id && !rows.some((e) => e.id === dept.manager_id)) {
-    const { data: mgr } = await supabase
-      .from("profiles")
-      .select(
-        "id, full_name, excluded_from_schedule, excluded_from_headcount, on_leave, leave_start_date, leave_end_date",
-      )
-      .eq("id", dept.manager_id)
-      .eq("is_active", true)
-      .maybeSingle();
-    if (mgr) rows.push(mgr as DeptEmployee);
-  }
-  rows.sort((a, b) => a.full_name.localeCompare(b.full_name, "he"));
-  return rows;
-}
-
-async function fetchDailySchedulePayload(
-  scope: DailyScheduleScope,
-  departmentId: string | undefined,
-  weekStart: string,
-  weekEnd: string,
-  useCoworkersView: boolean,
-  viewerCaps?: ScheduleViewerCaps | null,
-  managedDeptIds?: string[],
-): Promise<DailySchedulePayload> {
-  let departments: DeptScheduleMeta[];
-  if (scope === "department") {
-    if (!departmentId) {
-      return { departments: [], employeesByDept: {}, shifts: [] };
-    }
-    const { data: dept, error } = await supabase
-      .from("departments")
-      .select("id, name")
-      .eq("id", departmentId)
-      .maybeSingle();
-    if (error) throw error;
-    departments = dept
-      ? [{
-          id: dept.id,
-          name: dept.name,
-          hasPublishedSchedule: false,
-          scheduleId: null,
-          hasSavedAwaitingPublish: false,
-          changeBaselineKind: null,
-        }]
-      : [];
-  } else {
-    departments = await fetchBranchDepartments();
-  }
-
-  const deptIds = departments.map((d) => d.id);
-  if (!deptIds.length) {
-    return { departments: [], employeesByDept: {}, shifts: [] };
-  }
-
-  const { data: scheds, error: schedErr } = await supabase
-    .from("schedules")
-    .select("id, department_id, status, published_at, submitted_at, created_by, week_start, week_end")
-    .in("department_id", deptIds)
-    .lte("week_start", weekEnd)
-    .gte("week_end", weekStart);
-  if (schedErr) throw schedErr;
-
-  const schedByDept = new Map<string, DeptScheduleRow>();
-  const candidatesByDept = new Map<string, DeptScheduleRow[]>();
-  for (const s of (scheds ?? []) as DeptScheduleRow[]) {
-    const list = candidatesByDept.get(s.department_id) ?? [];
-    list.push(s);
-    candidatesByDept.set(s.department_id, list);
-  }
-
-  for (const [deptId, candidates] of candidatesByDept) {
-    if (useCoworkersView) {
-      const published = candidates.find(
-        (s) => s.status === "approved" && s.published_at,
-      );
-      if (published) schedByDept.set(deptId, published);
-      continue;
-    }
-    const visible = candidates.filter((s) =>
-      viewerCaps
-        ? canViewScheduleContent(
-            {
-              status: s.status,
-              published_at: s.published_at,
-              submitted_at: s.submitted_at,
-              created_by: s.created_by,
-              department_id: s.department_id,
-            },
-            viewerCaps,
-            managedDeptIds,
-          )
-        : false,
-    );
-    if (!visible.length) continue;
-    const picked =
-      visible.find((s) => s.status === "approved" && s.published_at) ?? visible[0]!;
-    schedByDept.set(deptId, picked);
-  }
-
-  departments = departments.map((d) => {
-    const sched = schedByDept.get(d.id);
-    const changeBaselineKind = sched
-      ? resolveScheduleChangeBaselineKind({
-          status: sched.status,
-          published_at: sched.published_at,
-          submitted_at: sched.submitted_at,
-        })
-      : null;
-    return {
-      ...d,
-      hasPublishedSchedule: !!(sched?.status === "approved" && sched?.published_at),
-      scheduleId: sched?.id ?? null,
-      hasSavedAwaitingPublish: false,
-      changeBaselineKind,
+  const empMap = new Map((employeesByDept[dept.id] ?? []).map((e) => [e.id, e]));
+  for (const row of shifts) {
+    if (row.schedule_id !== dept.scheduleId || row.day_date !== selectedDay) continue;
+    const emp = empMap.get(row.employee_id);
+    if (emp?.excluded_from_schedule) continue;
+    if (emp && !isCountedInDailySummary(emp)) continue;
+    const stub: DeptEmployee = emp ?? {
+      id: row.employee_id,
+      full_name: "",
+      on_leave: false,
+      leave_start_date: null,
+      leave_end_date: null,
     };
-  });
-
-  const scheduleIds = [...schedByDept.values()].map((s) => s.id);
-  let shifts: ShiftRow[] = [];
-  if (scheduleIds.length) {
-    const { data: shiftRows, error: shiftErr } = await supabase
-      .from("schedule_shifts")
-      .select(
-        "employee_id, day_date, shift, published_shift, published_note, published_start_time, published_end_time, submitted_shift, submitted_note, submitted_start_time, submitted_end_time, start_time, end_time, note, schedule_id",
-      )
-      .in("schedule_id", scheduleIds)
-      .gte("day_date", weekStart)
-      .lte("day_date", weekEnd);
-    if (shiftErr) throw shiftErr;
-    shifts = (shiftRows ?? []) as ShiftRow[];
+    const shift = normalizeShift(stub, selectedDay, row.shift);
+    counts[shift] += 1;
   }
-
-  const employeesByDept: Record<string, DeptEmployee[]> = {};
-  await Promise.all(
-    departments.map(async (d) => {
-      employeesByDept[d.id] = await fetchDepartmentEmployees(d.id, useCoworkersView);
-    }),
-  );
-
-  return { departments, employeesByDept, shifts };
+  return counts;
 }
 
-function buildDepartmentBlocks(args: {
-  departments: DeptScheduleMeta[];
+function buildDepartmentEmployeeRows(args: {
+  dept: DeptScheduleMeta;
   employeesByDept: Record<string, DeptEmployee[]>;
   shifts: ShiftRow[];
   selectedDay: string;
+  shiftFilter?: ScheduleShiftCode | null;
   shiftDefs: Map<string, ShiftDef>;
   selfId?: string;
-  shiftFilter: ScheduleShiftCode | null;
   includeSubmittedDiffWhenPublished: boolean;
-}): DailyScheduleDepartmentBlock[] {
+}): DailyScheduleEmployeeRow[] {
   const {
-    departments,
+    dept,
     employeesByDept,
     shifts,
     selectedDay,
+    shiftFilter = null,
     shiftDefs,
     selfId,
-    shiftFilter,
     includeSubmittedDiffWhenPublished,
   } = args;
+  if (!dept.scheduleId) return [];
 
-  const shiftsBySchedEmpDay = new Map<string, ShiftRow>();
-  for (const s of shifts) {
-    shiftsBySchedEmpDay.set(`${s.schedule_id}|${s.employee_id}|${s.day_date}`, s);
+  const empMap = new Map((employeesByDept[dept.id] ?? []).map((e) => [e.id, e]));
+  const dayShifts = shifts.filter(
+    (s) => s.schedule_id === dept.scheduleId && s.day_date === selectedDay,
+  );
+
+  const rows: DailyScheduleEmployeeRow[] = [];
+  for (const raw of dayShifts) {
+    const emp = empMap.get(raw.employee_id);
+    if (emp?.excluded_from_schedule) continue;
+    if (emp && !isCountedInDailySummary(emp)) continue;
+
+    const stub: DeptEmployee = emp ?? {
+      id: raw.employee_id,
+      full_name: "עובד/ת",
+      on_leave: false,
+      leave_start_date: null,
+      leave_end_date: null,
+    };
+    const shift = normalizeShift(stub, selectedDay, raw.shift);
+    if (shiftFilter != null && shift !== shiftFilter) continue;
+
+    const def = shiftDefs.get(shift);
+    const rawNote = raw.note ? String(raw.note).trim().slice(0, 10) : "";
+    const submittedBaseline = buildChangeBaselineFromShiftRow(raw, "submitted", shiftDefs);
+    const publishedBaseline = buildChangeBaselineFromShiftRow(raw, "published", shiftDefs);
+    const start = normHm(raw.start_time) ?? normHm(def?.start_time);
+    const end = normHm(raw.end_time) ?? normHm(def?.end_time);
+    const { isShiftModified, isNoteModified, isTimeModified } = diffScheduleCellForViewer({
+      currentShift: shift,
+      currentStart: start,
+      currentEnd: end,
+      currentNote: rawNote || null,
+      baselineKind: dept.changeBaselineKind,
+      submittedBaseline,
+      publishedBaseline,
+      currentShiftDef: def,
+      includeSubmittedDiffWhenPublished,
+    });
+
+    rows.push({
+      id: stub.id,
+      full_name: stub.full_name,
+      shift,
+      timeRange: resolveTimeRange(raw, shift, def),
+      note: rawNote || null,
+      isModified: isShiftModified,
+      isNoteModified,
+      isTimeModified,
+      isSelf: !!selfId && stub.id === selfId,
+    });
   }
 
-  return departments.map((dept) => {
-    if (!dept.scheduleId) {
-      return {
-        id: dept.id,
-        name: dept.name,
-        state: "no_weekly_schedule" as const,
-        employees: [],
-        hasSavedAwaitingPublish: dept.hasSavedAwaitingPublish,
-      };
-    }
-
-    const emps = (employeesByDept[dept.id] ?? []).filter((e) => !e.excluded_from_schedule);
-    const hasDayShiftRows = shifts.some(
-      (s) => s.day_date === selectedDay && emps.some((e) => e.id === s.employee_id),
-    );
-
-    const rows: DailyScheduleEmployeeRow[] = emps.map((emp) => {
-      const raw = shiftsBySchedEmpDay.get(`${dept.scheduleId}|${emp.id}|${selectedDay}`);
-      const shift = normalizeShift(emp, selectedDay, raw?.shift);
-      const def = shiftDefs.get(shift);
-      const rawNote = raw?.note ? String(raw.note).trim().slice(0, 10) : "";
-      const submittedBaseline = raw
-        ? buildChangeBaselineFromShiftRow(raw, "submitted", shiftDefs)
-        : null;
-      const publishedBaseline = raw
-        ? buildChangeBaselineFromShiftRow(raw, "published", shiftDefs)
-        : null;
-      const start = normHm(raw?.start_time) ?? normHm(def?.start_time);
-      const end = normHm(raw?.end_time) ?? normHm(def?.end_time);
-      const { isShiftModified, isNoteModified, isTimeModified } = diffScheduleCellForViewer({
-        currentShift: shift,
-        currentStart: start,
-        currentEnd: end,
-        currentNote: rawNote || null,
-        baselineKind: dept.changeBaselineKind,
-        submittedBaseline,
-        publishedBaseline,
-        currentShiftDef: def,
-        includeSubmittedDiffWhenPublished,
-      });
-      return {
-        id: emp.id,
-        full_name: emp.full_name,
-        shift,
-        timeRange: resolveTimeRange(raw, shift, def),
-        note: rawNote || null,
-        isModified: isShiftModified,
-        isNoteModified,
-        isTimeModified,
-        isSelf: !!selfId && emp.id === selfId,
-      };
-    });
-
-    rows.sort((a, b) => {
-      const so = SHIFT_ORDER[a.shift] - SHIFT_ORDER[b.shift];
-      if (so !== 0) return so;
-      return a.full_name.localeCompare(b.full_name, "he");
-    });
-
-    const filtered = shiftFilter ? rows.filter((r) => r.shift === shiftFilter) : rows;
-
-    let state: DailyScheduleDepartmentBlock["state"] = "has_rows";
-    if (!hasDayShiftRows && rows.every((r) => r.shift === "off")) {
-      state = "no_day_schedule";
-    }
-
-    return {
-      id: dept.id,
-      name: dept.name,
-      state,
-      employees: filtered,
-      hasSavedAwaitingPublish: dept.hasSavedAwaitingPublish,
-    };
+  rows.sort((a, b) => {
+    const shiftOrder = SHIFT_ORDER[a.shift] - SHIFT_ORDER[b.shift];
+    if (shiftOrder !== 0) return shiftOrder;
+    return a.full_name.localeCompare(b.full_name, "he");
   });
+  return rows;
 }
 
 export type DailyScheduleOverviewProps = {
@@ -460,32 +259,6 @@ export type DailyScheduleOverviewProps = {
   className?: string;
 };
 
-function buildViewerCapsFromProfile(
-  profile: {
-    id: string;
-    roles: string[];
-    department_id: string | null;
-  },
-  perms: {
-    can_create_schedule: boolean;
-    can_approve_schedule: boolean;
-    can_publish_schedule: boolean;
-    can_manage_schedule?: boolean;
-  },
-): ScheduleViewerCaps {
-  const caps = resolveScheduleManagerCaps(profile.roles, perms);
-  return {
-    userId: profile.id,
-    isMainAdmin: caps.isMainAdmin,
-    isBranchMgr: caps.isBranchMgr,
-    isDeptMgr: caps.isDeptMgr,
-    canCreate: caps.canCreate,
-    canApprove: caps.canApprove,
-    canPublishDirect: caps.canPublishDirect,
-    departmentId: profile.department_id,
-  };
-}
-
 export function DailyScheduleOverview({
   scope,
   departmentId,
@@ -496,6 +269,7 @@ export function DailyScheduleOverview({
 }: DailyScheduleOverviewProps) {
   const qc = useQueryClient();
   const { profile } = useAuth();
+  const getOverviewFn = useServerFn(getDailyScheduleOverview);
   const getDeptFlagsFn = useServerFn(getDepartmentWeekScheduleFlags);
   const shiftDefsQ = useShiftDefinitions({ activeOnly: true });
   const { weekStart, weekEnd, weekDays } = useMemo(() => getScheduleWeek(), []);
@@ -519,23 +293,17 @@ export function DailyScheduleOverview({
     },
   });
 
-  const viewerCaps = useMemo(() => {
-    if (useCoworkersView || !profile) return null;
-    return buildViewerCapsFromProfile(profile, permsQ.data ?? {
-      can_create_schedule: false,
-      can_approve_schedule: false,
-      can_publish_schedule: false,
-    });
+  const includeSubmittedDiffWhenPublished = useMemo(() => {
+    if (useCoworkersView || !profile) return false;
+    const caps = resolveScheduleManagerCaps(profile.roles, permsQ.data ?? {});
+    return (
+      caps.isMainAdmin ||
+      caps.isBranchMgr ||
+      caps.isDeptMgr ||
+      caps.canApprove ||
+      caps.canPublishDirect
+    );
   }, [useCoworkersView, profile, permsQ.data]);
-
-  const managedDeptIds = useMemo(() => {
-    if (!viewerCaps?.isDeptMgr || viewerCaps.isMainAdmin || viewerCaps.isBranchMgr) {
-      return undefined;
-    }
-    const ids = new Set<string>();
-    if (viewerCaps.departmentId) ids.add(viewerCaps.departmentId);
-    return [...ids];
-  }, [viewerCaps]);
 
   const todayIso = useMemo(() => {
     const now = new Date();
@@ -546,11 +314,11 @@ export function DailyScheduleOverview({
 
   const defaultDay = weekDays.includes(todayIso) ? todayIso : weekDays[0]!;
   const [selectedDay, setSelectedDay] = useState(defaultDay);
-  const [shiftFilter, setShiftFilter] = useState<ScheduleShiftCode | null>(null);
+  const [activeFilter, setActiveFilter] = useState<DeptShiftFilter | null>(null);
 
   useEffect(() => {
     setSelectedDay(defaultDay);
-    setShiftFilter(null);
+    setActiveFilter(null);
   }, [weekStart, defaultDay]);
 
   const queryKey = [
@@ -559,24 +327,22 @@ export function DailyScheduleOverview({
     departmentId ?? "all",
     weekStart,
     useCoworkersView,
-    viewerCaps?.userId ?? "anon",
   ] as const;
 
   const q = useQuery({
     queryKey,
     queryFn: () =>
-      fetchDailySchedulePayload(
-        scope,
-        departmentId ?? undefined,
-        weekStart,
-        weekEnd,
-        useCoworkersView,
-        viewerCaps,
-        managedDeptIds,
-      ),
-    enabled:
-      (scope === "branch" || !!departmentId) &&
-      (useCoworkersView || (!!viewerCaps && !permsQ.isLoading)),
+      getOverviewFn({
+        data: {
+          week_start: weekStart,
+          scope,
+          department_id: departmentId ?? undefined,
+          use_coworkers_view: useCoworkersView,
+        },
+      }),
+    enabled: scope === "branch" || !!departmentId,
+    staleTime: 0,
+    refetchOnMount: "always",
   });
 
   const deptFlagsQ = useQuery({
@@ -589,18 +355,21 @@ export function DailyScheduleOverview({
   });
 
   useEffect(() => {
+    const invalidate = () => {
+      qc.invalidateQueries({ queryKey: ["daily-schedule-overview"] });
+      qc.invalidateQueries({ queryKey: ["dept-schedule-flags"] });
+      qc.invalidateQueries({ queryKey: ["dashboard-shift-cards"] });
+    };
     const ch = supabase
       .channel(`daily-schedule-ov-${scope}-${departmentId ?? "branch"}-${weekStart}`)
-      .on("postgres_changes", { event: "*", schema: "public", table: "schedules" }, () => {
-        qc.invalidateQueries({ queryKey: ["daily-schedule-overview"] });
-        qc.invalidateQueries({ queryKey: ["dept-schedule-flags"] });
-      })
-      .on("postgres_changes", { event: "*", schema: "public", table: "schedule_shifts" }, () => {
-        qc.invalidateQueries({ queryKey: ["daily-schedule-overview"] });
-      })
-      .on("postgres_changes", { event: "*", schema: "public", table: "profiles" }, () => {
-        qc.invalidateQueries({ queryKey: ["daily-schedule-overview"] });
-      })
+      .on("postgres_changes", { event: "*", schema: "public", table: "schedules" }, invalidate)
+      .on("postgres_changes", { event: "*", schema: "public", table: "schedule_shifts" }, invalidate)
+      .on("postgres_changes", { event: "*", schema: "public", table: "profiles" }, invalidate)
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "schedule_notifications" },
+        invalidate,
+      )
       .subscribe();
     return () => {
       supabase.removeChannel(ch);
@@ -608,79 +377,33 @@ export function DailyScheduleOverview({
   }, [scope, departmentId, weekStart, qc]);
 
   const departments = useMemo(() => {
-    const base = q.data?.departments ?? [];
+    const base = (q.data?.departments ?? []) as DeptScheduleMeta[];
     if (scope !== "department" || !deptFlagsQ.data) return base;
     return base.map((d) => ({
       ...d,
       hasSavedAwaitingPublish: deptFlagsQ.data!.hasSavedAwaitingPublish,
     }));
   }, [q.data?.departments, scope, deptFlagsQ.data]);
-  const employeesByDept = q.data?.employeesByDept ?? {};
-  const shifts = q.data?.shifts ?? [];
 
-  const dayCounts = useMemo(() => {
-    const byDay: Record<string, Record<ScheduleShiftCode, number>> = {};
-    for (const day of weekDays) {
-      byDay[day] = { morning: 0, evening: 0, off: 0 };
-    }
+  const employeesByDept = (q.data?.employeesByDept ?? {}) as Record<string, DeptEmployee[]>;
+  const shifts = (q.data?.shifts ?? []) as ShiftRow[];
+
+  const deptCounts = useMemo(() => {
+    const out: Record<string, Record<ScheduleShiftCode, number>> = {};
     for (const dept of departments) {
-      if (!dept.scheduleId) continue;
-      const emps = (employeesByDept[dept.id] ?? []).filter((e) => !e.excluded_from_schedule);
-      for (const emp of emps) {
-        if (!isCountedInDailySummary(emp)) continue;
-        for (const day of weekDays) {
-          const raw = shifts.find((s) => s.day_date === day && s.employee_id === emp.id);
-          const shift = normalizeShift(emp, day, raw?.shift);
-          byDay[day]![shift] += 1;
-        }
-      }
+      out[dept.id] = computeDeptDayCounts(dept, employeesByDept, shifts, selectedDay);
     }
-    return byDay;
-  }, [departments, employeesByDept, shifts, weekDays]);
-
-  const selectedCounts = dayCounts[selectedDay] ?? { morning: 0, evening: 0, off: 0 };
-
-  const includeSubmittedDiffWhenPublished = useMemo(() => {
-    if (useCoworkersView || !viewerCaps) return false;
-    return (
-      viewerCaps.isMainAdmin ||
-      viewerCaps.isBranchMgr ||
-      viewerCaps.isDeptMgr ||
-      viewerCaps.canApprove ||
-      viewerCaps.canPublishDirect
-    );
-  }, [useCoworkersView, viewerCaps]);
-
-  const departmentBlocks = useMemo(
-    () =>
-      buildDepartmentBlocks({
-        departments,
-        employeesByDept,
-        shifts,
-        selectedDay,
-        shiftDefs: shiftDefsQ.map,
-        selfId: selfUserId,
-        shiftFilter,
-        includeSubmittedDiffWhenPublished,
-      }),
-    [
-      departments,
-      employeesByDept,
-      shifts,
-      selectedDay,
-      shiftDefsQ.map,
-      selfUserId,
-      shiftFilter,
-      includeSubmittedDiffWhenPublished,
-    ],
-  );
+    return out;
+  }, [departments, employeesByDept, shifts, selectedDay]);
 
   const selectedDayIndex = weekDays.indexOf(selectedDay);
   const selectedDayName =
     selectedDayIndex >= 0 ? SCHEDULE_DAY_NAMES[selectedDayIndex] : "";
 
-  const toggleFilter = (code: ScheduleShiftCode) => {
-    setShiftFilter((prev) => (prev === code ? null : code));
+  const toggleDeptFilter = (deptId: string, shift: ScheduleShiftCode) => {
+    setActiveFilter((prev) =>
+      prev?.deptId === deptId && prev.shift === shift ? null : { deptId, shift },
+    );
   };
 
   const shiftTone = (code: ScheduleShiftCode) => {
@@ -689,6 +412,9 @@ export function DailyScheduleOverview({
         badge: "bg-amber-100 text-amber-900 border-amber-300",
         row: "bg-amber-50/60 border-amber-100",
         label: "בוקר",
+        activeClass: "ring-2 ring-amber-500 border-amber-400 bg-amber-50",
+        idleClass: "border-amber-200 bg-amber-50/40 hover:bg-amber-50",
+        icon: Sun,
       };
     }
     if (code === "evening") {
@@ -696,49 +422,22 @@ export function DailyScheduleOverview({
         badge: "bg-sky-100 text-sky-900 border-sky-300",
         row: "bg-sky-50/60 border-sky-100",
         label: "ערב",
+        activeClass: "ring-2 ring-sky-500 border-sky-400 bg-sky-50",
+        idleClass: "border-sky-200 bg-sky-50/40 hover:bg-sky-50",
+        icon: Moon,
       };
     }
     return {
       badge: "bg-emerald-100 text-emerald-900 border-emerald-300",
       row: "bg-emerald-50/60 border-emerald-100",
       label: "חופש",
+      activeClass: "ring-2 ring-emerald-500 border-emerald-400 bg-emerald-50",
+      idleClass: "border-emerald-200 bg-emerald-50/40 hover:bg-emerald-50",
+      icon: Plane,
     };
   };
 
-  const filterCards: {
-    code: ScheduleShiftCode;
-    label: string;
-    icon: typeof Sun;
-    count: number;
-    activeClass: string;
-    idleClass: string;
-  }[] = [
-    {
-      code: "morning",
-      label: "בוקר",
-      icon: Sun,
-      count: selectedCounts.morning,
-      activeClass: "ring-2 ring-amber-500 border-amber-400 bg-amber-50",
-      idleClass: "border-amber-200 bg-amber-50/40 hover:bg-amber-50",
-    },
-    {
-      code: "evening",
-      label: "ערב",
-      icon: Moon,
-      count: selectedCounts.evening,
-      activeClass: "ring-2 ring-sky-500 border-sky-400 bg-sky-50",
-      idleClass: "border-sky-200 bg-sky-50/40 hover:bg-sky-50",
-    },
-    {
-      code: "off",
-      label: "חופש",
-      icon: Plane,
-      count: selectedCounts.off,
-      activeClass: "ring-2 ring-emerald-500 border-emerald-400 bg-emerald-50",
-      idleClass: "border-emerald-200 bg-emerald-50/40 hover:bg-emerald-50",
-    },
-  ];
-
+  const shiftCards: ScheduleShiftCode[] = ["morning", "evening", "off"];
   const hasAnyPublished = departments.some((d) => d.hasPublishedSchedule);
 
   return (
@@ -764,6 +463,10 @@ export function DailyScheduleOverview({
         <div className="flex justify-center py-12">
           <Loader2 className="size-6 animate-spin text-primary" />
         </div>
+      ) : q.isError ? (
+        <p className="p-6 text-sm text-destructive text-center">
+          {(q.error as Error)?.message ?? "שגיאה בטעינת הסידור"}
+        </p>
       ) : (
         <>
           <div className="px-3 pb-3 overflow-x-auto">
@@ -777,7 +480,7 @@ export function DailyScheduleOverview({
                     type="button"
                     onClick={() => {
                       setSelectedDay(day);
-                      setShiftFilter(null);
+                      setActiveFilter(null);
                     }}
                     className={cn(
                       "flex flex-col items-center min-w-[4.5rem] px-2 py-2 rounded-lg border text-center transition-colors",
@@ -797,156 +500,177 @@ export function DailyScheduleOverview({
             </div>
           </div>
 
-          <div className="px-4 pb-2">
-            <div className="grid grid-cols-3 gap-2">
-              {filterCards.map(({ code, label, icon: Icon, count, activeClass, idleClass }) => {
-                const active = shiftFilter === code;
-                return (
-                  <button
-                    key={code}
+          {selectedDayName && (
+            <div className="px-4 pb-2 text-xs text-muted-foreground">
+              יום {selectedDayName} {formatScheduleDayHe(selectedDay)}
+              {activeFilter && (
+                <span className="ms-2">
+                  · מציג: {SHIFT_LABEL[activeFilter.shift]} —{" "}
+                  {departments.find((d) => d.id === activeFilter.deptId)?.name}
+                  <Button
                     type="button"
-                    onClick={() => toggleFilter(code)}
-                    className={cn(
-                      "rounded-lg border p-2 text-center transition-all",
-                      active ? activeClass : idleClass,
-                    )}
+                    variant="ghost"
+                    size="sm"
+                    className="h-6 px-2 text-xs gap-1 ms-1"
+                    onClick={() => setActiveFilter(null)}
                   >
-                    <div className="flex items-center justify-center gap-1 text-xs font-medium">
-                      <Icon className="size-3.5" />
-                      {label}
-                    </div>
-                    <div className="text-lg font-bold tabular-nums mt-0.5">{count}</div>
-                    {active && (
-                      <div className="text-[10px] text-primary mt-0.5 font-medium">פעיל ✓</div>
-                    )}
-                  </button>
-                );
-              })}
-            </div>
-            <div className="flex flex-wrap items-center gap-2 mt-2 text-xs text-muted-foreground">
-              <span>
-                מציג:{" "}
-                <span className="font-medium text-foreground">
-                  {shiftFilter ? FILTER_LABEL[shiftFilter] : "כל המשמרות"}
-                </span>
-              </span>
-              {selectedDayName && (
-                <span>
-                  · יום {selectedDayName} {formatScheduleDayHe(selectedDay)}
+                    <X className="size-3" />
+                    ביטול
+                  </Button>
                 </span>
               )}
-              {shiftFilter && (
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  className="h-6 px-2 text-xs gap-1"
-                  onClick={() => setShiftFilter(null)}
-                >
-                  <X className="size-3" />
-                  ביטול סינון
-                </Button>
-              )}
             </div>
-          </div>
+          )}
 
           <div className="divide-y border-t max-h-[min(60vh,520px)] overflow-y-auto">
-            {departmentBlocks.map((dept) => (
-              <section key={dept.id} className="p-4">
-                <div className="flex items-center gap-2 mb-2">
-                  <Building2 className="size-4 text-muted-foreground shrink-0" />
-                  <h3 className="font-semibold text-sm">{dept.name}</h3>
-                  {dept.state === "has_rows" && dept.employees.length > 0 && (
-                    <span className="text-xs text-muted-foreground">({dept.employees.length})</span>
-                  )}
-                </div>
+            {departments.map((dept) => {
+              const counts = deptCounts[dept.id] ?? { morning: 0, evening: 0, off: 0 };
+              const isFilterActive =
+                activeFilter?.deptId === dept.id ? activeFilter.shift : null;
+              const displayRows = buildDepartmentEmployeeRows({
+                dept,
+                employeesByDept,
+                shifts,
+                selectedDay,
+                shiftFilter: isFilterActive,
+                shiftDefs: shiftDefsQ.map,
+                selfId: selfUserId,
+                includeSubmittedDiffWhenPublished,
+              });
 
-                {dept.state === "no_weekly_schedule" ? (
-                  dept.hasSavedAwaitingPublish ? (
-                    <Alert className="ms-6 border-amber-200 bg-amber-50/80">
-                      <AlertDescription className="text-sm text-amber-900">
-                        יש סידור עבודה למחלקה זו שמור ובהמתנה לפרסום.
-                      </AlertDescription>
-                    </Alert>
+              return (
+                <section key={dept.id} className="p-4">
+                  <div className="flex items-center gap-2 mb-3">
+                    <Building2 className="size-4 text-muted-foreground shrink-0" />
+                    <h3 className="font-semibold text-sm">{dept.name}</h3>
+                  </div>
+
+                  {!dept.scheduleId ? (
+                    dept.hasSavedAwaitingPublish ? (
+                      <Alert className="ms-6 border-amber-200 bg-amber-50/80">
+                        <AlertDescription className="text-sm text-amber-900">
+                          יש סידור עבודה למחלקה זו שמור ובהמתנה לפרסום.
+                        </AlertDescription>
+                      </Alert>
+                    ) : (
+                      <p className="text-sm text-muted-foreground ps-6">אין סידור שבועי שפורסם</p>
+                    )
                   ) : (
-                    <p className="text-sm text-muted-foreground ps-6">אין סידור שבועי שפורסם</p>
-                  )
-                ) : dept.employees.length === 0 ? (
-                  <p className="text-sm text-muted-foreground ps-6">
-                    {shiftFilter
-                      ? "אין עובדים במשמרת זו ליום זה"
-                      : dept.state === "no_day_schedule"
-                        ? "אין סידור עבודה ליום זה"
-                        : "אין עובדים במשמרת זו ליום זה"}
-                  </p>
-                ) : (
-                  <ul className="space-y-1.5 ps-1">
-                    {dept.employees.map((emp) => {
-                      const tone = shiftTone(emp.shift);
-                      return (
-                        <li
-                          key={emp.id}
-                          className={cn(
-                            "flex flex-wrap items-center justify-between gap-2 rounded-md border px-2 py-1.5",
-                            tone.row,
-                            emp.isSelf && "ring-2 ring-primary ring-offset-1",
-                            emp.isModified && "ring-2 ring-orange-500",
-                          )}
-                        >
-                          <div className="flex items-center gap-2 min-w-0">
-                            <Badge variant="outline" className={cn("shrink-0 text-[10px]", tone.badge)}>
-                              {tone.label}
-                            </Badge>
-                            <span className="font-medium text-sm truncate">{emp.full_name}</span>
-                            {emp.isSelf && (
-                              <Badge variant="secondary" className="text-[10px] shrink-0">
-                                את/ה
-                              </Badge>
-                            )}
-                            {emp.isModified && (
-                              <RefreshCw
-                                className="size-3 text-orange-600 shrink-0"
-                                aria-label="משמרת עודכנה לאחר פרסום"
-                              />
-                            )}
-                            {emp.note && (
-                              <span
-                                className={cn(
-                                  "text-[10px] text-red-600 shrink-0 truncate max-w-[4.5rem] font-medium",
-                                  emp.isNoteModified && "ring-2 ring-orange-500 rounded px-0.5",
-                                )}
-                                title={emp.note}
-                              >
-                                {emp.note}
-                              </span>
-                            )}
-                          </div>
-                          {emp.timeRange && (
-                            <span
+                    <>
+                      <div className="grid grid-cols-3 gap-2 ps-1 mb-2">
+                        {shiftCards.map((code) => {
+                          const tone = shiftTone(code);
+                          const Icon = tone.icon;
+                          const active = isFilterActive === code;
+                          return (
+                            <button
+                              key={code}
+                              type="button"
+                              onClick={() => toggleDeptFilter(dept.id, code)}
                               className={cn(
-                                "text-xs text-muted-foreground tabular-nums shrink-0 inline-flex items-center gap-1 rounded px-0.5",
-                                emp.isTimeModified && "ring-2 ring-orange-500",
+                                "rounded-lg border p-2 text-center transition-all",
+                                active ? tone.activeClass : tone.idleClass,
                               )}
-                              dir="ltr"
                             >
-                              {emp.timeRange}
-                              {emp.isTimeModified && (
-                                <RefreshCw
-                                  className="size-3 text-orange-600 shrink-0"
-                                  aria-label="שעות עודכנו"
-                                />
+                              <div className="flex items-center justify-center gap-1 text-xs font-medium">
+                                <Icon className="size-3.5" />
+                                {tone.label}
+                              </div>
+                              <div className="text-lg font-bold tabular-nums mt-0.5">
+                                {counts[code]}
+                              </div>
+                              {active && (
+                                <div className="text-[10px] text-primary mt-0.5 font-medium">
+                                  פעיל ✓
+                                </div>
                               )}
-                            </span>
-                          )}
-                        </li>
-                      );
-                    })}
-                  </ul>
-                )}
-              </section>
-            ))}
+                            </button>
+                          );
+                        })}
+                      </div>
 
-            {!departmentBlocks.length && scope === "branch" && (
+                      {displayRows.length === 0 ? (
+                        <p className="text-sm text-muted-foreground ps-6">
+                          {isFilterActive != null
+                            ? `אין עובדים ב${SHIFT_LABEL[isFilterActive]} ליום זה`
+                            : "אין עובדים בסידור ליום זה"}
+                        </p>
+                      ) : (
+                        <ul className="space-y-1.5 ps-1 mt-2">
+                          {displayRows.map((emp) => {
+                            const tone = shiftTone(emp.shift);
+                            return (
+                              <li
+                                key={emp.id}
+                                className={cn(
+                                  "flex flex-wrap items-center justify-between gap-2 rounded-md border px-2 py-1.5",
+                                  tone.row,
+                                  emp.isSelf && "ring-2 ring-primary ring-offset-1",
+                                  emp.isModified && "ring-2 ring-orange-500",
+                                )}
+                              >
+                                <div className="flex items-center gap-2 min-w-0">
+                                  <Badge
+                                    variant="outline"
+                                    className={cn("shrink-0 text-[10px]", tone.badge)}
+                                  >
+                                    {tone.label}
+                                  </Badge>
+                                  <span className="font-medium text-sm truncate">
+                                    {emp.full_name}
+                                  </span>
+                                  {emp.isSelf && (
+                                    <Badge variant="secondary" className="text-[10px] shrink-0">
+                                      את/ה
+                                    </Badge>
+                                  )}
+                                  {emp.isModified && (
+                                    <RefreshCw
+                                      className="size-3 text-orange-600 shrink-0"
+                                      aria-label="משמרת עודכנה לאחר פרסום"
+                                    />
+                                  )}
+                                  {emp.note && (
+                                    <span
+                                      className={cn(
+                                        "text-[10px] text-red-600 shrink-0 truncate max-w-[4.5rem] font-medium",
+                                        emp.isNoteModified && "ring-2 ring-orange-500 rounded px-0.5",
+                                      )}
+                                      title={emp.note}
+                                    >
+                                      {emp.note}
+                                    </span>
+                                  )}
+                                </div>
+                                {emp.timeRange && (
+                                  <span
+                                    className={cn(
+                                      "text-xs text-muted-foreground tabular-nums shrink-0 inline-flex items-center gap-1 rounded px-0.5",
+                                      emp.isTimeModified && "ring-2 ring-orange-500",
+                                    )}
+                                    dir="ltr"
+                                  >
+                                    {emp.timeRange}
+                                    {emp.isTimeModified && (
+                                      <RefreshCw
+                                        className="size-3 text-orange-600 shrink-0"
+                                        aria-label="שעות עודכנו"
+                                      />
+                                    )}
+                                  </span>
+                                )}
+                              </li>
+                            );
+                          })}
+                        </ul>
+                      )}
+                    </>
+                  )}
+                </section>
+              );
+            })}
+
+            {!departments.length && scope === "branch" && (
               <p className="p-6 text-sm text-muted-foreground text-center">
                 אין מחלקות פעילות להצגה.
               </p>
@@ -954,12 +678,12 @@ export function DailyScheduleOverview({
 
             {scope === "department" &&
               !hasAnyPublished &&
-              departmentBlocks.length > 0 &&
+              departments.length > 0 &&
               !departments.some((d) => d.hasSavedAwaitingPublish) && (
-              <p className="px-4 pb-4 text-sm text-muted-foreground border-t pt-4">
-                טרם פורסם סידור עבודה מאושר לשבוע זה.
-              </p>
-            )}
+                <p className="px-4 pb-4 text-sm text-muted-foreground border-t pt-4">
+                  טרם פורסם סידור עבודה מאושר לשבוע זה.
+                </p>
+              )}
           </div>
         </>
       )}

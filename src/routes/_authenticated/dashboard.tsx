@@ -48,7 +48,7 @@ import {
   isEmployeeCurrentlyOnLeave,
 } from "@/lib/employee-leave";
 import { formatScheduleDayHe } from "@/lib/schedule-week";
-import { resolveScheduleManagerCaps } from "@/lib/schedule-manager-caps";
+import { resolveScheduleManagerCaps, resolveDashboardScheduleScope, scheduleScopeNeedsLoadedPermissions } from "@/lib/schedule-manager-caps";
 import { CreateEmployeeDialog } from "./employees";
 import { ManagementOnShiftCard } from "@/components/management-on-shift-card";
 import { CustodyDashboardSection } from "@/components/custody-dashboard-section";
@@ -208,6 +208,9 @@ function DashboardPage() {
 
       <EmployeeOfMonthSection />
 
+      <DashboardSchedulePanel profile={profile} />
+
+      <LiveShiftCardsSection />
 
       {admin || isDeptManager ? (
         <>
@@ -474,9 +477,6 @@ function AdminDashboard({
         <StatCard label="❌ עובדים לא פעילים" value={stats.inactive} icon={UserX} tone="muted" onClick={() => go("inactive")} />
       </section>
 
-      <LiveShiftCardsSection />
-
-
       <section>
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-lg font-semibold flex items-center gap-2">
@@ -560,12 +560,6 @@ function EmployeeDashboard({ profile }: { profile: any }) {
   return (
     <div className="space-y-6">
       <BreakShortcutCard userId={profile.id} />
-      <DailyScheduleOverview
-        scope="department"
-        departmentId={profile.department_id}
-        selfUserId={profile.id}
-        useCoworkersView
-      />
       <EmployeeNotificationsCard userId={profile.id} />
       <EmployeeNewMessagesCard userId={profile.id} />
     </div>
@@ -739,6 +733,105 @@ function StatCard({
   );
 }
 
+function DashboardSchedulePanel({ profile }: { profile: any }) {
+  const needsLoadedPerms = scheduleScopeNeedsLoadedPermissions(profile.roles);
+
+  const permsQ = useQuery({
+    queryKey: ["my-perms", profile.id],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("user_task_permissions")
+        .select(
+          "can_create_schedule, can_approve_schedule, can_publish_schedule, can_manage_schedule",
+        )
+        .eq("user_id", profile.id)
+        .maybeSingle();
+      return (
+        data ?? {
+          can_create_schedule: false,
+          can_approve_schedule: false,
+          can_publish_schedule: false,
+          can_manage_schedule: false,
+        }
+      );
+    },
+  });
+
+  const permsReady = !needsLoadedPerms || !permsQ.isLoading;
+  const scheduleCaps = useMemo(
+    () => resolveScheduleManagerCaps(profile.roles, permsReady ? permsQ.data : undefined),
+    [profile.roles, permsQ.data, permsReady],
+  );
+  const { isDeptHeadOnly } = scheduleCaps;
+
+  const managedDeptQ = useQuery({
+    enabled: permsReady && isDeptHeadOnly && !!profile?.id,
+    queryKey: ["managed-dept-id", profile?.id],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("departments")
+        .select("id")
+        .eq("manager_id", profile.id)
+        .eq("is_active", true)
+        .maybeSingle();
+      if (error) throw error;
+      return data?.id ?? profile.department_id ?? null;
+    },
+  });
+
+  if (!permsReady || (isDeptHeadOnly && managedDeptQ.isLoading)) {
+    return (
+      <section className="space-y-4">
+        <DashboardScheduleHeader />
+        <div className="flex justify-center py-8">
+          <Loader2 className="size-6 animate-spin text-primary" />
+        </div>
+      </section>
+    );
+  }
+
+  const scope = resolveDashboardScheduleScope({
+    caps: scheduleCaps,
+    departmentId: profile.department_id,
+    managedDepartmentId: managedDeptQ.data,
+  });
+
+  if (scope.kind === "none") return null;
+
+  const overview =
+    scope.kind === "branch" ? (
+      <DailyScheduleOverview scope="branch" selfUserId={profile.id} />
+    ) : (
+      <DailyScheduleOverview
+        scope="department"
+        departmentId={scope.departmentId}
+        selfUserId={profile.id}
+        useCoworkersView={scope.useCoworkersView}
+      />
+    );
+
+  return (
+    <section className="space-y-4">
+      <DashboardScheduleHeader />
+      {overview}
+    </section>
+  );
+}
+
+function DashboardScheduleHeader() {
+  return (
+    <div className="flex items-center justify-between">
+      <h2 className="text-lg font-semibold flex items-center gap-2">
+        <CalendarDays className="size-5 text-primary" />
+        סידורי עבודה
+      </h2>
+      <Link to="/schedules" className="text-sm text-primary hover:underline">
+        לסידורי העבודה ←
+      </Link>
+    </div>
+  );
+}
+
 function SchedulesStatsSection({ profile }: { profile: any }) {
   const navigate = useNavigate();
   const qc = useQueryClient();
@@ -774,13 +867,11 @@ function SchedulesStatsSection({ profile }: { profile: any }) {
     isMainAdmin,
     isDeptMgr,
     isBranchMgr,
-    isDeptHeadOnly,
     canApprove,
     canPublishDirect,
   } = scheduleCaps;
   const canViewBranchScheduleOverview = isBranchMgr;
   const canManageOwnDeptSchedule = isDeptMgr;
-  const deptHeadOnly = isDeptHeadOnly;
 
   // Compute current week (Saturday-based) in Asia/Jerusalem-agnostic UTC slicing,
   // matching getWeekStart logic in schedules.tsx.
@@ -812,27 +903,15 @@ function SchedulesStatsSection({ profile }: { profile: any }) {
       }
       qc.invalidateQueries({ queryKey: ["dashboard-schedules"] });
       qc.invalidateQueries({ queryKey: ["emp-dash-schedule"] });
+      qc.invalidateQueries({ queryKey: ["daily-schedule-overview"] });
+      qc.invalidateQueries({ queryKey: ["dept-schedule-flags"] });
+      qc.invalidateQueries({ queryKey: ["dashboard-dept-states"] });
       setDraftOpen(false);
     },
     onError: (e: any) => toast.error(e?.message ?? "שגיאה בפרסום"),
   });
 
   const scopeFilter = canViewBranchScheduleOverview ? null : profile.department_id ?? null;
-
-  const managedDeptQ = useQuery({
-    enabled: deptHeadOnly && !!profile?.id,
-    queryKey: ["managed-dept-id", profile?.id],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("departments")
-        .select("id")
-        .eq("manager_id", profile.id)
-        .eq("is_active", true)
-        .maybeSingle();
-      if (error) throw error;
-      return data?.id ?? profile.department_id ?? null;
-    },
-  });
 
   const statsQ = useQuery({
     enabled: !!profile && canViewBranchScheduleOverview,
@@ -999,29 +1078,8 @@ function SchedulesStatsSection({ profile }: { profile: any }) {
     queryFn: () => getWeekDeptStatesFn({ data: { week_start: weekStart } }),
   });
 
-  if (deptHeadOnly) {
-    const deptId = managedDeptQ.data ?? profile.department_id ?? undefined;
-    return (
-      <section className="space-y-4">
-        <div className="flex items-center justify-between">
-          <h2 className="text-lg font-semibold flex items-center gap-2">
-            <CalendarDays className="size-5 text-primary" />
-            סידורי עבודה
-          </h2>
-          <Link to="/schedules" className="text-sm text-primary hover:underline">
-            לסידורי העבודה ←
-          </Link>
-        </div>
-        <DailyScheduleOverview
-          scope="department"
-          departmentId={deptId}
-          selfUserId={profile.id}
-        />
-      </section>
-    );
-  }
-
   if (!canViewBranchScheduleOverview) return null;
+
   if (statsQ.isLoading || !statsQ.data) return null;
   const baseS = statsQ.data;
   const s = deptStatesQ.data
@@ -1055,16 +1113,6 @@ function SchedulesStatsSection({ profile }: { profile: any }) {
 
   return (
     <section className="space-y-4">
-      <div className="flex items-center justify-between">
-        <h2 className="text-lg font-semibold flex items-center gap-2">
-          <CalendarDays className="size-5 text-primary" />
-          סידורי עבודה
-        </h2>
-        <Link to="/schedules" className="text-sm text-primary hover:underline">
-          לסידורי העבודה ←
-        </Link>
-      </div>
-
       {canViewBranchScheduleOverview && (
         <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
           <StatCard
@@ -1105,17 +1153,6 @@ function SchedulesStatsSection({ profile }: { profile: any }) {
           />
         </div>
       )}
-
-
-      <DailyScheduleOverview
-        scope={canViewBranchScheduleOverview ? "branch" : "department"}
-        departmentId={
-          canViewBranchScheduleOverview
-            ? undefined
-            : profile.department_id ?? undefined
-        }
-        selfUserId={profile.id}
-      />
 
       <ApprovedSchedulesDialog
         open={approvedOpen}
