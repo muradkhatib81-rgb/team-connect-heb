@@ -10,7 +10,7 @@ import { ApproveList } from "./breaks";
 import { BreakSettingsPage } from "./break-settings";
 import { BreakRequestPermissionsCard } from "@/components/break-request-permissions-card";
 import { BreakPolicySettingsCard } from "@/components/break-policy-settings-card";
-import { useCanManageBreaks } from "@/lib/break-permissions";
+import { useBreakRequiresApproval, useCanManageBreaks } from "@/lib/break-permissions";
 
 export const Route = createFileRoute("/_authenticated/breaks-admin")({
   component: BreaksAdminPage,
@@ -40,6 +40,7 @@ function BreaksAdminPage() {
   const isMainAdmin = !!me?.roles.includes("main_admin");
   const isBranchManager = !!me?.roles.includes("branch_manager");
   const { canManageBreaks, isLoading: managePermLoading } = useCanManageBreaks();
+  const { requiresApproval } = useBreakRequiresApproval();
   const isBreaksManager = canManageBreaks;
 
   // Hard redirect: non-managers must go to the employee request screen.
@@ -144,9 +145,13 @@ function BreaksAdminPage() {
     );
   }
 
-  const pendingCount = (allReqQ.data ?? []).filter((r) =>
-    r.status === "pending_approval" || r.status === "pending",
-  ).length;
+  const pendingCount = requiresApproval
+    ? (allReqQ.data ?? []).filter((r) =>
+        r.status === "pending_approval" || r.status === "pending",
+      ).length
+    : 0;
+
+  const defaultTab = requiresApproval ? "approve" : "settings";
 
   return (
     <div className="space-y-6">
@@ -157,16 +162,20 @@ function BreaksAdminPage() {
         <div>
           <h1 className="text-2xl sm:text-3xl font-bold">ניהול הפסקות</h1>
           <p className="text-sm text-muted-foreground mt-1">
-            אישור בקשות, ניהול הגדרות הפסקות וצפייה במצב בזמן אמת.
+            {requiresApproval
+              ? "אישור בקשות, ניהול הגדרות הפסקות וצפייה במצב בזמן אמת."
+              : "ניהול הגדרות הפסקות וצפייה במצב בזמן אמת."}
           </p>
         </div>
       </header>
 
-      <Tabs defaultValue="approve" className="space-y-4">
+      <Tabs key={defaultTab} defaultValue={defaultTab} className="space-y-4">
         <TabsList>
-          <TabsTrigger value="approve">
-            אישור בקשות{pendingCount > 0 ? ` (${pendingCount})` : ""}
-          </TabsTrigger>
+          {requiresApproval && (
+            <TabsTrigger value="approve">
+              אישור בקשות{pendingCount > 0 ? ` (${pendingCount})` : ""}
+            </TabsTrigger>
+          )}
           <TabsTrigger value="settings">הגדרות הפסקות</TabsTrigger>
           {(isMainAdmin || isBranchManager) && (
             <TabsTrigger value="permissions">הרשאות בקשת הפסקה</TabsTrigger>
@@ -176,16 +185,18 @@ function BreaksAdminPage() {
           )}
         </TabsList>
 
-        <TabsContent value="approve">
-          <ApproveList
-            all={allReqQ.data ?? []}
-            loading={allReqQ.isLoading}
-            settings={(settingsQ.data ?? []) as any}
-            profiles={profilesQ.data ?? []}
-            departments={deptsQ.data ?? []}
-            me={me.id}
-          />
-        </TabsContent>
+        {requiresApproval && (
+          <TabsContent value="approve">
+            <ApproveList
+              all={allReqQ.data ?? []}
+              loading={allReqQ.isLoading}
+              settings={(settingsQ.data ?? []) as any}
+              profiles={profilesQ.data ?? []}
+              departments={deptsQ.data ?? []}
+              me={me.id}
+            />
+          </TabsContent>
+        )}
 
         <TabsContent value="settings">
           <Card className="card-elevated p-0 sm:p-2 bg-transparent border-0 shadow-none">

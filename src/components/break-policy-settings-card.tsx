@@ -96,7 +96,10 @@ export function BreakPolicySettingsCard() {
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "break_policy" },
-        () => qc.invalidateQueries({ queryKey: ["break-policy"] }),
+        () => {
+          qc.invalidateQueries({ queryKey: ["break-policy"] });
+          qc.invalidateQueries({ queryKey: ["break-policy-effective"] });
+        },
       )
       .subscribe();
     return () => {
@@ -127,7 +130,9 @@ export function BreakPolicySettingsCard() {
     onSuccess: () => {
       toast.success("ההגדרות נשמרו והוחלו על המערכת");
       qc.invalidateQueries({ queryKey: ["break-policy"] });
+      qc.invalidateQueries({ queryKey: ["break-policy-effective"] });
       qc.invalidateQueries({ queryKey: ["can-request-break"] });
+      qc.invalidateQueries({ queryKey: ["dashboard-pending-breaks"] });
     },
     onError: (e: any) => toast.error(e?.message ?? "שגיאה בשמירה"),
   });

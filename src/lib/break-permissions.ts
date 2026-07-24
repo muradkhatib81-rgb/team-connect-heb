@@ -1,4 +1,5 @@
-import { useQuery } from "@tanstack/react-query";
+import { useEffect } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/use-auth";
 
@@ -68,5 +69,59 @@ export function useCanManageBreaks() {
   return {
     canManageBreaks: q.data === true,
     isLoading: q.isLoading,
+  };
+}
+
+export const breakPolicyEffectiveQueryKey = (userId: string | null) =>
+  ["break-policy-effective", userId] as const;
+
+/** Effective branch break policy — drives approval UI and request messaging. */
+export function useBreakRequiresApproval() {
+  const { data: profile } = useAuth();
+  const userId = profile?.id ?? null;
+  const queryClient = useQueryClient();
+
+  const q = useQuery({
+    enabled: !!userId,
+    queryKey: breakPolicyEffectiveQueryKey(userId),
+    queryFn: async () => {
+      const { data, error } = await (supabase as any).rpc("get_break_policy");
+      if (error) throw error;
+      return data as { requires_approval?: boolean } | null;
+    },
+    staleTime: 30_000,
+    retry: false,
+  });
+
+  useEffect(() => {
+    if (!userId) return;
+
+    const channel = supabase
+      .channel(`break-policy-effective-${userId}`)
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "break_policy" },
+        () => {
+          queryClient.invalidateQueries({
+            queryKey: breakPolicyEffectiveQueryKey(userId),
+          });
+        },
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [queryClient, userId]);
+
+  // Default to requiring approval until the policy loads (matches DB fallback).
+  const requiresApproval = q.isLoading
+    ? true
+    : q.data?.requires_approval === true;
+
+  return {
+    requiresApproval,
+    isLoading: q.isLoading,
+    policy: q.data ?? null,
   };
 }

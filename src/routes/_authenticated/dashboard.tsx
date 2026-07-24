@@ -68,7 +68,7 @@ import {
   useActivateDueBreaksPoll,
 } from "@/lib/break-workflow";
 import { useShiftSelfServiceVisible } from "@/lib/use-shift-self-service-visible";
-import { fetchCanUserRequestBreak, useCanManageBreaks } from "@/lib/break-permissions";
+import { fetchCanUserRequestBreak, useBreakRequiresApproval, useCanManageBreaks } from "@/lib/break-permissions";
 import { useActiveBranch } from "@/lib/use-active-branch";
 import {
   hasBranchActionPermission,
@@ -2364,6 +2364,7 @@ function OnBreakSection({ profile }: { profile: any }) {
   const [logSort, setLogSort] = useState<"created" | "overrun" | "return">("created");
   const [confirmReturn, setConfirmReturn] = useState<{ id: string; userId: string; name: string } | null>(null);
   const { canManageBreaks: canSee } = useCanManageBreaks();
+  const { requiresApproval } = useBreakRequiresApproval();
 
   const onBreakQ = useQuery({
     enabled: canSee,
@@ -2464,7 +2465,7 @@ function OnBreakSection({ profile }: { profile: any }) {
   });
 
   const pendingCountQ = useQuery({
-    enabled: canSee,
+    enabled: canSee && requiresApproval,
     queryKey: ["dashboard-pending-breaks"],
     queryFn: async () => {
       const { count, error } = await supabase
@@ -2627,16 +2628,18 @@ function OnBreakSection({ profile }: { profile: any }) {
 
   return (
     <>
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard
-          label="בקשות הפסקה ממתינות לאישור"
-          value={pendingCountQ.data ?? 0}
-          icon={Clock}
-          tone={(pendingCountQ.data ?? 0) > 0 ? "danger" : "warning"}
-          onClick={() => navigate({ to: "/breaks-admin" })}
-          badge={pendingCountQ.data ?? 0}
-          pulse={(pendingCountQ.data ?? 0) > 0}
-        />
+      <div className={`grid grid-cols-2 gap-4 ${requiresApproval ? "lg:grid-cols-4" : "lg:grid-cols-3"}`}>
+        {requiresApproval && (
+          <StatCard
+            label="בקשות הפסקה ממתינות לאישור"
+            value={pendingCountQ.data ?? 0}
+            icon={Clock}
+            tone={(pendingCountQ.data ?? 0) > 0 ? "danger" : "warning"}
+            onClick={() => navigate({ to: "/breaks-admin" })}
+            badge={pendingCountQ.data ?? 0}
+            pulse={(pendingCountQ.data ?? 0) > 0}
+          />
+        )}
         <StatCard
           label="עובדים בהפסקה כעת"
           value={list.length}
