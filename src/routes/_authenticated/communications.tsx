@@ -5,6 +5,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/use-auth";
 import { isAdmin } from "@/lib/constants";
 import { formatEmployeeName } from "@/lib/employee-name";
+import { isNonEmployeeIdentity } from "@/lib/employee-identity";
 import { Card } from "@/components/ui/card";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
@@ -1036,12 +1037,14 @@ function useEmployeesLite() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("profiles")
-        .select("id, first_name, last_name, full_name, department_id, departments(name)")
+        .select("id, first_name, last_name, full_name, department_id, branch_id, departments(name)")
         .eq("is_active", true)
         .order("first_name")
         .order("last_name");
       if (error) throw error;
-      return (data ?? []).map((r: any) => ({
+      return (data ?? [])
+        .filter((r: any) => !isNonEmployeeIdentity(r))
+        .map((r: any) => ({
         id: r.id,
         first_name: r.first_name,
         last_name: r.last_name,

@@ -17,6 +17,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Trophy, Plus, Pencil, Trash2, Loader2, Upload, History, ImageOff } from "lucide-react";
 import { toast } from "sonner";
+import { isNonEmployeeIdentity } from "@/lib/employee-identity";
 
 export const Route = createFileRoute("/_authenticated/employee-of-month")({
   component: EomManagePage,
@@ -126,11 +127,12 @@ function EomManagePage() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("profiles")
-        .select("id, full_name, departments(name)")
+        .select("id, full_name, department_id, branch_id, departments(name)")
         .eq("is_active", true)
         .order("full_name");
       if (error) throw error;
-      return (data ?? []) as { id: string; full_name: string; departments: { name: string } | null }[];
+      return ((data ?? []) as { id: string; full_name: string; department_id: string | null; branch_id: string | null; departments: { name: string } | null }[])
+        .filter((p) => !isNonEmployeeIdentity(p));
     },
   });
 

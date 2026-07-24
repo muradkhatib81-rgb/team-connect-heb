@@ -35,6 +35,7 @@ import {
   canManageUsers,
   type AppRole,
 } from "@/lib/constants";
+import { isNonEmployeeIdentity } from "@/lib/employee-identity";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -98,21 +99,22 @@ function DashboardPage() {
         { data: depts, error: dErr },
         { data: breaks, error: bErr },
       ] = await Promise.all([
-        supabase.from("profiles").select("id, is_active, on_leave, leave_start_date, leave_end_date, department_id, excluded_from_headcount"),
+        supabase.from("profiles").select("id, is_active, on_leave, leave_start_date, leave_end_date, department_id, branch_id, excluded_from_headcount"),
         supabase.from("departments").select("id, name, is_active").order("name"),
         supabase.from("break_requests").select("user_id").eq("status", "active"),
       ]);
       if (pErr) throw pErr;
       if (dErr) throw dErr;
       if (bErr) throw bErr;
-      // Employees flagged as "excluded from headcount" remain in the system but
-      // are not counted in any headcount statistic (totals, by-department, etc.).
-      const counted = profs!.filter((d: any) => !d.excluded_from_headcount);
+      // Staff only: exclude platform-owner identities (no dept + no branch) and
+      // anyone flagged "excluded from headcount". Applies for every viewer.
+      const staff = (profs ?? []).filter((d: any) => !isNonEmployeeIdentity(d));
+      const counted = staff.filter((d: any) => !d.excluded_from_headcount);
       const total = counted.length;
       const onLeave = counted.filter((d: any) => isEmployeeCurrentlyOnLeave(d)).length;
       const active = counted.filter((d: any) => d.is_active && !isEmployeeCurrentlyOnLeave(d)).length;
       const inactive = counted.filter((d: any) => !d.is_active).length;
-      const excludedIds = new Set(profs!.filter((d: any) => d.excluded_from_headcount).map((d: any) => d.id));
+      const excludedIds = new Set(staff.filter((d: any) => d.excluded_from_headcount).map((d: any) => d.id));
       const onBreak = new Set(
         (breaks ?? [])
           .map((b: any) => b.user_id as string)

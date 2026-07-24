@@ -48,6 +48,7 @@ import {
 import { Search, Loader2, Pencil, UserPlus, Filter, ImagePlus, X, KeyRound, Trash2, Users, UserCheck, UserX, Plane, Coffee, Shield, Power } from "lucide-react";
 import { toast } from "sonner";
 import { formatEmployeeName, employeeMatchesSearch, employeeNameInitial, splitFullName } from "@/lib/employee-name";
+import { isNonEmployeeIdentity } from "@/lib/employee-identity";
 
 type FilterMode = "all" | "active" | "inactive" | "on_leave" | "on_break" | "managers" | "workers";
 
@@ -81,6 +82,7 @@ interface ProfileRow {
   full_name: string;
   id_number: string | null;
   department_id: string | null;
+  branch_id: string | null;
   job_title: string | null;
   phone: string | null;
   is_active: boolean;
@@ -244,7 +246,7 @@ function EmployeesPage() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("profiles")
-        .select("id, first_name, last_name, full_name, department_id, job_title, is_active, on_leave, leave_start_date, leave_end_date, avatar_url, deactivated_at, excluded_from_headcount")
+        .select("id, first_name, last_name, full_name, department_id, branch_id, job_title, is_active, on_leave, leave_start_date, leave_end_date, avatar_url, deactivated_at, excluded_from_headcount")
         .order("first_name")
         .order("last_name");
       if (error) throw error;
@@ -331,11 +333,13 @@ function EmployeesPage() {
   const employees: ProfileRow[] = useMemo(() => {
     const list = employeesQuery.data ?? [];
     const cmap = contactsQuery.data ?? {};
-    return list.map((p) => ({
-      ...p,
-      id_number: cmap[p.id]?.id_number ?? null,
-      phone: cmap[p.id]?.phone ?? null,
-    }));
+    return list
+      .filter((p) => !isNonEmployeeIdentity(p))
+      .map((p) => ({
+        ...p,
+        id_number: cmap[p.id]?.id_number ?? null,
+        phone: cmap[p.id]?.phone ?? null,
+      }));
   }, [employeesQuery.data, contactsQuery.data]);
 
   const countedEmployees = useMemo(

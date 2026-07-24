@@ -8,6 +8,7 @@ import {
   canManageUsers,
   type AppRole,
 } from "@/lib/constants";
+import { isNonEmployeeIdentity } from "@/lib/employee-identity";
 import { Card } from "@/components/ui/card";
 import {
   Select,
@@ -261,7 +262,7 @@ export function PermissionsPage() {
       const [{ data: profiles, error: pe }, { data: roles, error: re }] = await Promise.all([
         supabase
           .from("profiles")
-          .select("id, full_name, department_id, departments(name)")
+          .select("id, full_name, department_id, branch_id, departments(name)")
           .order("full_name"),
         supabase.from("user_roles").select("user_id, role"),
       ]);
@@ -269,7 +270,9 @@ export function PermissionsPage() {
       if (re) throw re;
       const roleMap: Record<string, AppRole> = {};
       (roles ?? []).forEach((r) => (roleMap[r.user_id] = r.role as AppRole));
-      return (profiles ?? []).map((p: any) => ({
+      return (profiles ?? [])
+        .filter((p: any) => !isNonEmployeeIdentity(p))
+        .map((p: any) => ({
         id: p.id,
         full_name: p.full_name,
         department_name: p.departments?.name ?? "—",

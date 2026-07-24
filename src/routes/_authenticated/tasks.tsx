@@ -5,6 +5,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/use-auth";
 import { isAdmin, type AppRole } from "@/lib/constants";
+import { isNonEmployeeIdentity } from "@/lib/employee-identity";
 import {
   createTask,
   updateTask,
@@ -126,7 +127,7 @@ interface RecRow {
 }
 
 interface DeptOption { id: string; name: string }
-interface EmpOption { id: string; full_name: string; department_id: string | null }
+interface EmpOption { id: string; full_name: string; department_id: string | null; branch_id?: string | null }
 
 const STATUS_LABEL: Record<TaskStatus, string> = {
   new: "חדש",
@@ -206,11 +207,11 @@ function TasksPage() {
     queryFn: async () => {
       const [{ data: depts }, { data: emps }] = await Promise.all([
         supabase.from("departments").select("id, name").order("name"),
-        supabase.from("profiles").select("id, full_name, department_id").order("full_name"),
+        supabase.from("profiles").select("id, full_name, department_id, branch_id").order("full_name"),
       ]);
       return {
         departments: (depts ?? []) as DeptOption[],
-        employees: (emps ?? []) as EmpOption[],
+        employees: ((emps ?? []) as EmpOption[]).filter((e) => !isNonEmployeeIdentity(e)),
       };
     },
   });
