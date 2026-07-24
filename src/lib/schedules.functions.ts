@@ -68,8 +68,9 @@ async function getDepartmentScheduleEmployees(supabase: any, departmentId: strin
   if (includeDeptHead && !rows.some((e: any) => e.id === dept!.manager_id)) {
     const { data: mgr } = await supabase
       .from("profiles")
-      .select("id, full_name, is_active, excluded_from_schedule, on_leave, leave_start_date, leave_end_date")
+      .select("id, full_name, department_id, is_active, excluded_from_schedule, on_leave, leave_start_date, leave_end_date")
       .eq("id", dept.manager_id)
+      .eq("department_id", departmentId)
       .eq("is_active", true)
       .maybeSingle();
     if (mgr) rows.push(mgr as any);
@@ -392,6 +393,13 @@ export const createOrGetSchedule = createServerFn({ method: "POST" })
     }
     if (hiddenRow) {
       throw new Error("כבר קיים סידור עבודה לשבוע זה במחלקה זו");
+    }
+    const departmentEmployees = await getDepartmentScheduleEmployees(
+      context.supabase,
+      data.department_id,
+    );
+    if (schedulableDepartmentEmployees(departmentEmployees).length === 0) {
+      throw new Error("אין עובדים פעילים במחלקה זו שניתן לשבץ בסידור עבודה");
     }
     const { data: settings } = await context.supabase
       .from("company_settings")

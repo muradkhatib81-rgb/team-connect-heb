@@ -757,8 +757,9 @@ function SchedulesPage() {
       if (managerId && !rows.some((e: any) => e.id === managerId)) {
         const { data: mgr } = await supabase
           .from("profiles")
-          .select("id, full_name, is_active, excluded_from_schedule, excluded_from_headcount, on_leave, leave_start_date, leave_end_date")
+          .select("id, full_name, department_id, is_active, excluded_from_schedule, excluded_from_headcount, on_leave, leave_start_date, leave_end_date")
           .eq("id", managerId)
+          .eq("department_id", selectedDept!)
           .eq("is_active", true)
           .maybeSingle();
         if (mgr) rows.push(mgr as any);

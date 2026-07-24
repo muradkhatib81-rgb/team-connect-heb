@@ -638,7 +638,7 @@ export const updateEmployee = createServerFn({ method: "POST" })
 
     const { data: dept, error: dErr } = await context.supabase
       .from("departments")
-      .select("id, branch_id")
+      .select("id, branch_id, manager_id")
       .eq("id", data.department_id)
       .maybeSingle();
     if (dErr) throw new Error(dErr.message);
@@ -658,12 +658,34 @@ export const updateEmployee = createServerFn({ method: "POST" })
 
     const { data: existingProfile, error: existingProfileErr } = await supabaseAdmin
       .from("profiles")
-      .select("id_number, first_name, last_name, full_name")
+      .select("id_number, first_name, last_name, full_name, department_id")
       .eq("id", data.user_id)
       .eq("branch_id", context.branchId)
       .maybeSingle();
     if (existingProfileErr) throw new Error(existingProfileErr.message);
     if (!existingProfile) throw new Error("עובד לא נמצא בסניף הפעיל");
+
+    const { data: currentRoleRows, error: currentRolesErr } = await supabaseAdmin
+      .from("user_roles")
+      .select("role")
+      .eq("user_id", data.user_id);
+    if (currentRolesErr) throw new Error(currentRolesErr.message);
+    const currentRoles = new Set((currentRoleRows ?? []).map((row: any) => row.role as string));
+    const resultingRole = data.role_changed && data.role
+      ? data.role
+      : currentRoles.has("department_manager")
+        ? "department_manager"
+        : null;
+    const departmentChanged = existingProfile.department_id !== data.department_id;
+
+    if (
+      departmentChanged &&
+      resultingRole === "department_manager" &&
+      (dept as { manager_id?: string | null }).manager_id &&
+      (dept as { manager_id?: string | null }).manager_id !== data.user_id
+    ) {
+      throw new Error("למחלקה שנבחרה כבר קיים אחראי מחלקה");
+    }
 
     const trimmedFirst = data.first_name.trim();
     const trimmedLast = data.last_name.trim();
@@ -706,6 +728,29 @@ export const updateEmployee = createServerFn({ method: "POST" })
         firstName: trimmedFirst,
         lastName: trimmedLast,
       });
+    }
+
+    if (departmentChanged) {
+      // A profile can belong to only one department. Remove stale department
+      // ownership left behind by the previous department before applying any
+      // explicit role change. This changes department links only—not roles or
+      // permission rows.
+      const { error: clearOldDeptErr } = await supabaseAdmin
+        .from("departments")
+        .update({ manager_id: null })
+        .eq("manager_id", data.user_id)
+        .eq("branch_id", context.branchId)
+        .neq("id", data.department_id);
+      if (clearOldDeptErr) throw new Error(clearOldDeptErr.message);
+
+      if (resultingRole === "department_manager" && !data.role_changed) {
+        const { error: assignNewDeptErr } = await supabaseAdmin
+          .from("departments")
+          .update({ manager_id: data.user_id })
+          .eq("id", data.department_id)
+          .eq("branch_id", context.branchId);
+        if (assignNewDeptErr) throw new Error(assignNewDeptErr.message);
+      }
     }
 
     if (data.role_changed && data.role) {
