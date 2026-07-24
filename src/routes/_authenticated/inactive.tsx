@@ -4,7 +4,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { LogOut, UserX } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { APP_NAME } from "@/lib/constants";
+import { APP_NAME, supportContactInstruction } from "@/lib/constants";
 import { useAuth } from "@/lib/use-auth";
 import { supabase } from "@/integrations/supabase/client";
 
@@ -56,7 +56,7 @@ function InactiveAccountPage() {
         <div className="space-y-2">
           <h1 className="text-xl font-semibold text-destructive">החשבון אינו פעיל</h1>
           <p className="text-sm text-destructive/90 leading-relaxed">
-            אינך פעיל/ה כרגע במערכת. אנא פנה/י להנהלה.
+            אינך פעיל/ה כרגע במערכת. אנא {supportContactInstruction(profile?.roles ?? [])}.
           </p>
         </div>
         {profile?.full_name && (

@@ -27,6 +27,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { toast } from "sonner";
 import { useCanManageBreaks } from "@/lib/break-permissions";
+import { supportContactInstruction } from "@/lib/constants";
 import {
   Coffee,
   Plus,
@@ -168,7 +169,7 @@ export function BreakSettingsPage() {
       <Card className="card-elevated p-8 text-center">
         <h2 className="text-lg font-semibold">אין הרשאה</h2>
         <p className="text-sm text-muted-foreground mt-2">
-          רק בעל המערכת או משתמש עם הרשאת "ניהול הפסקות" יכול לגשת למסך זה.
+          אין הרשאה לגשת למסך זה. {supportContactInstruction(me.roles)}.
         </p>
       </Card>
     );

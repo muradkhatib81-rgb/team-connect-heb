@@ -30,6 +30,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { toast } from "sonner";
+import { supportContactInstruction } from "@/lib/constants";
 import {
   Clock,
   Plus,
@@ -196,7 +197,7 @@ function ShiftSettingsPage() {
       <Card className="card-elevated p-8 text-center">
         <h2 className="text-lg font-semibold">אין הרשאה</h2>
         <p className="text-sm text-muted-foreground mt-2">
-          רק בעל המערכת או משתמש עם הרשאת ניהול סידורי עבודה יכול לגשת למסך זה.
+          אין הרשאה לגשת למסך זה. {supportContactInstruction(me.roles)}.
         </p>
       </Card>
     );

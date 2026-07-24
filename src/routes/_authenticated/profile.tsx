@@ -3,7 +3,7 @@ import { useAuth } from "@/lib/use-auth";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Loader2, KeyRound, User } from "lucide-react";
-import { ROLE_LABELS, isPlatformOwner } from "@/lib/constants";
+import { ROLE_LABELS, isPlatformOwner, supportContactInstruction } from "@/lib/constants";
 import { EmployeeOfMonthSection } from "@/components/employee-of-month-section";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -51,7 +51,7 @@ function ProfilePage() {
           <AlertDescription className="text-amber-900">
             <span className="font-semibold">את/ה בחופש כרגע.</span>
             {leaveRange ? ` (${leaveRange})` : null}
-            {" "}לפרטים נוספים פנה/י להנהלה.
+            {" "}לפרטים נוספים {supportContactInstruction(me.roles)}.
           </AlertDescription>
         </Alert>
       )}

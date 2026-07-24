@@ -1424,7 +1424,7 @@ export const closeTask = createServerFn({ method: "POST" })
   .inputValidator((d: unknown) => z.object({ id: z.string().uuid() }).parse(d))
   .handler(async ({ data, context }) => {
     const caps = await getCallerCaps(context.supabase, context.userId);
-    if (!caps.canCloseTasks) throw new Error("רק בעל המערכת או בעלי הרשאת ניהול/אישור משימות יכולים לסגור משימה");
+    if (!caps.canCloseTasks) throw new Error("אין הרשאה לסגור משימה זו");
     const { error } = await context.supabase
       .from("tasks")
       .update({ status: "closed" } as any)

@@ -63,6 +63,27 @@ export function isAdmin(roles: AppRole[]): boolean {
   return roles.some((r) => ADMIN_ROLES.includes(r));
 }
 
+/**
+ * Branch/company management escalates to the platform owner.
+ * Employees and department heads escalate to branch management (הנהלה).
+ */
+export function isBranchOrCompanyManagementRole(roles: readonly string[]): boolean {
+  return roles.some(
+    (r) =>
+      r === "system_admin" ||
+      r === "main_admin" ||
+      r === "branch_manager" ||
+      r === "assistant_manager",
+  );
+}
+
+/** Contact instruction for help / missing-access messages, by viewer role. */
+export function supportContactInstruction(roles: readonly string[]): string {
+  return isBranchOrCompanyManagementRole(roles)
+    ? "פנה/י לבעל המערכת"
+    : "פנה/י להנהלה";
+}
+
 export function canManageUsers(roles: AppRole[]): boolean {
   return roles.includes("main_admin") || roles.includes("branch_manager");
 }

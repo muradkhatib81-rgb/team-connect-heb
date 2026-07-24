@@ -6,6 +6,7 @@ import { useActiveBranch } from "@/lib/use-active-branch";
 import { CustodySettingsPanel } from "@/components/custody-settings-panel";
 import { useQuery } from "@tanstack/react-query";
 import { fetchCustodyUserCaps } from "@/lib/custody-workflow";
+import { supportContactInstruction } from "@/lib/constants";
 
 export const Route = createFileRoute("/_authenticated/custody-settings")({
   component: CustodySettingsPage,
@@ -46,7 +47,7 @@ function CustodySettingsPage() {
       <Card className="card-elevated p-8 text-center">
         <h2 className="text-lg font-semibold">אין הרשאה</h2>
         <p className="text-sm text-muted-foreground mt-2">
-          נדרשת הרשאה מ«מערכת ניהול ציוד» — יש לפנות לבעל המערכת.
+          נדרשת הרשאה מ«מערכת ניהול ציוד». {supportContactInstruction(me.roles)}.
         </p>
       </Card>
     );
