@@ -9,6 +9,7 @@ import {
   invalidateShiftVisibleQueries,
   shiftVisibleQueryKey,
 } from "@/lib/shift-visible-rpc";
+import { onManagementOnShiftChanges } from "@/lib/management-on-shift-realtime";
 
 export type CustodyItemType = {
   id: string;
@@ -435,39 +436,32 @@ export function useCustodyRealtime(
   const qc = useQueryClient();
   useEffect(() => {
     if (!enabled || !branchId || !userId) return;
-    const ch = supabase
-      .channel(`custody-realtime-${userId}-${branchId}`)
-      .on(
-        "postgres_changes",
-        {
-          event: "*",
-          schema: "public",
-          table: "custody_checkouts",
-          filter: `branch_id=eq.${branchId}`,
-        },
-        () => invalidateCustodyQueries(qc, branchId, userId),
-      )
-      .on(
-        "postgres_changes",
-        {
-          event: "INSERT",
-          schema: "public",
-          table: "custody_session_archive",
-          filter: `branch_id=eq.${branchId}`,
-        },
-        () => invalidateCustodyQueries(qc, branchId, userId),
-      )
-      .on(
-        "postgres_changes",
-        {
-          event: "*",
-          schema: "public",
-          table: "management_on_shift",
-          filter: `branch_id=eq.${branchId}`,
-        },
-        () => invalidateShiftVisibleQueries(qc, userId, branchId),
-      )
-      .subscribe();
+    const ch = onManagementOnShiftChanges(
+      supabase
+        .channel(`custody-realtime-${userId}-${branchId}`)
+        .on(
+          "postgres_changes",
+          {
+            event: "*",
+            schema: "public",
+            table: "custody_checkouts",
+            filter: `branch_id=eq.${branchId}`,
+          },
+          () => invalidateCustodyQueries(qc, branchId, userId),
+        )
+        .on(
+          "postgres_changes",
+          {
+            event: "INSERT",
+            schema: "public",
+            table: "custody_session_archive",
+            filter: `branch_id=eq.${branchId}`,
+          },
+          () => invalidateCustodyQueries(qc, branchId, userId),
+        ),
+      branchId,
+      () => invalidateShiftVisibleQueries(qc, userId, branchId),
+    ).subscribe();
     return () => {
       supabase.removeChannel(ch);
     };

@@ -19,6 +19,7 @@ import {
   returnCustodyItem,
 } from "@/lib/custody-workflow";
 import { invalidateShiftVisibleQueries } from "@/lib/shift-visible-rpc";
+import { onManagementOnShiftChanges } from "@/lib/management-on-shift-realtime";
 import { CustodySettingsPanel } from "@/components/custody-settings-panel";
 import {
   Dialog,
@@ -57,38 +58,32 @@ export function CustodyBoardCard() {
 
   useEffect(() => {
     if (!profile || !scopedBranchId) return;
-    const ch = supabase
-      .channel(`custody-${profile.id}-${scopedBranchId}`)
-      .on(
-        "postgres_changes",
-        {
-          event: "*",
-          schema: "public",
-          table: "custody_checkouts",
-          filter: `branch_id=eq.${scopedBranchId}`,
-        },
-        () => invalidateCustodyQueries(qc, scopedBranchId, profile.id),
-      )
-      .on(
-        "postgres_changes",
-        {
-          event: "*",
-          schema: "public",
-          table: "custody_item_types",
-          filter: `branch_id=eq.${scopedBranchId}`,
-        },
-        () => invalidateCustodyQueries(qc, scopedBranchId, profile.id),
-      )
-      .on(
-        "postgres_changes",
-        {
-          event: "*",
-          schema: "public",
-          table: "management_on_shift",
-          filter: `branch_id=eq.${scopedBranchId}`,
-        },
-        () => invalidateShiftVisibleQueries(qc, profile.id, scopedBranchId),
-      )
+    const ch = onManagementOnShiftChanges(
+      supabase
+        .channel(`custody-${profile.id}-${scopedBranchId}`)
+        .on(
+          "postgres_changes",
+          {
+            event: "*",
+            schema: "public",
+            table: "custody_checkouts",
+            filter: `branch_id=eq.${scopedBranchId}`,
+          },
+          () => invalidateCustodyQueries(qc, scopedBranchId, profile.id),
+        )
+        .on(
+          "postgres_changes",
+          {
+            event: "*",
+            schema: "public",
+            table: "custody_item_types",
+            filter: `branch_id=eq.${scopedBranchId}`,
+          },
+          () => invalidateCustodyQueries(qc, scopedBranchId, profile.id),
+        ),
+      scopedBranchId,
+      () => invalidateShiftVisibleQueries(qc, profile.id, scopedBranchId),
+    )
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "schedule_shifts" },

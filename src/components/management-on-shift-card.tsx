@@ -14,6 +14,7 @@ import {
   shiftVisibleQueryKey,
 } from "@/lib/shift-visible-rpc";
 import { custodyQueryKey } from "@/lib/custody-workflow";
+import { onManagementOnShiftChanges } from "@/lib/management-on-shift-realtime";
 import { employeeNameInitial, formatEmployeeName } from "@/lib/employee-name";
 
 type Row = {
@@ -76,19 +77,13 @@ export function ManagementOnShiftCard() {
 
   useEffect(() => {
     if (!profile || !scopedBranchId) return;
-    const ch = supabase
-      .channel(`mos-${profile.id}-${scopedBranchId}`)
-      .on(
-        "postgres_changes",
-        {
-          event: "*",
-          schema: "public",
-          table: "management_on_shift",
-          filter: `branch_id=eq.${scopedBranchId}`,
-        },
-        () => qc.invalidateQueries({ queryKey: ["management-on-shift", scopedBranchId] }),
-      )
-      .subscribe();
+    const invalidate = () =>
+      qc.invalidateQueries({ queryKey: ["management-on-shift", scopedBranchId] });
+    const ch = onManagementOnShiftChanges(
+      supabase.channel(`mos-${profile.id}-${scopedBranchId}`),
+      scopedBranchId,
+      invalidate,
+    ).subscribe();
     return () => {
       supabase.removeChannel(ch);
     };
@@ -111,7 +106,9 @@ export function ManagementOnShiftCard() {
     onSuccess: () => {
       toast.success("סומנת כנמצא במשמרת");
       const branchId = activeBranchId ?? profile?.branch_id ?? null;
-      qc.invalidateQueries({ queryKey: ["management-on-shift"] });
+      if (branchId) {
+        qc.invalidateQueries({ queryKey: ["management-on-shift", branchId] });
+      }
       if (profile?.id) {
         invalidateShiftVisibleQueries(qc, profile.id, branchId);
         qc.setQueryData(shiftVisibleQueryKey(profile.id, branchId), true);
@@ -131,7 +128,12 @@ export function ManagementOnShiftCard() {
     onSuccess: () => {
       toast.success("סימנת סיום משמרת");
       const branchId = activeBranchId ?? profile?.branch_id ?? null;
-      qc.invalidateQueries({ queryKey: ["management-on-shift"] });
+      if (branchId) {
+        qc.setQueryData<Row[]>(["management-on-shift", branchId], (prev) =>
+          (prev ?? []).filter((r) => r.user_id !== profile!.id),
+        );
+        qc.invalidateQueries({ queryKey: ["management-on-shift", branchId] });
+      }
       if (profile?.id) {
         invalidateShiftVisibleQueries(qc, profile.id, branchId);
         qc.setQueryData(shiftVisibleQueryKey(profile.id, branchId), false);

@@ -48,6 +48,7 @@ import { cn } from "@/lib/utils";
 import { NotificationsBell } from "@/components/notifications-bell";
 import { useActiveBranch } from "@/lib/use-active-branch";
 import { useBreakSelfServiceNavVisible } from "@/lib/use-shift-self-service-visible";
+import { useCanManageBreaks, canManageBreaksQueryKey } from "@/lib/break-permissions";
 import { AppFooter } from "@/components/app-footer";
 import { useBranchContext, useCompanyContext } from "@/platform";
 
@@ -135,6 +136,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   }, [profile?.is_active, profile?.must_change_password, profile, pathname, navigate]);
 
   const breakSelfServiceNav = useBreakSelfServiceNavVisible();
+  const { canManageBreaks } = useCanManageBreaks();
 
   // Realtime bridge and the Branch Mode gate read the active branch via
   // <ActiveBranchProvider/>, which now wraps this whole component (see
@@ -158,7 +160,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   const isBranchManager = profile.roles.includes("branch_manager");
 
   // Managers of breaks: main admin, branch manager, or any user with the explicit permission.
-  const isBreaksManager = isMainAdmin || isBranchManager || !!breakPermQ.data?.breaks;
+  const isBreaksManager = canManageBreaks;
   const canRequestBreak = breakSelfServiceNav.isVisible;
   const canManageEom = isMainAdmin || isBranchManager || !!breakPermQ.data?.eom;
 
@@ -716,6 +718,7 @@ function RealtimeBridge({ uid }: { uid: string }) {
             qc.invalidateQueries({ queryKey: ["auth", "me"] });
             qc.invalidateQueries({ queryKey: ["task-perm"] });
             qc.invalidateQueries({ queryKey: ["shell-can-manage-breaks"] });
+            qc.invalidateQueries({ queryKey: canManageBreaksQueryKey(uid) });
           }
           qc.invalidateQueries({ queryKey: ["user-perms"] });
           qc.invalidateQueries({ queryKey: ["route-guard"] });
@@ -732,6 +735,7 @@ function RealtimeBridge({ uid }: { uid: string }) {
           if (!affected || affected === uid) {
             qc.invalidateQueries({ queryKey: ["auth", "me"] });
             qc.invalidateQueries({ queryKey: ["shell-can-manage-breaks", uid] });
+            qc.invalidateQueries({ queryKey: canManageBreaksQueryKey(uid) });
           }
           qc.invalidateQueries({ queryKey: ["route-guard"] });
         },

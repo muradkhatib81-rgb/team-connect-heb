@@ -128,21 +128,7 @@ function BreakPlanningPage() {
     },
   });
 
-  const isMainAdmin = !!me?.roles?.includes("main_admin");
-  const isBranchManager = !!me?.roles?.includes("branch_manager");
-  const permQ = useQuery({
-    enabled: !!me?.id && !isMainAdmin && !isBranchManager,
-    queryKey: ["my-break-manage-perm", me?.id],
-    queryFn: async () => {
-      const { data } = await supabase
-        .from("user_task_permissions")
-        .select("can_manage_breaks")
-        .eq("user_id", me!.id)
-        .maybeSingle();
-      return !!(data as any)?.can_manage_breaks;
-    },
-  });
-  const isBreaksManager = isMainAdmin || isBranchManager || !!permQ.data;
+  const canPlanBreaks = breakNav.isVisible;
 
   const rows = todayQ.data ?? [];
   const consumedTypeIds = useMemo(() => consumedBreakSettingIds(rows), [rows]);
@@ -360,7 +346,7 @@ function BreakPlanningPage() {
                   <Badge variant={BREAK_STATUS_TONE[r.status] ?? "secondary"}>
                     {BREAK_STATUS_LABEL[r.status] ?? r.status}
                   </Badge>
-                  {isBreakEditable(r.status) && isBreaksManager && (
+                  {isBreakEditable(r.status) && canPlanBreaks && (
                     <div className="flex gap-2">
                       <Button size="sm" variant="outline" onClick={() => setEditTarget(r)}>
                         <Pencil className="size-4" />
@@ -382,7 +368,7 @@ function BreakPlanningPage() {
         )}
       </Card>
 
-      {isBreaksManager && (
+      {canPlanBreaks && (
       <Card className="card-elevated p-5 space-y-4">
         <div className="flex items-center justify-between">
           <h2 className="font-semibold">הוספת הפסקות חדשות</h2>

@@ -57,7 +57,10 @@ import {
   toLocalTime,
   todayJerusalemDate,
 } from "@/lib/break-workflow";
-import { useShiftSelfServiceVisible } from "@/lib/use-shift-self-service-visible";
+import {
+  useCanUserRequestBreak,
+  useShiftSelfServiceVisible,
+} from "@/lib/use-shift-self-service-visible";
 
 export const Route = createFileRoute("/_authenticated/breaks")({
   component: BreaksPage,
@@ -93,38 +96,8 @@ interface BreakRequest {
 function BreaksPage() {
   const { data: me } = useAuth();
   const qc = useQueryClient();
-  const isMainAdmin = !!me?.roles?.includes("main_admin");
-  const isBranchOrAssistant =
-    !!me?.roles?.includes("branch_manager") || !!me?.roles?.includes("assistant_manager");
-
-  const permQ = useQuery({
-    enabled: !!me?.id && !isMainAdmin,
-    queryKey: ["my-break-manage-perm", me?.id],
-    queryFn: async () => {
-      const { data } = await supabase
-        .from("user_task_permissions")
-        .select("can_manage_breaks")
-        .eq("user_id", me!.id)
-        .maybeSingle();
-      return !!(data as any)?.can_manage_breaks;
-    },
-  });
-  const isBreaksManager =
-    isMainAdmin || isBranchOrAssistant || !!permQ.data;
-
-  // Can this user request a break? Combines job-title flag + system break policy.
-  const canRequestQ = useQuery({
-    enabled: !!me?.id,
-    queryKey: ["can-request-break", me?.id],
-    queryFn: async () => {
-      const { data, error } = await (supabase as any).rpc("can_user_request_break", {
-        _user_id: me!.id,
-      });
-      if (error) return true;
-      return data !== false;
-    },
-  });
-  const canRequestBreak = canRequestQ.data !== false;
+  const canRequestQ = useCanUserRequestBreak();
+  const canRequestBreak = canRequestQ.data === true;
   const shiftGate = useShiftSelfServiceVisible();
   const canShowRequestForm = canRequestBreak && shiftGate.isVisible;
 
@@ -310,7 +283,7 @@ function BreaksPage() {
               ? "הגשת בקשת הפסקה וצפייה בסטטוס. השעה המאושרת היא הקובעת."
               : "הגשת הפסקה ללא צורך באישור מנהל. השעה שבחרת תאושר אוטומטית."}
           </p>
-          {shiftGate.isVisible ? (
+          {canShowRequestForm ? (
             <Button variant="link" className="h-auto p-0 text-sm" asChild>
               <Link to="/break-planning">תכנון הפסקות למשמרת ←</Link>
             </Button>

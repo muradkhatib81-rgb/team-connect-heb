@@ -1,5 +1,6 @@
 import { supabase } from "@/integrations/supabase/client";
 import type { QueryClient } from "@tanstack/react-query";
+import { canRequestBreakQueryKey } from "@/lib/break-permissions";
 
 export function shiftVisibleQueryKey(userId: string | null, branchId?: string | null) {
   return ["custody-board-visible", userId, branchId ?? null] as const;
@@ -13,6 +14,7 @@ export function invalidateShiftVisibleQueries(
 ) {
   qc.invalidateQueries({ queryKey: shiftVisibleQueryKey(userId, branchId) });
   qc.invalidateQueries({ queryKey: ["custody-board-visible", userId] });
+  qc.invalidateQueries({ queryKey: canRequestBreakQueryKey(userId) });
 }
 
 /**

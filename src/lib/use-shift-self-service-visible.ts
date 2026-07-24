@@ -4,10 +4,12 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/use-auth";
 import { useActiveBranch } from "@/lib/use-active-branch";
 import { retainSharedRealtimeChannel } from "@/lib/realtime-shared-channel";
+import { onManagementOnShiftChanges } from "@/lib/management-on-shift-realtime";
 import {
   fetchShiftSelfServiceVisible,
   shiftVisibleQueryKey,
 } from "@/lib/shift-visible-rpc";
+import { useCanUserRequestBreak } from "@/lib/break-permissions";
 
 /** Open break statuses — inlined to avoid circular imports from break-workflow. */
 const OPEN_BREAK_NAV_STATUSES = new Set([
@@ -43,8 +45,9 @@ export function useShiftSelfServiceVisible() {
     if (!userId || !scopedBranchId) return;
     const invalidate = () =>
       qc.invalidateQueries({ queryKey: shiftVisibleQueryKey(userId, scopedBranchId) });
-    return retainSharedRealtimeChannel(`shift-self-service-visible-${userId}`, (channel) =>
-      channel
+    return retainSharedRealtimeChannel(`shift-self-service-visible-${userId}`, (channel) => {
+      const withMos = onManagementOnShiftChanges(channel, scopedBranchId, invalidate);
+      return withMos
         .on(
           "postgres_changes",
           { event: "*", schema: "public", table: "schedule_shifts" },
@@ -56,22 +59,12 @@ export function useShiftSelfServiceVisible() {
           {
             event: "*",
             schema: "public",
-            table: "management_on_shift",
-            filter: `branch_id=eq.${scopedBranchId}`,
-          },
-          invalidate,
-        )
-        .on(
-          "postgres_changes",
-          {
-            event: "*",
-            schema: "public",
             table: "profiles",
             filter: `id=eq.${userId}`,
           },
           invalidate,
-        ),
-    );
+        );
+    });
   }, [userId, scopedBranchId, qc]);
 
   useEffect(() => {
@@ -98,12 +91,15 @@ export function useShiftSelfServiceVisible() {
   };
 }
 
+export { useCanUserRequestBreak } from "@/lib/break-permissions";
+
 /**
  * Sidebar / breaks page gate: on-shift (or not on leave) plus open break requests
  * so users can still reach /breaks to view or end an active break.
  */
 export function useBreakSelfServiceNavVisible() {
   const shift = useShiftSelfServiceVisible();
+  const canRequestQ = useCanUserRequestBreak();
   const { data: profile } = useAuth();
   const userId = profile?.id ?? null;
 
@@ -123,9 +119,15 @@ export function useBreakSelfServiceNavVisible() {
     retry: false,
   });
 
+  const canRequestBreak = canRequestQ.data === true;
+
   return {
-    isVisible: shift.isVisible || openQ.data === true,
-    isLoading: shift.isLoading || (!shift.isVisible && openQ.isLoading),
+    isVisible: (shift.isVisible && canRequestBreak) || openQ.data === true,
+    isLoading:
+      shift.isLoading ||
+      canRequestQ.isLoading ||
+      (!shift.isVisible && canRequestQ.data !== true && openQ.isLoading),
     isOnShift: shift.isVisible,
+    canRequestBreak,
   };
 }

@@ -10,6 +10,7 @@ import { ApproveList } from "./breaks";
 import { BreakSettingsPage } from "./break-settings";
 import { BreakRequestPermissionsCard } from "@/components/break-request-permissions-card";
 import { BreakPolicySettingsCard } from "@/components/break-policy-settings-card";
+import { useCanManageBreaks } from "@/lib/break-permissions";
 
 export const Route = createFileRoute("/_authenticated/breaks-admin")({
   component: BreaksAdminPage,
@@ -38,31 +39,17 @@ function BreaksAdminPage() {
   const qc = useQueryClient();
   const isMainAdmin = !!me?.roles.includes("main_admin");
   const isBranchManager = !!me?.roles.includes("branch_manager");
-
-  const permQ = useQuery({
-    enabled: !!me?.id && !isMainAdmin,
-    queryKey: ["my-break-manage-perm", me?.id],
-    queryFn: async () => {
-      const { data } = await supabase
-        .from("user_task_permissions")
-        .select("can_manage_breaks")
-        .eq("user_id", me!.id)
-        .maybeSingle();
-      return !!(data as any)?.can_manage_breaks;
-    },
-  });
-
-  const isBreaksManager =
-    isMainAdmin || isBranchManager || !!permQ.data;
+  const { canManageBreaks, isLoading: managePermLoading } = useCanManageBreaks();
+  const isBreaksManager = canManageBreaks;
 
   // Hard redirect: non-managers must go to the employee request screen.
   useEffect(() => {
     if (!me) return;
-    if (!isMainAdmin && permQ.isLoading) return;
+    if (managePermLoading) return;
     if (!isBreaksManager) {
       window.location.replace("/breaks");
     }
-  }, [me, isMainAdmin, permQ.isLoading, isBreaksManager]);
+  }, [me, managePermLoading, isBreaksManager]);
 
   const allReqQ = useQuery({
     enabled: !!me && isBreaksManager,

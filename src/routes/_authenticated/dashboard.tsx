@@ -68,6 +68,7 @@ import {
   useActivateDueBreaksPoll,
 } from "@/lib/break-workflow";
 import { useShiftSelfServiceVisible } from "@/lib/use-shift-self-service-visible";
+import { fetchCanUserRequestBreak, useCanManageBreaks } from "@/lib/break-permissions";
 import { useActiveBranch } from "@/lib/use-active-branch";
 
 export const Route = createFileRoute("/_authenticated/dashboard")({
@@ -2058,17 +2059,11 @@ function BreakShortcutCard({ userId }: { userId: string }) {
   const canRequestQ = useQuery({
     enabled: !!userId,
     queryKey: ["can-request-break", userId],
-    queryFn: async () => {
-      const { data, error } = await (supabase as any).rpc("can_user_request_break", {
-        _user_id: userId,
-      });
-      if (error) return true;
-      return data !== false;
-    },
+    queryFn: () => fetchCanUserRequestBreak(userId),
     staleTime: 30_000,
     retry: false,
   });
-  const canRequestBreak = canRequestQ.data !== false;
+  const canRequestBreak = canRequestQ.data === true;
 
   const breakQ = useQuery({
     enabled: !!userId,
@@ -2288,7 +2283,6 @@ function ManagerEmployeeBreakPanel({
 function OnBreakSection({ profile }: { profile: any }) {
   const qc = useQueryClient();
   const navigate = useNavigate();
-  const isMainAdmin = profile.roles.includes("main_admin");
   const [open, setOpen] = useState(false);
   const [logOpen, setLogOpen] = useState(false);
   const [logSearch, setLogSearch] = useState("");
@@ -2298,20 +2292,7 @@ function OnBreakSection({ profile }: { profile: any }) {
   const [logStatusFilter, setLogStatusFilter] = useState<string>("__all");
   const [logSort, setLogSort] = useState<"created" | "overrun" | "return">("created");
   const [confirmReturn, setConfirmReturn] = useState<{ id: string; userId: string; name: string } | null>(null);
-
-  const permQ = useQuery({
-    enabled: !!profile.id && !isMainAdmin,
-    queryKey: ["dash-can-manage-breaks", profile.id],
-    queryFn: async () => {
-      const { data } = await supabase
-        .from("user_task_permissions")
-        .select("can_manage_breaks")
-        .eq("user_id", profile.id)
-        .maybeSingle();
-      return !!(data as any)?.can_manage_breaks;
-    },
-  });
-  const canSee = isMainAdmin || !!permQ.data;
+  const { canManageBreaks: canSee } = useCanManageBreaks();
 
   const onBreakQ = useQuery({
     enabled: canSee,

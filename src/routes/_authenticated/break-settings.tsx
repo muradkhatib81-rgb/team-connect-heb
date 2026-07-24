@@ -26,6 +26,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { toast } from "sonner";
+import { useCanManageBreaks } from "@/lib/break-permissions";
 import {
   Coffee,
   Plus,
@@ -51,23 +52,7 @@ interface BreakRow {
 export function BreakSettingsPage() {
   const qc = useQueryClient();
   const { data: me } = useAuth();
-  const isMainAdmin = !!me?.roles.includes("main_admin");
-  const isBranchManager = !!me?.roles.includes("branch_manager");
-
-  const permQ = useQuery({
-    enabled: !!me?.id && !isMainAdmin && !isBranchManager,
-    queryKey: ["my-break-manage-perm", me?.id],
-    queryFn: async () => {
-      const { data } = await supabase
-        .from("user_task_permissions")
-        .select("can_manage_breaks")
-        .eq("user_id", me!.id)
-        .maybeSingle();
-      return !!(data as any)?.can_manage_breaks;
-    },
-  });
-
-  const canManage = isMainAdmin || isBranchManager || !!permQ.data;
+  const { canManageBreaks: canManage, isLoading: managePermLoading } = useCanManageBreaks();
 
 
   const listQ = useQuery({
@@ -178,7 +163,7 @@ export function BreakSettingsPage() {
 
   if (!me) return null;
 
-  if (!permQ.isLoading && !canManage) {
+  if (!managePermLoading && !canManage) {
     return (
       <Card className="card-elevated p-8 text-center">
         <h2 className="text-lg font-semibold">אין הרשאה</h2>
