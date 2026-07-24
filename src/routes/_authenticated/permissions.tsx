@@ -5,7 +5,6 @@ import { useAuth } from "@/lib/use-auth";
 import {
   ROLE_LABELS,
   ROLE_OPTIONS,
-  canManageUsers,
   type AppRole,
 } from "@/lib/constants";
 import { isNonEmployeeIdentity } from "@/lib/employee-identity";
@@ -77,6 +76,10 @@ import { useServerFn } from "@tanstack/react-start";
 import { setUserPermissions, resetUserPermissions, listBranchPermissionOverrides } from "@/lib/tasks.functions";
 import { changeUserRole } from "@/lib/employees.functions";
 import { useEffect, useMemo, useState } from "react";
+import {
+  hasBranchActionPermission,
+  useCurrentPermissions,
+} from "@/lib/use-current-permissions";
 
 export const Route = createFileRoute("/_authenticated/permissions")({
   component: PermissionsPage,
@@ -245,15 +248,25 @@ export function PermissionsPage() {
   const qc = useQueryClient();
   const { data: me } = useAuth();
   const isMainAdmin = !!me?.roles.includes("main_admin");
-  const isBranchManager = !!me?.roles.includes("branch_manager");
-  const allowed = me ? canManageUsers(me.roles) : false;
+  const ownPermissionsQ = useCurrentPermissions(me?.id);
+  const allowed = me
+    ? hasBranchActionPermission(
+        me.roles,
+        ownPermissionsQ.data,
+        "can_manage_permissions",
+      )
+    : false;
+  const canEditRoles = me
+    ? hasBranchActionPermission(me.roles, ownPermissionsQ.data, "can_manage_users")
+    : false;
   const roleOptions = isMainAdmin
     ? ROLE_OPTIONS
     : ROLE_OPTIONS.filter((r) => r !== "main_admin" && r !== "branch_manager");
   const canEditRowRole = (row: Row) =>
     row.id !== me?.id &&
     !roleMutation.isPending &&
-    (isMainAdmin || (isBranchManager && row.role !== "main_admin" && row.role !== "branch_manager"));
+    canEditRoles &&
+    (isMainAdmin || (row.role !== "main_admin" && row.role !== "branch_manager"));
 
   const query = useQuery({
     enabled: allowed,
@@ -264,12 +277,29 @@ export function PermissionsPage() {
           .from("profiles")
           .select("id, full_name, department_id, branch_id, departments(name)")
           .order("full_name"),
-        supabase.from("user_roles").select("user_id, role"),
+        supabase.rpc("list_visible_user_roles"),
       ]);
       if (pe) throw pe;
       if (re) throw re;
+      const rolePriority: AppRole[] = [
+        "system_admin",
+        "main_admin",
+        "branch_manager",
+        "assistant_manager",
+        "department_manager",
+        "employee",
+      ];
       const roleMap: Record<string, AppRole> = {};
-      (roles ?? []).forEach((r) => (roleMap[r.user_id] = r.role as AppRole));
+      const bestRank: Record<string, number> = {};
+      (roles ?? []).forEach((r) => {
+        if (!r) return;
+        const role = r.role as AppRole;
+        const rank = rolePriority.indexOf(role);
+        const normalized = rank === -1 ? rolePriority.length : rank;
+        if (bestRank[r.user_id] !== undefined && bestRank[r.user_id] <= normalized) return;
+        bestRank[r.user_id] = normalized;
+        roleMap[r.user_id] = role;
+      });
       return (profiles ?? [])
         .filter((p: any) => !isNonEmployeeIdentity(p))
         .map((p: any) => ({
@@ -308,11 +338,8 @@ export function PermissionsPage() {
     );
   }
 
-  const managers = (query.data ?? []).filter((r) =>
-    isMainAdmin
-      ? r.role === "branch_manager" || r.role === "assistant_manager"
-      : r.role === "assistant_manager",
-  );
+  // Granular grants are assistant-only on the server; do not offer dead BM cards.
+  const managers = (query.data ?? []).filter((r) => r.role === "assistant_manager");
 
   const listOverridesFn = useServerFn(listBranchPermissionOverrides);
   const overridesQ = useQuery({
@@ -323,10 +350,11 @@ export function PermissionsPage() {
 
   const overrideRows = (overridesQ.data ?? []).filter(
     (row) =>
-      row.staleRole ||
-      row.hasScheduleOverride ||
-      row.hasTaskOverride ||
-      row.hasCustodyOverride,
+      row != null &&
+      (row.staleRole ||
+        row.hasScheduleOverride ||
+        row.hasTaskOverride ||
+        row.hasCustodyOverride),
   );
 
   return (
@@ -373,7 +401,7 @@ export function PermissionsPage() {
                   ) : null}
                 </div>
                 {row.role === "assistant_manager" &&
-                  (isMainAdmin || isBranchManager) &&
+                  allowed &&
                   row.id !== me?.id && (
                     <ResetPermissionsButtons userId={row.id} compact />
                   )}
@@ -410,7 +438,7 @@ export function PermissionsPage() {
           </section>
         )}
 
-        {(isMainAdmin || isBranchManager) && (
+        {allowed && (
           <section className="space-y-3">
             <div className="flex items-center gap-3 mt-8">
               <div className="size-10 rounded-xl bg-primary/10 text-primary flex items-center justify-center">
@@ -464,6 +492,7 @@ function ResetPermissionsButtons({
       qc.invalidateQueries({ queryKey: ["task-perm"] });
       qc.invalidateQueries({ queryKey: ["my-perms"] });
       qc.invalidateQueries({ queryKey: ["custody-caps"] });
+      qc.invalidateQueries({ queryKey: ["current-user-permissions", userId] });
       onDone?.();
     },
     onError: (e: any) => toast.error(e?.message ?? "שגיאה"),
@@ -492,6 +521,17 @@ function ResetPermissionsButtons({
       >
         <RotateCcw className="size-3.5 ml-1" />
         הסרת הרשאות סידור
+      </Button>
+      <Button
+        type="button"
+        size="sm"
+        variant="outline"
+        className="text-xs h-8"
+        disabled={mut.isPending}
+        onClick={() => mut.mutate("tasks_only")}
+      >
+        <RotateCcw className="size-3.5 ml-1" />
+        הסרת הרשאות משימות
       </Button>
       <Button
         type="button"
@@ -586,6 +626,7 @@ function ManagerPermsCard({
       qc.invalidateQueries({ queryKey: ["user-perms", userId] });
       qc.invalidateQueries({ queryKey: ["task-perm"] });
       qc.invalidateQueries({ queryKey: ["custody-caps"] });
+      qc.invalidateQueries({ queryKey: ["current-user-permissions", userId] });
       qc.invalidateQueries({ queryKey: ["permission-overrides"] });
     },
     onError: (e: any) => {
@@ -716,6 +757,7 @@ function CopyPermsButton({ managers }: { managers: Row[] }) {
       toast.success("ההרשאות הועתקו בהצלחה");
       qc.invalidateQueries({ queryKey: ["user-perms", toId] });
       qc.invalidateQueries({ queryKey: ["task-perm"] });
+      qc.invalidateQueries({ queryKey: ["current-user-permissions", toId] });
       setConfirm(false);
       setOpen(false);
       setFromId("");

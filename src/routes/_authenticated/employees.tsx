@@ -22,7 +22,6 @@ import {
   ROLE_LABELS,
   ROLE_OPTIONS,
   isAdmin,
-  canManageUsers,
   type AppRole,
 } from "@/lib/constants";
 import { Card } from "@/components/ui/card";
@@ -45,10 +44,14 @@ import {
   DialogTitle,
   DialogFooter,
 } from "@/components/ui/dialog";
-import { Search, Loader2, Pencil, UserPlus, Filter, ImagePlus, X, KeyRound, Trash2, Users, UserCheck, UserX, Plane, Coffee, Shield, Power } from "lucide-react";
+import { Search, Loader2, Pencil, UserPlus, Filter, ImagePlus, X, KeyRound, Trash2, Users, UserCheck, UserX, Plane, Coffee, Shield, Power, Download } from "lucide-react";
 import { toast } from "sonner";
 import { formatEmployeeName, employeeMatchesSearch, employeeNameInitial, splitFullName } from "@/lib/employee-name";
 import { isNonEmployeeIdentity } from "@/lib/employee-identity";
+import {
+  hasBranchActionPermission,
+  useCurrentPermissions,
+} from "@/lib/use-current-permissions";
 
 type FilterMode = "all" | "active" | "inactive" | "on_leave" | "on_break" | "managers" | "workers";
 
@@ -98,6 +101,11 @@ function isCountedInHeadcount(e: Pick<ProfileRow, "excluded_from_headcount">) {
   return !e.excluded_from_headcount;
 }
 
+function csvCell(value: unknown): string {
+  const text = value == null ? "" : String(value);
+  return `"${text.replaceAll('"', '""')}"`;
+}
+
 const FILTER_LABELS: Record<FilterMode, string> = {
   all: "👥 כל העובדים",
   active: "🟢 עובדים פעילים",
@@ -120,9 +128,12 @@ function isOrgManagerRole(roles: string[]) {
   return roles.some((role) => ORG_MANAGER_ROLES.has(role as AppRole));
 }
 
-function assignableRoleOptionsFor(roles: AppRole[] | undefined): AppRole[] {
+function assignableRoleOptionsFor(
+  roles: AppRole[] | undefined,
+  canManageRoles = false,
+): AppRole[] {
   if (roles?.includes("main_admin")) return ROLE_OPTIONS;
-  if (roles?.includes("branch_manager")) {
+  if (roles?.includes("branch_manager") || canManageRoles) {
     return ROLE_OPTIONS.filter((r) => r !== "main_admin" && r !== "branch_manager");
   }
   return ["employee"];
@@ -199,7 +210,56 @@ function EmployeesPage() {
 
   const isDeptManager = me ? me.roles.includes("department_manager") : false;
   const allowed = allowedAdmin || isDeptManager;
-  const canManageEmployees = me ? canManageUsers(me.roles) : false;
+  const permissionsQ = useCurrentPermissions(me?.id);
+  const canAddEmployee = me
+    ? hasBranchActionPermission(me.roles, permissionsQ.data, "can_add_employee")
+    : false;
+  const canEditEmployee = me
+    ? hasBranchActionPermission(me.roles, permissionsQ.data, "can_edit_employee")
+    : false;
+  const canDeleteEmployee = me
+    ? hasBranchActionPermission(me.roles, permissionsQ.data, "can_delete_employee")
+    : false;
+  const canResetEmployeePassword = me
+    ? hasBranchActionPermission(
+        me.roles,
+        permissionsQ.data,
+        "can_reset_employee_password",
+      )
+    : false;
+  const canExportEmployees = me
+    ? hasBranchActionPermission(
+        me.roles,
+        permissionsQ.data,
+        "can_export_employees",
+      )
+    : false;
+  const canManageUserRoles = me
+    ? hasBranchActionPermission(me.roles, permissionsQ.data, "can_manage_users")
+    : false;
+
+  function exportEmployeesCsv() {
+    const rows = [
+      ["שם", "מחלקה", "תפקיד", "סטטוס", "ת.ז", "טלפון"],
+      ...employees.map((employee) => [
+        formatEmployeeName(employee),
+        employee.department_id ? (deptMap[employee.department_id] ?? "") : "",
+        employee.job_title ?? "",
+        employee.is_active ? "פעיל" : "לא פעיל",
+        employee.id_number ?? "",
+        employee.phone ?? "",
+      ]),
+    ];
+    const csv = `\uFEFF${rows.map((row) => row.map(csvCell).join(",")).join("\r\n")}`;
+    const url = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = `employees-${new Date().toISOString().slice(0, 10)}.csv`;
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+    URL.revokeObjectURL(url);
+  }
 
   // Reactivation flow — flip is_active back to true and write an audit entry via RPC.
   const setActiveFn = useServerFn(setEmployeeActive);
@@ -467,12 +527,20 @@ function EmployeesPage() {
           )}
           <p className="text-sm text-muted-foreground mt-1">{headerSubtitle}</p>
         </div>
-        {canManageEmployees && (
-          <Button className="gap-2" onClick={() => setCreating(true)}>
-            <UserPlus className="size-4" />
-            הוספת עובד
-          </Button>
-        )}
+        <div className="flex flex-wrap gap-2">
+          {canExportEmployees && (
+            <Button variant="outline" className="gap-2" onClick={exportEmployeesCsv}>
+              <Download className="size-4" />
+              ייצוא עובדים
+            </Button>
+          )}
+          {canAddEmployee && (
+            <Button className="gap-2" onClick={() => setCreating(true)}>
+              <UserPlus className="size-4" />
+              הוספת עובד
+            </Button>
+          )}
+        </div>
       </header>
 
       {!isDeptManagerOnly && (
@@ -649,31 +717,31 @@ function EmployeesPage() {
               onDelete={() => setDeleting(emp)}
               onReactivate={() => reactivateMutation.mutate(emp.id)}
               reactivating={reactivateMutation.isPending && reactivateMutation.variables === emp.id}
-              canEdit={canManageEmployees}
-              canResetPassword={canManageEmployees}
-              canDelete={canManageEmployees && emp.id !== me?.id}
-              canReactivate={canManageEmployees}
+              canEdit={canEditEmployee}
+              canResetPassword={canResetEmployeePassword}
+              canDelete={canDeleteEmployee && emp.id !== me?.id}
+              canReactivate={canEditEmployee}
             />
           ))}
 
         </div>
       )}
 
-      {resetting && canManageEmployees && (
+      {resetting && canResetEmployeePassword && (
         <ResetPasswordDialog employee={resetting} onClose={() => setResetting(null)} />
       )}
 
-      {deleting && canManageEmployees && (
+      {deleting && canDeleteEmployee && (
         <DeleteEmployeeDialog employee={deleting} onClose={() => setDeleting(null)} />
       )}
 
-      {editing && me && canManageEmployees && (
+      {editing && me && canEditEmployee && (
         <EditEmployeeDialog
           employee={editing}
           depts={deptsQuery.data ?? []}
           currentRoles={rolesQuery.data?.[editing.id] ?? []}
-          canEditRoles={canManageUsers(me.roles)}
-          canDelete={editing.id !== me.id}
+          canEditRoles={canManageUserRoles}
+          canDelete={canDeleteEmployee && editing.id !== me.id}
           currentUserRoles={me.roles}
           onDelete={() => {
             setDeleting(editing);
@@ -683,7 +751,7 @@ function EmployeesPage() {
         />
       )}
 
-      {creating && canManageEmployees && (
+      {creating && canAddEmployee && (
         <CreateEmployeeDialog
           depts={deptsQuery.data ?? []}
           onClose={() => setCreating(false)}
@@ -700,6 +768,7 @@ function EmployeesPage() {
             setFilter("all");
           }}
           currentUserRoles={me?.roles}
+          canManageRoles={canManageUserRoles}
         />
       )}
     </div>
@@ -774,6 +843,7 @@ export function CreateEmployeeDialog({
   defaultDepartmentId,
   lockDepartment,
   currentUserRoles,
+  canManageRoles,
 }: {
   depts: DeptOption[];
   onClose: () => void;
@@ -782,11 +852,12 @@ export function CreateEmployeeDialog({
   defaultDepartmentId?: string;
   lockDepartment?: boolean;
   currentUserRoles?: AppRole[];
+  canManageRoles?: boolean;
 }) {
   const qc = useQueryClient();
   const createFn = useServerFn(createEmployee);
   const jobTitlesQ = useJobTitles();
-  const roleOptions = assignableRoleOptionsFor(currentUserRoles);
+  const roleOptions = assignableRoleOptionsFor(currentUserRoles, canManageRoles);
   const defaultDept = defaultDepartmentId ?? depts[0]?.id ?? "";
   const [form, setForm] = useState({
     first_name: "",

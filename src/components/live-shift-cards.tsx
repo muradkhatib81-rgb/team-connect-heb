@@ -63,7 +63,7 @@ export function LiveShiftCardsSection() {
       const { data } = await supabase
         .from("user_task_permissions")
         .select(
-          "can_create_schedule, can_approve_schedule, can_publish_schedule, can_manage_schedule",
+          "can_view_schedule, can_create_schedule, can_edit_schedule, can_approve_schedule, can_publish_schedule, can_manage_schedule",
         )
         .eq("user_id", profile!.id)
         .maybeSingle();
@@ -88,7 +88,9 @@ export function LiveShiftCardsSection() {
       isMainAdmin: scheduleCaps.isMainAdmin,
       isBranchMgr: scheduleCaps.isBranchMgr,
       isDeptMgr: scheduleCaps.isDeptMgr,
+      canView: scheduleCaps.canView,
       canCreate: scheduleCaps.canCreate,
+      canEdit: scheduleCaps.canEdit,
       canApprove: scheduleCaps.canApprove,
       canPublishDirect: scheduleCaps.canPublishDirect,
       departmentId: profile.department_id,

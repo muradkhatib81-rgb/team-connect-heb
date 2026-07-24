@@ -31,11 +31,18 @@ async function getCaps(supabase: any, userId: string) {
 /** Custom shift hours — platform owner, branch/assistant managers, or granular approve/publish only. */
 function canEditScheduleTimes(caps: {
   isMainAdmin: boolean;
-  isBranchMgr: boolean;
+  isBranchManager: boolean;
+  canEdit: boolean;
   canApprove: boolean;
   canPublishDirect: boolean;
 }) {
-  return caps.isMainAdmin || caps.isBranchMgr || caps.canApprove || caps.canPublishDirect;
+  return (
+    caps.isMainAdmin ||
+    caps.isBranchManager ||
+    caps.canEdit ||
+    caps.canApprove ||
+    caps.canPublishDirect
+  );
 }
 
 function stripShiftCustomTimes<
@@ -286,7 +293,7 @@ function weekStartOf(dateStr: string): { start: string; end: string } {
 
 async function getManagedDepartmentIds(
   supabase: any,
-  caps: ScheduleViewerCaps,
+  caps: Omit<ScheduleViewerCaps, "userId">,
   userId: string,
 ): Promise<string[]> {
   if (!caps.isDeptMgr) return [];
@@ -302,7 +309,7 @@ async function getManagedDepartmentIds(
 
 async function isScheduleVisibleToCaps(
   schedule: any,
-  caps: ScheduleViewerCaps,
+  caps: Omit<ScheduleViewerCaps, "userId">,
   userId: string,
   supabase: any,
 ) {
@@ -480,6 +487,8 @@ export const saveScheduleShifts = createServerFn({ method: "POST" })
       }
     } else if (!["draft", "rejected"].includes(sched.status)) {
       throw new Error("לא ניתן לערוך סידור בסטטוס זה");
+    } else if (!caps.canEdit && !(caps.canCreate && sched.created_by === context.userId)) {
+      throw new Error("אין הרשאה לעריכת סידור עבודה");
     }
 
     // Validate shift codes against active shift_definitions
@@ -1359,7 +1368,9 @@ export const getUnpublishedWeekSummary = createServerFn({ method: "POST" })
       isMainAdmin: caps.isMainAdmin,
       isBranchMgr: caps.isBranchMgr,
       isDeptMgr: caps.isDeptMgr,
+      canView: caps.canView,
       canCreate: caps.canCreate,
+      canEdit: caps.canEdit,
       canApprove: caps.canApprove,
       canPublishDirect: caps.canPublishDirect,
       departmentId: caps.departmentId,
@@ -1639,7 +1650,9 @@ export const getDailyScheduleOverview = createServerFn({ method: "POST" })
       isMainAdmin: capsRaw.isMainAdmin,
       isBranchMgr: capsRaw.isBranchMgr,
       isDeptMgr: capsRaw.isDeptMgr,
+      canView: capsRaw.canView,
       canCreate: capsRaw.canCreate,
+      canEdit: capsRaw.canEdit,
       canApprove: capsRaw.canApprove,
       canPublishDirect: capsRaw.canPublishDirect,
       departmentId: capsRaw.departmentId,

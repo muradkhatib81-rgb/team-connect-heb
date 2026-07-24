@@ -5,7 +5,9 @@ export type ScheduleViewerCaps = {
   isMainAdmin: boolean;
   isBranchMgr: boolean;
   isDeptMgr: boolean;
+  canView: boolean;
   canCreate: boolean;
+  canEdit: boolean;
   canApprove: boolean;
   canPublishDirect: boolean;
   departmentId: string | null;
@@ -43,7 +45,13 @@ export function isSavedScheduleAwaitingPublish(
 export function isBranchLevelScheduleViewer(caps: ScheduleViewerCaps): boolean {
   if (caps.isMainAdmin || caps.isBranchMgr) return true;
   if (caps.isDeptMgr) return false;
-  return caps.canCreate || caps.canApprove || caps.canPublishDirect;
+  return (
+    caps.canView ||
+    caps.canCreate ||
+    caps.canEdit ||
+    caps.canApprove ||
+    caps.canPublishDirect
+  );
 }
 
 function isManagedDepartment(
@@ -61,7 +69,9 @@ export function isPlainScheduleEmployee(caps: ScheduleViewerCaps): boolean {
     !caps.isMainAdmin &&
     !caps.isBranchMgr &&
     !caps.isDeptMgr &&
+    !caps.canView &&
     !caps.canCreate &&
+    !caps.canEdit &&
     !caps.canApprove &&
     !caps.canPublishDirect
   );

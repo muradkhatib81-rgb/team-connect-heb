@@ -20,7 +20,15 @@ export async function fetchCanManageBreaks(
   userId: string,
   roles: readonly string[],
 ): Promise<boolean> {
-  if (roles.includes("main_admin") || roles.includes("system_admin")) return true;
+  // Match public.has_break_manage_perm: owners and branch managers by role,
+  // assistants via the explicit can_manage_breaks grant.
+  if (
+    roles.includes("main_admin") ||
+    roles.includes("system_admin") ||
+    roles.includes("branch_manager")
+  ) {
+    return true;
+  }
   const { data } = await supabase
     .from("user_task_permissions")
     .select("can_manage_breaks")

@@ -9,9 +9,8 @@ import { usePlatformOwnerStatus } from "@/lib/platform-owners.hooks";
  *
  * Mirrors the DB rule (can_manage_morning_board_for_branch):
  *  - Platform Owner (main_admin / system_admin) → any branch
- *  - Users with `can_manage_morning_board` permission (grant restricted by
- *    the Primary Platform Owner to Branch Manager / Assistant Branch
- *    Manager in the permissions UI) → only their OWN branch
+ *  - Branch manager → own branch only
+ *  - Users with `can_manage_morning_board` permission → only their OWN branch
  */
 export function useCanManageMorningBoard(branchId: string | null) {
   const { data: profile } = useAuth();
@@ -33,8 +32,14 @@ export function useCanManageMorningBoard(branchId: string | null) {
     },
   });
 
+  const isBranchManager = !!profile?.roles?.includes("branch_manager");
+
   if (!profile) return false;
   if (isPlatformOwner) return true;
+  // Match RLS: branch managers manage their own branch without a grant row.
+  if (isBranchManager && branchId && ownBranchId && branchId === ownBranchId) {
+    return true;
+  }
   if (permQ.data && branchId && ownBranchId && branchId === ownBranchId) return true;
   return false;
 }

@@ -191,13 +191,15 @@ function SchedulesPage() {
       const { data } = await supabase
         .from("user_task_permissions")
         .select(
-          "can_create_schedule, can_approve_schedule, can_publish_schedule, can_manage_schedule",
+          "can_view_schedule, can_create_schedule, can_edit_schedule, can_approve_schedule, can_publish_schedule, can_manage_schedule",
         )
         .eq("user_id", me!.id)
         .maybeSingle();
       return (
         data ?? {
+          can_view_schedule: false,
           can_create_schedule: false,
+          can_edit_schedule: false,
           can_approve_schedule: false,
           can_publish_schedule: false,
           can_manage_schedule: false,
@@ -212,21 +214,27 @@ function SchedulesPage() {
   );
   const {
     isMainAdmin,
+    isBranchManager,
+    isAssistantManager,
     isDeptMgr,
     isBranchMgr,
     isDeptHeadOnly,
+    canView,
     canCreate,
+    canEdit,
     canApprove,
     canPublishDirect,
   } = managerCaps;
-  const isEmployee = !isMainAdmin && !isBranchMgr && !isDeptMgr;
+  const canViewBranchSchedules =
+    isBranchMgr || (isAssistantManager && canView);
+  const isEmployee = !isMainAdmin && !canViewBranchSchedules && !isDeptMgr;
 
   const canEditScheduleTimes =
-    isMainAdmin || isBranchMgr || canApprove || canPublishDirect;
+    isMainAdmin || isBranchManager || canEdit || canApprove || canPublishDirect;
   /** Dept heads submit for approval only; no standalone draft save. */
   const canSaveScheduleDraft = !isDeptHeadOnly;
   const canSeeScheduleQueues = canApprove || canPublishDirect;
-  const canViewPrePublishSummary = isBranchMgr;
+  const canViewPrePublishSummary = canViewBranchSchedules;
 
   const myDeptId = me?.department_id ?? null;
 
@@ -237,7 +245,9 @@ function SchedulesPage() {
       isMainAdmin,
       isBranchMgr,
       isDeptMgr,
+      canView,
       canCreate,
+      canEdit,
       canApprove,
       canPublishDirect,
       departmentId: myDeptId,
@@ -247,7 +257,9 @@ function SchedulesPage() {
     isMainAdmin,
     isBranchMgr,
     isDeptMgr,
+    canView,
     canCreate,
+    canEdit,
     canApprove,
     canPublishDirect,
     myDeptId,
@@ -431,7 +443,7 @@ function SchedulesPage() {
     [weekSavedQ.data],
   );
 
-  const canSwitchDepartments = !isEmployee && isBranchMgr;
+  const canSwitchDepartments = !isEmployee && canViewBranchSchedules;
 
 
 
@@ -1132,7 +1144,8 @@ function SchedulesPage() {
     !!visible &&
     !isEmployee &&
     (isMainAdmin ||
-      isBranchMgr ||
+      isBranchManager ||
+      canEdit ||
       ((visible.status === "draft" || visible.status === "rejected") &&
         visible.created_by === me?.id));
 
@@ -1246,7 +1259,8 @@ function SchedulesPage() {
     !!visible &&
     (visible.status === "draft" || visible.status === "rejected") &&
     !isMainAdmin &&
-    !isBranchMgr &&
+    !isBranchManager &&
+    !canEdit &&
     visible.created_by !== me?.id;
 
   const managerSavedDraftBlocksMe =
@@ -1267,7 +1281,7 @@ function SchedulesPage() {
     !isEmployee &&
     !isDraftLockedForMe &&
     (((visible.status === "draft" || visible.status === "rejected") &&
-      (isMainAdmin || isBranchMgr || visible.created_by === me?.id))
+      (isMainAdmin || isBranchManager || canEdit || visible.created_by === me?.id))
       || (visible.status === "approved" && (isMainAdmin || canPublishDirect))
       || (visible.status === "pending_approval" && (isMainAdmin || canApprove || canPublishDirect)));
 

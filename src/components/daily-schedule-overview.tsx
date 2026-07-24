@@ -268,7 +268,7 @@ export function DailyScheduleOverview({
   className,
 }: DailyScheduleOverviewProps) {
   const qc = useQueryClient();
-  const { profile } = useAuth();
+  const { data: profile } = useAuth();
   const getOverviewFn = useServerFn(getDailyScheduleOverview);
   const getDeptFlagsFn = useServerFn(getDepartmentWeekScheduleFlags);
   const shiftDefsQ = useShiftDefinitions({ activeOnly: true });
@@ -280,12 +280,14 @@ export function DailyScheduleOverview({
     queryFn: async () => {
       const { data } = await supabase
         .from("user_task_permissions")
-        .select("can_create_schedule, can_approve_schedule, can_publish_schedule")
+        .select("can_view_schedule, can_create_schedule, can_edit_schedule, can_approve_schedule, can_publish_schedule")
         .eq("user_id", profile!.id)
         .maybeSingle();
       return (
         data ?? {
+          can_view_schedule: false,
           can_create_schedule: false,
+          can_edit_schedule: false,
           can_approve_schedule: false,
           can_publish_schedule: false,
         }

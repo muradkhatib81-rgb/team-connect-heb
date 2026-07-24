@@ -265,7 +265,7 @@ async function getEmployeeManagerCaps(supabase: any, userId: string) {
     supabase.from("user_roles").select("role").eq("user_id", userId),
     supabase
       .from("user_task_permissions")
-      .select("can_add_employee, can_edit_employee, can_delete_employee, can_reset_employee_password")
+      .select("can_add_employee, can_edit_employee, can_delete_employee, can_reset_employee_password, can_manage_users")
       .eq("user_id", userId)
       .maybeSingle(),
   ]);
@@ -288,11 +288,16 @@ async function getEmployeeManagerCaps(supabase: any, userId: string) {
     canDelete: isPlatformOwner || isBranchManager || (isAssistantManager && !!p.can_delete_employee),
     canResetPassword:
       isPlatformOwner || isBranchManager || (isAssistantManager && !!p.can_reset_employee_password),
+    canManageUsers:
+      isPlatformOwner || isBranchManager || (isAssistantManager && !!p.can_manage_users),
   };
 }
 
 function assertAssignableRole(role: (typeof APP_ROLES)[number], caps: Awaited<ReturnType<typeof getEmployeeManagerCaps>>) {
   if (caps.isPlatformOwner) return;
+  if (!caps.canManageUsers && role !== "employee") {
+    throw new Error("אין הרשאה להענקת תפקיד ניהולי");
+  }
   if (role === "main_admin" || role === "branch_manager") {
     throw new Error("מנהל סניף אינו יכול להעניק תפקיד בעל המערכת או מנהל סניף");
   }
@@ -300,9 +305,11 @@ function assertAssignableRole(role: (typeof APP_ROLES)[number], caps: Awaited<Re
 
 async function assertTargetIsNotProtectedManager(supabase: any, targetUserId: string, caps: Awaited<ReturnType<typeof getEmployeeManagerCaps>>) {
   if (caps.isPlatformOwner) return;
-  const { data, error } = await supabase.from("user_roles").select("role").eq("user_id", targetUserId);
+  const { data, error } = await supabase.rpc("list_visible_user_roles");
   if (error) throw new Error(error.message);
-  const roles = (data ?? []).map((r: any) => r.role as string);
+  const roles = (data ?? [])
+    .filter((r: any) => r.user_id === targetUserId)
+    .map((r: any) => r.role as string);
   if (roles.includes("main_admin") || roles.includes("branch_manager") || roles.includes("system_admin")) {
     throw new Error("רק בעל המערכת יכול לערוך בעל המערכת או מנהל סניף");
   }
@@ -577,7 +584,7 @@ export const changeUserRole = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     if (!context.branchId) throw new Error("יש לבחור סניף פעיל");
     const caps = await getEmployeeManagerCaps(context.supabase, context.userId);
-    if (!caps.isPlatformOwner && !caps.isBranchManager) {
+    if (!caps.canManageUsers) {
       throw new Error("אין הרשאה לשינוי תפקיד");
     }
     if (data.user_id === context.userId) {
@@ -613,6 +620,9 @@ export const updateEmployee = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     const caps = await getEmployeeManagerCaps(context.supabase, context.userId);
     if (!caps.canEdit) throw new Error("אין הרשאה לעריכת עובד");
+    if (data.role_changed && !caps.canManageUsers) {
+      throw new Error("אין הרשאה לשינוי תפקיד");
+    }
     if (!context.branchId) throw new Error("יש לבחור סניף פעיל");
 
     await assertProfileVisibleInActiveBranch(context.supabase, data.user_id);

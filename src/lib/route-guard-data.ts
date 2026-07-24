@@ -4,16 +4,22 @@ import type { AppRole } from "./constants";
 const ROUTE_GUARD_STALE_MS = 30_000;
 
 export type RouteGuardPermissions = {
+  can_view_all_employees: boolean | null;
+  can_view_employee_details: boolean | null;
   can_add_employee: boolean | null;
   can_edit_employee: boolean | null;
   can_delete_employee: boolean | null;
   can_reset_employee_password: boolean | null;
   can_manage_departments: boolean | null;
   can_manage_employee_of_month: boolean | null;
+  can_view_schedule: boolean | null;
   can_create_schedule: boolean | null;
+  can_edit_schedule: boolean | null;
   can_approve_schedule: boolean | null;
   can_publish_schedule: boolean | null;
   can_manage_schedule: boolean | null;
+  can_manage_permissions: boolean | null;
+  can_manage_company_settings: boolean | null;
 };
 
 export async function fetchRouteGuardRoles(userId: string): Promise<AppRole[]> {
@@ -28,7 +34,7 @@ export async function fetchRouteGuardPermissions(
   const { data, error } = await supabase
     .from("user_task_permissions")
     .select(
-      "can_add_employee, can_edit_employee, can_delete_employee, can_reset_employee_password, can_manage_departments, can_manage_employee_of_month, can_create_schedule, can_approve_schedule, can_publish_schedule, can_manage_schedule",
+      "can_view_all_employees, can_view_employee_details, can_add_employee, can_edit_employee, can_delete_employee, can_reset_employee_password, can_manage_departments, can_manage_employee_of_month, can_view_schedule, can_create_schedule, can_edit_schedule, can_approve_schedule, can_publish_schedule, can_manage_schedule, can_manage_permissions, can_manage_company_settings",
     )
     .eq("user_id", userId)
     .maybeSingle();

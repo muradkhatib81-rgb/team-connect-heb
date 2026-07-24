@@ -27,6 +27,10 @@ async function getCallerCaps(supabase: any, userId: string) {
   const isManager = isBranchManager || isAssistantManager;
   const isAdmin = isMainAdmin || isManager;
   const p: any = perm ?? {};
+  const canViewTasks =
+    isMainAdmin ||
+    isBranchManager ||
+    (isAssistantManager && !!p.can_view_tasks);
   const canCreateTasks =
     isMainAdmin || isBranchManager || (isAssistantManager && (!!p.can_manage_tasks || !!p.can_create_tasks));
   const canEditTasks =
@@ -37,7 +41,14 @@ async function getCallerCaps(supabase: any, userId: string) {
   const isDeptManager = roleSet.has("department_manager");
   return {
     isMainAdmin,
+    isBranchManager,
+    isAssistantManager,
     isAdmin,
+    canViewTasks,
+    canManagePermissions:
+      isMainAdmin ||
+      isBranchManager ||
+      (isAssistantManager && !!p.can_manage_permissions),
     canCreateTasks,
     canEditTasks,
     canDeleteTasks,
@@ -230,7 +241,9 @@ async function resolveTaskListScope(supabase: any, userId: string, branchId: str
     resolvedBranchId = (profile?.branch_id as string | null | undefined) ?? null;
   }
   const departmentScope =
-    caps.isDeptManager && !caps.canCreateTasks ? deptHeadOwnDepartmentId(caps) : null;
+    caps.isDeptManager && !caps.canViewTasks && !caps.canCreateTasks
+      ? deptHeadOwnDepartmentId(caps)
+      : null;
   return { branchId: resolvedBranchId, departmentScope, caps };
 }
 
@@ -258,7 +271,7 @@ async function filterTasksForViewer(
   caps: Awaited<ReturnType<typeof getCallerCaps>>,
   rows: any[],
 ) {
-  if (caps.canCreateTasks || caps.isMainAdmin) return rows;
+  if (caps.canViewTasks || caps.canCreateTasks || caps.isMainAdmin) return rows;
   if (caps.isDeptManager && !caps.canCreateTasks) {
     const ownDept = deptHeadOwnDepartmentId(caps);
     return ownDept ? rows.filter((r) => r.department_id === ownDept) : [];
@@ -1180,7 +1193,7 @@ async function assertCanManageTargetPermissions(
   const callerRoleSet = new Set((callerRoles ?? []).map((r: any) => r.role));
   const callerIsBranchManager = callerRoleSet.has("branch_manager");
 
-  if (!caps.isMainAdmin && !callerIsBranchManager) {
+  if (!caps.canManagePermissions) {
     throw new Error("אין הרשאה לנהל הרשאות");
   }
 
@@ -1192,7 +1205,7 @@ async function assertCanManageTargetPermissions(
   if (targetError) throw new Error(targetError.message);
   if (!target) throw new Error("המשתמש לא נמצא בסניף הפעיל");
 
-  if (callerIsBranchManager && !caps.isMainAdmin && targetUserId === callerUserId) {
+  if (!caps.isMainAdmin && targetUserId === callerUserId) {
     throw new Error("לא ניתן לערוך את ההרשאות של עצמך");
   }
 
@@ -1299,7 +1312,8 @@ export const setUserPermissions = createServerFn({ method: "POST" })
       caps,
     );
 
-    const { data: targetRoles, error: rolesError } = await context.supabase
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { data: targetRoles, error: rolesError } = await supabaseAdmin
       .from("user_roles")
       .select("role")
       .eq("user_id", data.user_id);
@@ -1319,7 +1333,6 @@ export const setUserPermissions = createServerFn({ method: "POST" })
     row.can_manage_tasks =
       data.perms.can_create_tasks && data.perms.can_edit_tasks && data.perms.can_delete_tasks;
 
-    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const { error } = await supabaseAdmin
       .from("user_task_permissions")
       .upsert(row as any, { onConflict: "user_id" });
@@ -1336,7 +1349,7 @@ export const listBranchPermissionOverrides = createServerFn({ method: "GET" })
       .select("role")
       .eq("user_id", context.userId);
     const callerRoleSet = new Set((callerRoles ?? []).map((r: any) => r.role));
-    if (!caps.isMainAdmin && !callerRoleSet.has("branch_manager")) {
+    if (!caps.canManagePermissions) {
       throw new Error("אין הרשאה");
     }
     if (!context.branchId) throw new Error("יש לבחור סניף פעיל");

@@ -4,7 +4,11 @@ import { useServerFn } from "@tanstack/react-start";
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/use-auth";
-import { canManageUsers, ROLE_LABELS, type AppRole } from "@/lib/constants";
+import { ROLE_LABELS, type AppRole } from "@/lib/constants";
+import {
+  hasBranchActionPermission,
+  useCurrentPermissions,
+} from "@/lib/use-current-permissions";
 import {
   formatLeaveDateRange,
   isEmployeeCurrentlyOnLeave,
@@ -118,7 +122,14 @@ async function fetchDepartmentsWithManagers(): Promise<DepartmentRow[]> {
 function DepartmentsPage() {
   const navigate = useNavigate();
   const { data: me, isLoading: meLoading } = useAuth();
-  const canManageDepartments = me ? canManageUsers(me.roles) : false;
+  const permissionsQ = useCurrentPermissions(me?.id);
+  const canManageDepartments = me
+    ? hasBranchActionPermission(
+        me.roles,
+        permissionsQ.data,
+        "can_manage_departments",
+      )
+    : false;
   const qcRT = useQueryClient();
 
   const [creating, setCreating] = useState(false);

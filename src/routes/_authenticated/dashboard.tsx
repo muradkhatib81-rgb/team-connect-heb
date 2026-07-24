@@ -32,7 +32,6 @@ import {
   DEPARTMENT_LABELS,
   highestRole,
   isAdmin,
-  canManageUsers,
   type AppRole,
 } from "@/lib/constants";
 import { isNonEmployeeIdentity } from "@/lib/employee-identity";
@@ -71,6 +70,10 @@ import {
 import { useShiftSelfServiceVisible } from "@/lib/use-shift-self-service-visible";
 import { fetchCanUserRequestBreak, useCanManageBreaks } from "@/lib/break-permissions";
 import { useActiveBranch } from "@/lib/use-active-branch";
+import {
+  hasBranchActionPermission,
+  useCurrentPermissions,
+} from "@/lib/use-current-permissions";
 
 export const Route = createFileRoute("/_authenticated/dashboard")({
   component: DashboardPage,
@@ -83,6 +86,31 @@ function DashboardPage() {
   const { activeBranchId } = useActiveBranch();
   const admin = profile ? isAdmin(profile.roles) : false;
   const isDeptManager = profile ? profile.roles.includes("department_manager") : false;
+  const permissionsQ = useCurrentPermissions(profile?.id);
+  const canCreateEmployee = profile
+    ? hasBranchActionPermission(
+        profile.roles,
+        permissionsQ.data,
+        "can_add_employee",
+      )
+    : false;
+  const canViewBreaks = profile
+    ? profile.roles.some((role) =>
+        ["system_admin", "main_admin", "branch_manager", "department_manager"].includes(
+          role,
+        ),
+      ) ||
+      hasBranchActionPermission(
+        profile.roles,
+        permissionsQ.data,
+        "can_view_breaks",
+      ) ||
+      hasBranchActionPermission(
+        profile.roles,
+        permissionsQ.data,
+        "can_manage_breaks",
+      )
+    : false;
   const queryClient = useQueryClient();
   const fetchTaskStats = useServerFn(getDashboardTaskStats);
   const [deptDialogId, setDeptDialogId] = useState<string | null>(null);
@@ -219,10 +247,10 @@ function DashboardPage() {
           <BreakShortcutCard userId={profile.id} />
           <TasksStatsSection stats={tasksStatsQuery.data} loading={tasksStatsQuery.isLoading} />
           <SchedulesStatsSection profile={profile} />
-          <OnBreakSection profile={profile} />
+          {canViewBreaks && <OnBreakSection profile={profile} />}
 
           {admin ? (
-            <AdminDashboard stats={statsQuery.data} loading={statsQuery.isLoading} onSelectDept={setDeptDialogId} canCreateEmployee={profile ? canManageUsers(profile.roles) : false} currentUserRoles={profile.roles} />
+            <AdminDashboard stats={statsQuery.data} loading={statsQuery.isLoading} onSelectDept={setDeptDialogId} canCreateEmployee={canCreateEmployee} currentUserRoles={profile.roles} />
           ) : (
             <DeptManagerDashboard data={deptManagerQuery.data} loading={deptManagerQuery.isLoading} />
           )}
@@ -744,13 +772,15 @@ function DashboardSchedulePanel({ profile }: { profile: any }) {
       const { data } = await supabase
         .from("user_task_permissions")
         .select(
-          "can_create_schedule, can_approve_schedule, can_publish_schedule, can_manage_schedule",
+          "can_view_schedule, can_create_schedule, can_edit_schedule, can_approve_schedule, can_publish_schedule, can_manage_schedule",
         )
         .eq("user_id", profile.id)
         .maybeSingle();
       return (
         data ?? {
+          can_view_schedule: false,
           can_create_schedule: false,
+          can_edit_schedule: false,
           can_approve_schedule: false,
           can_publish_schedule: false,
           can_manage_schedule: false,
@@ -849,13 +879,15 @@ function SchedulesStatsSection({ profile }: { profile: any }) {
       const { data } = await supabase
         .from("user_task_permissions")
         .select(
-          "can_create_schedule, can_approve_schedule, can_publish_schedule, can_manage_schedule",
+          "can_view_schedule, can_create_schedule, can_edit_schedule, can_approve_schedule, can_publish_schedule, can_manage_schedule",
         )
         .eq("user_id", profile.id)
         .maybeSingle();
       return (
         data ?? {
+          can_view_schedule: false,
           can_create_schedule: false,
+          can_edit_schedule: false,
           can_approve_schedule: false,
           can_publish_schedule: false,
           can_manage_schedule: false,

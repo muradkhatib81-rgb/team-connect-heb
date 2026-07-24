@@ -3,7 +3,6 @@ import { useEffect, useMemo, useState } from "react";
 import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/use-auth";
-import { isAdmin } from "@/lib/constants";
 import { formatEmployeeName } from "@/lib/employee-name";
 import { isNonEmployeeIdentity } from "@/lib/employee-identity";
 import { Card } from "@/components/ui/card";
@@ -120,7 +119,9 @@ function CommunicationsPage() {
   const { data: me } = useAuth();
   const qc = useQueryClient();
   const userId = me?.id;
-  const admin = me ? isAdmin(me.roles) : false;
+  const branchAdmin = !!me?.roles.some((role) =>
+    ["system_admin", "main_admin", "branch_manager"].includes(role),
+  );
   const isDeptManager = !!me?.roles.includes("department_manager");
 
   // Granular perms
@@ -142,11 +143,17 @@ function CommunicationsPage() {
   // Department managers behave like regular employees in communications:
   // read-only inbox/archive. All send/edit/delete/receipts capabilities
   // are forcibly disabled unless they are also an admin.
-  const deptMgrOnly = isDeptManager && !admin;
-  const canSendMsg = !deptMgrOnly && (admin || !!p.can_send_messages || !!p.can_manage_communications);
-  const canManage = !deptMgrOnly && (admin || !!p.can_manage_communications);
-  const canDelete = !deptMgrOnly && (admin || !!p.can_delete_communications || !!p.can_manage_communications);
-  const canViewReceipts = !deptMgrOnly && (admin || !!p.can_view_read_receipts || !!p.can_manage_communications);
+  const deptMgrOnly = isDeptManager && !branchAdmin;
+  const canSendMsg =
+    !deptMgrOnly &&
+    (branchAdmin || !!p.can_send_messages || !!p.can_manage_communications);
+  const canManage = !deptMgrOnly && (branchAdmin || !!p.can_manage_communications);
+  const canDelete =
+    !deptMgrOnly &&
+    (branchAdmin || !!p.can_delete_communications || !!p.can_manage_communications);
+  const canViewReceipts =
+    !deptMgrOnly &&
+    (branchAdmin || !!p.can_view_read_receipts || !!p.can_manage_communications);
   const canSeeSent = canSendMsg || canManage;
 
   // Realtime subscriptions (messages only — announcements module removed)
@@ -252,7 +259,7 @@ function CommunicationsPage() {
           open={composeOpen}
           onOpenChange={setComposeOpen}
           perms={p}
-          admin={admin}
+          admin={branchAdmin}
           isDeptManager={isDeptManager}
           myDeptId={me.department_id}
         />

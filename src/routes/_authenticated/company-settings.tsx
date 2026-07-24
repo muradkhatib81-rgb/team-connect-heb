@@ -14,6 +14,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { toast } from "sonner";
 import { Loader2, Upload, Trash2, Building2, CalendarRange } from "lucide-react";
+import { useCurrentPermissions } from "@/lib/use-current-permissions";
 
 export const Route = createFileRoute("/_authenticated/company-settings")({
   ssr: false,
@@ -50,6 +51,13 @@ export function CompanySettingsPage() {
   });
 
   const isMainAdmin = !!profile?.roles?.includes("main_admin");
+  const permissionsQ = useCurrentPermissions(profile?.id);
+  const canManageSettings =
+    !!profile &&
+    (profile.roles.includes("system_admin") ||
+      profile.roles.includes("main_admin") ||
+      (profile.roles.includes("assistant_manager") &&
+        permissionsQ.data?.can_manage_company_settings === true));
 
   // Permission: can_manage_schedule (used to change schedule type)
   const manageSchedQ = useQuery({
@@ -91,20 +99,25 @@ export function CompanySettingsPage() {
 
   const saveMut = useMutation({
     mutationFn: async () => {
-      if (!form.company_name.trim()) throw new Error("שם החברה הוא שדה חובה");
+      if (canManageSettings && !form.company_name.trim()) {
+        throw new Error("שם החברה הוא שדה חובה");
+      }
       // Saves must be branch-scoped so we never overwrite another store's
       // company_settings (or the legacy seed row) while Branch Mode is off.
       if (!getActiveBranchScope() && !activeBranchId) {
         throw new Error("יש לבחור סניף פעיל לפני שמירת הגדרות החברה");
       }
-      const payload: Record<string, unknown> = {
-        company_name: form.company_name.trim(),
-        address: form.address.trim() || null,
-        phone: form.phone.trim() || null,
-        email: form.email.trim() || null,
-        primary_color: form.primary_color.trim() || null,
-        logo_url: form.logo_url || null,
-      };
+      const payload: Record<string, unknown> = {};
+      if (canManageSettings) {
+        Object.assign(payload, {
+          company_name: form.company_name.trim(),
+          address: form.address.trim() || null,
+          phone: form.phone.trim() || null,
+          email: form.email.trim() || null,
+          primary_color: form.primary_color.trim() || null,
+          logo_url: form.logo_url || null,
+        });
+      }
       if (canManageSchedule) {
         payload.schedule_type = form.schedule_type;
       }
@@ -167,7 +180,7 @@ export function CompanySettingsPage() {
     );
   }
 
-  if (!isMainAdmin && !canManageSchedule) {
+  if (!canManageSettings && !canManageSchedule) {
     return (
       <div className="flex flex-col items-center justify-center py-20 text-center space-y-3">
         <div className="size-12 rounded-xl bg-destructive/10 flex items-center justify-center">
@@ -233,7 +246,7 @@ export function CompanySettingsPage() {
         </Card>
       )}
 
-      {!isMainAdmin ? null : (
+      {!canManageSettings ? null : (
       <Card className="card-elevated p-6 space-y-5">
         <div className="space-y-2">
           <Label>לוגו החברה</Label>

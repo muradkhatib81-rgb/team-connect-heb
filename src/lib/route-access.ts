@@ -6,22 +6,28 @@
  * URL access to obtain data outside the caller's scope.
  */
 
-import { hasAnyScheduleManagementPerm } from "@/lib/schedule-manager-caps";
+import { hasAnyScheduleViewPerm } from "@/lib/schedule-manager-caps";
 
 type RouteAccessInput = {
   pathname: string;
   roles: readonly string[];
   permissions: {
+    can_view_all_employees?: boolean;
+    can_view_employee_details?: boolean;
     can_add_employee?: boolean;
     can_edit_employee?: boolean;
     can_delete_employee?: boolean;
     can_reset_employee_password?: boolean;
     can_manage_departments?: boolean;
     can_manage_employee_of_month?: boolean;
+    can_view_schedule?: boolean;
     can_create_schedule?: boolean;
+    can_edit_schedule?: boolean;
     can_approve_schedule?: boolean;
     can_publish_schedule?: boolean;
     can_manage_schedule?: boolean;
+    can_manage_permissions?: boolean;
+    can_manage_company_settings?: boolean;
   } | null;
 };
 
@@ -29,8 +35,12 @@ function hasRole(roles: readonly string[], ...allowed: string[]): boolean {
   return allowed.some((role) => roles.includes(role));
 }
 
+function isPlatformRole(roles: readonly string[]): boolean {
+  return hasRole(roles, "system_admin", "main_admin");
+}
+
 function isPlatformOrBranchManager(roles: readonly string[]): boolean {
-  return hasRole(roles, "system_admin", "main_admin", "branch_manager");
+  return isPlatformRole(roles) || hasRole(roles, "branch_manager");
 }
 
 function canManageEmployees(input: RouteAccessInput): boolean {
@@ -47,11 +57,20 @@ function canManageEmployees(input: RouteAccessInput): boolean {
   );
 }
 
+function canViewEmployeesDirectory(input: RouteAccessInput): boolean {
+  const { permissions, roles } = input;
+  return (
+    canManageEmployees(input) ||
+    (roles.includes("assistant_manager") &&
+      !!(permissions?.can_view_all_employees || permissions?.can_view_employee_details))
+  );
+}
+
 function hasScheduleDirectoryAccess(input: RouteAccessInput): boolean {
   const { permissions, roles } = input;
   return (
     isPlatformOrBranchManager(roles) ||
-    (roles.includes("assistant_manager") && hasAnyScheduleManagementPerm(permissions))
+    (roles.includes("assistant_manager") && hasAnyScheduleViewPerm(permissions))
   );
 }
 
@@ -73,15 +92,28 @@ export function canAccessRoute(input: RouteAccessInput): boolean {
   if (pathname === "/employees") {
     // Department heads may open a read-only, RLS-scoped view of their department.
     // Branch schedule operators need employee directory access to build schedules.
+    // Assistants with view-only grants may open the directory without write actions.
     return (
-      canManageEmployees(input) ||
+      canViewEmployeesDirectory(input) ||
       roles.includes("department_manager") ||
       hasScheduleDirectoryAccess(input)
     );
   }
 
   if (pathname === "/permissions") {
-    return isPlatformOrBranchManager(roles);
+    return (
+      isPlatformOrBranchManager(roles) ||
+      (roles.includes("assistant_manager") && !!permissions?.can_manage_permissions)
+    );
+  }
+
+  if (pathname === "/company-settings") {
+    return (
+      isPlatformRole(roles) ||
+      (roles.includes("assistant_manager") &&
+        !!permissions?.can_manage_company_settings) ||
+      !!permissions?.can_manage_schedule
+    );
   }
 
   if (pathname === "/departments") {

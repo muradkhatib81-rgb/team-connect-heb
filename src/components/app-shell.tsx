@@ -39,7 +39,6 @@ import {
   APP_NAME,
   ROLE_LABELS,
   isAdmin,
-  canManageUsers,
   highestRole,
   isPlatformOwner as isPlatformOwnerRole,
 } from "@/lib/constants";
@@ -52,6 +51,10 @@ import { useCanManageBreaks, canManageBreaksQueryKey } from "@/lib/break-permiss
 import { AppFooter } from "@/components/app-footer";
 import { useBranchContext, useCompanyContext } from "@/platform";
 import { useIdleLogout } from "@/lib/use-idle-logout";
+import {
+  hasBranchActionPermission,
+  useCurrentPermissions,
+} from "@/lib/use-current-permissions";
 
 interface NavItem {
   to: string;
@@ -138,6 +141,7 @@ export function AppShell({ children }: { children: ReactNode }) {
 
   const breakSelfServiceNav = useBreakSelfServiceNavVisible();
   const { canManageBreaks } = useCanManageBreaks();
+  const permissionsQ = useCurrentPermissions(profile?.id);
 
   // Realtime bridge and the Branch Mode gate read the active branch via
   // <ActiveBranchProvider/>, which now wraps this whole component (see
@@ -164,6 +168,15 @@ export function AppShell({ children }: { children: ReactNode }) {
   const isBreaksManager = canManageBreaks;
   const canRequestBreak = breakSelfServiceNav.isVisible;
   const canManageEom = isMainAdmin || isBranchManager || !!breakPermQ.data?.eom;
+  const canManagePermissions = hasBranchActionPermission(
+    profile.roles,
+    permissionsQ.data,
+    "can_manage_permissions",
+  );
+  const canManageCompanySettings =
+    isPlatformOwner ||
+    (profile.roles.includes("assistant_manager") &&
+      permissionsQ.data?.can_manage_company_settings === true);
 
   type NavEntry = {
     to: string;
@@ -257,7 +270,7 @@ export function AppShell({ children }: { children: ReactNode }) {
       to: "/permissions",
       label: "הרשאות",
       icon: ShieldCheck,
-      visible: canManageUsers(profile.roles),
+      visible: canManagePermissions,
       section: branchSection,
     },
     {
@@ -278,7 +291,7 @@ export function AppShell({ children }: { children: ReactNode }) {
       to: "/company-settings",
       label: "הגדרות חברה",
       icon: Building,
-      visible: isMainAdmin,
+      visible: canManageCompanySettings,
       section: branchSection,
     },
     // Personal profile stays reachable regardless of Branch Mode.
@@ -726,6 +739,7 @@ function RealtimeBridge({ uid }: { uid: string }) {
           if (!affected || affected === uid) {
             qc.invalidateQueries({ queryKey: ["auth", "me"] });
             qc.invalidateQueries({ queryKey: ["task-perm"] });
+            qc.invalidateQueries({ queryKey: ["current-user-permissions", uid] });
             qc.invalidateQueries({ queryKey: ["shell-can-manage-breaks"] });
             qc.invalidateQueries({ queryKey: canManageBreaksQueryKey(uid) });
           }
@@ -743,6 +757,7 @@ function RealtimeBridge({ uid }: { uid: string }) {
           const affected = payload?.new?.user_id ?? payload?.old?.user_id;
           if (!affected || affected === uid) {
             qc.invalidateQueries({ queryKey: ["auth", "me"] });
+            qc.invalidateQueries({ queryKey: ["current-user-permissions", uid] });
             qc.invalidateQueries({ queryKey: ["shell-can-manage-breaks", uid] });
             qc.invalidateQueries({ queryKey: canManageBreaksQueryKey(uid) });
           }
