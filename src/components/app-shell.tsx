@@ -51,6 +51,7 @@ import { useBreakSelfServiceNavVisible } from "@/lib/use-shift-self-service-visi
 import { useCanManageBreaks, canManageBreaksQueryKey } from "@/lib/break-permissions";
 import { AppFooter } from "@/components/app-footer";
 import { useBranchContext, useCompanyContext } from "@/platform";
+import { useIdleLogout } from "@/lib/use-idle-logout";
 
 interface NavItem {
   to: string;
@@ -638,6 +639,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   return (
     <>
       <RealtimeBridge uid={profile.id} />
+      <IdleLogoutGuard onIdle={handleSignOut} />
       <BranchModeGuard isPlatformOwner={isPlatformOwner} />
       <div className="flex flex-col min-h-screen bg-background">
         {/* Desktop sidebar (RTL: stick to right) */}
@@ -701,6 +703,13 @@ export function AppShell({ children }: { children: ReactNode }) {
  * the sysadmin switches branches, so realtime stops emitting events
  * scoped to the previous branch through the open WebSocket.
  */
+// Signs the user out after a fixed window of inactivity (12h, no warning).
+// Mounted only once profile exists, so its hook order stays stable.
+function IdleLogoutGuard({ onIdle }: { onIdle: () => void }) {
+  useIdleLogout(onIdle);
+  return null;
+}
+
 function RealtimeBridge({ uid }: { uid: string }) {
   const qc = useQueryClient();
   const { activeBranchId } = useActiveBranch();
