@@ -44,7 +44,7 @@ import {
   DialogTitle,
   DialogFooter,
 } from "@/components/ui/dialog";
-import { Search, Loader2, Pencil, UserPlus, Filter, ImagePlus, X, KeyRound, Trash2, Users, UserCheck, UserX, Plane, Coffee, Shield, Power, Download } from "lucide-react";
+import { Search, Loader2, Pencil, UserPlus, Filter, ImagePlus, X, KeyRound, Trash2, Users, UserCheck, UserX, Plane, Shield, Power, Download } from "lucide-react";
 import { toast } from "sonner";
 import { formatEmployeeName, employeeMatchesSearch, employeeNameInitial, splitFullName } from "@/lib/employee-name";
 import { isNonEmployeeIdentity } from "@/lib/employee-identity";
@@ -451,9 +451,8 @@ function EmployeesPage() {
       active: dept.filter((e) => e.is_active && !isEmployeeCurrentlyOnLeave(e)).length,
       onLeave: dept.filter((e) => isEmployeeCurrentlyOnLeave(e)).length + (selfOnLeave ? 1 : 0),
       inactive: dept.filter((e) => !e.is_active).length,
-      onBreak: dept.filter((e) => onBreakSet.has(e.id)).length,
     };
-  }, [employeesQuery.data, isDeptManagerOnly, me, onBreakSet]);
+  }, [employeesQuery.data, isDeptManagerOnly, me]);
 
   // Ensure manager's own avatar is signed too
   const managerAvatarQ = useSignedAvatarUrls(
@@ -484,9 +483,6 @@ function EmployeesPage() {
       if (isEmployeeCurrentlyOnLeave(e)) onLeave += 1;
       if (!e.is_active) inactive += 1;
     });
-    const excludedIds = new Set(
-      employees.filter((e) => e.excluded_from_headcount).map((e) => e.id),
-    );
     return {
       total: countedEmployees.length,
       active,
@@ -494,9 +490,8 @@ function EmployeesPage() {
       workers,
       onLeave,
       inactive,
-      onBreak: [...onBreakSet].filter((id) => !excludedIds.has(id)).length,
     };
-  }, [countedEmployees, employees, rolesQuery.data, onBreakSet]);
+  }, [countedEmployees, employees, rolesQuery.data]);
 
 
   if (meLoading) {
@@ -544,12 +539,11 @@ function EmployeesPage() {
       </header>
 
       {!isDeptManagerOnly && (
-        <section className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+        <section className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
           <SummaryStatCard label="עובדים" value={summaryStats.workers} icon={<Users className="size-5" />} tone="primary" emoji="👤" active={filterMode === "workers"} onClick={() => setFilter("workers")} />
           <SummaryStatCard label="מנהלים" value={summaryStats.managers} icon={<Shield className="size-5" />} tone="indigo" emoji="👔" active={filterMode === "managers"} onClick={() => setFilter("managers")} />
           <SummaryStatCard label="עובדים פעילים" value={summaryStats.active} icon={<UserCheck className="size-5" />} tone="green" emoji="🟢" active={filterMode === "active"} onClick={() => setFilter("active")} />
           <SummaryStatCard label="בחופשה" value={summaryStats.onLeave} icon={<Plane className="size-5" />} tone="sky" emoji="🏖️" active={filterMode === "on_leave"} onClick={() => setFilter("on_leave")} />
-          <SummaryStatCard label="בהפסקה" value={summaryStats.onBreak} icon={<Coffee className="size-5" />} tone="amber" emoji="☕" active={filterMode === "on_break"} onClick={() => setFilter("on_break")} />
           <SummaryStatCard label="לא פעילים" value={summaryStats.inactive} icon={<UserX className="size-5" />} tone="red" emoji="❌" active={filterMode === "inactive"} onClick={() => setFilter("inactive")} />
         </section>
 
@@ -597,7 +591,7 @@ function EmployeesPage() {
       )}
 
       {isDeptManagerOnly && managerDeptStats && (
-        <section className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+        <section className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
           <SummaryStatCard
             label="עובדי המחלקה"
             value={managerDeptStats.total}
@@ -624,15 +618,6 @@ function EmployeesPage() {
             emoji="🏖️"
             active={filterMode === "on_leave"}
             onClick={() => setFilter("on_leave")}
-          />
-          <SummaryStatCard
-            label="בהפסקה"
-            value={managerDeptStats.onBreak}
-            icon={<Coffee className="size-5" />}
-            tone="amber"
-            emoji="☕"
-            active={filterMode === "on_break"}
-            onClick={() => setFilter("on_break")}
           />
           <SummaryStatCard
             label="לא פעילים"
