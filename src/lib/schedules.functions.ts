@@ -1543,7 +1543,7 @@ export const getDepartmentWeekScheduleFlags = createServerFn({ method: "POST" })
 
     const { data: sched, error } = await supabaseAdmin
       .from("schedules")
-      .select("status, published_at, submitted_at, created_by, department_id")
+      .select("status, published_at, submitted_at, created_by, department_id, created_at, updated_at")
       .eq("department_id", data.department_id)
       .eq("week_start", start)
       .maybeSingle();
@@ -1559,6 +1559,11 @@ export const getDepartmentWeekScheduleFlags = createServerFn({ method: "POST" })
         ? {
             status: sched!.status as string,
             created_by: (sched!.created_by as string | null) ?? null,
+            /** Last save time (falls back to creation if never updated). */
+            saved_at:
+              ((sched as { updated_at?: string | null }).updated_at as string | null) ??
+              ((sched as { created_at?: string | null }).created_at as string | null) ??
+              null,
           }
         : null,
     };

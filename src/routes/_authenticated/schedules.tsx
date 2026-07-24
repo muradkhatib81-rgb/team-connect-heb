@@ -1256,6 +1256,11 @@ function SchedulesPage() {
   const blockedAwaitingStatus =
     deptWeekFlagsQ.data?.awaitingPublish?.status ??
     (visible?.status as string | undefined);
+  const blockedSavedAt =
+    deptWeekFlagsQ.data?.awaitingPublish?.saved_at ??
+    (visible as { updated_at?: string | null } | null)?.updated_at ??
+    (visible as { created_at?: string | null } | null)?.created_at ??
+    null;
 
   const editable =
     !!visible &&
@@ -1865,6 +1870,12 @@ function SchedulesPage() {
                     : (blockedCreatorQ.data ?? "לא ידוע")}
                 </span>
               </p>
+              <p>
+                נשמר בתאריך:{" "}
+                <span className="font-medium" dir="ltr">
+                  {blockedSavedAt ? formatHeDateTime(blockedSavedAt) : "לא ידוע"}
+                </span>
+              </p>
               {blockedAwaitingStatus && (
                 <p>
                   סטטוס:{" "}
@@ -1926,6 +1937,12 @@ function SchedulesPage() {
                     נשמר על־ידי:{" "}
                     <span className="font-medium">
                       {decisionPersonQ.data?.creator?.full_name ?? "לא ידוע"}
+                    </span>
+                  </p>
+                  <p>
+                    נשמר בתאריך:{" "}
+                    <span className="font-medium" dir="ltr">
+                      {blockedSavedAt ? formatHeDateTime(blockedSavedAt) : "לא ידוע"}
                     </span>
                   </p>
                   <p>
