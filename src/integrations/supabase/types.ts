@@ -2591,6 +2591,13 @@ export type Database = {
           phone: string
         }[]
       }
+      list_visible_user_roles: {
+        Args: never
+        Returns: {
+          role: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }[]
+      }
       log_platform_owner_event: {
         Args: { _event: string; _payload?: Json; _target_user_id?: string }
         Returns: string

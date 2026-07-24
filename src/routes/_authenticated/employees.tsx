@@ -277,10 +277,12 @@ function EmployeesPage() {
     enabled: allowed,
     queryKey: ["all-roles"],
     queryFn: async () => {
-      const { data, error } = await supabase.from("user_roles").select("user_id, role");
+      // Scoped viewers (assistant manager, dept head) cannot read user_roles
+      // directly; this RPC returns roles for the staff they already see.
+      const { data, error } = await supabase.rpc("list_visible_user_roles");
       if (error) throw error;
       const map: Record<string, AppRole[]> = {};
-      data.forEach((r) => {
+      (data ?? []).forEach((r) => {
         map[r.user_id] ||= [];
         map[r.user_id].push(r.role as AppRole);
       });

@@ -376,17 +376,32 @@ function DeptEmployeesDialog({
         .order("first_name")
         .order("last_name");
       if (eErr) throw eErr;
-      const empIds = (emps ?? []).map((e: any) => e.id);
+      const empIds = new Set((emps ?? []).map((e: any) => e.id));
       const [{ data: roles }, { data: manager }] = await Promise.all([
-        empIds.length
-          ? supabase.from("user_roles").select("user_id, role").in("user_id", empIds)
+        empIds.size
+          ? supabase.rpc("list_visible_user_roles")
           : Promise.resolve({ data: [] as any[] }),
         dept.manager_id
           ? supabase.from("profiles").select("first_name, last_name, full_name").eq("id", dept.manager_id).maybeSingle()
           : Promise.resolve({ data: null as any }),
       ]);
+      // Highest role wins so a dual-role member shows their management title.
+      const rolePriority: AppRole[] = [
+        "system_admin",
+        "main_admin",
+        "branch_manager",
+        "assistant_manager",
+        "department_manager",
+        "employee",
+      ];
       const roleMap: Record<string, string> = {};
-      (roles ?? []).forEach((r: any) => {
+      const bestRank: Record<string, number> = {};
+      ((roles ?? []) as any[]).forEach((r: any) => {
+        if (!empIds.has(r.user_id)) return;
+        const rank = rolePriority.indexOf(r.role as AppRole);
+        const normalized = rank === -1 ? rolePriority.length : rank;
+        if (bestRank[r.user_id] !== undefined && bestRank[r.user_id] <= normalized) return;
+        bestRank[r.user_id] = normalized;
         roleMap[r.user_id] = ROLE_LABELS[r.role as AppRole] ?? r.role;
       });
       const fallbackManager = !manager
@@ -612,11 +627,9 @@ function EmpProfileDialog({
         .eq("id", employeeId)
         .maybeSingle();
       if (pErr) throw pErr;
-      const { data: roles } = await supabase
-        .from("user_roles")
-        .select("role")
-        .eq("user_id", employeeId);
-      const roleLabel = (roles ?? [])
+      const { data: roles } = await supabase.rpc("list_visible_user_roles");
+      const roleLabel = ((roles ?? []) as any[])
+        .filter((r: any) => r.user_id === employeeId)
         .map((r: any) => ROLE_LABELS[r.role as AppRole])
         .filter(Boolean)
         .join(", ") || "—";
