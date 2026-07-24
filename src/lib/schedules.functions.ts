@@ -323,6 +323,21 @@ export const createOrGetSchedule = createServerFn({ method: "POST" })
       }
     }
     const { start, end } = weekStartOf(data.week_start);
+    if (caps.isDeptHeadOnly) {
+      const todayHe = new Intl.DateTimeFormat("en-CA", {
+        timeZone: "Asia/Jerusalem",
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit",
+      }).format(new Date());
+      const currentWeek = weekStartOf(todayHe).start;
+      const nextWeekDate = new Date(currentWeek + "T00:00:00Z");
+      nextWeekDate.setUTCDate(nextWeekDate.getUTCDate() + 7);
+      const nextWeek = nextWeekDate.toISOString().slice(0, 10);
+      if (start !== currentWeek && start !== nextWeek) {
+        throw new Error("ניתן ליצור סידור רק לשבוע הנוכחי או לשבוע הבא");
+      }
+    }
     const existing = await context.supabase
       .from("schedules")
       .select("*")

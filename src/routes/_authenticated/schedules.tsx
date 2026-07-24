@@ -73,6 +73,7 @@ import {
 } from "@/lib/schedule-publish-diff";
 import {
   canViewScheduleContent,
+  isSavedScheduleAwaitingPublish,
   type ScheduleViewerCaps,
 } from "@/lib/schedule-visibility";
 import {
@@ -300,6 +301,20 @@ function SchedulesPage() {
   const [weekStart, setWeekStart] = useState(() =>
     search.week ? getWeekStart(new Date(search.week + "T00:00:00Z")) : getWeekStart(new Date()),
   );
+
+  /** Dept head may only browse/create for current week + next week. */
+  const deptHeadWeekWindow = useMemo(() => {
+    const current = getWeekStart(new Date());
+    return { current, next: addDaysISO(current, 7) };
+  }, [weekStart]);
+
+  useEffect(() => {
+    if (!isDeptHeadOnly) return;
+    const { current, next } = deptHeadWeekWindow;
+    if (weekStart < current || weekStart > next) {
+      setWeekStart(current);
+    }
+  }, [isDeptHeadOnly, weekStart, deptHeadWeekWindow]);
 
   const getSchedulesFn = useServerFn(getSchedulesForViewer);
   const deptWeekFlagsFn = useServerFn(getDepartmentWeekScheduleFlags);
@@ -654,22 +669,28 @@ function SchedulesPage() {
     return s;
   }, [schedQ.data, scheduleViewerCaps, managedDeptIds]);
 
-  /** Dept head: published schedule for the week being viewed → hide draft/edit nav. */
-  const deptHeadHasPublishedThisWeek = useMemo(() => {
+  /**
+   * Dept head: hide "סידורי עבודה שמורים" / "עריכת סידור שבועי" for the week
+   * being viewed when a published schedule exists OR a manager-saved schedule
+   * is awaiting publish (draft / pending / approved-unpublished).
+   */
+  const deptHeadScheduleNavBlocked = useMemo(() => {
     if (!isDeptHeadOnly) return false;
     if (deptWeekFlagsQ.data?.hasPublished) return true;
+    if (deptWeekFlagsQ.data?.hasSavedAwaitingPublish) return true;
     if (visible?.status === "approved" && !!(visible as any).published_at) return true;
+    if (visible && isSavedScheduleAwaitingPublish(visible as any)) return true;
     const deptId = selectedDept ?? myDeptId;
     if (!deptId) return false;
-    return (weekSavedQ.data?.savedList ?? []).some(
-      (s) =>
-        s.department_id === deptId &&
-        s.status === "approved" &&
-        !!s.published_at,
-    );
+    return (weekSavedQ.data?.savedList ?? []).some((s) => {
+      if (s.department_id !== deptId) return false;
+      if (s.status === "approved" && s.published_at) return true;
+      return isSavedScheduleAwaitingPublish(s);
+    });
   }, [
     isDeptHeadOnly,
     deptWeekFlagsQ.data?.hasPublished,
+    deptWeekFlagsQ.data?.hasSavedAwaitingPublish,
     visible,
     selectedDept,
     myDeptId,
@@ -677,10 +698,10 @@ function SchedulesPage() {
   ]);
 
   useEffect(() => {
-    if (deptHeadHasPublishedThisWeek && view === "saved") {
+    if (deptHeadScheduleNavBlocked && view === "saved") {
       setView("editor");
     }
-  }, [deptHeadHasPublishedThisWeek, view]);
+  }, [deptHeadScheduleNavBlocked, view]);
 
   const changeBaselineKind = useMemo(
     () =>
@@ -1331,7 +1352,7 @@ function SchedulesPage() {
 
       {((canSeeScheduleQueues || canCreate) &&
         !isEmployee &&
-        (canSeeScheduleQueues || !deptHeadHasPublishedThisWeek)) && (
+        (canSeeScheduleQueues || !deptHeadScheduleNavBlocked)) && (
         <div className="flex gap-2 flex-wrap">
           {canSeeScheduleQueues && (
             <Button
@@ -1347,7 +1368,7 @@ function SchedulesPage() {
               )}
             </Button>
           )}
-          {!deptHeadHasPublishedThisWeek && (
+          {!deptHeadScheduleNavBlocked && (
             <Button
               size="sm"
               variant={view === "saved" ? "default" : "outline"}
@@ -1375,7 +1396,7 @@ function SchedulesPage() {
               )}
             </Button>
           )}
-          {!deptHeadHasPublishedThisWeek && (
+          {!deptHeadScheduleNavBlocked && (
             <Button
               size="sm"
               variant={view === "editor" ? "default" : "outline"}
@@ -1656,29 +1677,50 @@ function SchedulesPage() {
       <Card className="card-elevated p-4 flex flex-col sm:flex-row gap-3 items-stretch sm:items-center">
         {!isEmployee && (
           <div className="flex items-center gap-2">
-            <Button
-              variant="outline"
-              size="icon"
-              onClick={() => setWeekStart(addDaysISO(weekStart, -7))}
-              aria-label="שבוע קודם"
-            >
-              <ChevronRight className="size-4" />
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setWeekStart(getWeekStart(new Date()))}
-            >
-              השבוע
-            </Button>
-            <Button
-              variant="outline"
-              size="icon"
-              onClick={() => setWeekStart(addDaysISO(weekStart, 7))}
-              aria-label="שבוע הבא"
-            >
-              <ChevronLeft className="size-4" />
-            </Button>
+            {isDeptHeadOnly ? (
+              <>
+                <Button
+                  variant={weekStart === deptHeadWeekWindow.current ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => setWeekStart(deptHeadWeekWindow.current)}
+                >
+                  השבוע הזה
+                </Button>
+                <Button
+                  variant={weekStart === deptHeadWeekWindow.next ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => setWeekStart(deptHeadWeekWindow.next)}
+                >
+                  השבוע הבא
+                </Button>
+              </>
+            ) : (
+              <>
+                <Button
+                  variant="outline"
+                  size="icon"
+                  onClick={() => setWeekStart(addDaysISO(weekStart, -7))}
+                  aria-label="שבוע קודם"
+                >
+                  <ChevronRight className="size-4" />
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setWeekStart(getWeekStart(new Date()))}
+                >
+                  השבוע
+                </Button>
+                <Button
+                  variant="outline"
+                  size="icon"
+                  onClick={() => setWeekStart(addDaysISO(weekStart, 7))}
+                  aria-label="שבוע הבא"
+                >
+                  <ChevronLeft className="size-4" />
+                </Button>
+              </>
+            )}
           </div>
         )}
 
@@ -1775,14 +1817,14 @@ function SchedulesPage() {
           <Loader2 className="size-6 animate-spin text-primary" />
         </div>
       ) : managerSavedDraftBlocksMe ? (
-        <Card className="card-elevated p-6 border-primary/30 bg-primary/5">
+        <Card className="card-elevated p-6 border-destructive/40 bg-destructive/5">
           <div className="flex gap-3 items-start">
-            <AlertTriangle className="size-5 text-primary mt-0.5 shrink-0" />
-            <div className="space-y-1.5 text-sm">
+            <AlertTriangle className="size-5 text-destructive mt-0.5 shrink-0" />
+            <div className="space-y-1.5 text-sm text-destructive">
               <p className="font-semibold text-base">
                 כבר קיים סידור עבודה שמור למחלקה זו
               </p>
-              <p className="text-muted-foreground">
+              <p>
                 הסידור נשמר על־ידי ההנהלה וממתין לפרסום. לא ניתן ליצור סידור חדש
                 עד לפרסום או מחיקת הסידור הקיים.
               </p>

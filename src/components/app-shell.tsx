@@ -797,6 +797,7 @@ function RealtimeBridge({ uid }: { uid: string }) {
         qc.invalidateQueries({ queryKey: ["dashboard-shift-cards"] });
         qc.invalidateQueries({ queryKey: ["week-schedules"] });
         qc.invalidateQueries({ queryKey: ["schedules-week-saved"] });
+        qc.invalidateQueries({ queryKey: ["dept-schedule-flags"] });
         qc.invalidateQueries({ queryKey: ["dashboard-dept-states"] });
         qc.invalidateQueries({ queryKey: ["departments-list"] });
       })
