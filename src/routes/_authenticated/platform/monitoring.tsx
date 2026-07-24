@@ -99,8 +99,8 @@ function PlatformMonitoringPage() {
           {healthyCount} / {results.length} תקינים
         </Badge>
         <p className="text-xs text-muted-foreground">
-          מרענן אוטומטית כל 30 שניות. סטטוס "לא ידוע" מוצג בכנות עבור רכיבים שאינם מחוברים בפועל
-          (למשל אחסון), ולא מוצג כתקין.
+          מרענן אוטומטית כל 30 שניות. הבדיקות לקריאה בלבד (DB / Storage / Realtime / API) — ללא שינוי
+          נתונים או הרשאות. רכיבים שאינם מחוברים (למשל תור עבודות) מוצגים כ"לא ידוע".
         </p>
       </Card>
 
@@ -126,6 +126,11 @@ function PlatformMonitoringPage() {
                 <Badge variant="outline" className={meta.className.replace("bg-", "border-")}>
                   {meta.label}
                 </Badge>
+                {result.message && (
+                  <p className="text-[11px] text-muted-foreground break-words" dir="auto">
+                    {result.message}
+                  </p>
+                )}
                 <p className="text-[11px] text-muted-foreground">
                   נבדק: {result.checkedAt.toLocaleTimeString("he-IL")}
                 </p>

@@ -46,8 +46,17 @@ import { PerformanceLogger } from "./logging/performance-logger";
 import { ErrorLogger } from "./logging/error-logger";
 
 import { getEnvironment } from "./config/environment";
-import type { IHealthCheck } from "./monitoring/health-check.interface";
-import type { HealthState, HealthTarget } from "./monitoring/types";
+import type { HealthCheckOutcome, IHealthCheck } from "./monitoring/health-check.interface";
+import type { HealthTarget } from "./monitoring/types";
+import {
+  AsyncHealthCheck,
+  probeApi,
+  probeConfiguration,
+  probeDatabase,
+  probeRealtime,
+  probeStorage,
+  probeSync,
+} from "./monitoring/platform-probes";
 
 const TOKENS = {
   databaseClient: "database-client",
@@ -83,9 +92,9 @@ const TOKENS = {
 class SimpleHealthCheck implements IHealthCheck {
   constructor(
     public readonly target: HealthTarget,
-    private readonly probe: () => HealthState,
+    private readonly probe: () => HealthCheckOutcome | Promise<HealthCheckOutcome>,
   ) {}
-  async check(): Promise<HealthState> {
+  async check(): Promise<HealthCheckOutcome> {
     return this.probe();
   }
 }
@@ -169,25 +178,39 @@ for (const flag of [
   });
 }
 
-// Part 4 — Monitoring Integration: register health checks for every
-// requested target. Storage reports "unknown" honestly because no provider
-// is connected yet; nothing here fabricates a connection. Database now
-// reports "healthy" because the Foundation IDatabaseClient is wired
-// (Supabase-backed when env is present; see ./database).
-monitoringManager.registerCheck(new SimpleHealthCheck("platform", () => "healthy"));
-monitoringManager.registerCheck(new SimpleHealthCheck("api", () => "healthy"));
-monitoringManager.registerCheck(new SimpleHealthCheck("configuration", () => "healthy"));
-monitoringManager.registerCheck(new SimpleHealthCheck("database", () => "healthy"));
-monitoringManager.registerCheck(new SimpleHealthCheck("storage", () => "unknown"));
-monitoringManager.registerCheck(new SimpleHealthCheck("realtime", () => "healthy"));
-monitoringManager.registerCheck(new SimpleHealthCheck("queue", () => "unknown"));
+// Part 4 — Monitoring Integration: real read-only probes where possible.
+// Queue stays "unknown" (no job queue wired). No writes / no permission changes.
+monitoringManager.registerCheck(new AsyncHealthCheck("configuration", probeConfiguration));
+monitoringManager.registerCheck(new AsyncHealthCheck("api", probeApi));
+monitoringManager.registerCheck(new AsyncHealthCheck("database", probeDatabase));
+monitoringManager.registerCheck(new AsyncHealthCheck("storage", probeStorage));
+monitoringManager.registerCheck(new AsyncHealthCheck("realtime", probeRealtime));
+monitoringManager.registerCheck(new AsyncHealthCheck("sync", probeSync));
 monitoringManager.registerCheck(
-  new SimpleHealthCheck("sync", () =>
-    container.resolve<OfflineManager>(TOKENS.offline).isOnline() ? "healthy" : "degraded",
-  ),
+  new SimpleHealthCheck("platform", async () => {
+    const cfg = await probeConfiguration();
+    const cfgState = typeof cfg === "string" ? cfg : cfg.state;
+    if (cfgState === "down") {
+      return { state: "down" as const, message: "תצורת הפלטפורמה חסרה" };
+    }
+    if (runtimeManagers.length === 0) {
+      return { state: "down" as const, message: "לא נרשמו managers" };
+    }
+    return { state: "healthy" as const, message: "פלטפורמה פעילה" };
+  }),
 );
 monitoringManager.registerCheck(
-  new SimpleHealthCheck("managers", () => (runtimeManagers.length > 0 ? "healthy" : "down")),
+  new SimpleHealthCheck("queue", () => ({
+    state: "unknown" as const,
+    message: "אין תור עבודות מחובר בפלטפורמה",
+  })),
+);
+monitoringManager.registerCheck(
+  new SimpleHealthCheck("managers", () =>
+    runtimeManagers.length > 0
+      ? { state: "healthy" as const, message: `${runtimeManagers.length} managers` }
+      : { state: "down" as const, message: "לא נרשמו managers" },
+  ),
 );
 
 /** Part 6 — Runtime: start every registered manager exactly once. */
