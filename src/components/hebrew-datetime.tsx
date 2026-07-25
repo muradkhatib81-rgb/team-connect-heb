@@ -35,22 +35,33 @@ export function HebrewDateInput({
   onChange,
   placeholder = "בחר תאריך",
   className,
+  min,
+  max,
+  disabled,
 }: {
   value: string;
   onChange: (v: string) => void;
   placeholder?: string;
   className?: string;
+  /** Inclusive lower bound as YYYY-MM-DD */
+  min?: string;
+  /** Inclusive upper bound as YYYY-MM-DD */
+  max?: string;
+  disabled?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const selected = useMemo(() => fromYmd(value), [value]);
+  const minDate = useMemo(() => fromYmd(min ?? ""), [min]);
+  const maxDate = useMemo(() => fromYmd(max ?? ""), [max]);
   return (
-    <Popover open={open} onOpenChange={setOpen}>
+    <Popover open={disabled ? false : open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
         <Button
           type="button"
           variant="outline"
           dir="rtl"
           lang="he"
+          disabled={disabled}
           className={cn(
             "w-full justify-start text-right font-normal",
             !selected && "text-muted-foreground",
@@ -67,6 +78,13 @@ export function HebrewDateInput({
           locale={he}
           dir="rtl"
           selected={selected}
+          disabled={(day) => {
+            const ymd = toLocalYmd(day);
+            if (min && ymd < min) return true;
+            if (max && ymd > max) return true;
+            return false;
+          }}
+          defaultMonth={selected ?? minDate ?? maxDate}
           onSelect={(d) => {
             if (d) {
               onChange(toLocalYmd(d));

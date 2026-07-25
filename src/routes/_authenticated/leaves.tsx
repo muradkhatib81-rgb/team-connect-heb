@@ -16,6 +16,8 @@ import {
   type LeaveTypeRow,
 } from "@/lib/leave.functions";
 import { useLeaveAccess } from "@/lib/leave-permissions";
+import { formatLeaveDateRange } from "@/lib/employee-leave";
+import { HebrewDateInput } from "@/components/hebrew-datetime";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -178,7 +180,7 @@ function LeavesPage() {
           leave_type_id: source.leave_type_id,
           start_date: source.start_date,
           end_date: source.end_date,
-          note: `בקשת ביטול לחופשה ${source.start_date}–${source.end_date}`,
+          note: `בקשת ביטול לחופשה ${formatLeaveDateRange(source.start_date, source.end_date)}`,
           kind: "cancellation",
           cancels_request_id: source.id,
         },
@@ -250,7 +252,7 @@ function LeavesPage() {
   });
 
   return (
-    <div className="mx-auto max-w-3xl space-y-6 p-4 md:p-6" dir="rtl">
+    <div className="mx-auto max-w-3xl space-y-6 p-4 md:p-6" dir="rtl" lang="he-IL">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h1 className="flex items-center gap-2 text-2xl font-semibold tracking-tight">
@@ -318,25 +320,23 @@ function LeavesPage() {
           </div>
           <div className="space-y-2">
             <Label>מתאריך</Label>
-            <Input
-              type="date"
+            <HebrewDateInput
+              value={startDate}
               min={minDate}
               max={maxDate}
-              value={startDate}
-              onChange={(e) => {
-                setStartDate(e.target.value);
-                if (endDate < e.target.value) setEndDate(e.target.value);
+              onChange={(v) => {
+                setStartDate(v);
+                if (endDate < v) setEndDate(v);
               }}
             />
           </div>
           <div className="space-y-2">
             <Label>עד תאריך</Label>
-            <Input
-              type="date"
+            <HebrewDateInput
+              value={endDate}
               min={startDate || minDate}
               max={maxDate}
-              value={endDate}
-              onChange={(e) => setEndDate(e.target.value)}
+              onChange={setEndDate}
             />
           </div>
           <div className="space-y-2 sm:col-span-2">
@@ -390,7 +390,7 @@ function LeavesPage() {
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <div>
                     <div className="font-medium">
-                      {r.leave_types?.name ?? "חופשה"} · {r.start_date} – {r.end_date}
+                      {r.leave_types?.name ?? "חופשה"} · {formatLeaveDateRange(r.start_date, r.end_date)}
                     </div>
                     <div className="text-muted-foreground">{r.days_count} ימים</div>
                   </div>
@@ -445,16 +445,15 @@ function LeavesPage() {
                     </div>
                     <div className="space-y-2">
                       <Label>תחילת הארכה</Label>
-                      <Input type="date" value={extStart} disabled />
+                      <HebrewDateInput value={extStart} onChange={() => {}} disabled />
                     </div>
                     <div className="space-y-2">
                       <Label>עד תאריך</Label>
-                      <Input
-                        type="date"
+                      <HebrewDateInput
+                        value={extendEndDate}
                         min={extStart}
                         max={maxDate}
-                        value={extendEndDate}
-                        onChange={(e) => setExtendEndDate(e.target.value)}
+                        onChange={setExtendEndDate}
                       />
                     </div>
                     <div className="space-y-2 sm:col-span-2">
@@ -509,7 +508,7 @@ function LeavesPage() {
               >
                 <div>
                   <div className="font-medium">
-                    {r.leave_types?.name ?? "חופשה"} · {r.start_date} – {r.end_date}
+                    {r.leave_types?.name ?? "חופשה"} · {formatLeaveDateRange(r.start_date, r.end_date)}
                   </div>
                   <div className="text-muted-foreground">{r.days_count} ימים</div>
                 </div>
@@ -543,7 +542,7 @@ function LeavesPage() {
                       : r.kind === "extension"
                         ? "הארכה · "
                         : ""}
-                    {r.leave_types?.name ?? "חופשה"} · {r.start_date} – {r.end_date}
+                    {r.leave_types?.name ?? "חופשה"} · {formatLeaveDateRange(r.start_date, r.end_date)}
                   </div>
                   <Badge className={LEAVE_STATUS_TONE[r.status]}>
                     {LEAVE_STATUS_LABEL[r.status]}

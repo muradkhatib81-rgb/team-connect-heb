@@ -25,6 +25,7 @@ import {
   type LeaveRequestRow,
   type LeaveTypeRow,
 } from "@/lib/leave.functions";
+import { formatLeaveDateRange } from "@/lib/employee-leave";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -79,7 +80,7 @@ function LeavesAdminPage() {
       const { data, error } = await (supabase as any)
         .from("leave_requests")
         .select(
-          "*, leave_types(code, name, requires_attachment), profiles:user_id(full_name, first_name, last_name)",
+          "*, leave_types(code, name, requires_attachment), profiles!user_id(full_name, first_name, last_name)",
         )
         .order("submitted_at", { ascending: false })
         .limit(200);
@@ -174,7 +175,7 @@ function LeavesAdminPage() {
                   {r.leave_types?.name ?? "חופשה"}
                 </div>
                 <div className="text-muted-foreground">
-                  {r.start_date} – {r.end_date} · {r.days_count} ימים
+                  {formatLeaveDateRange(r.start_date, r.end_date)} · {r.days_count} ימים
                 </div>
                 {r.note && <p className="mt-1">{r.note}</p>}
                 {r.balance_warning && (
@@ -227,7 +228,7 @@ function LeavesAdminPage() {
   }
 
   return (
-    <div className="mx-auto max-w-4xl space-y-6 p-4 md:p-6" dir="rtl">
+    <div className="mx-auto max-w-4xl space-y-6 p-4 md:p-6" dir="rtl" lang="he-IL">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h1 className="flex items-center gap-2 text-2xl font-semibold tracking-tight">
@@ -301,7 +302,7 @@ function LeavesAdminPage() {
                       <div>
                         <span className="font-medium">{displayName(r)}</span>
                         {" · "}
-                        {r.leave_types?.name} · {r.start_date} – {r.end_date}
+                        {r.leave_types?.name} · {formatLeaveDateRange(r.start_date, r.end_date)}
                       </div>
                       <Badge className={LEAVE_STATUS_TONE[r.status]}>
                         {LEAVE_STATUS_LABEL[r.status]}
@@ -348,6 +349,14 @@ function LeavesAdminPage() {
   );
 }
 
+function empDisplayName(e: {
+  full_name?: string | null;
+  first_name?: string | null;
+  last_name?: string | null;
+}) {
+  return e.full_name || [e.first_name, e.last_name].filter(Boolean).join(" ") || "עובד";
+}
+
 function BalancesTab({
   types,
   canCancel,
@@ -368,22 +377,22 @@ function BalancesTab({
     queryFn: async () => {
       const { data, error } = await supabase
         .from("profiles")
-        .select("id, full_name, first_name, last_name")
-        .eq("is_active", true)
+        .select("id, full_name, first_name, last_name, is_active")
         .order("full_name")
         .limit(500);
       if (error) throw error;
-      return data ?? [];
+      return (data ?? []).filter((e) => e.is_active !== false);
     },
   });
 
   const balancesQ = useQuery({
     queryKey: ["leave-admin-balances"],
     queryFn: async () => {
+      // Avoid ambiguous PostgREST embeds (profiles:user_id) that throw on some schemas.
       const { data, error } = await (supabase as any)
         .from("leave_balances")
         .select(
-          "id, user_id, leave_type_id, manual_balance, accrued_days, used_days, reserved_days, leave_types(name, code), profiles:user_id(full_name)",
+          "id, user_id, leave_type_id, manual_balance, accrued_days, used_days, reserved_days, leave_types(name, code)",
         )
         .order("updated_at", { ascending: false })
         .limit(300);
@@ -391,6 +400,14 @@ function BalancesTab({
       return data ?? [];
     },
   });
+
+  const nameById = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const e of employeesQ.data ?? []) {
+      map.set(e.id, empDisplayName(e));
+    }
+    return map;
+  }, [employeesQ.data]);
 
   const adjustMut = useMutation({
     mutationFn: async () => {
@@ -426,10 +443,17 @@ function BalancesTab({
     onError: (e: Error) => toast.error(e.message),
   });
 
+  const balanceRows = balancesQ.data ?? [];
+
   return (
-    <div className="space-y-4">
+    <div className="space-y-4" lang="he-IL">
       <Card className="space-y-3 p-4">
         <h2 className="font-medium">עדכון יתרה ידני</h2>
+        {employeesQ.isError && (
+          <p className="text-sm text-destructive">
+            לא ניתן לטעון עובדים: {(employeesQ.error as Error).message}
+          </p>
+        )}
         <div className="grid gap-3 sm:grid-cols-2">
           <div className="space-y-2 sm:col-span-2">
             <Label>עובד</Label>
@@ -440,7 +464,7 @@ function BalancesTab({
               <SelectContent>
                 {(employeesQ.data ?? []).map((e) => (
                   <SelectItem key={e.id} value={e.id}>
-                    {e.full_name || `${e.first_name ?? ""} ${e.last_name ?? ""}`.trim()}
+                    {empDisplayName(e)}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -463,7 +487,7 @@ function BalancesTab({
           </div>
           <div className="space-y-2">
             <Label>שינוי (+/−)</Label>
-            <Input value={delta} onChange={(e) => setDelta(e.target.value)} />
+            <Input value={delta} onChange={(e) => setDelta(e.target.value)} inputMode="decimal" />
           </div>
           <div className="space-y-2 sm:col-span-2">
             <Label>סיבה</Label>
@@ -477,37 +501,49 @@ function BalancesTab({
 
       <Card className="space-y-3 p-4">
         <h2 className="font-medium">יתרות בסניף</h2>
-        <ul className="max-h-96 space-y-2 overflow-y-auto text-sm">
-          {(balancesQ.data as any[]).map((b) => {
-            const available =
-              Number(b.manual_balance) +
-              Number(b.accrued_days) -
-              Number(b.used_days) -
-              Number(b.reserved_days);
-            return (
-              <li
-                key={b.id}
-                className="flex flex-wrap items-center justify-between gap-2 rounded border p-2"
-              >
-                <div>
-                  <span className="font-medium">{b.profiles?.full_name ?? "עובד"}</span>
-                  {" · "}
-                  {b.leave_types?.name} · זמין {available}
-                </div>
-                {canCancel && (
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    disabled={cancelMut.isPending}
-                    onClick={() => cancelMut.mutate(b.user_id)}
-                  >
-                    ביטול חופשה פעילה
-                  </Button>
-                )}
-              </li>
-            );
-          })}
-        </ul>
+        {balancesQ.isLoading ? (
+          <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+        ) : balancesQ.isError ? (
+          <p className="text-sm text-destructive">
+            לא ניתן לטעון יתרות: {(balancesQ.error as Error).message}
+          </p>
+        ) : balanceRows.length === 0 ? (
+          <p className="text-sm text-muted-foreground">אין יתרות עדיין. עדכנו יתרה ידנית למעלה.</p>
+        ) : (
+          <ul className="max-h-96 space-y-2 overflow-y-auto text-sm">
+            {balanceRows.map((b: any) => {
+              const available =
+                Number(b.manual_balance) +
+                Number(b.accrued_days) -
+                Number(b.used_days) -
+                Number(b.reserved_days);
+              return (
+                <li
+                  key={b.id}
+                  className="flex flex-wrap items-center justify-between gap-2 rounded border p-2"
+                >
+                  <div>
+                    <span className="font-medium">
+                      {nameById.get(b.user_id) ?? "עובד"}
+                    </span>
+                    {" · "}
+                    {b.leave_types?.name} · זמין {available}
+                  </div>
+                  {canCancel && (
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      disabled={cancelMut.isPending}
+                      onClick={() => cancelMut.mutate(b.user_id)}
+                    >
+                      ביטול חופשה פעילה
+                    </Button>
+                  )}
+                </li>
+              );
+            })}
+          </ul>
+        )}
       </Card>
     </div>
   );
@@ -524,8 +560,8 @@ function AccrualTab({ types }: { types: LeaveTypeRow[] }) {
     queryFn: async () => {
       const { data, error } = await (supabase as any)
         .from("leave_accrual_rules")
-        .select("*, leave_types(name, code)")
-        .order("created_at");
+        .select("id, leave_type_id, days_per_month, max_cap, is_active, leave_types(name, code)")
+        .order("updated_at", { ascending: false });
       if (error) throw error;
       return data ?? [];
     },
@@ -536,11 +572,15 @@ function AccrualTab({ types }: { types: LeaveTypeRow[] }) {
       if (!leaveTypeId) throw new Error("יש לבחור סוג");
       const n = Number(days);
       if (!Number.isFinite(n) || n < 0) throw new Error("ערך לא תקין");
+      const capN = cap.trim() ? Number(cap) : null;
+      if (cap.trim() && (!Number.isFinite(capN) || (capN as number) < 0)) {
+        throw new Error("תקרה לא תקינה");
+      }
       await setAccrualFn({
         data: {
           leave_type_id: leaveTypeId,
           days_per_month: n,
-          max_cap: cap.trim() ? Number(cap) : null,
+          max_cap: capN,
           is_active: true,
         },
       });
@@ -552,8 +592,10 @@ function AccrualTab({ types }: { types: LeaveTypeRow[] }) {
     onError: (e: Error) => toast.error(e.message),
   });
 
+  const rules = rulesQ.data ?? [];
+
   return (
-    <Card className="space-y-4 p-4">
+    <Card className="space-y-4 p-4" lang="he-IL">
       <h2 className="font-medium">צבירה חודשית לפי סוג</h2>
       <div className="grid gap-3 sm:grid-cols-3">
         <div className="space-y-2">
@@ -573,25 +615,35 @@ function AccrualTab({ types }: { types: LeaveTypeRow[] }) {
         </div>
         <div className="space-y-2">
           <Label>ימים לחודש</Label>
-          <Input value={days} onChange={(e) => setDays(e.target.value)} />
+          <Input value={days} onChange={(e) => setDays(e.target.value)} inputMode="decimal" />
         </div>
         <div className="space-y-2">
           <Label>תקרה (אופציונלי)</Label>
-          <Input value={cap} onChange={(e) => setCap(e.target.value)} placeholder="ללא" />
+          <Input value={cap} onChange={(e) => setCap(e.target.value)} placeholder="ללא" inputMode="decimal" />
         </div>
       </div>
       <Button disabled={saveMut.isPending} onClick={() => saveMut.mutate()}>
-        שמירת כלל
+        {saveMut.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : "שמירת כלל"}
       </Button>
-      <ul className="space-y-2 text-sm">
-        {(rulesQ.data as any[]).map((r) => (
-          <li key={r.id} className="rounded border p-2">
-            {r.leave_types?.name}: {r.days_per_month} ימים/חודש
-            {r.max_cap != null ? ` · תקרה ${r.max_cap}` : ""}
-            {!r.is_active ? " · כבוי" : ""}
-          </li>
-        ))}
-      </ul>
+      {rulesQ.isLoading ? (
+        <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+      ) : rulesQ.isError ? (
+        <p className="text-sm text-destructive">
+          לא ניתן לטעון כללי צבירה: {(rulesQ.error as Error).message}
+        </p>
+      ) : rules.length === 0 ? (
+        <p className="text-sm text-muted-foreground">אין כללים עדיין.</p>
+      ) : (
+        <ul className="space-y-2 text-sm">
+          {rules.map((r: any) => (
+            <li key={r.id} className="rounded border p-2">
+              {r.leave_types?.name}: {r.days_per_month} ימים/חודש
+              {r.max_cap != null ? ` · תקרה ${r.max_cap}` : ""}
+              {!r.is_active ? " · כבוי" : ""}
+            </li>
+          ))}
+        </ul>
+      )}
     </Card>
   );
 }

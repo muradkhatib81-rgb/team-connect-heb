@@ -62,6 +62,23 @@ export function leaveOffLabel(code: LeaveTypeCode | string | null | undefined): 
   return "חופש";
 }
 
+/** Single calendar day as Hebrew short date (Latin digits, Gregorian). */
+export function formatLeaveDay(value: string | null | undefined): string {
+  const day = dayOnly(value ?? null);
+  if (!day) return "—";
+  // Parse as noon local to avoid UTC day-shift on date-only strings.
+  const d = new Date(`${day}T12:00:00`);
+  if (Number.isNaN(d.getTime())) return day;
+  return new Intl.DateTimeFormat("he-IL", {
+    timeZone: "Asia/Jerusalem",
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    numberingSystem: "latn",
+    calendar: "gregory",
+  }).format(d);
+}
+
 export function formatLeaveDateRange(
   start: string | null | undefined,
   end: string | null | undefined,
@@ -69,6 +86,6 @@ export function formatLeaveDateRange(
   const s = dayOnly(start ?? null);
   const e = dayOnly(end ?? null);
   if (!s && !e) return null;
-  if (s && e) return `${s} – ${e}`;
-  return s ?? e;
+  if (s && e) return `${formatLeaveDay(s)} – ${formatLeaveDay(e)}`;
+  return formatLeaveDay(s ?? e);
 }

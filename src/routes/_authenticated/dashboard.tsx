@@ -2380,7 +2380,7 @@ function LeaveShortcutCard({ userId }: { userId: string }) {
                 {pendingMine.length > 0
                   ? `${pendingMine.length} בקשות ממתינות`
                   : approvedUpcoming.length > 0
-                    ? `${approvedUpcoming[0].start_date} – ${approvedUpcoming[0].end_date}`
+                    ? `${formatLeaveDateRange(approvedUpcoming[0].start_date, approvedUpcoming[0].end_date)}`
                     : "הגשה ומעקב סטטוס"}
               </p>
             </div>

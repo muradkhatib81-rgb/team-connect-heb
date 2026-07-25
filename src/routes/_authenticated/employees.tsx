@@ -6,6 +6,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { createEmployee, resetEmployeePassword, deleteEmployee, setEmployeeActive, updateEmployee } from "@/lib/employees.functions";
 import { extractServerFnErrorMessage } from "@/lib/server-fn-error";
 import { formatLeaveDateRange, isEmployeeCurrentlyOnLeave } from "@/lib/employee-leave";
+import { HebrewDateInput } from "@/components/hebrew-datetime";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -1763,23 +1764,17 @@ function EditEmployeeDialog({
               </div>
               <div className="space-y-1.5">
                 <Label htmlFor="leave_start">תאריך התחלת חופשה</Label>
-                <Input
-                  id="leave_start"
-                  type="date"
+                <HebrewDateInput
                   value={form.leave_start_date}
-                  onChange={(e) => setForm({ ...form, leave_start_date: e.target.value })}
-                  required={form.on_leave}
+                  onChange={(v) => setForm({ ...form, leave_start_date: v })}
                 />
               </div>
               <div className="space-y-1.5">
                 <Label htmlFor="leave_end">תאריך סיום חופשה</Label>
-                <Input
-                  id="leave_end"
-                  type="date"
+                <HebrewDateInput
                   value={form.leave_end_date}
                   min={form.leave_start_date || undefined}
-                  onChange={(e) => setForm({ ...form, leave_end_date: e.target.value })}
-                  required={form.on_leave}
+                  onChange={(v) => setForm({ ...form, leave_end_date: v })}
                 />
               </div>
               <p className="text-xs text-muted-foreground sm:col-span-2">
