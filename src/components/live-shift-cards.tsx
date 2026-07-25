@@ -126,8 +126,8 @@ export function LiveShiftCardsSection() {
       if (error) throw error;
       return (data ?? []) as TodayRow[];
     },
-    staleTime: 0,
-    refetchOnMount: "always",
+    staleTime: 30_000,
+    refetchOnMount: true,
   });
 
   const empIds = useMemo(

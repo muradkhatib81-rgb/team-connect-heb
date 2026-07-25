@@ -142,6 +142,7 @@ function DashboardPage() {
   const statsQuery = useQuery({
     enabled: admin,
     queryKey: ["dashboard", "stats"],
+    staleTime: 30_000,
     queryFn: async () => {
       const [
         { data: profs, error: pErr },
@@ -187,6 +188,7 @@ function DashboardPage() {
       "department-managers",
       activeBranchId ?? profile?.branch_id ?? "none",
     ],
+    staleTime: 60_000,
     queryFn: async () => {
       const { data: departments, error: departmentsError } = await supabase
         .from("departments")
@@ -235,6 +237,7 @@ function DashboardPage() {
   const deptManagerQuery = useQuery({
     enabled: !admin && isDeptManager && !!profile,
     queryKey: ["dashboard", "dept-manager", profile?.id],
+    staleTime: 30_000,
     queryFn: async () => {
       const { data: dept, error: dErr } = await supabase
         .from("departments")
@@ -279,6 +282,7 @@ function DashboardPage() {
     enabled: !!profile && (admin || isDeptManager),
     queryKey: ["dashboard", "tasks-stats", activeBranchId ?? profile?.branch_id ?? "none"],
     retry: false,
+    staleTime: 30_000,
     queryFn: () => fetchTaskStats(),
   });
 
@@ -1183,6 +1187,7 @@ function SchedulesStatsSection({ profile }: { profile: any }) {
 
   const statsQ = useQuery({
     enabled: !!profile && canViewBranchScheduleOverview,
+    staleTime: 30_000,
     queryKey: [
       "dashboard-schedules",
       profile.id,
@@ -1918,6 +1923,7 @@ function MyActiveBreakCard({ userId }: { userId: string }) {
   const breakQ = useQuery({
     enabled: !!userId,
     queryKey: ["my-active-break", userId],
+    staleTime: 15_000,
     queryFn: async () => {
       const { primary } = await fetchMyBreakDashboardRows(userId);
       return primary;
@@ -1931,9 +1937,11 @@ function MyActiveBreakCard({ userId }: { userId: string }) {
   });
 
   useEffect(() => {
+    // Only tick while a live countdown is on screen.
+    if (!activeRow) return;
     const id = setInterval(() => setTick((t) => t + 1), 1000);
     return () => clearInterval(id);
-  }, []);
+  }, [activeRow?.id]);
 
   const endMut = useMutation({
     mutationFn: async (id: string) => {
@@ -2528,6 +2536,7 @@ function BreakShortcutCard({ userId }: { userId: string }) {
   const breakQ = useQuery({
     enabled: !!userId,
     queryKey: ["my-break-shortcut", userId],
+    staleTime: 15_000,
     queryFn: () => fetchMyBreakDashboardRows(userId),
   });
 
@@ -2549,9 +2558,11 @@ function BreakShortcutCard({ userId }: { userId: string }) {
   });
 
   useEffect(() => {
+    // Countdown only needed for active/upcoming break tiles.
+    if (!activeBreak && upcomingBreaks.length === 0) return;
     const id = setInterval(() => setTick((t) => t + 1), 1000);
     return () => clearInterval(id);
-  }, []);
+  }, [activeBreak?.id, upcomingBreaks.length]);
 
   const endMut = useMutation({
     mutationFn: async (id: string) => {
@@ -2764,6 +2775,7 @@ function OnBreakSection({ profile }: { profile: any }) {
   const onBreakQ = useQuery({
     enabled: canSee,
     queryKey: ["dashboard-on-break"],
+    staleTime: 15_000,
     queryFn: async () => {
       const { data, error } = await supabase
         .from("break_requests")
@@ -2996,12 +3008,13 @@ function OnBreakSection({ profile }: { profile: any }) {
 
   const [, setOnBreakTick] = useState(0);
 
-  // Live countdown tick for on-break admin cards.
+  // Live countdown tick for on-break admin cards — only while someone is on break.
   useEffect(() => {
     if (!canSee) return;
+    if ((onBreakQ.data?.length ?? 0) === 0) return;
     const t = setInterval(() => setOnBreakTick((n) => n + 1), 1000);
     return () => clearInterval(t);
-  }, [canSee]);
+  }, [canSee, onBreakQ.data?.length]);
 
   if (!canSee) return null;
   const list = onBreakQ.data ?? [];

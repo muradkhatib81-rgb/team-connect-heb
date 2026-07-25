@@ -63,6 +63,7 @@ export function ManagementOnShiftCard() {
   const q = useQuery({
     enabled: !!profile && !!scopedBranchId,
     queryKey: ["management-on-shift", scopedBranchId],
+    staleTime: 30_000,
     queryFn: async (): Promise<Row[]> => {
       // SECURITY DEFINER RPC — employees cannot read manager profiles via RLS,
       // but everyone in the branch should see who is on shift.
