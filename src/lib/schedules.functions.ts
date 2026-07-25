@@ -59,7 +59,7 @@ async function getDepartmentScheduleEmployees(supabase: any, departmentId: strin
   const [{ data: emps }, { data: dept }] = await Promise.all([
     supabase
       .from("profiles")
-      .select("id, full_name, is_active, excluded_from_schedule, on_leave, leave_start_date, leave_end_date")
+      .select("id, full_name, is_active, excluded_from_schedule, on_leave, leave_start_date, leave_end_date, leave_type_code")
       .eq("department_id", departmentId)
       .eq("is_active", true),
     supabase
@@ -75,7 +75,7 @@ async function getDepartmentScheduleEmployees(supabase: any, departmentId: strin
   if (includeDeptHead && !rows.some((e: any) => e.id === dept!.manager_id)) {
     const { data: mgr } = await supabase
       .from("profiles")
-      .select("id, full_name, department_id, is_active, excluded_from_schedule, on_leave, leave_start_date, leave_end_date")
+      .select("id, full_name, department_id, is_active, excluded_from_schedule, on_leave, leave_start_date, leave_end_date, leave_type_code")
       .eq("id", dept.manager_id)
       .eq("department_id", departmentId)
       .eq("is_active", true)
@@ -107,6 +107,7 @@ function applyLeaveOffToShifts(
     shift: string;
     start_time?: string | null;
     end_time?: string | null;
+    leave_type_code?: string | null;
   }[],
 ) {
   const schedulable = schedulableDepartmentEmployees(deptEmployees);
@@ -125,6 +126,7 @@ function applyLeaveOffToShifts(
         shift: "off",
         start_time: null,
         end_time: null,
+        leave_type_code: emp.leave_type_code ?? prev?.leave_type_code ?? "regular",
       });
     }
   }
@@ -460,6 +462,7 @@ const saveShiftsSchema = z.object({
       start_time: timeStr,
       end_time: timeStr,
       note: scheduleNoteSchema,
+      leave_type_code: z.enum(["regular", "sick"]).nullable().optional(),
     }),
   ),
 });
@@ -605,6 +608,10 @@ export const saveScheduleShifts = createServerFn({ method: "POST" })
           ...s,
           schedule_id: data.schedule_id,
           note: canEditNotes ? ((s as any).note ?? null) : (noteMap.get(key) ?? null),
+          leave_type_code:
+            s.shift === "off"
+              ? ((s as any).leave_type_code ?? null)
+              : null,
           published_shift: preserveSnapshots ? (snap?.published_shift ?? null) : null,
           published_note: preserveSnapshots ? (snap?.published_note ?? null) : null,
           published_start_time: preserveSnapshots ? (snap?.published_start_time ?? null) : null,
@@ -1604,7 +1611,7 @@ async function enrichOverviewEmployeesFromShifts(
   const { data: profiles, error } = await supabaseAdmin
     .from("profiles")
     .select(
-      "id, full_name, excluded_from_schedule, excluded_from_headcount, on_leave, leave_start_date, leave_end_date",
+      "id, full_name, excluded_from_schedule, excluded_from_headcount, on_leave, leave_start_date, leave_end_date, leave_type_code",
     )
     .in("id", [...missingIds])
     .eq("is_active", true);
@@ -1822,7 +1829,7 @@ export const getDailyScheduleOverview = createServerFn({ method: "POST" })
       const { data: shiftRows, error: shiftErr } = await supabaseAdmin
         .from("schedule_shifts")
         .select(
-          "employee_id, day_date, shift, published_shift, published_note, published_start_time, published_end_time, submitted_shift, submitted_note, submitted_start_time, submitted_end_time, start_time, end_time, note, schedule_id",
+          "employee_id, day_date, shift, leave_type_code, published_shift, published_note, published_start_time, published_end_time, submitted_shift, submitted_note, submitted_start_time, submitted_end_time, start_time, end_time, note, schedule_id",
         )
         .in("schedule_id", scheduleIds)
         .gte("day_date", start)

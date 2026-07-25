@@ -7,28 +7,12 @@
  */
 
 import { hasAnyScheduleViewPerm } from "@/lib/schedule-manager-caps";
+import type { RouteGuardPermissions } from "@/lib/route-guard-data";
 
 type RouteAccessInput = {
   pathname: string;
   roles: readonly string[];
-  permissions: {
-    can_view_all_employees?: boolean;
-    can_view_employee_details?: boolean;
-    can_add_employee?: boolean;
-    can_edit_employee?: boolean;
-    can_delete_employee?: boolean;
-    can_reset_employee_password?: boolean;
-    can_manage_departments?: boolean;
-    can_manage_employee_of_month?: boolean;
-    can_view_schedule?: boolean;
-    can_create_schedule?: boolean;
-    can_edit_schedule?: boolean;
-    can_approve_schedule?: boolean;
-    can_publish_schedule?: boolean;
-    can_manage_schedule?: boolean;
-    can_manage_permissions?: boolean;
-    can_manage_company_settings?: boolean;
-  } | null;
+  permissions: RouteGuardPermissions | null;
 };
 
 function hasRole(roles: readonly string[], ...allowed: string[]): boolean {
@@ -122,6 +106,20 @@ export function canAccessRoute(input: RouteAccessInput): boolean {
       roles.includes("department_manager") ||
       (roles.includes("assistant_manager") && !!permissions?.can_manage_departments) ||
       hasScheduleDirectoryAccess(input)
+    );
+  }
+
+  if (pathname === "/leaves-admin") {
+    return (
+      isPlatformOrBranchManager(roles) ||
+      roles.includes("department_manager") ||
+      (roles.includes("assistant_manager") &&
+        !!(
+          permissions?.can_view_leave ||
+          permissions?.can_approve_leave ||
+          permissions?.can_reject_leave ||
+          permissions?.can_edit_leave_balance
+        ))
     );
   }
 

@@ -1,8 +1,11 @@
 /** Profile fields used to decide if an employee is on leave on a calendar day (YYYY-MM-DD). */
+export type LeaveTypeCode = "regular" | "sick";
+
 export type EmployeeLeaveFields = {
   on_leave?: boolean | null;
   leave_start_date?: string | null;
   leave_end_date?: string | null;
+  leave_type_code?: LeaveTypeCode | string | null;
 };
 
 function dayOnly(value: string | null | undefined): string | null {
@@ -50,6 +53,13 @@ export function effectiveScheduleShift<T extends string | null | undefined>(
 ): T | "off" {
   if (isEmployeeOnLeaveOnDate(emp, dayDate)) return "off";
   return shift;
+}
+
+/** Schedule card label for leave days — same wording for manual + request paths. */
+export function leaveOffLabel(code: LeaveTypeCode | string | null | undefined): string {
+  if (code === "sick") return "חופש מחלה";
+  if (code === "regular") return "חופש רגיל";
+  return "חופש";
 }
 
 export function formatLeaveDateRange(

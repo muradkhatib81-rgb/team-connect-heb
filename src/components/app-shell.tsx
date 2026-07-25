@@ -28,6 +28,7 @@ import {
   Flag,
   BarChart3,
   Bell,
+  Palmtree,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
@@ -48,6 +49,7 @@ import { NotificationsBell } from "@/components/notifications-bell";
 import { useActiveBranch } from "@/lib/use-active-branch";
 import { useBreakSelfServiceNavVisible } from "@/lib/use-shift-self-service-visible";
 import { useCanManageBreaks, canManageBreaksQueryKey } from "@/lib/break-permissions";
+import { useLeaveAccess } from "@/lib/leave-permissions";
 import { AppFooter } from "@/components/app-footer";
 import { useBranchContext, useCompanyContext } from "@/platform";
 import { useIdleLogout } from "@/lib/use-idle-logout";
@@ -141,6 +143,7 @@ export function AppShell({ children }: { children: ReactNode }) {
 
   const breakSelfServiceNav = useBreakSelfServiceNavVisible();
   const { canManageBreaks } = useCanManageBreaks();
+  const leaveAccess = useLeaveAccess();
   const permissionsQ = useCurrentPermissions(profile?.id);
 
   // Realtime bridge and the Branch Mode gate read the active branch via
@@ -242,6 +245,20 @@ export function AppShell({ children }: { children: ReactNode }) {
       label: "ניהול הפסקות",
       icon: Coffee,
       visible: isBreaksManager,
+      section: branchSection,
+    },
+    {
+      to: "/leaves",
+      label: "חופשות",
+      icon: Palmtree,
+      visible: leaveAccess.canOpenLeavesPage,
+      section: branchSection,
+    },
+    {
+      to: "/leaves-admin",
+      label: "ניהול חופשות",
+      icon: Palmtree,
+      visible: leaveAccess.canOpenLeaveAdmin,
       section: branchSection,
     },
     {

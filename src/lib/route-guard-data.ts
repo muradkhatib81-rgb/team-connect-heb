@@ -20,6 +20,10 @@ export type RouteGuardPermissions = {
   can_manage_schedule: boolean | null;
   can_manage_permissions: boolean | null;
   can_manage_company_settings: boolean | null;
+  can_view_leave: boolean | null;
+  can_approve_leave: boolean | null;
+  can_reject_leave: boolean | null;
+  can_edit_leave_balance: boolean | null;
 };
 
 export async function fetchRouteGuardRoles(userId: string): Promise<AppRole[]> {
@@ -34,7 +38,7 @@ export async function fetchRouteGuardPermissions(
   const { data, error } = await supabase
     .from("user_task_permissions")
     .select(
-      "can_view_all_employees, can_view_employee_details, can_add_employee, can_edit_employee, can_delete_employee, can_reset_employee_password, can_manage_departments, can_manage_employee_of_month, can_view_schedule, can_create_schedule, can_edit_schedule, can_approve_schedule, can_publish_schedule, can_manage_schedule, can_manage_permissions, can_manage_company_settings",
+      "can_view_all_employees, can_view_employee_details, can_add_employee, can_edit_employee, can_delete_employee, can_reset_employee_password, can_manage_departments, can_manage_employee_of_month, can_view_schedule, can_create_schedule, can_edit_schedule, can_approve_schedule, can_publish_schedule, can_manage_schedule, can_manage_permissions, can_manage_company_settings, can_view_leave, can_approve_leave, can_reject_leave, can_edit_leave_balance",
     )
     .eq("user_id", userId)
     .maybeSingle();

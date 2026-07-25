@@ -616,6 +616,7 @@ const updateEmployeeSchema = z.object({
   on_leave: z.boolean(),
   leave_start_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional(),
   leave_end_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional(),
+  leave_type_code: z.enum(["regular", "sick"]).nullable().optional(),
   is_active: z.boolean(),
   is_active_changed: z.boolean(),
   avatar_url: z.string().trim().max(500).nullable().optional(),
@@ -684,6 +685,7 @@ export const updateEmployee = createServerFn({ method: "POST" })
 
     let leaveStart = data.leave_start_date ?? null;
     let leaveEnd = data.leave_end_date ?? null;
+    let leaveTypeCode = data.leave_type_code ?? null;
     if (data.on_leave) {
       if (!leaveStart || !leaveEnd) {
         throw new Error("יש להזין תאריך התחלה וסיום לחופשה");
@@ -691,9 +693,13 @@ export const updateEmployee = createServerFn({ method: "POST" })
       if (leaveEnd < leaveStart) {
         throw new Error("תאריך סיום החופשה חייב להיות אחרי תאריך ההתחלה");
       }
+      if (!leaveTypeCode) {
+        throw new Error("יש לבחור סוג חופשה (רגילה או מחלה)");
+      }
     } else {
       leaveStart = null;
       leaveEnd = null;
+      leaveTypeCode = null;
     }
 
     const { data: dept, error: dErr } = await context.supabase
@@ -718,7 +724,7 @@ export const updateEmployee = createServerFn({ method: "POST" })
 
     const { data: existingProfile, error: existingProfileErr } = await supabaseAdmin
       .from("profiles")
-      .select("id_number, first_name, last_name, full_name, department_id")
+      .select("id_number, first_name, last_name, full_name, department_id, on_leave, leave_start_date, leave_end_date, leave_type_code")
       .eq("id", data.user_id)
       .eq("branch_id", context.branchId)
       .maybeSingle();
@@ -773,6 +779,7 @@ export const updateEmployee = createServerFn({ method: "POST" })
         on_leave: data.on_leave,
         leave_start_date: leaveStart,
         leave_end_date: leaveEnd,
+        leave_type_code: leaveTypeCode,
         job_title: data.job_title || null,
         avatar_url: data.avatar_url ?? null,
         ...(data.is_active_changed ? {} : { is_active: data.is_active }),
@@ -780,6 +787,41 @@ export const updateEmployee = createServerFn({ method: "POST" })
       .eq("id", data.user_id)
       .eq("branch_id", context.branchId);
     if (updErr) throw new Error(updErr.message);
+
+    const leaveChanged =
+      existingProfile.on_leave !== data.on_leave ||
+      (existingProfile.leave_start_date ?? null) !== leaveStart ||
+      (existingProfile.leave_end_date ?? null) !== leaveEnd ||
+      ((existingProfile as { leave_type_code?: string | null }).leave_type_code ?? null) !== leaveTypeCode;
+    if (leaveChanged) {
+      await (context.supabase as any).rpc("write_leave_audit", {
+        _action: data.on_leave ? "manual_leave_set" : "manual_leave_cleared",
+        _request_id: null,
+        _user_id: data.user_id,
+        _payload: {
+          on_leave: data.on_leave,
+          leave_start_date: leaveStart,
+          leave_end_date: leaveEnd,
+          leave_type_code: leaveTypeCode,
+          previous: {
+            on_leave: existingProfile.on_leave,
+            leave_start_date: existingProfile.leave_start_date,
+            leave_end_date: existingProfile.leave_end_date,
+            leave_type_code: (existingProfile as { leave_type_code?: string | null }).leave_type_code ?? null,
+          },
+        },
+        _branch_id: context.branchId,
+      });
+      if (data.on_leave && leaveStart && leaveEnd) {
+        await (supabaseAdmin as any).rpc("apply_leave_to_schedule_shifts", {
+          _user_id: data.user_id,
+          _start: leaveStart,
+          _end: leaveEnd,
+          _branch_id: context.branchId,
+          _leave_type_code: leaveTypeCode,
+        });
+      }
+    }
 
     if (nextIdNumber) {
       await syncEmployeeAuthIdentity(supabaseAdmin, {

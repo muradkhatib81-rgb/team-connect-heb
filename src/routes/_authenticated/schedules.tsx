@@ -65,7 +65,7 @@ import {
   setEmployeeScheduleExclusion,
 } from "@/lib/schedules.functions";
 import { formatHeDate, formatHeDateTime } from "@/lib/date-format";
-import { isEmployeeOnLeaveOnDate, effectiveScheduleShift } from "@/lib/employee-leave";
+import { isEmployeeOnLeaveOnDate, effectiveScheduleShift, leaveOffLabel } from "@/lib/employee-leave";
 import {
   buildChangeBaselineMap,
   diffScheduleCellForViewer,
@@ -392,7 +392,7 @@ function SchedulesPage() {
       const ids = scheds.map((s: any) => s.id);
       const { data: shiftRows, error: e2 } = await supabase
         .from("schedule_shifts")
-        .select("schedule_id, employee_id, day_date, shift")
+        .select("schedule_id, employee_id, day_date, shift, leave_type_code")
         .in("schedule_id", ids);
       if (e2) throw e2;
       const schedById = new Map<string, any>((scheds as any[]).map((s) => [s.id, s]));
@@ -738,7 +738,7 @@ function SchedulesPage() {
       if (isEmployee) {
         const { data, error } = await (supabase as any)
           .from("department_coworkers")
-          .select("id, full_name, is_active, excluded_from_schedule, excluded_from_headcount, on_leave, leave_start_date, leave_end_date")
+          .select("id, full_name, is_active, excluded_from_schedule, excluded_from_headcount, on_leave, leave_start_date, leave_end_date, leave_type_code")
           .eq("department_id", selectedDept!)
           .eq("is_active", true)
           .order("full_name");
@@ -757,7 +757,7 @@ function SchedulesPage() {
       const [{ data, error }, { data: dept }] = await Promise.all([
         supabase
         .from("profiles")
-        .select("id, full_name, is_active, excluded_from_schedule, excluded_from_headcount, on_leave, leave_start_date, leave_end_date")
+        .select("id, full_name, is_active, excluded_from_schedule, excluded_from_headcount, on_leave, leave_start_date, leave_end_date, leave_type_code")
         .eq("department_id", selectedDept!)
         .eq("is_active", true)
           .order("full_name"),
@@ -769,7 +769,7 @@ function SchedulesPage() {
       if (managerId && !rows.some((e: any) => e.id === managerId)) {
         const { data: mgr } = await supabase
           .from("profiles")
-          .select("id, full_name, department_id, is_active, excluded_from_schedule, excluded_from_headcount, on_leave, leave_start_date, leave_end_date")
+          .select("id, full_name, department_id, is_active, excluded_from_schedule, excluded_from_headcount, on_leave, leave_start_date, leave_end_date, leave_type_code")
           .eq("id", managerId)
           .eq("department_id", selectedDept!)
           .eq("is_active", true)
@@ -819,7 +819,7 @@ function SchedulesPage() {
       const { data, error } = await supabase
         .from("schedule_shifts")
         .select(
-          "employee_id, day_date, shift, published_shift, published_note, published_start_time, published_end_time, submitted_shift, submitted_note, submitted_start_time, submitted_end_time, start_time, end_time, note",
+          "employee_id, day_date, shift, leave_type_code, published_shift, published_note, published_start_time, published_end_time, submitted_shift, submitted_note, submitted_start_time, submitted_end_time, start_time, end_time, note",
         )
         .eq("schedule_id", visible!.id);
       if (error) throw error;
@@ -834,6 +834,8 @@ function SchedulesPage() {
     Record<string, Record<string, { start: string | null; end: string | null }>>
   >({});
   const [noteEdits, setNoteEdits] = useState<Record<string, Record<string, string | null>>>({});
+  /** leave_type_code per emp|day from DB / profile — drives חופש רגיל / חופש מחלה labels */
+  const [leaveTypeByCell, setLeaveTypeByCell] = useState<Record<string, string | null>>({});
   const editsDirtyRef = useRef(false);
   const editsScheduleIdRef = useRef<string | null>(null);
   const submittedBaselineRef = useRef<{
@@ -851,6 +853,7 @@ function SchedulesPage() {
     const next: Record<string, Record<string, Shift>> = {};
     const t: Record<string, Record<string, { start: string | null; end: string | null }>> = {};
     const n: Record<string, Record<string, string | null>> = {};
+    const leaveMap: Record<string, string | null> = {};
     for (const s of rows) {
       next[s.employee_id] ??= {};
       next[s.employee_id][s.day_date] = s.shift as Shift;
@@ -861,18 +864,25 @@ function SchedulesPage() {
       n[s.employee_id] ??= {};
       const rawNote = (s as any).note ? String((s as any).note).trim().slice(0, SCHEDULE_NOTE_MAX) : "";
       n[s.employee_id][s.day_date] = rawNote || null;
+      const ltc = (s as any).leave_type_code ? String((s as any).leave_type_code) : null;
+      if (ltc) leaveMap[`${s.employee_id}|${s.day_date}`] = ltc;
     }
     for (const emp of emps) {
       for (const day of days) {
         if (isEmployeeOnLeaveOnDate(emp, day)) {
           next[emp.id] ??= {};
           next[emp.id][day] = "off";
+          const key = `${emp.id}|${day}`;
+          if (!leaveMap[key] && (emp as any).leave_type_code) {
+            leaveMap[key] = String((emp as any).leave_type_code);
+          }
         }
       }
     }
     setEdits(next);
     setTimeEdits(t);
     setNoteEdits(n);
+    setLeaveTypeByCell(leaveMap);
     editsDirtyRef.current = false;
   };
 
@@ -1206,6 +1216,7 @@ function SchedulesPage() {
     start_time: string | null;
     end_time: string | null;
     note: string | null;
+    leave_type_code: string | null;
   }[] {
     const filled = editsWithEmptyAsOff(sourceEdits);
     const list: {
@@ -1215,6 +1226,7 @@ function SchedulesPage() {
       start_time: string | null;
       end_time: string | null;
       note: string | null;
+      leave_type_code: string | null;
     }[] = [];
     for (const [emp, m] of Object.entries(filled)) {
       const empRow = empsQ.data?.find((e) => e.id === emp);
@@ -1226,6 +1238,13 @@ function SchedulesPage() {
         const t = timeEdits[emp]?.[day];
         const norm = (v: string | null | undefined) =>
           v && /^\d{2}:\d{2}$/.test(v) ? `${v}:00` : v && /^\d{2}:\d{2}:\d{2}$/.test(v) ? v : null;
+        const onLeave = empRow ? isEmployeeOnLeaveOnDate(empRow, day) : false;
+        const leaveCode =
+          resolved === "off"
+            ? leaveTypeByCell[`${emp}|${day}`] ??
+              (onLeave ? ((empRow as any)?.leave_type_code as string | null) : null) ??
+              (onLeave ? "regular" : null)
+            : null;
         list.push({
           employee_id: emp,
           day_date: day,
@@ -1238,6 +1257,7 @@ function SchedulesPage() {
             resolved === "off" || !canEditScheduleTimes
               ? null
               : noteEdits[emp]?.[day]?.trim().slice(0, SCHEDULE_NOTE_MAX) || null,
+          leave_type_code: leaveCode,
         });
       }
     }
@@ -2259,6 +2279,16 @@ function SchedulesPage() {
                         | Shift
                         | undefined;
                       const baselineKey = `${emp.id}|${day}`;
+                      const cellLeaveType =
+                        leaveTypeByCell[baselineKey] ??
+                        (onLeaveDay ? ((emp as any).leave_type_code as string | null) : null) ??
+                        null;
+                      const cellShiftLabel =
+                        cur === "off"
+                          ? leaveOffLabel(cellLeaveType)
+                          : cur
+                            ? shiftLabel(cur)
+                            : "";
                       const def = cur ? shiftDefsQ.map.get(cur) : undefined;
                       const cellTimes = timeEdits[emp.id]?.[day];
                       const effStart =
@@ -2295,7 +2325,7 @@ function SchedulesPage() {
                                     }`}
                                     style={shiftStyle(cur)}
                                   >
-                                    {shiftLabel(cur)}
+                                    {cellShiftLabel}
                                   </span>
                                   {effStart && effEnd && cur !== "off" && (
                                     <div
@@ -2345,7 +2375,9 @@ function SchedulesPage() {
                                 }`}
                                 style={cur ? shiftStyle(cur) : undefined}
                               >
-                                <SelectValue placeholder="—" />
+                                <SelectValue placeholder="—">
+                                  {cur ? cellShiftLabel : "—"}
+                                </SelectValue>
                               </SelectTrigger>
                               <SelectContent>
                                 {activeShifts.map((s) => (

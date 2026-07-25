@@ -133,10 +133,10 @@ const CATEGORIES: Category[] = [
     title: "חופשות",
     icon: Palmtree,
     perms: [
-      { key: "can_view_leave", label: "צפייה בבקשות חופשה", description: "מאפשר לראות בקשות חופשה שעובדים שלחו." },
-      { key: "can_approve_leave", label: "אישור חופשות", description: "מאפשר לאשר בקשת חופשה." },
-      { key: "can_reject_leave", label: "דחיית חופשות", description: "מאפשר לדחות בקשת חופשה." },
-      { key: "can_edit_leave_balance", label: "עריכת יתרת חופשה", description: "מאפשר לשנות את מספר ימי החופשה שעומדים לרשות עובד." },
+      { key: "can_view_leave", label: "צפייה בבקשות חופשה", description: "מאפשר לפתוח את ניהול החופשות ולראות בקשות בסניף." },
+      { key: "can_approve_leave", label: "אישור חופשות", description: "מאפשר לאשר בקשת חופשה בשלב ההנהלה." },
+      { key: "can_reject_leave", label: "דחיית חופשות", description: "מאפשר לדחות בקשת חופשה בשלב ההנהלה." },
+      { key: "can_edit_leave_balance", label: "עריכת יתרת חופשה", description: "מאפשר לעדכן יתרות וכללי צבירה חודשית." },
     ],
   },
   {

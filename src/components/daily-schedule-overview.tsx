@@ -19,6 +19,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { supabase } from "@/integrations/supabase/client";
 import {
   effectiveScheduleShift,
+  leaveOffLabel,
   type EmployeeLeaveFields,
 } from "@/lib/employee-leave";
 import {
@@ -54,6 +55,7 @@ type ShiftRow = {
   employee_id: string;
   day_date: string;
   shift: string;
+  leave_type_code?: string | null;
   published_shift: string | null;
   published_note: string | null;
   published_start_time: string | null;
@@ -81,6 +83,7 @@ export type DailyScheduleEmployeeRow = {
   id: string;
   full_name: string;
   shift: ScheduleShiftCode;
+  shiftLabel: string;
   timeRange: string | null;
   note: string | null;
   isModified: boolean;
@@ -233,6 +236,10 @@ function buildDepartmentEmployeeRows(args: {
       id: stub.id,
       full_name: stub.full_name,
       shift,
+      shiftLabel:
+        shift === "off"
+          ? leaveOffLabel(raw.leave_type_code ?? stub.leave_type_code)
+          : SHIFT_LABEL[shift],
       timeRange: resolveTimeRange(raw, shift, def),
       note: rawNote || null,
       isModified: isShiftModified,
@@ -616,7 +623,7 @@ export function DailyScheduleOverview({
                                     variant="outline"
                                     className={cn("shrink-0 text-[10px]", tone.badge)}
                                   >
-                                    {tone.label}
+                                    {emp.shiftLabel}
                                   </Badge>
                                   <span className="font-medium text-sm truncate">
                                     {emp.full_name}

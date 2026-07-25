@@ -18,6 +18,8 @@ import { Route as AuthenticatedShiftSettingsRouteImport } from './routes/_authen
 import { Route as AuthenticatedSchedulesRouteImport } from './routes/_authenticated/schedules'
 import { Route as AuthenticatedProfileRouteImport } from './routes/_authenticated/profile'
 import { Route as AuthenticatedPermissionsRouteImport } from './routes/_authenticated/permissions'
+import { Route as AuthenticatedLeavesAdminRouteImport } from './routes/_authenticated/leaves-admin'
+import { Route as AuthenticatedLeavesRouteImport } from './routes/_authenticated/leaves'
 import { Route as AuthenticatedJobTitlesRouteImport } from './routes/_authenticated/job-titles'
 import { Route as AuthenticatedInactiveRouteImport } from './routes/_authenticated/inactive'
 import { Route as AuthenticatedEmployeesRouteImport } from './routes/_authenticated/employees'
@@ -101,6 +103,17 @@ const AuthenticatedPermissionsRoute =
     path: '/permissions',
     getParentRoute: () => AuthenticatedRouteRoute,
   } as any)
+const AuthenticatedLeavesAdminRoute =
+  AuthenticatedLeavesAdminRouteImport.update({
+    id: '/leaves-admin',
+    path: '/leaves-admin',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
+const AuthenticatedLeavesRoute = AuthenticatedLeavesRouteImport.update({
+  id: '/leaves',
+  path: '/leaves',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
 const AuthenticatedJobTitlesRoute = AuthenticatedJobTitlesRouteImport.update({
   id: '/job-titles',
   path: '/job-titles',
@@ -331,6 +344,8 @@ export interface FileRoutesByFullPath {
   '/employees': typeof AuthenticatedEmployeesRoute
   '/inactive': typeof AuthenticatedInactiveRoute
   '/job-titles': typeof AuthenticatedJobTitlesRoute
+  '/leaves': typeof AuthenticatedLeavesRoute
+  '/leaves-admin': typeof AuthenticatedLeavesAdminRoute
   '/permissions': typeof AuthenticatedPermissionsRoute
   '/profile': typeof AuthenticatedProfileRoute
   '/schedules': typeof AuthenticatedSchedulesRoute
@@ -376,6 +391,8 @@ export interface FileRoutesByTo {
   '/employees': typeof AuthenticatedEmployeesRoute
   '/inactive': typeof AuthenticatedInactiveRoute
   '/job-titles': typeof AuthenticatedJobTitlesRoute
+  '/leaves': typeof AuthenticatedLeavesRoute
+  '/leaves-admin': typeof AuthenticatedLeavesAdminRoute
   '/permissions': typeof AuthenticatedPermissionsRoute
   '/profile': typeof AuthenticatedProfileRoute
   '/schedules': typeof AuthenticatedSchedulesRoute
@@ -423,6 +440,8 @@ export interface FileRoutesById {
   '/_authenticated/employees': typeof AuthenticatedEmployeesRoute
   '/_authenticated/inactive': typeof AuthenticatedInactiveRoute
   '/_authenticated/job-titles': typeof AuthenticatedJobTitlesRoute
+  '/_authenticated/leaves': typeof AuthenticatedLeavesRoute
+  '/_authenticated/leaves-admin': typeof AuthenticatedLeavesAdminRoute
   '/_authenticated/permissions': typeof AuthenticatedPermissionsRoute
   '/_authenticated/profile': typeof AuthenticatedProfileRoute
   '/_authenticated/schedules': typeof AuthenticatedSchedulesRoute
@@ -471,6 +490,8 @@ export interface FileRouteTypes {
     | '/employees'
     | '/inactive'
     | '/job-titles'
+    | '/leaves'
+    | '/leaves-admin'
     | '/permissions'
     | '/profile'
     | '/schedules'
@@ -516,6 +537,8 @@ export interface FileRouteTypes {
     | '/employees'
     | '/inactive'
     | '/job-titles'
+    | '/leaves'
+    | '/leaves-admin'
     | '/permissions'
     | '/profile'
     | '/schedules'
@@ -562,6 +585,8 @@ export interface FileRouteTypes {
     | '/_authenticated/employees'
     | '/_authenticated/inactive'
     | '/_authenticated/job-titles'
+    | '/_authenticated/leaves'
+    | '/_authenticated/leaves-admin'
     | '/_authenticated/permissions'
     | '/_authenticated/profile'
     | '/_authenticated/schedules'
@@ -661,6 +686,20 @@ declare module '@tanstack/react-router' {
       path: '/permissions'
       fullPath: '/permissions'
       preLoaderRoute: typeof AuthenticatedPermissionsRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/leaves-admin': {
+      id: '/_authenticated/leaves-admin'
+      path: '/leaves-admin'
+      fullPath: '/leaves-admin'
+      preLoaderRoute: typeof AuthenticatedLeavesAdminRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/leaves': {
+      id: '/_authenticated/leaves'
+      path: '/leaves'
+      fullPath: '/leaves'
+      preLoaderRoute: typeof AuthenticatedLeavesRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
     '/_authenticated/job-titles': {
@@ -1041,6 +1080,8 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedEmployeesRoute: typeof AuthenticatedEmployeesRoute
   AuthenticatedInactiveRoute: typeof AuthenticatedInactiveRoute
   AuthenticatedJobTitlesRoute: typeof AuthenticatedJobTitlesRoute
+  AuthenticatedLeavesRoute: typeof AuthenticatedLeavesRoute
+  AuthenticatedLeavesAdminRoute: typeof AuthenticatedLeavesAdminRoute
   AuthenticatedPermissionsRoute: typeof AuthenticatedPermissionsRoute
   AuthenticatedProfileRoute: typeof AuthenticatedProfileRoute
   AuthenticatedSchedulesRoute: typeof AuthenticatedSchedulesRoute
@@ -1065,6 +1106,8 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedEmployeesRoute: AuthenticatedEmployeesRoute,
   AuthenticatedInactiveRoute: AuthenticatedInactiveRoute,
   AuthenticatedJobTitlesRoute: AuthenticatedJobTitlesRoute,
+  AuthenticatedLeavesRoute: AuthenticatedLeavesRoute,
+  AuthenticatedLeavesAdminRoute: AuthenticatedLeavesAdminRoute,
   AuthenticatedPermissionsRoute: AuthenticatedPermissionsRoute,
   AuthenticatedProfileRoute: AuthenticatedProfileRoute,
   AuthenticatedSchedulesRoute: AuthenticatedSchedulesRoute,

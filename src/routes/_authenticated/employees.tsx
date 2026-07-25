@@ -92,6 +92,7 @@ interface ProfileRow {
   on_leave: boolean;
   leave_start_date: string | null;
   leave_end_date: string | null;
+  leave_type_code?: string | null;
   avatar_url: string | null;
   deactivated_at: string | null;
   excluded_from_headcount?: boolean;
@@ -306,7 +307,7 @@ function EmployeesPage() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("profiles")
-        .select("id, first_name, last_name, full_name, department_id, branch_id, job_title, is_active, on_leave, leave_start_date, leave_end_date, avatar_url, deactivated_at, excluded_from_headcount")
+        .select("id, first_name, last_name, full_name, department_id, branch_id, job_title, is_active, on_leave, leave_start_date, leave_end_date, leave_type_code, avatar_url, deactivated_at, excluded_from_headcount")
         .order("first_name")
         .order("last_name");
       if (error) throw error;
@@ -1553,6 +1554,7 @@ function EditEmployeeDialog({
     on_leave: employee.on_leave,
     leave_start_date: employee.leave_start_date?.slice(0, 10) ?? "",
     leave_end_date: employee.leave_end_date?.slice(0, 10) ?? "",
+    leave_type_code: (employee.leave_type_code as "regular" | "sick" | "") || "regular",
     role: (currentRoles[0] ?? "employee") as AppRole,
     avatar_url: employee.avatar_url,
     job_title: employee.job_title ?? "",
@@ -1567,6 +1569,9 @@ function EditEmployeeDialog({
       if (!selected) throw new Error("מחלקה לא נמצאה");
       if (form.on_leave && (!form.leave_start_date || !form.leave_end_date)) {
         throw new Error("יש להזין תאריך התחלה וסיום לחופשה");
+      }
+      if (form.on_leave && !form.leave_type_code) {
+        throw new Error("יש לבחור סוג חופשה (רגילה או מחלה)");
       }
       if (
         form.on_leave &&
@@ -1596,6 +1601,9 @@ function EditEmployeeDialog({
           on_leave: form.on_leave,
           leave_start_date: form.on_leave ? form.leave_start_date : null,
           leave_end_date: form.on_leave ? form.leave_end_date : null,
+          leave_type_code: form.on_leave
+            ? (form.leave_type_code as "regular" | "sick")
+            : null,
           job_title: form.job_title || "",
           is_active: form.is_active,
           is_active_changed: isActiveChanged,
@@ -1726,7 +1734,9 @@ function EditEmployeeDialog({
                 setForm({
                   ...form,
                   on_leave: v,
-                  ...(v ? {} : { leave_start_date: "", leave_end_date: "" }),
+                  ...(v
+                    ? { leave_type_code: form.leave_type_code || "regular" }
+                    : { leave_start_date: "", leave_end_date: "", leave_type_code: "regular" }),
                 })
               }
             />
@@ -1734,6 +1744,23 @@ function EditEmployeeDialog({
 
           {form.on_leave && (
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 rounded-lg border border-border p-3">
+              <div className="space-y-1.5 sm:col-span-2">
+                <Label>סוג חופשה</Label>
+                <Select
+                  value={form.leave_type_code || "regular"}
+                  onValueChange={(v) =>
+                    setForm({ ...form, leave_type_code: v as "regular" | "sick" })
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="בחרו סוג" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="regular">חופש רגיל</SelectItem>
+                    <SelectItem value="sick">חופש מחלה</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
               <div className="space-y-1.5">
                 <Label htmlFor="leave_start">תאריך התחלת חופשה</Label>
                 <Input
@@ -1756,7 +1783,7 @@ function EditEmployeeDialog({
                 />
               </div>
               <p className="text-xs text-muted-foreground sm:col-span-2">
-                בימים אלו הסידור יסומן אוטומטית כ«חופש».
+                בימים אלו הסידור יסומן אוטומטית כ«חופש רגיל» או «חופש מחלה» לפי הסוג שנבחר.
               </p>
             </div>
           )}

@@ -38,7 +38,9 @@ import { isNonEmployeeIdentity } from "@/lib/employee-identity";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Users, UserCheck, UserX, Building2, Loader2, Plane, ListTodo, Clock, CheckCircle2, AlertTriangle, CalendarDays, User, Coffee, Send, UserPlus } from "lucide-react";
+import { Users, UserCheck, UserX, Building2, Loader2, Plane, ListTodo, Clock, CheckCircle2, AlertTriangle, CalendarDays, User, Coffee, Send, UserPlus, Palmtree } from "lucide-react";
+import { useLeaveAccess } from "@/lib/leave-permissions";
+import { LEAVE_STATUS_LABEL } from "@/lib/leave.functions";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { EmployeeOfMonthSection } from "@/components/employee-of-month-section";
 import { DailyScheduleOverview } from "@/components/daily-schedule-overview";
@@ -245,6 +247,7 @@ function DashboardPage() {
       {admin || isDeptManager ? (
         <>
           <BreakShortcutCard userId={profile.id} />
+          <LeaveShortcutCard userId={profile.id} />
           <SchedulesStatsSection profile={profile} />
           {!admin && isDeptManager && <DeptHeadOnBreakSection />}
           <TasksStatsSection stats={tasksStatsQuery.data} loading={tasksStatsQuery.isLoading} />
@@ -716,6 +719,7 @@ function EmployeeDashboard({ profile }: { profile: any }) {
   return (
     <div className="space-y-6">
       <BreakShortcutCard userId={profile.id} />
+      <LeaveShortcutCard userId={profile.id} />
       <EmployeeNotificationsCard userId={profile.id} />
       <EmployeeNewMessagesCard userId={profile.id} />
     </div>
@@ -2244,6 +2248,157 @@ function DashboardPendingBreakCard({ row }: { row: DashboardBreakRow }) {
         </div>
       </div>
     </Card>
+  );
+}
+
+function LeaveShortcutCard({ userId }: { userId: string }) {
+  const navigate = useNavigate();
+  const leaveAccess = useLeaveAccess();
+  // Key cards off live roles so a role change refreshes which cards appear
+  const rolesKey = leaveAccess.roles.join(",");
+
+  const myLeaveQ = useQuery({
+    enabled: !!userId && leaveAccess.showRequestCard,
+    queryKey: ["dashboard-my-leave", userId, rolesKey],
+    queryFn: async () => {
+      const { data, error } = await (supabase as any)
+        .from("leave_requests")
+        .select("id, status, kind, start_date, end_date, days_count, leave_types(name)")
+        .eq("user_id", userId)
+        .in("status", ["pending_dept", "pending_admin", "approved"])
+        .order("submitted_at", { ascending: false })
+        .limit(10);
+      if (error) throw error;
+      return data ?? [];
+    },
+    staleTime: 30_000,
+    retry: false,
+  });
+
+  const pendingQueueQ = useQuery({
+    enabled: !!userId && leaveAccess.showPendingQueueCard,
+    queryKey: [
+      "dashboard-leave-queue",
+      userId,
+      rolesKey,
+      leaveAccess.pendingQueueMode,
+    ],
+    queryFn: async () => {
+      let q = (supabase as any)
+        .from("leave_requests")
+        .select("id, status", { count: "exact", head: true });
+      if (leaveAccess.pendingQueueMode === "dept") {
+        q = q.eq("status", "pending_dept");
+      } else if (leaveAccess.pendingQueueMode === "both") {
+        q = q.in("status", ["pending_dept", "pending_admin"]);
+      } else {
+        q = q.eq("status", "pending_admin");
+      }
+      const { count, error } = await q;
+      if (error) throw error;
+      return count ?? 0;
+    },
+    staleTime: 30_000,
+    retry: false,
+  });
+
+  const myRows = myLeaveQ.data ?? [];
+  const pendingMine = myRows.filter(
+    (r: any) => r.status === "pending_dept" || r.status === "pending_admin",
+  );
+  const approvedUpcoming = myRows.filter((r: any) => r.status === "approved");
+  const queueCount = pendingQueueQ.data ?? 0;
+
+  const goLeaves = () => navigate({ to: "/leaves" });
+  const goAdmin = () => navigate({ to: "/leaves-admin" });
+
+  const queueTitle = leaveAccess.isDeptManager && leaveAccess.pendingQueueMode === "dept"
+    ? "בקשות חופשה במחלקה"
+    : leaveAccess.isDeptManager
+      ? "בקשות חופשה ממתינות"
+      : "בקשות חופשה ממתינות לאישור";
+
+  const queueSubtitle =
+    leaveAccess.pendingQueueMode === "dept"
+      ? queueCount > 0
+        ? `יש ${queueCount} בקשות של עובדי המחלקה שממתינות לאישורך.`
+        : "אין כרגע בקשות ממתינות במחלקה."
+      : queueCount > 0
+        ? `יש ${queueCount} בקשות שממתינות לטיפול שלך.`
+        : "אין כרגע בקשות ממתינות לאישור.";
+
+  if (!leaveAccess.showRequestCard && !leaveAccess.showPendingQueueCard) {
+    return null;
+  }
+
+  const both = leaveAccess.showRequestCard && leaveAccess.showPendingQueueCard;
+
+  return (
+    <div className={both ? "grid grid-cols-1 gap-2 sm:grid-cols-2" : "space-y-2"}>
+      {leaveAccess.showPendingQueueCard && (
+        <Card
+          role="button"
+          tabIndex={0}
+          onClick={goAdmin}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" || e.key === " ") goAdmin();
+          }}
+          className="card-elevated cursor-pointer border border-amber-300/60 bg-amber-50/70 p-3 transition-colors hover:bg-amber-50"
+        >
+          <div className="flex items-center gap-2.5">
+            <div className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-amber-200/70 text-amber-900">
+              <Palmtree className="size-4" />
+            </div>
+            <div className="min-w-0 flex-1">
+              <h3 className="text-sm font-semibold leading-tight">{queueTitle}</h3>
+              <p className="mt-0.5 line-clamp-2 text-[11px] text-muted-foreground">{queueSubtitle}</p>
+            </div>
+            <Badge className="shrink-0 bg-amber-600 px-1.5 py-0 text-xs text-white hover:bg-amber-600">
+              {queueCount}
+            </Badge>
+          </div>
+        </Card>
+      )}
+
+      {leaveAccess.showRequestCard && (
+        <Card
+          role="button"
+          tabIndex={0}
+          onClick={goLeaves}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" || e.key === " ") goLeaves();
+          }}
+          className="card-elevated cursor-pointer border border-emerald-300/50 bg-emerald-50/50 p-3 transition-colors hover:bg-emerald-50"
+        >
+          <div className="flex items-center gap-2.5">
+            <div className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-emerald-200/60 text-emerald-900">
+              <Palmtree className="size-4" />
+            </div>
+            <div className="min-w-0 flex-1">
+              <h3 className="text-sm font-semibold leading-tight">בקשת חופשה</h3>
+              <p className="mt-0.5 line-clamp-2 text-[11px] text-muted-foreground">
+                {pendingMine.length > 0
+                  ? `${pendingMine.length} בקשות ממתינות`
+                  : approvedUpcoming.length > 0
+                    ? `${approvedUpcoming[0].start_date} – ${approvedUpcoming[0].end_date}`
+                    : "הגשה ומעקב סטטוס"}
+              </p>
+            </div>
+            <Button
+              size="sm"
+              className="h-7 shrink-0 gap-1 px-2 text-xs"
+              onClick={(e) => {
+                e.stopPropagation();
+                goLeaves();
+              }}
+            >
+              <Send className="size-3" />
+              בקשה
+            </Button>
+          </div>
+        </Card>
+      )}
+    </div>
   );
 }
 
