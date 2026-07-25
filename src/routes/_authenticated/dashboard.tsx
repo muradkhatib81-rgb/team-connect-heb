@@ -108,6 +108,13 @@ function DashboardPage() {
         "can_add_employee",
       )
     : false;
+  const canViewDepartments = profile
+    ? hasBranchActionPermission(
+        profile.roles,
+        permissionsQ.data,
+        "can_manage_departments",
+      )
+    : false;
   const canViewBreaks = profile
     ? profile.roles.some((role) =>
         ["system_admin", "main_admin", "branch_manager", "department_manager"].includes(
@@ -170,6 +177,56 @@ function DashboardPage() {
         }
       });
       return { total, active, inactive, onLeave, onBreak, byDept, departments: depts as DeptRow[] };
+    },
+  });
+
+  const departmentManagersQuery = useQuery({
+    enabled: admin && canViewDepartments,
+    queryKey: [
+      "dashboard",
+      "department-managers",
+      activeBranchId ?? profile?.branch_id ?? "none",
+    ],
+    queryFn: async () => {
+      const { data: departments, error: departmentsError } = await supabase
+        .from("departments")
+        .select("id, manager_id");
+      if (departmentsError) throw departmentsError;
+
+      const managerIds = Array.from(
+        new Set(
+          (departments ?? [])
+            .map((department) => department.manager_id)
+            .filter((id): id is string => !!id),
+        ),
+      );
+      const namesById = new Map<string, string>();
+
+      if (managerIds.length > 0) {
+        const { data: managers, error: managersError } = await supabase
+          .from("profiles")
+          .select("id, full_name, first_name, last_name")
+          .in("id", managerIds);
+        if (managersError) throw managersError;
+
+        for (const manager of managers ?? []) {
+          namesById.set(
+            manager.id,
+            manager.full_name ||
+              [manager.first_name, manager.last_name].filter(Boolean).join(" ") ||
+              "ללא שם",
+          );
+        }
+      }
+
+      return Object.fromEntries(
+        (departments ?? []).map((department) => [
+          department.id,
+          department.manager_id
+            ? namesById.get(department.manager_id) ?? "אחראי מחלקה לא זמין"
+            : null,
+        ]),
+      ) as Record<string, string | null>;
     },
   });
 
@@ -266,7 +323,15 @@ function DashboardPage() {
           {canViewBreaks && <OnBreakSection profile={profile} />}
 
           {admin ? (
-            <AdminDashboard stats={statsQuery.data} loading={statsQuery.isLoading} onSelectDept={setDeptDialogId} canCreateEmployee={canCreateEmployee} currentUserRoles={profile.roles} />
+            <AdminDashboard
+              stats={statsQuery.data}
+              loading={statsQuery.isLoading}
+              onSelectDept={setDeptDialogId}
+              canCreateEmployee={canCreateEmployee}
+              canViewDepartments={canViewDepartments}
+              departmentManagerNames={departmentManagersQuery.data}
+              currentUserRoles={profile.roles}
+            />
           ) : (
             <DeptManagerDashboard data={deptManagerQuery.data} loading={deptManagerQuery.isLoading} />
           )}
@@ -617,12 +682,16 @@ function AdminDashboard({
   loading,
   onSelectDept,
   canCreateEmployee,
+  canViewDepartments,
+  departmentManagerNames,
   currentUserRoles,
 }: {
   stats?: { total: number; active: number; inactive: number; onLeave: number; onBreak: number; byDept: Record<string, number>; departments: DeptRow[] };
   loading: boolean;
   onSelectDept?: (id: string) => void;
   canCreateEmployee: boolean;
+  canViewDepartments: boolean;
+  departmentManagerNames?: Record<string, string | null>;
   currentUserRoles?: AppRole[];
 }) {
   const navigate = useNavigate();
@@ -681,8 +750,14 @@ function AdminDashboard({
                 <div className="flex h-full w-full items-center justify-between gap-2.5">
                   <div className="min-w-0 self-center">
                     <p className={`${DASH_TILE_TITLE} truncate`}>{d.name}</p>
-                    <p className="mt-0.5 text-2xl font-bold leading-none tabular-nums">
-                      {stats.byDept[d.id] ?? 0}
+                    {canViewDepartments && (
+                      <p className="mt-1 truncate text-sm font-bold text-primary">
+                        אחראי המחלקה:{" "}
+                        {departmentManagerNames?.[d.id] ?? "לא מונה"}
+                      </p>
+                    )}
+                    <p className="mt-1 text-xs font-semibold text-muted-foreground">
+                      {stats.byDept[d.id] ?? 0} עובדים
                     </p>
                   </div>
                   {canCreateEmployee && (
