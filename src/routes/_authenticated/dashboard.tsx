@@ -38,6 +38,18 @@ import { isNonEmployeeIdentity } from "@/lib/employee-identity";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+
+/** Shared tile size for all dashboard summary/shortcut cards (matches leave cards). */
+const DASH_TILE =
+  "card-elevated flex h-full min-h-[4.75rem] p-3 transition-colors";
+const DASH_TILE_GRID = "grid grid-cols-1 items-stretch gap-2 sm:grid-cols-2";
+const DASH_TILE_ICON =
+  "flex size-8 shrink-0 items-center justify-center rounded-lg";
+const DASH_TILE_TITLE = "text-sm font-semibold leading-tight";
+const DASH_TILE_SUB =
+  "mt-0.5 line-clamp-2 min-h-[2rem] text-[11px] leading-snug text-muted-foreground";
+const DASH_TILE_TRAIL =
+  "flex h-7 w-[4.75rem] shrink-0 items-center justify-end";
 import { Users, UserCheck, UserX, Building2, Loader2, Plane, ListTodo, Clock, CheckCircle2, AlertTriangle, CalendarDays, User, Coffee, Send, UserPlus, Palmtree } from "lucide-react";
 import { useLeaveAccess } from "@/lib/leave-permissions";
 import { LEAVE_STATUS_LABEL } from "@/lib/leave.functions";
@@ -327,7 +339,7 @@ function TasksStatsSection({
           לכל המשימות ←
         </Link>
       </div>
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className={DASH_TILE_GRID}>
         <StatCard label="פתוחות" value={stats.open} icon={ListTodo} tone="primary" onClick={() => go("new")} />
         <StatCard label="בביצוע" value={stats.in_progress} icon={Clock} tone="success" onClick={() => go("in_progress")} />
         <StatCard label="הוגשו / הושלמו" value={stats.completed} icon={CheckCircle2} tone="muted" onClick={() => go("pending_approval")} />
@@ -402,7 +414,7 @@ function DeptHeadOnBreakSection() {
 
   return (
     <>
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+      <div className={DASH_TILE_GRID}>
         <StatCard
           label="עובדים בהפסקה כעת"
           value={list.length}
@@ -549,7 +561,7 @@ function DeptManagerDashboard({
         </Card>
       )}
 
-      <section className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      <section className={DASH_TILE_GRID}>
         <StatCard label="עובדי המחלקה" value={total} icon={Users} tone="primary" onClick={() => go("all")} />
         <StatCard label="פעילים" value={active} icon={UserCheck} tone="success" onClick={() => go("active")} />
         <StatCard label="בחופש" value={onLeave} icon={Plane} tone="warning" onClick={() => go("on_leave")} />
@@ -572,14 +584,14 @@ function DeptManagerDashboard({
             עדיין אין עובדים משויכים למחלקה זו.
           </Card>
         ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div className={DASH_TILE_GRID}>
             {emps.map((e) => (
-              <Card key={e.id} className="card-elevated p-4">
-                <div className="flex items-center gap-3">
-                  <div className="size-10 rounded-full bg-accent text-accent-foreground flex items-center justify-center text-sm font-semibold shrink-0 overflow-hidden">
+              <Card key={e.id} className={DASH_TILE}>
+                <div className="flex h-full w-full items-center gap-2.5">
+                  <div className="flex size-8 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-accent text-sm font-semibold text-accent-foreground">
                     <span>{e.full_name?.charAt(0) || "?"}</span>
                   </div>
-                  <div className="flex-1 min-w-0">
+                  <div className="min-w-0 flex-1 self-center">
                     <div className="flex items-center gap-2 flex-wrap">
                       <p className="font-medium truncate">{e.full_name || "ללא שם"}</p>
                       {!e.is_active && (
@@ -629,7 +641,7 @@ function AdminDashboard({
 
   return (
     <>
-      <section className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      <section className={DASH_TILE_GRID}>
         <StatCard label="👥 סך עובדים" value={stats.total} icon={Users} tone="primary" onClick={() => go("all")} />
         <StatCard label="🟢 עובדים פעילים" value={stats.active} icon={UserCheck} tone="success" onClick={() => go("active")} />
         <StatCard label="🏖️ בחופשה" value={stats.onLeave} icon={Plane} tone="warning" onClick={() => go("on_leave")} />
@@ -651,11 +663,11 @@ function AdminDashboard({
             עדיין לא הוגדרו מחלקות. ניתן להוסיף דרך מסך ניהול המחלקות.
           </Card>
         ) : (
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+          <div className={DASH_TILE_GRID}>
             {stats.departments.map((d) => (
               <Card
                 key={d.id}
-                className="card-elevated p-4 cursor-pointer hover:bg-accent/30 transition-colors text-right"
+                className={`${DASH_TILE} cursor-pointer text-right hover:bg-accent/30`}
                 onClick={() => onSelectDept?.(d.id)}
                 role="button"
                 tabIndex={0}
@@ -666,25 +678,27 @@ function AdminDashboard({
                   }
                 }}
               >
-                <div className="flex items-start justify-between gap-2">
-                  <div className="min-w-0">
-                    <p className="text-base sm:text-lg font-bold leading-tight truncate">{d.name}</p>
-                    <p className="text-2xl font-bold mt-1">{stats.byDept[d.id] ?? 0}</p>
+                <div className="flex h-full w-full items-center justify-between gap-2.5">
+                  <div className="min-w-0 self-center">
+                    <p className={`${DASH_TILE_TITLE} truncate`}>{d.name}</p>
+                    <p className="mt-0.5 text-2xl font-bold leading-none tabular-nums">
+                      {stats.byDept[d.id] ?? 0}
+                    </p>
                   </div>
                   {canCreateEmployee && (
                     <Button
                       type="button"
                       size="sm"
                       variant="outline"
-                      className="h-8 px-2 gap-1 shrink-0"
+                      className="h-7 shrink-0 gap-1 px-2 text-xs"
                       onClick={(e) => {
                         e.stopPropagation();
                         setCreateForDept(d);
                       }}
                       title="הוסף עובד למחלקה"
                     >
-                      <UserPlus className="size-4" />
-                      <span className="text-xs">הוסף</span>
+                      <UserPlus className="size-3" />
+                      הוסף
                     </Button>
                   )}
                 </div>
@@ -865,19 +879,34 @@ function StatCard({
   }[tone];
   const cardClass =
     tone === "danger"
-      ? "card-elevated p-5 cursor-pointer transition-colors bg-destructive/10 border-2 border-destructive ring-2 ring-destructive/40 hover:bg-destructive/15"
-      : "card-elevated p-5 cursor-pointer hover:bg-accent/30 transition-colors";
+      ? `${DASH_TILE} cursor-pointer bg-destructive/10 border-2 border-destructive ring-2 ring-destructive/40 hover:bg-destructive/15`
+      : `${DASH_TILE} cursor-pointer hover:bg-accent/30`;
   const inner = (
     <Card className={cardClass + (pulse ? " animate-pulse" : "")}>
-      <div className="flex items-center justify-between">
-        <div>
-          <p className={"text-sm " + (tone === "danger" ? "text-destructive font-semibold" : "text-muted-foreground")}>{label}</p>
-          <p className={"text-3xl font-bold mt-2 " + (tone === "danger" ? "text-destructive" : "")}>{value}</p>
+      <div className="flex h-full w-full items-center gap-2.5">
+        <div className="min-w-0 flex-1 self-center text-right">
+          <p
+            className={
+              tone === "danger"
+                ? "line-clamp-2 text-sm font-semibold leading-tight text-destructive"
+                : "line-clamp-2 text-sm font-semibold leading-tight"
+            }
+          >
+            {label}
+          </p>
+          <p
+            className={
+              "mt-0.5 text-2xl font-bold tabular-nums leading-none " +
+              (tone === "danger" ? "text-destructive" : "")
+            }
+          >
+            {value}
+          </p>
         </div>
-        <div className={`relative size-11 rounded-xl flex items-center justify-center ${toneClass}`}>
-          <Icon className="size-5" />
+        <div className={`relative ${DASH_TILE_ICON} ${toneClass}`}>
+          <Icon className="size-4" />
           {!!badge && badge > 0 && (
-            <span className="absolute -top-1.5 -right-1.5 min-w-[20px] h-5 px-1.5 rounded-full bg-destructive text-destructive-foreground text-[11px] font-bold flex items-center justify-center shadow">
+            <span className="absolute -top-1.5 -right-1.5 flex h-5 min-w-[20px] items-center justify-center rounded-full bg-destructive px-1.5 text-[11px] font-bold text-destructive-foreground shadow">
               {badge > 99 ? "99+" : badge}
             </span>
           )}
@@ -1278,7 +1307,7 @@ function SchedulesStatsSection({ profile }: { profile: any }) {
   return (
     <section className="space-y-4">
       {canViewBranchScheduleOverview && (
-        <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
+        <div className={DASH_TILE_GRID}>
           <StatCard
             label="ממתינים לאישור"
             value={canApprove ? s.pendingAll : s.pending}
@@ -1293,7 +1322,7 @@ function SchedulesStatsSection({ profile }: { profile: any }) {
       )}
 
       {canViewBranchScheduleOverview && (
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <div className={DASH_TILE_GRID}>
           <StatCard
             label="מחלקות שטרם הוכן להן סידור עבודה"
             value={s.noScheduleCount}
@@ -2334,7 +2363,7 @@ function LeaveShortcutCard({ userId }: { userId: string }) {
   const both = leaveAccess.showRequestCard && leaveAccess.showPendingQueueCard;
 
   return (
-    <div className={both ? "grid grid-cols-1 gap-2 sm:grid-cols-2" : "space-y-2"}>
+    <div className={both ? DASH_TILE_GRID : "space-y-2"}>
       {leaveAccess.showPendingQueueCard && (
         <Card
           role="button"
@@ -2343,19 +2372,21 @@ function LeaveShortcutCard({ userId }: { userId: string }) {
           onKeyDown={(e) => {
             if (e.key === "Enter" || e.key === " ") goAdmin();
           }}
-          className="card-elevated cursor-pointer border border-amber-300/60 bg-amber-50/70 p-3 transition-colors hover:bg-amber-50"
+          className={`${DASH_TILE} cursor-pointer border border-amber-300/60 bg-amber-50/70 hover:bg-amber-50`}
         >
-          <div className="flex items-center gap-2.5">
-            <div className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-amber-200/70 text-amber-900">
+          <div className="flex h-full w-full items-center gap-2.5">
+            <div className={`${DASH_TILE_ICON} bg-amber-200/70 text-amber-900`}>
               <Palmtree className="size-4" />
             </div>
-            <div className="min-w-0 flex-1">
-              <h3 className="text-sm font-semibold leading-tight">{queueTitle}</h3>
-              <p className="mt-0.5 line-clamp-2 text-[11px] text-muted-foreground">{queueSubtitle}</p>
+            <div className="min-w-0 flex-1 self-center">
+              <h3 className={DASH_TILE_TITLE}>{queueTitle}</h3>
+              <p className={DASH_TILE_SUB}>{queueSubtitle}</p>
             </div>
-            <Badge className="shrink-0 bg-amber-600 px-1.5 py-0 text-xs text-white hover:bg-amber-600">
-              {queueCount}
-            </Badge>
+            <div className={DASH_TILE_TRAIL}>
+              <Badge className="bg-amber-600 px-1.5 py-0 text-xs text-white hover:bg-amber-600">
+                {queueCount}
+              </Badge>
+            </div>
           </div>
         </Card>
       )}
@@ -2368,15 +2399,15 @@ function LeaveShortcutCard({ userId }: { userId: string }) {
           onKeyDown={(e) => {
             if (e.key === "Enter" || e.key === " ") goLeaves();
           }}
-          className="card-elevated cursor-pointer border border-emerald-300/50 bg-emerald-50/50 p-3 transition-colors hover:bg-emerald-50"
+          className={`${DASH_TILE} cursor-pointer border border-emerald-300/50 bg-emerald-50/50 hover:bg-emerald-50`}
         >
-          <div className="flex items-center gap-2.5">
-            <div className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-emerald-200/60 text-emerald-900">
+          <div className="flex h-full w-full items-center gap-2.5">
+            <div className={`${DASH_TILE_ICON} bg-emerald-200/60 text-emerald-900`}>
               <Palmtree className="size-4" />
             </div>
-            <div className="min-w-0 flex-1">
-              <h3 className="text-sm font-semibold leading-tight">בקשת חופשה</h3>
-              <p className="mt-0.5 line-clamp-2 text-[11px] text-muted-foreground">
+            <div className="min-w-0 flex-1 self-center">
+              <h3 className={DASH_TILE_TITLE}>בקשת חופשה</h3>
+              <p className={DASH_TILE_SUB}>
                 {pendingMine.length > 0
                   ? `${pendingMine.length} בקשות ממתינות`
                   : approvedUpcoming.length > 0
@@ -2384,17 +2415,19 @@ function LeaveShortcutCard({ userId }: { userId: string }) {
                     : "הגשה ומעקב סטטוס"}
               </p>
             </div>
-            <Button
-              size="sm"
-              className="h-7 shrink-0 gap-1 px-2 text-xs"
-              onClick={(e) => {
-                e.stopPropagation();
-                goLeaves();
-              }}
-            >
-              <Send className="size-3" />
-              בקשה
-            </Button>
+            <div className={DASH_TILE_TRAIL}>
+              <Button
+                size="sm"
+                className="h-7 gap-1 px-2 text-xs"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  goLeaves();
+                }}
+              >
+                <Send className="size-3" />
+                בקשה
+              </Button>
+            </div>
           </div>
         </Card>
       )}
@@ -2473,22 +2506,28 @@ function BreakShortcutCard({ userId }: { userId: string }) {
         tabIndex={0}
         onClick={goRequest}
         onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") goRequest(); }}
-        className="card-elevated p-5 border-2 border-primary/30 bg-primary/5 cursor-pointer transition-colors hover:bg-primary/10"
+        className={`${DASH_TILE} cursor-pointer border border-primary/30 bg-primary/5 hover:bg-primary/10`}
       >
-        <div className="flex items-center gap-3">
-          <div className="size-11 rounded-xl bg-primary/15 text-primary flex items-center justify-center shrink-0">
-            <Coffee className="size-6" />
+        <div className="flex h-full w-full items-center gap-2.5">
+          <div className={`${DASH_TILE_ICON} bg-primary/15 text-primary`}>
+            <Coffee className="size-4" />
           </div>
-          <div className="flex-1 min-w-0">
-            <h3 className="font-semibold text-base">הפסקה</h3>
-            <p className="text-xs text-muted-foreground mt-0.5">
+          <div className="min-w-0 flex-1 self-center">
+            <h3 className={DASH_TILE_TITLE}>הפסקה</h3>
+            <p className={DASH_TILE_SUB}>
               בקש/י הפסקה במהירות, ללא מעבר לתפריט.
             </p>
           </div>
-          <Button size="sm" className="gap-2 shrink-0" onClick={(e) => { e.stopPropagation(); goRequest(); }}>
-            <Send className="size-4" />
-            בקשת הפסקה
-          </Button>
+          <div className={DASH_TILE_TRAIL}>
+            <Button
+              size="sm"
+              className="h-7 gap-1 px-2 text-xs"
+              onClick={(e) => { e.stopPropagation(); goRequest(); }}
+            >
+              <Send className="size-3" />
+              בקשה
+            </Button>
+          </div>
         </div>
       </Card>
     );
@@ -2909,7 +2948,7 @@ function OnBreakSection({ profile }: { profile: any }) {
 
   return (
     <>
-      <div className={`grid grid-cols-2 gap-4 ${requiresApproval ? "lg:grid-cols-4" : "lg:grid-cols-3"}`}>
+      <div className={DASH_TILE_GRID}>
         {requiresApproval && (
           <StatCard
             label="בקשות הפסקה ממתינות לאישור"
