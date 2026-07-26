@@ -33,6 +33,8 @@ type EmployeeInfo = {
   full_name: string;
   job_title: string | null;
   department_name: string | null;
+  /** Job-title flag: appear in app, but never in schedule headcount numbers/lists. */
+  excluded_from_headcount: boolean;
 };
 
 type DisplayEmployee = EmployeeInfo & { start: string | null; end: string | null };
@@ -43,6 +45,9 @@ type DisplayEmployee = EmployeeInfo & { start: string | null; end: string | null
  * - One card per active shift definition (ordered by sort_order).
  * - Counts = employees assigned to that shift **today** in published schedules
  *   for the current schedule week (בוקר / ערב / חופש — including חופש with no hours).
+ * - Honors the existing headcount rule: profiles with excluded_from_headcount
+ *   (תפקיד "לא נכלל במצבת") stay in the app but are omitted from these numbers
+ *   and from the name lists opened from the cards.
  * - Realtime on schedule_shifts / schedules / shift_definitions.
  */
 export function LiveShiftCardsSection() {
@@ -141,7 +146,7 @@ export function LiveShiftCardsSection() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("profiles")
-        .select("id, full_name, job_title, departments(name)")
+        .select("id, full_name, job_title, excluded_from_headcount, departments(name)")
         .in("id", empIds);
       if (error) throw error;
       return ((data ?? []) as any[]).map((row) => ({
@@ -150,6 +155,7 @@ export function LiveShiftCardsSection() {
         job_title: (row.job_title as string | null) ?? null,
         department_name:
           (row.departments?.name as string | null | undefined) ?? null,
+        excluded_from_headcount: !!row.excluded_from_headcount,
       }));
     },
     staleTime: 60_000,
@@ -185,8 +191,10 @@ export function LiveShiftCardsSection() {
     };
   }, [qc]);
 
-  // Group employees by shift code — all assignments today (deduped per employee).
-  const { byShift, empMap } = useMemo(() => {
+  // Group employees by shift code — published today only.
+  // Same headcount rule as the rest of the app: תפקיד marked
+  // "לא נכלל במצבת" stays visible elsewhere but is omitted from these numbers/lists.
+  const byShift = useMemo(() => {
     const empMap = new Map<string, EmployeeInfo>();
     for (const e of empsQ.data ?? []) empMap.set(e.id, e);
     const byShift = new Map<string, DisplayEmployee[]>();
@@ -195,15 +203,19 @@ export function LiveShiftCardsSection() {
       byShift.set(def.code, []);
       seenByShift.set(def.code, new Set());
     }
+    // Wait for profile flags before counting so excluded roles never flash into totals.
+    if (empIds.length > 0 && !empsQ.data) return byShift;
+
     for (const r of rowsQ.data ?? []) {
       const def = shiftDefsQ.map.get(r.shift);
       if (!def || !def.is_active) continue;
+      const info = empMap.get(r.employee_id);
+      if (info?.excluded_from_headcount) continue;
       const seen = seenByShift.get(r.shift);
       if (!seen || seen.has(r.employee_id)) continue;
       seen.add(r.employee_id);
       const start = r.start_time ?? def.start_time ?? null;
       const end = r.end_time ?? def.end_time ?? null;
-      const info = empMap.get(r.employee_id);
       const list = byShift.get(r.shift) ?? [];
       list.push({
         id: r.employee_id,
@@ -218,10 +230,8 @@ export function LiveShiftCardsSection() {
     for (const list of byShift.values()) {
       list.sort((a, b) => a.full_name.localeCompare(b.full_name, "he"));
     }
-    return { byShift, empMap };
-  }, [rowsQ.data, empsQ.data, shiftDefsQ.list, shiftDefsQ.map]);
-
-  void empMap;
+    return byShift;
+  }, [rowsQ.data, empsQ.data, empIds.length, shiftDefsQ.list, shiftDefsQ.map]);
 
   const [openShift, setOpenShift] = useState<string | null>(null);
 
