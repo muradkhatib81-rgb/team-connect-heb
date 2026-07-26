@@ -30,8 +30,10 @@ import {
   type LeaveTypeRow,
 } from "@/lib/leave.functions";
 import {
+  countLeaveDays,
   formatLeaveDateRange,
   formatLeaveDateTime,
+  isEmployeeCurrentlyOnLeave,
   leaveLifecycleVisual,
   LEAVE_LIFECYCLE_BADGE,
   LEAVE_LIFECYCLE_ROW,
@@ -520,14 +522,43 @@ function todayIsoJerusalem(): string {
 }
 
 /** Managers with approve permission — not department heads. */
+type ManualOnLeaveRow = {
+  id: string;
+  full_name: string | null;
+  first_name: string | null;
+  last_name: string | null;
+  on_leave: boolean;
+  leave_start_date: string | null;
+  leave_end_date: string | null;
+  leave_type_code: string | null;
+  departments: { name: string | null } | null;
+};
+
+type OnLeaveListItem =
+  | { source: "request"; row: LeaveRequestRow }
+  | {
+      source: "manual";
+      user_id: string;
+      name: string;
+      department_name: string | null;
+      leave_start_date: string | null;
+      leave_end_date: string | null;
+      leave_type_code: string | null;
+    };
+
 function ActiveOnLeaveTab() {
   const qc = useQueryClient();
   const cancelFn = useServerFn(adminCancelActiveLeave);
-  const [cancelTarget, setCancelTarget] = useState<LeaveRequestRow | null>(null);
+  const [cancelTarget, setCancelTarget] = useState<{
+    user_id: string;
+    name: string;
+    start: string | null;
+    end: string | null;
+  } | null>(null);
   const today = todayIsoJerusalem();
 
-  const onLeaveQ = useQuery({
-    queryKey: ["leave-admin-on-leave", today],
+  const requestsQ = useQuery({
+    queryKey: ["leave-admin-on-leave", "requests", today],
     queryFn: async () => {
       const { data, error } = await (supabase as any)
         .from("leave_requests")
@@ -549,6 +580,22 @@ function ActiveOnLeaveTab() {
     },
   });
 
+  // Manual / profile leave (employee file) — same source as ניהול עובדים "בחופשה".
+  const profilesQ = useQuery({
+    queryKey: ["leave-admin-on-leave", "profiles", today],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("profiles")
+        .select(
+          "id, full_name, first_name, last_name, on_leave, leave_start_date, leave_end_date, leave_type_code, departments(name)",
+        )
+        .or(`on_leave.eq.true,leave_end_date.gte.${today}`)
+        .limit(500);
+      if (error) throw error;
+      return (data ?? []) as ManualOnLeaveRow[];
+    },
+  });
+
   const cancelMut = useMutation({
     mutationFn: async (uid: string) => {
       await cancelFn({ data: { user_id: uid, note: "ביטול ישיר מניהול חופשות" } });
@@ -564,12 +611,47 @@ function ActiveOnLeaveTab() {
       qc.invalidateQueries({ queryKey: ["schedules"] });
       qc.invalidateQueries({ queryKey: ["emp-dash-notif"] });
       qc.invalidateQueries({ queryKey: ["dashboard"] });
+      qc.invalidateQueries({ queryKey: ["dashboard-shift-cards"] });
       qc.invalidateQueries({ queryKey: ["notifications"] });
     },
     onError: (e: Error) => toast.error(e.message),
   });
 
-  const rows = onLeaveQ.data ?? [];
+  const items = useMemo((): OnLeaveListItem[] => {
+    const requests = requestsQ.data ?? [];
+    const coveredByRequest = new Set(requests.map((r) => r.user_id));
+    const list: OnLeaveListItem[] = requests.map((row) => ({ source: "request", row }));
+
+    for (const p of profilesQ.data ?? []) {
+      if (!isEmployeeCurrentlyOnLeave(p, today)) continue;
+      if (coveredByRequest.has(p.id)) continue;
+      const name =
+        p.full_name ||
+        [p.first_name, p.last_name].filter(Boolean).join(" ") ||
+        "עובד";
+      list.push({
+        source: "manual",
+        user_id: p.id,
+        name,
+        department_name: p.departments?.name ?? null,
+        leave_start_date: p.leave_start_date,
+        leave_end_date: p.leave_end_date,
+        leave_type_code: p.leave_type_code,
+      });
+    }
+
+    list.sort((a, b) => {
+      const aStart =
+        a.source === "request" ? a.row.start_date : a.leave_start_date ?? "";
+      const bStart =
+        b.source === "request" ? b.row.start_date : b.leave_start_date ?? "";
+      return aStart.localeCompare(bStart);
+    });
+    return list;
+  }, [requestsQ.data, profilesQ.data, today]);
+
+  const loading = requestsQ.isLoading || profilesQ.isLoading;
+  const error = requestsQ.error ?? profilesQ.error;
 
   return (
     <>
@@ -577,44 +659,99 @@ function ActiveOnLeaveTab() {
         <div>
           <h2 className="font-medium">עובדים בחופשה</h2>
           <p className="mt-1 text-xs text-muted-foreground">
-            חופשות פעילות (אדום). ביטול מעדכן את הסידור ומודיע לעובד. אחראי מחלקה אינו יכול לבטל מכאן.
+            חופשות פעילות (אדום) — כולל בקשות שאושרו וחופשה ידנית מקובץ העובד.
+            ביטול מעדכן את הסידור ומודיע לעובד. אחראי מחלקה אינו יכול לבטל מכאן.
           </p>
         </div>
-        {onLeaveQ.isLoading ? (
+        {loading ? (
           <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
-        ) : onLeaveQ.isError ? (
+        ) : error ? (
           <p className="text-sm text-destructive">
-            לא ניתן לטעון: {(onLeaveQ.error as Error).message}
+            לא ניתן לטעון: {(error as Error).message}
           </p>
-        ) : rows.length === 0 ? (
+        ) : items.length === 0 ? (
           <p className="text-sm text-muted-foreground">אין עובדים בחופשה כרגע.</p>
         ) : (
           <ul className="max-h-[32rem] space-y-2 overflow-y-auto">
-            {rows.map((r) => {
-              const approved = approverLabel(r);
+            {items.map((item) => {
+              if (item.source === "request") {
+                const r = item.row;
+                const approved = approverLabel(r);
+                return (
+                  <li
+                    key={`req-${r.id}`}
+                    className={`flex flex-wrap items-start justify-between gap-3 rounded-lg border p-3 text-sm ${LEAVE_LIFECYCLE_ROW.active}`}
+                  >
+                    <div className="min-w-0 space-y-1">
+                      <div className="font-medium">
+                        {requestEmployeeName(r)} · {r.leave_types?.name ?? leaveOffLabel(null)}
+                      </div>
+                      <div className="text-muted-foreground">
+                        {formatLeaveDateRange(r.start_date, r.end_date)}
+                        {" · "}
+                        <span className="font-medium text-foreground">{r.days_count} ימים</span>
+                      </div>
+                      {approved && (
+                        <div className="text-xs text-muted-foreground">
+                          אושר על ידי{" "}
+                          <span className="font-medium text-foreground">{approved.name}</span>
+                          {" · "}
+                          {approved.at}
+                        </div>
+                      )}
+                      <SickAttachmentButton row={r} />
+                    </div>
+                    <div className="flex flex-col items-end gap-2 shrink-0">
+                      <Badge className={LEAVE_LIFECYCLE_BADGE.active} variant="outline">
+                        חופשה פעילה
+                      </Badge>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="text-destructive border-destructive/40 hover:bg-destructive/10"
+                        onClick={() =>
+                          setCancelTarget({
+                            user_id: r.user_id,
+                            name: requestEmployeeName(r),
+                            start: r.start_date,
+                            end: r.end_date,
+                          })
+                        }
+                      >
+                        <UserMinus className="h-4 w-4" />
+                        ביטול חופשה
+                      </Button>
+                    </div>
+                  </li>
+                );
+              }
+
+              const days = countLeaveDays(item.leave_start_date, item.leave_end_date);
+              const range = formatLeaveDateRange(item.leave_start_date, item.leave_end_date);
               return (
                 <li
-                  key={r.id}
+                  key={`manual-${item.user_id}`}
                   className={`flex flex-wrap items-start justify-between gap-3 rounded-lg border p-3 text-sm ${LEAVE_LIFECYCLE_ROW.active}`}
                 >
                   <div className="min-w-0 space-y-1">
                     <div className="font-medium">
-                      {requestEmployeeName(r)} · {r.leave_types?.name ?? leaveOffLabel(null)}
+                      {item.name} · {leaveOffLabel(item.leave_type_code)}
                     </div>
-                    <div className="text-muted-foreground">
-                      {formatLeaveDateRange(r.start_date, r.end_date)}
-                      {" · "}
-                      <span className="font-medium text-foreground">{r.days_count} ימים</span>
-                    </div>
-                    {approved && (
-                      <div className="text-xs text-muted-foreground">
-                        אושר על ידי{" "}
-                        <span className="font-medium text-foreground">{approved.name}</span>
-                        {" · "}
-                        {approved.at}
-                      </div>
+                    {item.department_name && (
+                      <div className="text-xs text-muted-foreground">{item.department_name}</div>
                     )}
-                    <SickAttachmentButton row={r} />
+                    <div className="text-muted-foreground">
+                      {range ?? "—"}
+                      {days != null && (
+                        <>
+                          {" · "}
+                          <span className="font-medium text-foreground">
+                            {days} {days === 1 ? "יום" : "ימים"}
+                          </span>
+                        </>
+                      )}
+                    </div>
+                    <div className="text-xs text-muted-foreground">הוזן ידנית מקובץ העובד</div>
                   </div>
                   <div className="flex flex-col items-end gap-2 shrink-0">
                     <Badge className={LEAVE_LIFECYCLE_BADGE.active} variant="outline">
@@ -624,7 +761,14 @@ function ActiveOnLeaveTab() {
                       size="sm"
                       variant="outline"
                       className="text-destructive border-destructive/40 hover:bg-destructive/10"
-                      onClick={() => setCancelTarget(r)}
+                      onClick={() =>
+                        setCancelTarget({
+                          user_id: item.user_id,
+                          name: item.name,
+                          start: item.leave_start_date,
+                          end: item.leave_end_date,
+                        })
+                      }
                     >
                       <UserMinus className="h-4 w-4" />
                       ביטול חופשה
@@ -648,11 +792,9 @@ function ActiveOnLeaveTab() {
               {cancelTarget && (
                 <>
                   יבוטל החופש של{" "}
-                  <span className="font-medium text-foreground">
-                    {requestEmployeeName(cancelTarget)}
-                  </span>
-                  {formatLeaveDateRange(cancelTarget.start_date, cancelTarget.end_date)
-                    ? ` (${formatLeaveDateRange(cancelTarget.start_date, cancelTarget.end_date)})`
+                  <span className="font-medium text-foreground">{cancelTarget.name}</span>
+                  {formatLeaveDateRange(cancelTarget.start, cancelTarget.end)
+                    ? ` (${formatLeaveDateRange(cancelTarget.start, cancelTarget.end)})`
                     : ""}
                   . הסידור יתעדכן, והעובד יקבל התראה בדשבורד עם שמך ותאריך הביטול.
                 </>

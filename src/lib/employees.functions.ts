@@ -821,18 +821,16 @@ export const updateEmployee = createServerFn({ method: "POST" })
           _leave_type_code: leaveTypeCode,
         });
       } else if (!data.on_leave) {
-        // Cleared via employee edit — unlock schedule leave marking for previous range
+        // Cleared via employee edit — same restore path as admin cancel / request cancel
         const prevStart = (existingProfile.leave_start_date as string | null)?.slice(0, 10) ?? null;
         const prevEnd = (existingProfile.leave_end_date as string | null)?.slice(0, 10) ?? null;
         if (prevStart && prevEnd) {
-          await supabaseAdmin
-            .from("schedule_shifts")
-            .update({ leave_type_code: null })
-            .eq("employee_id", data.user_id)
-            .eq("branch_id", context.branchId)
-            .eq("shift", "off")
-            .gte("day_date", prevStart)
-            .lte("day_date", prevEnd);
+          await (supabaseAdmin as any).rpc("clear_leave_from_schedule_shifts", {
+            _user_id: data.user_id,
+            _start: prevStart,
+            _end: prevEnd,
+            _branch_id: context.branchId,
+          });
         }
       }
     }
