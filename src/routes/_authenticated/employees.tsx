@@ -1633,8 +1633,12 @@ function EditEmployeeDialog({
       qc.invalidateQueries({ queryKey: ["dashboard", "stats"] });
       qc.invalidateQueries({ queryKey: ["dashboard", "dept-manager"] });
       qc.invalidateQueries({ queryKey: ["dashboard-dept-on-break"] });
+      qc.invalidateQueries({ queryKey: ["dashboard-dept-daily-breaks"] });
+      qc.invalidateQueries({ queryKey: ["dashboard-on-break"] });
+      qc.invalidateQueries({ queryKey: ["dashboard-daily-breaks"] });
       qc.invalidateQueries({ queryKey: ["dept-employees"] });
       qc.invalidateQueries({ queryKey: ["schedule-shifts"] });
+      qc.invalidateQueries({ queryKey: ["schedules"] });
       onClose();
     },
     onError: (e: any) => {

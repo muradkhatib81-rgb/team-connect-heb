@@ -129,11 +129,12 @@ function BreakPlanningPage() {
     },
   });
 
-  // Department heads may view today's breaks / end an active one, but must not
-  // use multi-row planning (הוסף שורה). They request via /breaks like employees.
+  // Department heads may view/edit/end their own breaks, but must not use
+  // multi-row planning (הוסף שורה). They request new breaks via /breaks.
   const isDeptHeadOnly =
     !!me?.roles.includes("department_manager") && !isAdmin(me.roles);
   const canPlanBreaks = breakNav.isVisible && !isDeptHeadOnly;
+  const canEditOwnBreaks = breakNav.isVisible;
 
   const rows = todayQ.data ?? [];
   const consumedTypeIds = useMemo(() => consumedBreakSettingIds(rows), [rows]);
@@ -355,7 +356,7 @@ function BreakPlanningPage() {
                   <Badge variant={BREAK_STATUS_TONE[r.status] ?? "secondary"}>
                     {BREAK_STATUS_LABEL[r.status] ?? r.status}
                   </Badge>
-                  {isBreakEditable(r.status) && canPlanBreaks && (
+                  {isBreakEditable(r.status) && canEditOwnBreaks && (
                     <div className="flex gap-2">
                       <Button size="sm" variant="outline" onClick={() => setEditTarget(r)}>
                         <Pencil className="size-4" />
@@ -547,6 +548,10 @@ function EditBreakDialog({
     onSuccess: () => {
       toast.success("ההפסקה עודכנה");
       qc.invalidateQueries({ queryKey: ["my-breaks-today"] });
+      qc.invalidateQueries({ queryKey: ["my-break-requests"] });
+      qc.invalidateQueries({ queryKey: ["my-break-shortcut"] });
+      qc.invalidateQueries({ queryKey: ["dashboard-daily-breaks"] });
+      qc.invalidateQueries({ queryKey: ["dashboard-dept-daily-breaks"] });
       onClose();
     },
     onError: (e: any) => toast.error(e?.message ?? "שגיאה בעדכון"),

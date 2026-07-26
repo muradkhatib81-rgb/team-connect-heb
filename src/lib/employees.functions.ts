@@ -1065,6 +1065,20 @@ export const updateEmployee = createServerFn({ method: "POST" })
         .eq("branch_id", context.branchId)
         .neq("id", data.department_id);
       if (clearOldDeptErr) throw new Error(clearOldDeptErr.message);
+
+      // Move current/next-week shifts + open leave/break dept links with the employee.
+      if (existingProfile.department_id) {
+        const { error: transferErr } = await (supabaseAdmin as any).rpc(
+          "transfer_employee_department_data",
+          {
+            _user_id: data.user_id,
+            _from_dept: existingProfile.department_id,
+            _to_dept: data.department_id,
+            _branch_id: context.branchId,
+          },
+        );
+        if (transferErr) throw new Error(transferErr.message);
+      }
     }
 
     if (data.role_changed && data.role) {

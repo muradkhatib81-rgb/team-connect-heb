@@ -3105,8 +3105,8 @@ function OnBreakSection({ profile: _profile }: { profile: any }) {
             : Promise.resolve({ data: [] as any[] }),
           (supabase as any)
             .from("break_audit_log")
-            .select("break_request_id, actor_id, occurred_at, action")
-            .eq("action", "manual_end")
+            .select("break_request_id, actor_id, occurred_at, action, payload")
+            .in("action", ["manual_end", "reschedule"])
             .in("break_request_id", rows.map((r) => r.id)),
         ]);
       const pMap = new Map((profs ?? []).map((p: any) => [p.id, p]));
@@ -3125,14 +3125,36 @@ function OnBreakSection({ profile: _profile }: { profile: any }) {
         for (const a of actorProfs ?? []) pMap.set((a as any).id, a);
       }
       const auditByReq = new Map<string, { by: string; at: string }>();
+      const rescheduleByReq = new Map<
+        string,
+        { by: string; at: string; oldStart: string | null; newStart: string | null }
+      >();
       for (const a of auditList) {
-        // keep earliest manual_end per break_request
-        const prev = auditByReq.get(a.break_request_id);
-        if (!prev || new Date(a.occurred_at) < new Date(prev.at)) {
-          auditByReq.set(a.break_request_id, {
-            by: (pMap.get(a.actor_id) as any)?.full_name ?? "מנהל",
-            at: a.occurred_at,
-          });
+        const actorName = (pMap.get(a.actor_id) as any)?.full_name ?? "מנהל";
+        if (a.action === "manual_end") {
+          // keep earliest manual_end per break_request
+          const prev = auditByReq.get(a.break_request_id);
+          if (!prev || new Date(a.occurred_at) < new Date(prev.at)) {
+            auditByReq.set(a.break_request_id, {
+              by: actorName,
+              at: a.occurred_at,
+            });
+          }
+        } else if (a.action === "reschedule") {
+          // keep latest reschedule per break_request
+          const prev = rescheduleByReq.get(a.break_request_id);
+          if (!prev || new Date(a.occurred_at) > new Date(prev.at)) {
+            const payload = (a.payload ?? {}) as {
+              old_start?: string | null;
+              new_start?: string | null;
+            };
+            rescheduleByReq.set(a.break_request_id, {
+              by: actorName,
+              at: a.occurred_at,
+              oldStart: payload.old_start ?? null,
+              newStart: payload.new_start ?? null,
+            });
+          }
         }
       }
       return rows.map((r) => ({
@@ -3162,6 +3184,7 @@ function OnBreakSection({ profile: _profile }: { profile: any }) {
         status: r.status as string,
         approverName: r.approved_by ? (pMap.get(r.approved_by) as any)?.full_name ?? "—" : "—",
         manualReturn: auditByReq.get(r.id) ?? null,
+        reschedule: rescheduleByReq.get(r.id) ?? null,
       }));
     },
   });
@@ -3478,7 +3501,15 @@ function OnBreakSection({ profile: _profile }: { profile: any }) {
                               <td className="p-2 whitespace-nowrap">{r.department}</td>
                               <td className="p-2 whitespace-nowrap">{r.type}</td>
                               <td className="p-2 whitespace-nowrap">{r.approverName}</td>
-                              <td className="p-2 whitespace-nowrap">{fmtT(r.displayStart ?? r.startedAt)}</td>
+                              <td className="p-2 whitespace-nowrap">
+                                {fmtT(r.displayStart ?? r.startedAt)}
+                                {r.reschedule ? (
+                                  <div className="text-[11px] text-muted-foreground mt-0.5 whitespace-normal">
+                                    שונה ע״י {r.reschedule.by}:{" "}
+                                    {fmtT(r.reschedule.oldStart)} → {fmtT(r.reschedule.newStart)}
+                                  </div>
+                                ) : null}
+                              </td>
                               <td className="p-2 whitespace-nowrap">
                                 {fmtT(
                                   r.endsAt ??
