@@ -434,15 +434,21 @@ type DeptEmp = {
   department_id: string | null;
 };
 
+/** Active break whose planned end time has already passed. */
+function isBreakOverdue(endsAt: string | null, nowMs = Date.now()) {
+  if (!endsAt) return false;
+  return new Date(endsAt).getTime() < nowMs;
+}
+
 function DeptHeadOnBreakSection() {
   const qc = useQueryClient();
-  const [open, setOpen] = useState(false);
+  const [listKind, setListKind] = useState<"onBreak" | "late" | null>(null);
   const [logOpen, setLogOpen] = useState(false);
   const [logSearch, setLogSearch] = useState("");
   const [logEmpFilter, setLogEmpFilter] = useState("__all");
   const [logTypeFilter, setLogTypeFilter] = useState("__all");
   const [logStatusFilter, setLogStatusFilter] = useState("__all");
-  const [, setTick] = useState(0);
+  const [onBreakTick, setOnBreakTick] = useState(0);
 
   const onBreakQ = useQuery({
     queryKey: ["dashboard-dept-on-break"],
@@ -513,13 +519,19 @@ function DeptHeadOnBreakSection() {
   }, [qc]);
 
   useEffect(() => {
-    if (!open) return;
-    const t = setInterval(() => setTick((n) => n + 1), 1000);
+    if ((onBreakQ.data?.length ?? 0) === 0) return;
+    const t = setInterval(() => setOnBreakTick((n) => n + 1), 1000);
     return () => clearInterval(t);
-  }, [open]);
+  }, [onBreakQ.data?.length]);
 
   const list = onBreakQ.data ?? [];
   const log = dailyLogQ.data ?? [];
+  void onBreakTick;
+  const nowMs = Date.now();
+  const onBreakNow = list.filter((r) => !isBreakOverdue(r.ends_at, nowMs));
+  const lateList = list.filter((r) => isBreakOverdue(r.ends_at, nowMs));
+  const dialogList =
+    listKind === "late" ? lateList : listKind === "onBreak" ? onBreakNow : [];
   const fmtT = (iso: string | null) => fmtBreakTime(iso) || "—";
   const deptName = list[0]?.department_name ?? log[0]?.department_name ?? null;
 
@@ -577,12 +589,21 @@ function DeptHeadOnBreakSection() {
       <div className={DASH_TILE_GRID}>
         <StatCard
           label="עובדים בהפסקה כעת"
-          value={list.length}
+          value={onBreakNow.length}
           icon={Coffee}
-          tone={list.length > 0 ? "warning" : "primary"}
-          onClick={() => setOpen(true)}
-          badge={list.length}
-          pulse={list.length > 0}
+          tone={onBreakNow.length > 0 ? "warning" : "primary"}
+          onClick={() => setListKind("onBreak")}
+          badge={onBreakNow.length}
+          pulse={onBreakNow.length > 0}
+        />
+        <StatCard
+          label="עובדים מאחרים מהפסקה"
+          value={lateList.length}
+          icon={AlertTriangle}
+          tone={lateList.length > 0 ? "danger" : "muted"}
+          onClick={() => setListKind("late")}
+          badge={lateList.length}
+          pulse={lateList.length > 0}
         />
         <StatCard
           label="יומן הפסקות"
@@ -593,12 +614,17 @@ function DeptHeadOnBreakSection() {
         />
       </div>
 
-      <Dialog open={open} onOpenChange={setOpen}>
+      <Dialog
+        open={listKind !== null}
+        onOpenChange={(o) => {
+          if (!o) setListKind(null);
+        }}
+      >
         <DialogContent className="max-w-lg">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Coffee className="size-5 text-primary" />
-              עובדים בהפסקה כעת
+              {listKind === "late" ? "עובדים מאחרים מהפסקה" : "עובדים בהפסקה כעת"}
               {deptName ? (
                 <span className="text-xs font-normal text-muted-foreground mr-2">
                   · {deptName}
@@ -611,15 +637,18 @@ function DeptHeadOnBreakSection() {
             <div className="flex justify-center py-8">
               <Loader2 className="size-5 animate-spin text-primary" />
             </div>
-          ) : list.length === 0 ? (
+          ) : dialogList.length === 0 ? (
             <p className="text-sm text-muted-foreground py-6 text-center">
-              אין עובדים בהפסקה במחלקה כרגע.
+              {listKind === "late"
+                ? "אין עובדים מאחרים מהפסקה במחלקה כרגע."
+                : "אין עובדים בהפסקה במחלקה כרגע."}
             </p>
           ) : (
             <div className="space-y-3 max-h-[60vh] overflow-y-auto">
-              {list.map((r) => {
+              {dialogList.map((r) => {
                 const now = Date.now();
                 const endsTs = r.ends_at ? new Date(r.ends_at).getTime() : 0;
+                const remainingMs = endsTs ? endsTs - now : 0;
                 const overrunMs = endsTs && now > endsTs ? now - endsTs : 0;
                 return (
                   <Card
@@ -640,11 +669,15 @@ function DeptHeadOnBreakSection() {
                       <p className="text-sm text-muted-foreground">
                         יצא: {fmtT(r.started_at)} · חזרה: {fmtT(r.ends_at)}
                       </p>
-                      {overrunMs > 0 && (
+                      {overrunMs > 0 ? (
                         <Badge variant="destructive" className="mt-1">
                           חריגה +{fmtHMS(overrunMs)}
                         </Badge>
-                      )}
+                      ) : endsTs ? (
+                        <Badge variant="secondary" className="mt-1">
+                          נותר {fmtHMS(Math.max(0, remainingMs))}
+                        </Badge>
+                      ) : null}
                     </div>
                   </Card>
                 );
@@ -2926,130 +2959,12 @@ type ManagerOnBreakRow = {
   startedAt: string | null;
   endsAt: string | null;
   approverName: string;
-  upcoming: {
-    type: string;
-    durationMinutes: number;
-    plannedStart: string | null;
-    status: string;
-  } | null;
 };
 
-function ManagerEmployeeBreakPanel({
-  row,
-  fmtT,
-  onReturn,
-  returning,
-  canReturn,
-}: {
-  row: ManagerOnBreakRow;
-  fmtT: (iso: string | null) => string;
-  onReturn: () => void;
-  returning: boolean;
-  canReturn: boolean;
-}) {
-  const now = Date.now();
-  const endsTs = row.endsAt ? new Date(row.endsAt).getTime() : 0;
-  const remainingMs = endsTs ? endsTs - now : 0;
-  const overrunMs = endsTs && now > endsTs ? now - endsTs : 0;
-  const upcomingStartMs = row.upcoming?.plannedStart
-    ? new Date(row.upcoming.plannedStart).getTime()
-    : null;
-  const upcomingCountdownMs = upcomingStartMs ? Math.max(0, upcomingStartMs - now) : 0;
-  const upcomingEndsIso =
-    upcomingStartMs && row.upcoming
-      ? new Date(
-          upcomingStartMs + row.upcoming.durationMinutes * 60_000,
-        ).toISOString()
-      : null;
-
-  return (
-    <div className={row.upcoming ? "grid gap-3 lg:grid-cols-2" : ""}>
-      <Card
-        className={
-          "card-elevated p-4 border-2 " +
-          (overrunMs > 0
-            ? "border-red-500 bg-red-50 dark:bg-red-950/30"
-            : "border-green-500 bg-green-50 dark:bg-green-950/30")
-        }
-      >
-        <div className="flex items-start justify-between gap-3">
-          <div className="min-w-0 space-y-1">
-            <p className="font-semibold truncate">
-              👤 {row.name}
-              {row.role_label ? ` · 💼 ${row.role_label}` : ""}
-            </p>
-            <p className="text-xs text-muted-foreground">
-              🏬 {row.department} · ☕ {row.type} · {row.durationMinutes} דק׳
-            </p>
-            <p className="text-xs text-muted-foreground">
-              ▶️ {fmtT(row.startedAt)} · 🏁 {fmtT(row.endsAt)} · אישר/ה: {row.approverName}
-            </p>
-            <Badge variant={overrunMs > 0 ? "destructive" : "default"} className="mt-1">
-              {overrunMs > 0 ? "🔴 חריגה" : "🟢 הפסקה נוכחית"}
-            </Badge>
-          </div>
-          <div className="text-center shrink-0">
-            <div
-              className={
-                "font-mono font-bold tabular-nums text-2xl " +
-                (overrunMs > 0 ? "text-red-600" : "text-green-600")
-              }
-            >
-              {overrunMs > 0 ? `+${fmtHMS(overrunMs)}` : endsTs ? fmtHMS(remainingMs) : "--:--"}
-            </div>
-            {canReturn && (
-              <Button
-                size="sm"
-                variant={overrunMs > 0 ? "destructive" : "outline"}
-                className="gap-1 mt-2"
-                onClick={onReturn}
-                disabled={returning}
-              >
-                {returning ? (
-                  <Loader2 className="size-4 animate-spin" />
-                ) : (
-                  <CheckCircle2 className="size-4" />
-                )}
-                החזר מההפסקה
-              </Button>
-            )}
-          </div>
-        </div>
-      </Card>
-
-      {row.upcoming && (
-        <Card className="card-elevated p-4 border-2 border-amber-500 bg-amber-50 dark:bg-amber-950/30">
-          <div className="flex items-start justify-between gap-3">
-            <div className="min-w-0 space-y-1.5">
-              <p className="font-semibold">הפסקה הבאה · {row.name}</p>
-              <p className="text-xs text-muted-foreground">
-                ☕ {row.upcoming.type} · {row.upcoming.durationMinutes} דק׳
-              </p>
-              <p className="text-base font-semibold text-amber-900 dark:text-amber-100 tabular-nums">
-                תתחיל ב־{fmtT(row.upcoming.plannedStart)}
-                {upcomingEndsIso ? ` · עד ${fmtT(upcomingEndsIso)}` : ""}
-              </p>
-              <Badge variant="secondary" className="mt-0.5">
-                {BREAK_STATUS_LABEL[row.upcoming.status] ?? row.upcoming.status}
-              </Badge>
-            </div>
-            <div className="text-center shrink-0">
-              <div className="font-mono font-bold tabular-nums text-2xl text-amber-600">
-                {upcomingStartMs ? fmtHMS(upcomingCountdownMs) : "--:--"}
-              </div>
-              <div className="text-[11px] text-muted-foreground mt-0.5">זמן עד התחלה</div>
-            </div>
-          </div>
-        </Card>
-      )}
-    </div>
-  );
-}
-
-function OnBreakSection({ profile }: { profile: any }) {
+function OnBreakSection({ profile: _profile }: { profile: any }) {
   const qc = useQueryClient();
   const navigate = useNavigate();
-  const [open, setOpen] = useState(false);
+  const [listKind, setListKind] = useState<"onBreak" | "late" | null>(null);
   const [logOpen, setLogOpen] = useState(false);
   const [logSearch, setLogSearch] = useState("");
   const [logEmpFilter, setLogEmpFilter] = useState<string>("__all");
@@ -3075,36 +2990,13 @@ function OnBreakSection({ profile }: { profile: any }) {
         .eq("status", "active");
       if (error) throw error;
       const rows = (data ?? []) as any[];
-      if (!rows.length) return [];
-
-      const today = todayJerusalemDate();
-      const dayStart = `${today}T00:00:00+03:00`;
-      const dayEnd = `${today}T23:59:59+03:00`;
-      const activeUserIds = Array.from(new Set(rows.map((r) => r.user_id as string)));
-
-      const { data: upcomingRaw } = await supabase
-        .from("break_requests")
-        .select(
-          "id, user_id, break_setting_id, planned_start, requested_at, approved_at_time, started_at, duration_minutes, status",
-        )
-        .in("user_id", activeUserIds)
-        .in("status", [...BREAK_PRE_ACTIVE_STATUSES])
-        .gte("requested_at", dayStart)
-        .lte("requested_at", dayEnd);
+      if (!rows.length) return [] as ManagerOnBreakRow[];
 
       const uids = Array.from(
-        new Set([
-          ...rows.flatMap((r) => [r.user_id, r.approved_by].filter(Boolean)),
-          ...(upcomingRaw ?? []).map((r: any) => r.user_id),
-        ]),
+        new Set(rows.flatMap((r) => [r.user_id, r.approved_by].filter(Boolean))),
       );
       const dids = Array.from(new Set(rows.map((r) => r.department_id).filter(Boolean)));
-      const sids = Array.from(
-        new Set([
-          ...rows.map((r) => r.break_setting_id),
-          ...(upcomingRaw ?? []).map((r: any) => r.break_setting_id),
-        ].filter(Boolean)),
-      );
+      const sids = Array.from(new Set(rows.map((r) => r.break_setting_id).filter(Boolean)));
       const [{ data: profs }, { data: depts }, { data: settings }, { data: meta }] =
         await Promise.all([
           supabase.from("profiles").select("id, full_name, job_title").in("id", uids),
@@ -3121,45 +3013,43 @@ function OnBreakSection({ profile }: { profile: any }) {
       const sMap = new Map((settings ?? []).map((s: any) => [s.id, s.name]));
       const mMap = new Map((meta ?? []).map((m: any) => [m.id, m]));
 
-      const upcomingByUser = new Map<string, any>();
-      for (const uid of activeUserIds) {
-        const userRows = (upcomingRaw ?? []).filter((r: any) => r.user_id === uid);
-        const activeRow = rows.find((r) => r.user_id === uid);
-        const next = pickUpcomingBreak(userRows as any[], activeRow?.id);
-        if (next) upcomingByUser.set(uid, next);
-      }
-
-      return rows.map((r) => {
-        const upcoming = upcomingByUser.get(r.user_id);
-        const upcomingStart = upcoming ? breakStartIso(upcoming) : null;
-        return {
-          id: r.id,
-          userId: r.user_id as string,
-          name: (pMap.get(r.user_id) as any)?.full_name ?? "—",
-          job_title:
-            (mMap.get(r.user_id) as any)?.job_title ??
-            (pMap.get(r.user_id) as any)?.job_title ??
-            null,
-          role_label: (mMap.get(r.user_id) as any)?.role_label ?? null,
-          department: dMap.get(r.department_id) ?? "—",
-          type: sMap.get(r.break_setting_id) ?? "הפסקה",
-          durationMinutes: r.duration_minutes as number,
-          startedAt: r.started_at as string | null,
-          endsAt: r.ends_at as string | null,
-          approverName:
-            r.approved_by ? (pMap.get(r.approved_by) as any)?.full_name ?? "—" : "—",
-          upcoming: upcoming
-            ? {
-                type: sMap.get(upcoming.break_setting_id) ?? "הפסקה",
-                durationMinutes: upcoming.duration_minutes as number,
-                plannedStart: upcomingStart,
-                status: upcoming.status as string,
-              }
-            : null,
-        };
-      });
+      return rows.map((r) => ({
+        id: r.id,
+        userId: r.user_id as string,
+        name: (pMap.get(r.user_id) as any)?.full_name ?? "—",
+        job_title:
+          (mMap.get(r.user_id) as any)?.job_title ??
+          (pMap.get(r.user_id) as any)?.job_title ??
+          null,
+        role_label: (mMap.get(r.user_id) as any)?.role_label ?? null,
+        department: dMap.get(r.department_id) ?? "—",
+        type: sMap.get(r.break_setting_id) ?? "הפסקה",
+        durationMinutes: r.duration_minutes as number,
+        startedAt: r.started_at as string | null,
+        endsAt: r.ends_at as string | null,
+        approverName:
+          r.approved_by ? (pMap.get(r.approved_by) as any)?.full_name ?? "—" : "—",
+      }));
     },
   });
+
+  useEffect(() => {
+    const ch = supabase
+      .channel("dashboard-on-break-rt")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "break_requests" },
+        () => {
+          qc.invalidateQueries({ queryKey: ["dashboard-on-break"] });
+          qc.invalidateQueries({ queryKey: ["dashboard-daily-breaks"] });
+          qc.invalidateQueries({ queryKey: ["dashboard-pending-breaks"] });
+        },
+      )
+      .subscribe();
+    return () => {
+      supabase.removeChannel(ch);
+    };
+  }, [qc]);
 
   const pendingCountQ = useQuery({
     enabled: canManageBreaks && requiresApproval,
@@ -3285,6 +3175,8 @@ function OnBreakSection({ profile }: { profile: any }) {
     onSuccess: (input) => {
       toast.success("ההפסקה הסתיימה");
       qc.invalidateQueries({ queryKey: ["dashboard-on-break"] });
+      qc.invalidateQueries({ queryKey: ["dashboard-dept-on-break"] });
+      qc.invalidateQueries({ queryKey: ["dashboard-dept-daily-breaks"] });
       qc.invalidateQueries({ queryKey: ["dashboard-pending-breaks"] });
       qc.invalidateQueries({ queryKey: ["dashboard-daily-breaks"] });
       qc.invalidateQueries({ queryKey: ["dashboard", "stats"] });
@@ -3299,9 +3191,9 @@ function OnBreakSection({ profile }: { profile: any }) {
 
 
 
-  const [, setOnBreakTick] = useState(0);
+  const [onBreakTick, setOnBreakTick] = useState(0);
 
-  // Live countdown tick for on-break admin cards — only while someone is on break.
+  // Live split: move overdue people into the late tile without waiting for refetch.
   useEffect(() => {
     if ((onBreakQ.data?.length ?? 0) === 0) return;
     const t = setInterval(() => setOnBreakTick((n) => n + 1), 1000);
@@ -3310,6 +3202,11 @@ function OnBreakSection({ profile }: { profile: any }) {
 
   const list = onBreakQ.data ?? [];
   const log = dailyLogQ.data ?? [];
+  void onBreakTick; // recompute on/late split every second
+  const nowMs = Date.now();
+  const onBreakNow = list.filter((r) => !isBreakOverdue(r.endsAt, nowMs));
+  const lateList = list.filter((r) => isBreakOverdue(r.endsAt, nowMs));
+  const dialogList = listKind === "late" ? lateList : listKind === "onBreak" ? onBreakNow : [];
 
   const fmtT = (iso: string | null) =>
     iso
@@ -3341,10 +3238,21 @@ function OnBreakSection({ profile }: { profile: any }) {
         )}
         <StatCard
           label="עובדים בהפסקה כעת"
-          value={list.length}
+          value={onBreakNow.length}
           icon={Coffee}
-          tone="primary"
-          onClick={() => setOpen(true)}
+          tone={onBreakNow.length > 0 ? "warning" : "primary"}
+          onClick={() => setListKind("onBreak")}
+          badge={onBreakNow.length}
+          pulse={onBreakNow.length > 0}
+        />
+        <StatCard
+          label="עובדים מאחרים מהפסקה"
+          value={lateList.length}
+          icon={AlertTriangle}
+          tone={lateList.length > 0 ? "danger" : "muted"}
+          onClick={() => setListKind("late")}
+          badge={lateList.length}
+          pulse={lateList.length > 0}
         />
         <StatCard
           label="יומן הפסקות"
@@ -3366,27 +3274,6 @@ function OnBreakSection({ profile }: { profile: any }) {
           </Card>
         )}
       </div>
-
-      {list.length > 0 && (
-        <section className="space-y-3">
-          <h2 className="text-lg font-semibold flex items-center gap-2">
-            <Coffee className="size-5 text-primary" />
-            עובדים בהפסקה כעת
-          </h2>
-          <div className="space-y-3">
-            {list.map((r) => (
-              <ManagerEmployeeBreakPanel
-                key={r.id}
-                row={r}
-                fmtT={fmtT}
-                onReturn={() => setConfirmReturn({ id: r.id, userId: r.userId, name: r.name })}
-                returning={manualEndMut.isPending}
-                canReturn={canManageBreaks}
-              />
-            ))}
-          </div>
-        </section>
-      )}
 
       <Dialog open={logOpen} onOpenChange={setLogOpen}>
         <DialogContent className="max-w-6xl">
@@ -3644,18 +3531,27 @@ function OnBreakSection({ profile }: { profile: any }) {
 
 
 
-      <Dialog open={open} onOpenChange={setOpen}>
+      <Dialog
+        open={listKind !== null}
+        onOpenChange={(o) => {
+          if (!o) setListKind(null);
+        }}
+      >
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>עובדים בהפסקה כעת</DialogTitle>
+            <DialogTitle>
+              {listKind === "late" ? "עובדים מאחרים מהפסקה" : "עובדים בהפסקה כעת"}
+            </DialogTitle>
           </DialogHeader>
-          {list.length === 0 ? (
+          {dialogList.length === 0 ? (
             <p className="text-sm text-muted-foreground py-6 text-center">
-              אין עובדים בהפסקה כרגע.
+              {listKind === "late"
+                ? "אין עובדים מאחרים מהפסקה כרגע."
+                : "אין עובדים בהפסקה כרגע."}
             </p>
           ) : (
             <ul className="space-y-2 max-h-[60vh] overflow-y-auto">
-              {list.map((r) => {
+              {dialogList.map((r) => {
                 const endsTs = r.endsAt ? new Date(r.endsAt).getTime() : 0;
                 const now = Date.now();
                 const remainingMs = endsTs ? endsTs - now : 0;
@@ -3679,43 +3575,10 @@ function OnBreakSection({ profile }: { profile: any }) {
                         {r.job_title ? ` · ${r.job_title}` : ""}
                       </p>
                       <p className="text-xs text-muted-foreground">
-                        🏬 {r.department} · ☕ {r.type} · התחיל ב־{startStr} · 🕒 חזרה משוערת: {endStr}
+                        🏬 {r.department} · ☕ {r.type} · התחיל ב־{startStr} · 🕒 חזרה משוערת:{" "}
+                        {endStr}
                       </p>
-                      <p className="text-xs text-muted-foreground">
-                        אישר/ה: {r.approverName}
-                      </p>
-                      {r.upcoming && (
-                        <div className="mt-2 rounded-md border border-amber-500/40 bg-amber-50/60 dark:bg-amber-950/20 p-2.5 text-xs space-y-1">
-                          <p className="font-medium text-foreground">הפסקה הבאה</p>
-                          <p className="text-muted-foreground">
-                            ☕ {r.upcoming.type} · {r.upcoming.durationMinutes} דק׳ ·{" "}
-                            {BREAK_STATUS_LABEL[r.upcoming.status] ?? r.upcoming.status}
-                          </p>
-                          <p className="text-sm font-semibold text-amber-900 dark:text-amber-100 tabular-nums">
-                            תתחיל ב־
-                            {r.upcoming.plannedStart ? fmtT(r.upcoming.plannedStart) : "—"}
-                            {r.upcoming.plannedStart
-                              ? ` · עד ${fmtT(
-                                  new Date(
-                                    new Date(r.upcoming.plannedStart).getTime() +
-                                      r.upcoming.durationMinutes * 60_000,
-                                  ).toISOString(),
-                                )}`
-                              : ""}
-                          </p>
-                          {r.upcoming.plannedStart && (
-                            <p className="text-amber-600 font-mono tabular-nums">
-                              ⏳ עוד{" "}
-                              {fmtHMS(
-                                Math.max(
-                                  0,
-                                  new Date(r.upcoming.plannedStart).getTime() - Date.now(),
-                                ),
-                              )}
-                            </p>
-                          )}
-                        </div>
-                      )}
+                      <p className="text-xs text-muted-foreground">אישר/ה: {r.approverName}</p>
                     </div>
                     <div className="shrink-0 flex flex-col items-end gap-1">
                       {overrunMs > 0 ? (
@@ -3728,7 +3591,9 @@ function OnBreakSection({ profile }: { profile: any }) {
                           size="sm"
                           variant={overrunMs > 0 ? "destructive" : "outline"}
                           className="gap-1"
-                          onClick={() => setConfirmReturn({ id: r.id, userId: r.userId, name: r.name })}
+                          onClick={() =>
+                            setConfirmReturn({ id: r.id, userId: r.userId, name: r.name })
+                          }
                           disabled={manualEndMut.isPending}
                         >
                           {manualEndMut.isPending ? (
@@ -3736,7 +3601,7 @@ function OnBreakSection({ profile }: { profile: any }) {
                           ) : (
                             <CheckCircle2 className="size-4" />
                           )}
-                          החזר עובד מהפסקה
+                          החזר מההפסקה
                         </Button>
                       )}
                     </div>
