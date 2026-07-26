@@ -4,7 +4,7 @@ import { useServerFn } from "@tanstack/react-start";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/use-auth";
-import { isAdmin, type AppRole } from "@/lib/constants";
+import { isAdmin, isPlatformOwner, type AppRole } from "@/lib/constants";
 import { isNonEmployeeIdentity } from "@/lib/employee-identity";
 import {
   createTask,
@@ -158,7 +158,9 @@ export const Route = createFileRoute("/_authenticated/tasks")({
 function useTaskCaps() {
   const { data: profile } = useAuth();
   const roles: AppRole[] = profile?.roles ?? [];
-  const isMainAdmin = roles.includes("main_admin");
+  // Platform owners (system_admin + main_admin) — same as server getCallerCaps.
+  const isOwner = isPlatformOwner(roles);
+  const isMainAdmin = isOwner;
   const isAdm = isAdmin(roles);
   const isDeptMgr = roles.includes("department_manager");
   const permQuery = useQuery({
@@ -184,6 +186,7 @@ function useTaskCaps() {
   const canManageTasks = canEditTasks;
   return {
     profile,
+    isOwner,
     isMainAdmin,
     isAdm,
     isDeptMgr,
@@ -383,7 +386,8 @@ function TaskCard({
     !["completed", "pending_closure", "closed"].includes(task.status) &&
     new Date(task.due_at).getTime() < Date.now();
   const canEdit = canEditTaskContent(task, caps.profile?.id ?? "");
-  const canDelete = caps.canDeleteTasks && canEdit;
+  // Platform owners may delete any task; everyone else keeps the creator-scoped rule.
+  const canDelete = caps.canDeleteTasks && (caps.isOwner || canEdit);
 
   return (
     <>
@@ -459,7 +463,15 @@ function statusVariant(s: TaskStatus): "default" | "secondary" | "destructive" |
   return "outline";
 }
 
-function DeleteTaskBtn({ id }: { id: string }) {
+function DeleteTaskBtn({
+  id,
+  onDeleted,
+  label,
+}: {
+  id: string;
+  onDeleted?: () => void;
+  label?: string;
+}) {
   const [open, setOpen] = useState(false);
   const qc = useQueryClient();
   const del = useServerFn(deleteTask);
@@ -468,20 +480,32 @@ function DeleteTaskBtn({ id }: { id: string }) {
     onSuccess: () => {
       toast.success("המשימה נמחקה");
       qc.invalidateQueries({ queryKey: ["tasks"] });
+      onDeleted?.();
     },
     onError: (e: any) => toast.error(e?.message ?? "שגיאה במחיקה"),
   });
   return (
     <>
-      <Button
-        variant="ghost"
-        size="icon"
-        onClick={() => setOpen(true)}
-        aria-label="מחיקה"
-        className="text-destructive"
-      >
-        <Trash2 className="size-4" />
-      </Button>
+      {label ? (
+        <Button
+          variant="destructive"
+          onClick={() => setOpen(true)}
+          disabled={m.isPending}
+        >
+          <Trash2 className="size-4" />
+          {label}
+        </Button>
+      ) : (
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={() => setOpen(true)}
+          aria-label="מחיקה"
+          className="text-destructive"
+        >
+          <Trash2 className="size-4" />
+        </Button>
+      )}
       <AlertDialog open={open} onOpenChange={setOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
@@ -787,6 +811,9 @@ function TaskDetailDialog({
         </div>
         <DialogFooter className="gap-2 flex-wrap">
           <Button variant="outline" onClick={onClose}>סגירה</Button>
+          {caps.canDeleteTasks && (caps.isOwner || canEditTaskContent(task, caps.profile?.id ?? "")) && (
+            <DeleteTaskBtn id={task.id} label="מחק משימה" onDeleted={onClose} />
+          )}
           {canMarkDone && task.status === "new" && (
             <Button
               variant="secondary"

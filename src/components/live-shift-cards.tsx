@@ -222,6 +222,7 @@ export function LiveShiftCardsSection() {
         full_name: info?.full_name ?? "עובד",
         job_title: info?.job_title ?? null,
         department_name: info?.department_name ?? null,
+        excluded_from_headcount: false,
         start: start ? formatHHMM(start) : null,
         end: end ? formatHHMM(end) : null,
       });
