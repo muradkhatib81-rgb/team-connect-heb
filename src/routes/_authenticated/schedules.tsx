@@ -1151,14 +1151,21 @@ function SchedulesPage() {
     },
   });
 
-  const canDelete =
-    !!visible &&
+  // Management: delete anytime.
+  // Dept head: only own-dept draft/rejected (before send for approval) — never after.
+  const canDeleteAsManagement =
+    !isDeptHeadOnly &&
     !isEmployee &&
     (isMainAdmin ||
       isBranchManager ||
+      canCreate ||
       canEdit ||
-      ((visible.status === "draft" || visible.status === "rejected") &&
-        visible.created_by === me?.id));
+      canApprove ||
+      canPublishDirect);
+  const canDeleteAsDeptHeadDraft =
+    isDeptHeadOnly &&
+    (visible?.status === "draft" || visible?.status === "rejected");
+  const canDelete = !!visible && (canDeleteAsManagement || canDeleteAsDeptHeadDraft);
 
   function setShift(empId: string, day: string, value: string) {
     editsDirtyRef.current = true;

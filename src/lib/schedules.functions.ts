@@ -1324,7 +1324,16 @@ export const deleteSchedule = createServerFn({ method: "POST" })
       sched.department_id === caps.departmentId &&
       (sched.status === "draft" || sched.status === "rejected");
 
-    if (!caps.isMainAdmin && !caps.canApprove && !caps.canPublishDirect && !isOwnDeptMgrDraft) {
+    const canManageDelete =
+      !caps.isDeptHeadOnly &&
+      (caps.isMainAdmin ||
+        caps.isBranchManager ||
+        caps.canApprove ||
+        caps.canPublishDirect ||
+        caps.canCreate ||
+        caps.canEdit);
+
+    if (!canManageDelete && !isOwnDeptMgrDraft) {
       throw new Error("אין הרשאה למחוק את סידור העבודה");
     }
 
