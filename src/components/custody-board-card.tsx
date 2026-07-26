@@ -134,34 +134,9 @@ export function CustodyBoardCard() {
 
   if (profile.on_leave) return null;
 
-  if (visibleQ.data !== true) {
-    if (caps?.canOpenSettings && scopedBranchId) {
-      return (
-        <Card className="p-5 border-emerald-500/20 bg-gradient-to-br from-emerald-500/5 via-background to-background shadow-soft">
-          <div className="flex items-center justify-between gap-3 flex-wrap">
-            <div className="flex items-center gap-2">
-              <div className="size-9 rounded-lg bg-emerald-500/15 text-emerald-600 flex items-center justify-center">
-                <Package className="size-5" />
-              </div>
-              <div>
-                <h2 className="text-base font-bold leading-tight">📦 מערכת ניהול ציוד</h2>
-                <p className="text-xs text-muted-foreground">
-                  לוח הציוד זמין במהלך משמרת — ניתן להגדיר פריטים מראש
-                </p>
-              </div>
-            </div>
-            <Button type="button" variant="outline" size="sm" className="gap-2" asChild>
-              <Link to="/custody-settings">
-                <Settings2 className="size-4" />
-                הגדרות
-              </Link>
-            </Button>
-          </div>
-        </Card>
-      );
-    }
-    return null;
-  }
+  // Settings / management entry moved to the sidebar (מערכת ניהול ציוד).
+  // Dashboard only shows the live board while the shift self-service gate is open.
+  if (visibleQ.data !== true) return null;
 
   const slots = boardQ.data ?? [];
   const busy = checkoutMut.isPending || returnMut.isPending;

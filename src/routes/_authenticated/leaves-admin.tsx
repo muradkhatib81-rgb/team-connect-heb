@@ -7,7 +7,7 @@ import {
   FileText,
   Loader2,
   Palmtree,
-  Settings2,
+  Trash2,
   UserMinus,
   Users,
   Wallet,
@@ -25,7 +25,8 @@ import {
   decideLeaveRequest,
   getLeaveAttachmentSignedUrl,
   listLeaveTypes,
-  setLeaveAccrualRule,
+  purgeLeaveRequest,
+  setLeaveEmployeeAccrualRate,
   type LeaveRequestRow,
   type LeaveTypeRow,
 } from "@/lib/leave.functions";
@@ -134,7 +135,9 @@ function LeavesAdminPage() {
     leaveAccess.pendingQueueMode === "both";
   const historyTitle = deptScopedOnly
     ? "כל הבקשות במחלקה שלי"
-    : "כל הבקשות בסניף";
+    : leaveAccess.isPlatformOwner
+      ? "כל בקשות החופשה"
+      : "כל הבקשות בסניף";
 
   const [decideTarget, setDecideTarget] = useState<{
     row: LeaveRequestRow;
@@ -292,12 +295,6 @@ function LeavesAdminPage() {
               יתרות
             </TabsTrigger>
           )}
-          {leaveAccess.canEditBalance && (
-            <TabsTrigger value="accrual">
-              <Settings2 className="h-3.5 w-3.5" />
-              צבירה
-            </TabsTrigger>
-          )}
         </TabsList>
 
         <TabsContent value="queue" className="space-y-4">
@@ -337,10 +334,16 @@ function LeavesAdminPage() {
             </p>
             {requestsQ.isLoading ? (
               <Loader2 className="h-5 w-5 animate-spin" />
+            ) : (requestsQ.data ?? []).length === 0 ? (
+              <p className="text-sm text-muted-foreground">אין בקשות להצגה.</p>
             ) : (
               <ul className="max-h-[32rem] space-y-2 overflow-y-auto">
                 {(requestsQ.data ?? []).map((r) => (
-                  <LeaveReportRow key={r.id} row={r} />
+                  <LeaveReportRow
+                    key={r.id}
+                    row={r}
+                    canPurge={leaveAccess.isPlatformOwner}
+                  />
                 ))}
               </ul>
             )}
@@ -349,10 +352,6 @@ function LeavesAdminPage() {
 
         <TabsContent value="balances">
           <BalancesTab types={types} />
-        </TabsContent>
-
-        <TabsContent value="accrual">
-          <AccrualTab types={types} />
         </TabsContent>
       </Tabs>
 
@@ -471,11 +470,33 @@ function SickAttachmentButton({ row }: { row: LeaveRequestRow }) {
   );
 }
 
-function LeaveReportRow({ row }: { row: LeaveRequestRow }) {
+function LeaveReportRow({
+  row,
+  canPurge,
+}: {
+  row: LeaveRequestRow;
+  canPurge?: boolean;
+}) {
+  const qc = useQueryClient();
+  const purgeFn = useServerFn(purgeLeaveRequest);
+  const [confirmOpen, setConfirmOpen] = useState(false);
   const life = leaveLifecycleVisual(row.status, row.end_date, undefined, row.kind);
   const approved = approverLabel(row);
   const kindPrefix =
     row.kind === "cancellation" ? "ביטול · " : row.kind === "extension" ? "הארכה · " : "";
+
+  const purgeMut = useMutation({
+    mutationFn: async () => {
+      await purgeFn({ data: { request_id: row.id } });
+    },
+    onSuccess: () => {
+      toast.success("הבקשה נמחקה מההיסטוריה");
+      setConfirmOpen(false);
+      qc.invalidateQueries({ queryKey: ["leave-admin-requests"] });
+      qc.invalidateQueries({ queryKey: ["leave-admin-on-leave"] });
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
 
   return (
     <li
@@ -506,8 +527,53 @@ function LeaveReportRow({ row }: { row: LeaveRequestRow }) {
           {row.note && <p className="text-xs">{row.note}</p>}
           <SickAttachmentButton row={row} />
         </div>
-        {statusBadgeForRow(row)}
+        <div className="flex flex-col items-end gap-2 shrink-0">
+          {statusBadgeForRow(row)}
+          {canPurge && (
+            <Button
+              size="sm"
+              variant="outline"
+              className="text-destructive border-destructive/40 hover:bg-destructive/10"
+              onClick={() => setConfirmOpen(true)}
+            >
+              <Trash2 className="h-4 w-4" />
+              מחיקה
+            </Button>
+          )}
+        </div>
       </div>
+
+      <AlertDialog open={confirmOpen} onOpenChange={(o) => !o && !purgeMut.isPending && setConfirmOpen(false)}>
+        <AlertDialogContent dir="rtl">
+          <AlertDialogHeader>
+            <AlertDialogTitle>למחוק את הבקשה מההיסטוריה?</AlertDialogTitle>
+            <AlertDialogDescription>
+              פעולה זו מוחקת את רשומת החופשה לצמיתות (זמין לבעל המערכת בלבד).
+              {" "}
+              {requestEmployeeName(row)}
+              {formatLeaveDateRange(row.start_date, row.end_date)
+                ? ` · ${formatLeaveDateRange(row.start_date, row.end_date)}`
+                : ""}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter className="gap-2 sm:justify-start">
+            <AlertDialogAction
+              disabled={purgeMut.isPending}
+              onClick={(ev) => {
+                ev.preventDefault();
+                purgeMut.mutate();
+              }}
+            >
+              {purgeMut.isPending ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                "כן, מחק"
+              )}
+            </AlertDialogAction>
+            <AlertDialogCancel disabled={purgeMut.isPending}>חזרה</AlertDialogCancel>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </li>
   );
 }
@@ -903,265 +969,400 @@ function ActiveOnLeaveTab() {
   );
 }
 
+type BalanceEmp = {
+  id: string;
+  full_name: string | null;
+  first_name: string | null;
+  last_name: string | null;
+  id_number: string | null;
+  is_active: boolean | null;
+};
+
 function BalancesTab({ types }: { types: LeaveTypeRow[] }) {
   const qc = useQueryClient();
   const adjustFn = useServerFn(adjustLeaveBalance);
+  const setEmpRateFn = useServerFn(setLeaveEmployeeAccrualRate);
+  const [search, setSearch] = useState("");
   const [userId, setUserId] = useState("");
-  const [leaveTypeId, setLeaveTypeId] = useState("");
-  const [delta, setDelta] = useState("1");
-  const [reason, setReason] = useState("");
+  const [rateDrafts, setRateDrafts] = useState<
+    Record<string, { days: string; cap: string; useOverride: boolean }>
+  >({});
+  const [adjustDrafts, setAdjustDrafts] = useState<
+    Record<string, { delta: string; reason: string }>
+  >({});
 
   const employeesQ = useQuery({
     queryKey: ["leave-balance-employees"],
     queryFn: async () => {
       const { data, error } = await supabase
         .from("profiles")
-        .select("id, full_name, first_name, last_name, is_active")
+        .select("id, full_name, first_name, last_name, id_number, is_active")
         .order("full_name")
-        .limit(500);
+        .limit(800);
       if (error) throw error;
-      return (data ?? []).filter((e) => e.is_active !== false);
+      return ((data ?? []) as BalanceEmp[]).filter((e) => e.is_active !== false);
     },
   });
 
+  const filteredEmployees = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    const all = employeesQ.data ?? [];
+    if (!q) return all.slice(0, 40);
+    return all
+      .filter((e) => {
+        const name = empDisplayName(e).toLowerCase();
+        const idn = (e.id_number ?? "").toLowerCase();
+        return name.includes(q) || idn.includes(q);
+      })
+      .slice(0, 40);
+  }, [employeesQ.data, search]);
+
+  const selected = useMemo(
+    () => (employeesQ.data ?? []).find((e) => e.id === userId) ?? null,
+    [employeesQ.data, userId],
+  );
+
   const balancesQ = useQuery({
-    queryKey: ["leave-admin-balances"],
+    queryKey: ["leave-admin-balances", userId],
+    enabled: !!userId,
     queryFn: async () => {
-      // Avoid ambiguous PostgREST embeds (profiles:user_id) that throw on some schemas.
       const { data, error } = await (supabase as any)
         .from("leave_balances")
         .select(
-          "id, user_id, leave_type_id, manual_balance, accrued_days, used_days, reserved_days, leave_types(name, code)",
+          "id, user_id, leave_type_id, manual_balance, accrued_days, used_days, reserved_days",
         )
-        .order("updated_at", { ascending: false })
-        .limit(300);
+        .eq("user_id", userId);
       if (error) throw error;
       return data ?? [];
     },
   });
 
-  const nameById = useMemo(() => {
-    const map = new Map<string, string>();
-    for (const e of employeesQ.data ?? []) {
-      map.set(e.id, empDisplayName(e));
+  const empRatesQ = useQuery({
+    queryKey: ["leave-emp-accrual-rates", userId],
+    enabled: !!userId,
+    queryFn: async () => {
+      const { data, error } = await (supabase as any)
+        .from("leave_employee_accrual_rates")
+        .select("id, leave_type_id, days_per_month, max_cap, is_active")
+        .eq("user_id", userId);
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
+
+  const branchRulesQ = useQuery({
+    queryKey: ["leave-accrual-rules"],
+    queryFn: async () => {
+      const { data, error } = await (supabase as any)
+        .from("leave_accrual_rules")
+        .select("leave_type_id, days_per_month, max_cap, is_active")
+        .eq("is_active", true);
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
+
+  useEffect(() => {
+    if (!userId) {
+      setRateDrafts({});
+      setAdjustDrafts({});
+      return;
     }
-    return map;
-  }, [employeesQ.data]);
+    const nextRates: Record<string, { days: string; cap: string; useOverride: boolean }> = {};
+    const nextAdj: Record<string, { delta: string; reason: string }> = {};
+    for (const t of types) {
+      const er = (empRatesQ.data ?? []).find((r: any) => r.leave_type_id === t.id);
+      const br = (branchRulesQ.data ?? []).find((r: any) => r.leave_type_id === t.id);
+      const useOverride = !!(er && er.is_active);
+      nextRates[t.id] = {
+        useOverride,
+        days: String(
+          useOverride
+            ? er.days_per_month
+            : br?.days_per_month ?? "0",
+        ),
+        cap: useOverride
+          ? er.max_cap != null
+            ? String(er.max_cap)
+            : ""
+          : br?.max_cap != null
+            ? String(br.max_cap)
+            : "",
+      };
+      nextAdj[t.id] = { delta: "1", reason: "" };
+    }
+    setRateDrafts(nextRates);
+    setAdjustDrafts(nextAdj);
+  }, [userId, types, empRatesQ.data, branchRulesQ.data]);
+
+  const saveRateMut = useMutation({
+    mutationFn: async (leaveTypeId: string) => {
+      if (!userId) throw new Error("יש לבחור עובד");
+      const draft = rateDrafts[leaveTypeId];
+      if (!draft) throw new Error("אין נתונים");
+      const n = Number(draft.days);
+      if (!Number.isFinite(n) || n < 0) throw new Error("ערך צבירה לא תקין");
+      const capN = draft.cap.trim() ? Number(draft.cap) : null;
+      if (draft.cap.trim() && (!Number.isFinite(capN) || (capN as number) < 0)) {
+        throw new Error("תקרה לא תקינה");
+      }
+      await setEmpRateFn({
+        data: {
+          user_id: userId,
+          leave_type_id: leaveTypeId,
+          days_per_month: n,
+          max_cap: capN,
+          is_active: draft.useOverride,
+        },
+      });
+    },
+    onSuccess: () => {
+      toast.success("שיעור הצבירה נשמר");
+      qc.invalidateQueries({ queryKey: ["leave-emp-accrual-rates", userId] });
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
 
   const adjustMut = useMutation({
-    mutationFn: async () => {
-      if (!userId || !leaveTypeId) throw new Error("יש לבחור עובד וסוג חופשה");
-      const n = Number(delta);
-      if (!Number.isFinite(n) || n === 0) throw new Error("ערך לא תקין");
+    mutationFn: async (leaveTypeId: string) => {
+      if (!userId) throw new Error("יש לבחור עובד");
+      const draft = adjustDrafts[leaveTypeId];
+      const n = Number(draft?.delta);
+      if (!Number.isFinite(n) || n === 0) throw new Error("ערך שינוי לא תקין");
       await adjustFn({
         data: {
           user_id: userId,
           leave_type_id: leaveTypeId,
           delta: n,
-          reason: reason.trim() || null,
+          reason: draft?.reason.trim() || null,
         },
       });
     },
-    onSuccess: () => {
+    onSuccess: (_d, leaveTypeId) => {
       toast.success("היתרה עודכנה");
-      setReason("");
-      qc.invalidateQueries({ queryKey: ["leave-admin-balances"] });
+      setAdjustDrafts((prev) => ({
+        ...prev,
+        [leaveTypeId]: { delta: "1", reason: "" },
+      }));
+      qc.invalidateQueries({ queryKey: ["leave-admin-balances", userId] });
       qc.invalidateQueries({ queryKey: ["my-leave-balances"] });
     },
     onError: (e: Error) => toast.error(e.message),
   });
 
-  const balanceRows = balancesQ.data ?? [];
-
   return (
     <div className="space-y-4" lang="he-IL">
       <Card className="space-y-3 p-4">
-        <h2 className="font-medium">עדכון יתרה ידני</h2>
+        <h2 className="font-medium">יתרות ושיעור צבירה לעובד</h2>
+        <p className="text-xs text-muted-foreground">
+          בחרו עובד לפי שם או ת.ז. — עדכון יתרה ידנית ושיעור צבירה חודשית לכל סוג חופשה.
+        </p>
         {employeesQ.isError && (
           <p className="text-sm text-destructive">
             לא ניתן לטעון עובדים: {(employeesQ.error as Error).message}
           </p>
         )}
-        <div className="grid gap-3 sm:grid-cols-2">
-          <div className="space-y-2 sm:col-span-2">
-            <Label>עובד</Label>
-            <Select value={userId} onValueChange={setUserId}>
-              <SelectTrigger>
-                <SelectValue placeholder="בחרו עובד" />
-              </SelectTrigger>
-              <SelectContent>
-                {(employeesQ.data ?? []).map((e) => (
-                  <SelectItem key={e.id} value={e.id}>
-                    {empDisplayName(e)}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="space-y-2">
-            <Label>סוג</Label>
-            <Select value={leaveTypeId} onValueChange={setLeaveTypeId}>
-              <SelectTrigger>
-                <SelectValue placeholder="סוג חופשה" />
-              </SelectTrigger>
-              <SelectContent>
-                {types.map((t) => (
-                  <SelectItem key={t.id} value={t.id}>
-                    {t.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="space-y-2">
-            <Label>שינוי (+/−)</Label>
-            <Input value={delta} onChange={(e) => setDelta(e.target.value)} inputMode="decimal" />
-          </div>
-          <div className="space-y-2 sm:col-span-2">
-            <Label>סיבה</Label>
-            <Input value={reason} onChange={(e) => setReason(e.target.value)} />
-          </div>
+        <div className="space-y-2">
+          <Label>חיפוש עובד</Label>
+          <Input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="שם או מספר תעודת זהות…"
+          />
         </div>
-        <Button disabled={adjustMut.isPending} onClick={() => adjustMut.mutate()}>
-          {adjustMut.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : "שמירה"}
-        </Button>
+        <div className="max-h-48 space-y-1 overflow-y-auto rounded border p-1">
+          {employeesQ.isLoading ? (
+            <div className="flex justify-center p-3">
+              <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+            </div>
+          ) : filteredEmployees.length === 0 ? (
+            <p className="p-2 text-sm text-muted-foreground">לא נמצאו עובדים.</p>
+          ) : (
+            filteredEmployees.map((e) => {
+              const active = e.id === userId;
+              return (
+                <button
+                  key={e.id}
+                  type="button"
+                  onClick={() => setUserId(e.id)}
+                  className={`flex w-full items-center justify-between gap-2 rounded px-2 py-1.5 text-right text-sm transition-colors ${
+                    active ? "bg-primary text-primary-foreground" : "hover:bg-muted"
+                  }`}
+                >
+                  <span className="font-medium">{empDisplayName(e)}</span>
+                  <span className={active ? "opacity-80" : "text-muted-foreground"}>
+                    {e.id_number || "—"}
+                  </span>
+                </button>
+              );
+            })
+          )}
+        </div>
       </Card>
 
-      <Card className="space-y-3 p-4">
-        <h2 className="font-medium">יתרות בסניף</h2>
-        {balancesQ.isLoading ? (
-          <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
-        ) : balancesQ.isError ? (
-          <p className="text-sm text-destructive">
-            לא ניתן לטעון יתרות: {(balancesQ.error as Error).message}
-          </p>
-        ) : balanceRows.length === 0 ? (
-          <p className="text-sm text-muted-foreground">אין יתרות עדיין. עדכנו יתרה ידנית למעלה.</p>
-        ) : (
-          <ul className="max-h-96 space-y-2 overflow-y-auto text-sm">
-            {balanceRows.map((b: any) => {
-              const available =
-                Number(b.manual_balance) +
-                Number(b.accrued_days) -
-                Number(b.used_days) -
-                Number(b.reserved_days);
+      {selected && (
+        <Card className="space-y-4 p-4">
+          <div>
+            <h3 className="font-medium">{empDisplayName(selected)}</h3>
+            <p className="text-xs text-muted-foreground">
+              ת.ז. {selected.id_number || "לא הוזנה"}
+            </p>
+          </div>
+          {(balancesQ.isLoading || empRatesQ.isLoading || branchRulesQ.isLoading) && (
+            <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+          )}
+          <ul className="space-y-4">
+            {types.map((t) => {
+              const bal = (balancesQ.data ?? []).find((b: any) => b.leave_type_id === t.id);
+              const available = bal
+                ? Number(bal.manual_balance) +
+                  Number(bal.accrued_days) -
+                  Number(bal.used_days) -
+                  Number(bal.reserved_days)
+                : 0;
+              const br = (branchRulesQ.data ?? []).find((r: any) => r.leave_type_id === t.id);
+              const rate = rateDrafts[t.id] ?? { days: "0", cap: "", useOverride: false };
+              const adj = adjustDrafts[t.id] ?? { delta: "1", reason: "" };
               return (
-                <li
-                  key={b.id}
-                  className="flex flex-wrap items-center justify-between gap-2 rounded border p-2"
-                >
-                  <div>
-                    <span className="font-medium">
-                      {nameById.get(b.user_id) ?? "עובד"}
+                <li key={t.id} className="space-y-3 rounded border p-3">
+                  <div className="flex flex-wrap items-baseline justify-between gap-2">
+                    <span className="font-medium">{t.name}</span>
+                    <span className="text-sm">
+                      זמין{" "}
+                      <span className="font-semibold tabular-nums">{available}</span>
+                      {bal ? (
+                        <span className="text-muted-foreground">
+                          {" "}
+                          (ידני {bal.manual_balance} · צבור {bal.accrued_days} · נוצל{" "}
+                          {bal.used_days}
+                          {Number(bal.reserved_days) > 0
+                            ? ` · שמור ${bal.reserved_days}`
+                            : ""}
+                          )
+                        </span>
+                      ) : (
+                        <span className="text-muted-foreground"> · אין רשומת יתרה עדיין</span>
+                      )}
                     </span>
-                    {" · "}
-                    {b.leave_types?.name} · זמין {available}
+                  </div>
+
+                  <div className="space-y-2 rounded bg-muted/40 p-2">
+                    <div className="flex flex-wrap items-center gap-3 text-sm">
+                      <label className="flex items-center gap-2">
+                        <input
+                          type="checkbox"
+                          checked={rate.useOverride}
+                          onChange={(e) =>
+                            setRateDrafts((prev) => ({
+                              ...prev,
+                              [t.id]: { ...rate, useOverride: e.target.checked },
+                            }))
+                          }
+                        />
+                        שיעור אישי לעובד
+                      </label>
+                      <span className="text-xs text-muted-foreground">
+                        ברירת סניף:{" "}
+                        {br
+                          ? `${br.days_per_month} ימים/חודש${br.max_cap != null ? ` · תקרה ${br.max_cap}` : ""}`
+                          : "לא הוגדרה"}
+                      </span>
+                    </div>
+                    <div className="grid gap-2 sm:grid-cols-3">
+                      <div className="space-y-1">
+                        <Label className="text-xs">ימים לחודש</Label>
+                        <Input
+                          value={rate.days}
+                          disabled={!rate.useOverride}
+                          onChange={(e) =>
+                            setRateDrafts((prev) => ({
+                              ...prev,
+                              [t.id]: { ...rate, days: e.target.value },
+                            }))
+                          }
+                          inputMode="decimal"
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <Label className="text-xs">תקרה (אופציונלי)</Label>
+                        <Input
+                          value={rate.cap}
+                          disabled={!rate.useOverride}
+                          onChange={(e) =>
+                            setRateDrafts((prev) => ({
+                              ...prev,
+                              [t.id]: { ...rate, cap: e.target.value },
+                            }))
+                          }
+                          placeholder="ללא"
+                          inputMode="decimal"
+                        />
+                      </div>
+                      <div className="flex items-end">
+                        <Button
+                          size="sm"
+                          variant="secondary"
+                          disabled={saveRateMut.isPending}
+                          onClick={() => saveRateMut.mutate(t.id)}
+                        >
+                          {saveRateMut.isPending && saveRateMut.variables === t.id ? (
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                          ) : rate.useOverride ? (
+                            "שמירת שיעור"
+                          ) : (
+                            "חזרה לברירת סניף"
+                          )}
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="grid gap-2 sm:grid-cols-3">
+                    <div className="space-y-1">
+                      <Label className="text-xs">שינוי יתרה (+/−)</Label>
+                      <Input
+                        value={adj.delta}
+                        onChange={(e) =>
+                          setAdjustDrafts((prev) => ({
+                            ...prev,
+                            [t.id]: { ...adj, delta: e.target.value },
+                          }))
+                        }
+                        inputMode="decimal"
+                      />
+                    </div>
+                    <div className="space-y-1 sm:col-span-1">
+                      <Label className="text-xs">סיבה</Label>
+                      <Input
+                        value={adj.reason}
+                        onChange={(e) =>
+                          setAdjustDrafts((prev) => ({
+                            ...prev,
+                            [t.id]: { ...adj, reason: e.target.value },
+                          }))
+                        }
+                      />
+                    </div>
+                    <div className="flex items-end">
+                      <Button
+                        size="sm"
+                        disabled={adjustMut.isPending}
+                        onClick={() => adjustMut.mutate(t.id)}
+                      >
+                        {adjustMut.isPending && adjustMut.variables === t.id ? (
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                        ) : (
+                          "עדכון יתרה"
+                        )}
+                      </Button>
+                    </div>
                   </div>
                 </li>
               );
             })}
           </ul>
-        )}
-      </Card>
-    </div>
-  );
-}
-
-function AccrualTab({ types }: { types: LeaveTypeRow[] }) {
-  const setAccrualFn = useServerFn(setLeaveAccrualRule);
-  const [leaveTypeId, setLeaveTypeId] = useState("");
-  const [days, setDays] = useState("1.5");
-  const [cap, setCap] = useState("");
-
-  const rulesQ = useQuery({
-    queryKey: ["leave-accrual-rules"],
-    queryFn: async () => {
-      const { data, error } = await (supabase as any)
-        .from("leave_accrual_rules")
-        .select("id, leave_type_id, days_per_month, max_cap, is_active, leave_types(name, code)")
-        .order("updated_at", { ascending: false });
-      if (error) throw error;
-      return data ?? [];
-    },
-  });
-
-  const saveMut = useMutation({
-    mutationFn: async () => {
-      if (!leaveTypeId) throw new Error("יש לבחור סוג");
-      const n = Number(days);
-      if (!Number.isFinite(n) || n < 0) throw new Error("ערך לא תקין");
-      const capN = cap.trim() ? Number(cap) : null;
-      if (cap.trim() && (!Number.isFinite(capN) || (capN as number) < 0)) {
-        throw new Error("תקרה לא תקינה");
-      }
-      await setAccrualFn({
-        data: {
-          leave_type_id: leaveTypeId,
-          days_per_month: n,
-          max_cap: capN,
-          is_active: true,
-        },
-      });
-    },
-    onSuccess: () => {
-      toast.success("כלל הצבירה נשמר");
-      rulesQ.refetch();
-    },
-    onError: (e: Error) => toast.error(e.message),
-  });
-
-  const rules = rulesQ.data ?? [];
-
-  return (
-    <Card className="space-y-4 p-4" lang="he-IL">
-      <h2 className="font-medium">צבירה חודשית לפי סוג</h2>
-      <div className="grid gap-3 sm:grid-cols-3">
-        <div className="space-y-2">
-          <Label>סוג</Label>
-          <Select value={leaveTypeId} onValueChange={setLeaveTypeId}>
-            <SelectTrigger>
-              <SelectValue placeholder="סוג" />
-            </SelectTrigger>
-            <SelectContent>
-              {types.map((t) => (
-                <SelectItem key={t.id} value={t.id}>
-                  {t.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-        <div className="space-y-2">
-          <Label>ימים לחודש</Label>
-          <Input value={days} onChange={(e) => setDays(e.target.value)} inputMode="decimal" />
-        </div>
-        <div className="space-y-2">
-          <Label>תקרה (אופציונלי)</Label>
-          <Input value={cap} onChange={(e) => setCap(e.target.value)} placeholder="ללא" inputMode="decimal" />
-        </div>
-      </div>
-      <Button disabled={saveMut.isPending} onClick={() => saveMut.mutate()}>
-        {saveMut.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : "שמירת כלל"}
-      </Button>
-      {rulesQ.isLoading ? (
-        <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
-      ) : rulesQ.isError ? (
-        <p className="text-sm text-destructive">
-          לא ניתן לטעון כללי צבירה: {(rulesQ.error as Error).message}
-        </p>
-      ) : rules.length === 0 ? (
-        <p className="text-sm text-muted-foreground">אין כללים עדיין.</p>
-      ) : (
-        <ul className="space-y-2 text-sm">
-          {rules.map((r: any) => (
-            <li key={r.id} className="rounded border p-2">
-              {r.leave_types?.name}: {r.days_per_month} ימים/חודש
-              {r.max_cap != null ? ` · תקרה ${r.max_cap}` : ""}
-              {!r.is_active ? " · כבוי" : ""}
-            </li>
-          ))}
-        </ul>
+        </Card>
       )}
-    </Card>
+    </div>
   );
 }

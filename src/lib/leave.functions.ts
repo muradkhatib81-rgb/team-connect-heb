@@ -181,6 +181,30 @@ export const setLeaveAccrualRule = createServerFn({ method: "POST" })
     return { ok: true };
   });
 
+const employeeAccrualSchema = z.object({
+  user_id: z.string().uuid(),
+  leave_type_id: z.string().uuid(),
+  days_per_month: z.number().min(0).max(31),
+  max_cap: z.number().min(0).nullable().optional(),
+  is_active: z.boolean().default(true),
+});
+
+/** Per-employee accrual override — requires can_edit_leave_balance (owner always). */
+export const setLeaveEmployeeAccrualRate = createServerFn({ method: "POST" })
+  .middleware([requireBranchContext])
+  .inputValidator((data: unknown) => employeeAccrualSchema.parse(data))
+  .handler(async ({ data, context }) => {
+    const { error } = await sb(context.supabase).rpc("set_leave_employee_accrual_rate", {
+      _user_id: data.user_id,
+      _leave_type_id: data.leave_type_id,
+      _days_per_month: data.days_per_month,
+      _max_cap: data.max_cap ?? null,
+      _is_active: data.is_active,
+    });
+    if (error) throw new Error(error.message);
+    return { ok: true };
+  });
+
 const cancelSchema = z.object({
   user_id: z.string().uuid(),
   note: z.string().max(500).optional().nullable(),
@@ -193,6 +217,22 @@ export const adminCancelActiveLeave = createServerFn({ method: "POST" })
     const { error } = await sb(context.supabase).rpc("admin_cancel_active_leave", {
       _user_id: data.user_id,
       _note: data.note ?? null,
+    });
+    if (error) throw new Error(error.message);
+    return { ok: true };
+  });
+
+const purgeLeaveSchema = z.object({
+  request_id: z.string().uuid(),
+});
+
+/** Platform owner only — hard-delete a leave request from history. */
+export const purgeLeaveRequest = createServerFn({ method: "POST" })
+  .middleware([requireBranchContext])
+  .inputValidator((data: unknown) => purgeLeaveSchema.parse(data))
+  .handler(async ({ data, context }) => {
+    const { error } = await sb(context.supabase).rpc("purge_leave_request", {
+      _request_id: data.request_id,
     });
     if (error) throw new Error(error.message);
     return { ok: true };

@@ -1,0 +1,80 @@
+import { createFileRoute } from "@tanstack/react-router";
+import { Card } from "@/components/ui/card";
+import { ClipboardList, Loader2 } from "lucide-react";
+import { useAuth } from "@/lib/use-auth";
+import { useActiveBranch } from "@/lib/use-active-branch";
+import { useQuery } from "@tanstack/react-query";
+import { fetchCustodyUserCaps } from "@/lib/custody-workflow";
+import { supportContactInstruction } from "@/lib/constants";
+import { CustodyLogPanel } from "@/components/custody-log-panel";
+
+export const Route = createFileRoute("/_authenticated/custody-log")({
+  component: CustodyLogPage,
+});
+
+function CustodyLogPage() {
+  const { data: me } = useAuth();
+  const { activeBranchId } = useActiveBranch();
+  const branchId = activeBranchId ?? me?.branch_id ?? null;
+
+  const capsQ = useQuery({
+    enabled: !!me?.id,
+    queryKey: ["custody-caps", me?.id],
+    queryFn: () => fetchCustodyUserCaps(me!.id),
+  });
+
+  if (!me) return null;
+
+  if (!branchId) {
+    return (
+      <Card className="card-elevated p-8 text-center">
+        <h2 className="text-lg font-semibold">לא נמצא סניף</h2>
+        <p className="text-sm text-muted-foreground mt-2">יש לבחור סניף פעיל.</p>
+      </Card>
+    );
+  }
+
+  if (capsQ.isLoading) {
+    return (
+      <div className="flex justify-center py-16">
+        <Loader2 className="size-8 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
+
+  if (!capsQ.data?.canAccessCustodyLog) {
+    return (
+      <Card className="card-elevated p-8 text-center">
+        <h2 className="text-lg font-semibold">אין הרשאה</h2>
+        <p className="text-sm text-muted-foreground mt-2">
+          נדרשת הרשאה מ«מערכת ניהול ציוד». {supportContactInstruction(me.roles)}.
+        </p>
+      </Card>
+    );
+  }
+
+  const todayLabel = new Intl.DateTimeFormat("he-IL", {
+    timeZone: "Asia/Jerusalem",
+    dateStyle: "full",
+    numberingSystem: "latn",
+    calendar: "gregory",
+  }).format(new Date());
+
+  return (
+    <div className="space-y-6">
+      <header className="flex items-center gap-3">
+        <div className="size-10 rounded-xl bg-teal-500/10 text-teal-600 flex items-center justify-center">
+          <ClipboardList className="size-5" />
+        </div>
+        <div>
+          <h1 className="text-2xl font-bold">יומן ניהול ציוד</h1>
+          <p className="text-sm text-muted-foreground">{todayLabel}</p>
+        </div>
+      </header>
+
+      <Card className="card-elevated p-4 sm:p-6">
+        <CustodyLogPanel branchId={branchId} />
+      </Card>
+    </div>
+  );
+}

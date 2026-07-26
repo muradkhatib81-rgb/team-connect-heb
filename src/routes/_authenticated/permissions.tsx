@@ -136,7 +136,7 @@ const CATEGORIES: Category[] = [
       { key: "can_view_leave", label: "צפייה בבקשות חופשה", description: "מאפשר לפתוח את ניהול החופשות ולראות בקשות בסניף." },
       { key: "can_approve_leave", label: "אישור חופשות", description: "מאפשר לאשר בקשת חופשה בשלב ההנהלה." },
       { key: "can_reject_leave", label: "דחיית חופשות", description: "מאפשר לדחות בקשת חופשה בשלב ההנהלה." },
-      { key: "can_edit_leave_balance", label: "עריכת יתרת חופשה", description: "מאפשר לעדכן יתרות וכללי צבירה חודשית." },
+      { key: "can_edit_leave_balance", label: "עריכת יתרת חופשה", description: "מאפשר לעדכן יתרות ושיעור צבירה חודשית לעובד. לא אוטומטי למנהל/סגן — רק בהענקת הרשאה מבעל הפלטפורמה." },
     ],
   },
   {

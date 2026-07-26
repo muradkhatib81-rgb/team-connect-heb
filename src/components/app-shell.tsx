@@ -29,6 +29,9 @@ import {
   BarChart3,
   Bell,
   Palmtree,
+  Package,
+  ClipboardList,
+  ChevronDown,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
@@ -57,6 +60,7 @@ import {
   hasBranchActionPermission,
   useCurrentPermissions,
 } from "@/lib/use-current-permissions";
+import { fetchCustodyUserCaps } from "@/lib/custody-workflow";
 
 interface NavItem {
   to: string;
@@ -145,6 +149,12 @@ export function AppShell({ children }: { children: ReactNode }) {
   const { canManageBreaks } = useCanManageBreaks();
   const leaveAccess = useLeaveAccess();
   const permissionsQ = useCurrentPermissions(profile?.id);
+  const custodyCapsQ = useQuery({
+    enabled: !!profile?.id,
+    queryKey: ["custody-caps", profile?.id],
+    queryFn: () => fetchCustodyUserCaps(profile!.id),
+    staleTime: 60_000,
+  });
 
   // Realtime bridge and the Branch Mode gate read the active branch via
   // <ActiveBranchProvider/>, which now wraps this whole component (see
@@ -190,6 +200,7 @@ export function AppShell({ children }: { children: ReactNode }) {
     section?: string;
     active?: boolean;
     onSelect?: () => void;
+    children?: NavEntry[];
   };
 
   // Branch modules — only meaningful once an Active Branch exists. Regular
@@ -202,6 +213,10 @@ export function AppShell({ children }: { children: ReactNode }) {
   // routing level. Tagged with a section header only for Platform Owners,
   // so a regular employee's nav looks exactly like it always has.
   const branchSection = isPlatformOwner ? activeBranch?.name : undefined;
+  const canOpenCustodySettings = !!custodyCapsQ.data?.canOpenSettings;
+  const canAccessCustodyLog = !!custodyCapsQ.data?.canAccessCustodyLog;
+  const showCustodyNav = canOpenCustodySettings || canAccessCustodyLog;
+
   const branchItems: NavEntry[] = [
     {
       to: "/dashboard",
@@ -260,6 +275,22 @@ export function AppShell({ children }: { children: ReactNode }) {
       icon: Palmtree,
       visible: leaveAccess.canOpenLeaveAdmin,
       section: branchSection,
+    },
+    {
+      to: canOpenCustodySettings ? "/custody-settings" : "/custody-log",
+      label: "מערכת ניהול ציוד",
+      icon: Package,
+      visible: showCustodyNav,
+      section: branchSection,
+      children: [
+        {
+          to: "/custody-log",
+          label: "יומן ניהול ציוד",
+          icon: ClipboardList,
+          visible: canAccessCustodyLog,
+          section: branchSection,
+        },
+      ],
     },
     {
       to: "/employee-of-month",
@@ -580,8 +611,13 @@ export function AppShell({ children }: { children: ReactNode }) {
           </div>
         )}
         {nav.map((item, idx) => {
+          const visibleChildren = (item.children ?? []).filter((c) => c.visible);
+          const childActive = visibleChildren.some(
+            (c) => pathname === c.to || pathname.startsWith(`${c.to}/`),
+          );
           const active =
-            item.active ?? (pathname === item.to || pathname.startsWith(item.to + "/"));
+            item.active ??
+            (pathname === item.to || pathname.startsWith(`${item.to}/`) || childActive);
           const prev = idx > 0 ? nav[idx - 1] : null;
           const showSectionHeader = !!item.section && (!prev || prev.section !== item.section);
           const className = cn(
@@ -619,12 +655,44 @@ export function AppShell({ children }: { children: ReactNode }) {
                 <Link to={item.to} onClick={() => setMobileOpen(false)} className={className}>
                   <item.icon className="size-4 shrink-0" />
                   <span className="flex-1">{item.label}</span>
+                  {visibleChildren.length > 0 ? (
+                    <ChevronDown
+                      className={cn(
+                        "size-3.5 shrink-0 opacity-70 transition-transform",
+                        childActive || active ? "rotate-180" : "",
+                      )}
+                    />
+                  ) : null}
                   {!!item.badge && item.badge > 0 && (
                     <span className="min-w-[20px] h-5 px-1.5 rounded-full bg-destructive text-destructive-foreground text-[11px] font-bold flex items-center justify-center">
                       {item.badge > 99 ? "99+" : item.badge}
                     </span>
                   )}
                 </Link>
+              )}
+              {visibleChildren.length > 0 && (
+                <div className="mr-4 mt-0.5 space-y-0.5 border-r border-sidebar-border/70 pr-2">
+                  {visibleChildren.map((child) => {
+                    const childIsActive =
+                      pathname === child.to || pathname.startsWith(`${child.to}/`);
+                    return (
+                      <Link
+                        key={`${child.to}-${child.label}`}
+                        to={child.to}
+                        onClick={() => setMobileOpen(false)}
+                        className={cn(
+                          "flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium transition-colors",
+                          childIsActive
+                            ? "bg-sidebar-accent text-sidebar-accent-foreground"
+                            : "text-sidebar-foreground/85 hover:bg-sidebar-accent/60",
+                        )}
+                      >
+                        <child.icon className="size-3.5 shrink-0" />
+                        <span className="flex-1">{child.label}</span>
+                      </Link>
+                    );
+                  })}
+                </div>
               )}
             </div>
           );
