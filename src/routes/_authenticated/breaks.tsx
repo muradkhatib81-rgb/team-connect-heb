@@ -151,14 +151,38 @@ function BreaksPage() {
         (payload: any) => {
           const prev = payload.old?.status;
           const next = payload.new?.status;
+          const actorName =
+            (payload.new?.ended_by_manager_name as string | null)?.trim() ||
+            (payload.new?.cancelled_by_name as string | null)?.trim() ||
+            "מנהל";
+          const atRaw =
+            (payload.new?.completed_at as string | null) ||
+            (payload.new?.cancelled_at as string | null) ||
+            (payload.new?.rejected_at as string | null);
+          const when = atRaw
+            ? new Intl.DateTimeFormat("he-IL", {
+                timeZone: "Asia/Jerusalem",
+                day: "2-digit",
+                month: "2-digit",
+                year: "numeric",
+                hour: "2-digit",
+                minute: "2-digit",
+                hour12: false,
+                numberingSystem: "latn",
+              }).format(new Date(atRaw))
+            : "";
+          const whenPart = when ? ` · ${when}` : "";
+
           if (prev !== "active" && next === "active") {
             toast.success("ההפסקה שלך התחילה");
           } else if (prev !== "completed" && next === "completed") {
             toast("ההפסקה הסתיימה");
           } else if (prev !== "rejected" && next === "rejected") {
-            toast.error("בקשת ההפסקה נדחתה");
+            toast.error(`בקשת ההפסקה נדחתה על ידי ${actorName}${whenPart}`);
           } else if (prev !== "ended_by_manager" && next === "ended_by_manager") {
-            toast("ההפסקה הסתיימה על ידי מנהל");
+            toast(`ההפסקה הסתיימה על ידי ${actorName}${whenPart}`);
+          } else if (prev !== "cancelled_by_manager" && next === "cancelled_by_manager") {
+            toast(`ההפסקה בוטלה על ידי ${actorName}${whenPart}`);
           }
           qc.invalidateQueries({ queryKey: ["my-break-requests"] });
         },
