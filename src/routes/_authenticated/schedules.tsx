@@ -19,6 +19,7 @@ import {
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
@@ -2098,7 +2099,6 @@ function SchedulesPage() {
                         <button
                           key={`${day.day}-${s.code}`}
                           type="button"
-                          disabled={s.count === 0}
                           onClick={() =>
                             setSummaryShiftPick({
                               day: day.day,
@@ -2107,10 +2107,9 @@ function SchedulesPage() {
                               members: s.members,
                             })
                           }
-                          className={`px-3 py-1.5 rounded-md text-sm font-medium border text-start ${
-                            s.count > 0 ? "cursor-pointer hover:opacity-90 transition-opacity" : "cursor-default opacity-70"
-                          }`}
+                          className="px-3 py-1.5 rounded-md text-sm font-medium border text-start cursor-pointer hover:opacity-90 hover:ring-1 hover:ring-primary/40 transition"
                           style={shiftStyle(s.code)}
+                          title="לחץ להצגת השמות"
                         >
                           <span
                             className="inline-block size-2 rounded-full me-2 align-middle"
@@ -2214,14 +2213,23 @@ function SchedulesPage() {
                         {dayCounts.length > 0 && (
                           <div className="mt-1 flex flex-wrap gap-1 justify-center">
                             {dayCounts.map((s) => (
-                              <span
+                              <button
                                 key={`hdr-${d}-${s.code}`}
-                                className="px-1.5 py-0.5 rounded text-[10px] font-medium border leading-none"
+                                type="button"
+                                onClick={() =>
+                                  setSummaryShiftPick({
+                                    day: d,
+                                    dayLabel: FULL_DAY_NAMES[i],
+                                    shiftName: s.name,
+                                    members: s.members,
+                                  })
+                                }
+                                className="px-1.5 py-0.5 rounded text-[10px] font-medium border leading-none cursor-pointer hover:opacity-80 hover:ring-1 hover:ring-primary/40 transition"
                                 style={shiftStyle(s.code)}
-                                title={`${s.name}: ${s.count}`}
+                                title={`${s.name}: ${s.count} — לחץ להצגת השמות`}
                               >
                                 {s.name} ({s.count})
-                              </span>
+                              </button>
                             ))}
                           </div>
                         )}
@@ -2568,13 +2576,20 @@ function SchedulesPage() {
                 ? `יום ${summaryShiftPick.dayLabel} · ${summaryShiftPick.shiftName}`
                 : "עובדים במשמרת"}
             </DialogTitle>
+            {summaryShiftPick && (
+              <DialogDescription>
+                {formatHeDate(summaryShiftPick.day)} · {summaryShiftPick.members.length} עובדים
+              </DialogDescription>
+            )}
           </DialogHeader>
           {summaryMembersQ.isLoading ? (
             <div className="flex justify-center py-8">
               <Loader2 className="size-5 animate-spin text-primary" />
             </div>
           ) : (summaryMembersQ.data ?? []).length === 0 ? (
-            <p className="text-sm text-muted-foreground py-4 text-center">אין עובדים.</p>
+            <p className="text-sm text-muted-foreground py-4 text-center">
+              אין עובדים משובצים במשמרת זו.
+            </p>
           ) : (
             <ul className="divide-y max-h-[50vh] overflow-auto">
               {(summaryMembersQ.data ?? []).map((row, i) => (
