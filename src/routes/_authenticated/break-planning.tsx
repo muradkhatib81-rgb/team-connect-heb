@@ -60,6 +60,7 @@ import {
   useActivateDueBreaksPoll,
 } from "@/lib/break-workflow";
 import { useBreakSelfServiceNavVisible } from "@/lib/use-shift-self-service-visible";
+import { isAdmin } from "@/lib/constants";
 
 export const Route = createFileRoute("/_authenticated/break-planning")({
   component: BreakPlanningPage,
@@ -128,7 +129,11 @@ function BreakPlanningPage() {
     },
   });
 
-  const canPlanBreaks = breakNav.isVisible;
+  // Department heads may view today's breaks / end an active one, but must not
+  // use multi-row planning (הוסף שורה). They request via /breaks like employees.
+  const isDeptHeadOnly =
+    !!me?.roles.includes("department_manager") && !isAdmin(me.roles);
+  const canPlanBreaks = breakNav.isVisible && !isDeptHeadOnly;
 
   const rows = todayQ.data ?? [];
   const consumedTypeIds = useMemo(() => consumedBreakSettingIds(rows), [rows]);
@@ -283,7 +288,11 @@ function BreakPlanningPage() {
         <div className="flex-1 min-w-0">
           <h1 className="text-2xl sm:text-3xl font-bold">תכנון הפסקות</h1>
           <p className="text-sm text-muted-foreground mt-1">
-            תכנון כל ההפסקות למשמרת — ניתן להוסיף מספר הפסקות בבת אחת.
+            {canPlanBreaks
+              ? "תכנון כל ההפסקות למשמרת — ניתן להוסיף מספר הפסקות בבת אחת."
+              : isDeptHeadOnly
+                ? "צפייה בהפסקות היום. בקשת הפסקה חדשה מתבצעת ממסך ההפסקה."
+                : "תכנון הפסקות למשמרת."}
           </p>
         </div>
         <Button variant="outline" size="sm" asChild>

@@ -117,11 +117,11 @@ function DashboardPage() {
         "can_manage_departments",
       )
     : false;
+  // Branch-level break overview only. Department heads use DeptHeadOnBreakSection
+  // (own managed department) — they must not get the cross-department journal.
   const canViewBreaks = profile
     ? profile.roles.some((role) =>
-        ["system_admin", "main_admin", "branch_manager", "department_manager"].includes(
-          role,
-        ),
+        ["system_admin", "main_admin", "branch_manager"].includes(role),
       ) ||
       hasBranchActionPermission(
         profile.roles,
@@ -326,7 +326,10 @@ function DashboardPage() {
           <SchedulesStatsSection profile={profile} />
           {!admin && isDeptManager && <DeptHeadOnBreakSection />}
           <TasksStatsSection stats={tasksStatsQuery.data} loading={tasksStatsQuery.isLoading} />
-          {canViewBreaks && <OnBreakSection profile={profile} />}
+          {/* Branch-level journal only — dept heads use DeptHeadOnBreakSection (own dept). */}
+          {canViewBreaks && !(isDeptManager && !admin) && (
+            <OnBreakSection profile={profile} />
+          )}
 
           {admin ? (
             <AdminDashboard
@@ -434,6 +437,11 @@ type DeptEmp = {
 function DeptHeadOnBreakSection() {
   const qc = useQueryClient();
   const [open, setOpen] = useState(false);
+  const [logOpen, setLogOpen] = useState(false);
+  const [logSearch, setLogSearch] = useState("");
+  const [logEmpFilter, setLogEmpFilter] = useState("__all");
+  const [logTypeFilter, setLogTypeFilter] = useState("__all");
+  const [logStatusFilter, setLogStatusFilter] = useState("__all");
   const [, setTick] = useState(0);
 
   const onBreakQ = useQuery({
@@ -458,6 +466,35 @@ function DeptHeadOnBreakSection() {
     refetchInterval: 30_000,
   });
 
+  const dailyLogQ = useQuery({
+    queryKey: ["dashboard-dept-daily-breaks"],
+    queryFn: async () => {
+      const { data, error } = await (supabase as any).rpc(
+        "list_managed_department_daily_breaks",
+      );
+      if (error) throw error;
+      return (data ?? []) as {
+        id: string;
+        user_id: string;
+        full_name: string;
+        job_title: string | null;
+        break_type: string;
+        duration_minutes: number;
+        status: string;
+        created_at: string | null;
+        requested_at: string | null;
+        planned_start: string | null;
+        started_at: string | null;
+        ends_at: string | null;
+        completed_at: string | null;
+        department_id: string;
+        department_name: string;
+        approver_name: string | null;
+      }[];
+    },
+    refetchInterval: 60_000,
+  });
+
   useEffect(() => {
     const ch = supabase
       .channel("dashboard-dept-on-break-rt")
@@ -466,6 +503,7 @@ function DeptHeadOnBreakSection() {
         { event: "*", schema: "public", table: "break_requests" },
         () => {
           qc.invalidateQueries({ queryKey: ["dashboard-dept-on-break"] });
+          qc.invalidateQueries({ queryKey: ["dashboard-dept-daily-breaks"] });
         },
       )
       .subscribe();
@@ -481,7 +519,58 @@ function DeptHeadOnBreakSection() {
   }, [open]);
 
   const list = onBreakQ.data ?? [];
+  const log = dailyLogQ.data ?? [];
   const fmtT = (iso: string | null) => fmtBreakTime(iso) || "—";
+  const deptName = list[0]?.department_name ?? log[0]?.department_name ?? null;
+
+  const employees = Array.from(
+    new Map(log.map((r) => [r.user_id, r.full_name])).entries(),
+  ).sort((a, b) => a[1].localeCompare(b[1], "he"));
+  const types = Array.from(new Set(log.map((r) => r.break_type))).sort();
+  const statuses = Array.from(new Set(log.map((r) => r.status)));
+
+  const enriched = log.map((r) => {
+    const startedMs = r.started_at ? new Date(r.started_at).getTime() : null;
+    const endsMs = r.ends_at ? new Date(r.ends_at).getTime() : null;
+    const completedMs = r.completed_at ? new Date(r.completed_at).getTime() : null;
+    const displayStart = r.started_at ?? r.planned_start ?? r.requested_at;
+    const actualDurMin =
+      startedMs && completedMs
+        ? Math.max(0, Math.round((completedMs - startedMs) / 60000))
+        : null;
+    const overrunMin =
+      completedMs && endsMs && completedMs > endsMs
+        ? Math.round((completedMs - endsMs) / 60000)
+        : r.status === "active" && endsMs && Date.now() > endsMs
+          ? Math.round((Date.now() - endsMs) / 60000)
+          : 0;
+    const returnedOnTime =
+      r.status === "completed" && completedMs && endsMs && completedMs <= endsMs;
+    const returnedLate = r.status === "completed" && overrunMin > 0;
+    return {
+      ...r,
+      displayStart,
+      actualDurMin,
+      overrunMin,
+      returnedOnTime: !!returnedOnTime,
+      returnedLate,
+    };
+  });
+
+  const filtered = enriched.filter((r) => {
+    if (logEmpFilter !== "__all" && r.user_id !== logEmpFilter) return false;
+    if (logTypeFilter !== "__all" && r.break_type !== logTypeFilter) return false;
+    if (logStatusFilter !== "__all" && r.status !== logStatusFilter) return false;
+    if (logSearch.trim()) {
+      const q = logSearch.trim().toLowerCase();
+      const hay = [r.full_name, r.break_type, r.job_title, r.approver_name]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase();
+      if (!hay.includes(q)) return false;
+    }
+    return true;
+  });
 
   return (
     <>
@@ -495,6 +584,13 @@ function DeptHeadOnBreakSection() {
           badge={list.length}
           pulse={list.length > 0}
         />
+        <StatCard
+          label="יומן הפסקות"
+          value={log.length}
+          icon={Coffee}
+          tone="muted"
+          onClick={() => setLogOpen(true)}
+        />
       </div>
 
       <Dialog open={open} onOpenChange={setOpen}>
@@ -503,6 +599,11 @@ function DeptHeadOnBreakSection() {
             <DialogTitle className="flex items-center gap-2">
               <Coffee className="size-5 text-primary" />
               עובדים בהפסקה כעת
+              {deptName ? (
+                <span className="text-xs font-normal text-muted-foreground mr-2">
+                  · {deptName}
+                </span>
+              ) : null}
             </DialogTitle>
           </DialogHeader>
 
@@ -550,6 +651,155 @@ function DeptHeadOnBreakSection() {
               })}
             </div>
           )}
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={logOpen} onOpenChange={setLogOpen}>
+        <DialogContent className="max-w-5xl">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 flex-wrap">
+              <Coffee className="size-5 text-primary" />
+              📋 יומן ההפסקות
+              {deptName ? (
+                <Badge variant="secondary" className="rounded-full">
+                  {deptName}
+                </Badge>
+              ) : null}
+              <span className="text-xs font-normal text-muted-foreground">
+                {new Intl.DateTimeFormat("he-IL", {
+                  timeZone: "Asia/Jerusalem",
+                  dateStyle: "full",
+                  numberingSystem: "latn",
+                  calendar: "gregory",
+                }).format(new Date())}
+              </span>
+            </DialogTitle>
+          </DialogHeader>
+
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mb-3">
+            <Input
+              placeholder="🔎 חיפוש..."
+              value={logSearch}
+              onChange={(e) => setLogSearch(e.target.value)}
+            />
+            <Select value={logEmpFilter} onValueChange={setLogEmpFilter}>
+              <SelectTrigger>
+                <SelectValue placeholder="עובד" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="__all">כל עובדי המחלקה</SelectItem>
+                {employees.map(([id, name]) => (
+                  <SelectItem key={id} value={id}>
+                    {name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Select value={logTypeFilter} onValueChange={setLogTypeFilter}>
+              <SelectTrigger>
+                <SelectValue placeholder="סוג הפסקה" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="__all">כל הסוגים</SelectItem>
+                {types.map((t) => (
+                  <SelectItem key={t} value={t}>
+                    {t}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Select value={logStatusFilter} onValueChange={setLogStatusFilter}>
+              <SelectTrigger>
+                <SelectValue placeholder="סטטוס" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="__all">כל הסטטוסים</SelectItem>
+                {statuses.map((s) => (
+                  <SelectItem key={s} value={s}>
+                    {BREAK_STATUS_LABEL[s] ?? s}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="overflow-auto max-h-[65vh] border rounded-md">
+            {dailyLogQ.isLoading ? (
+              <div className="flex justify-center py-8">
+                <Loader2 className="size-5 animate-spin text-primary" />
+              </div>
+            ) : filtered.length === 0 ? (
+              <p className="p-6 text-sm text-muted-foreground text-center">
+                אין רשומות הפסקה במחלקה להיום.
+              </p>
+            ) : (
+              <table className="w-full text-xs sm:text-sm">
+                <thead className="bg-muted/40 sticky top-0">
+                  <tr>
+                    <th className="text-right p-2">עובד</th>
+                    <th className="text-right p-2">סוג</th>
+                    <th className="text-right p-2">התחלה</th>
+                    <th className="text-right p-2">סיום מתוכנן</th>
+                    <th className="text-right p-2">חזרה</th>
+                    <th className="text-right p-2">חריגה</th>
+                    <th className="text-right p-2">סטטוס</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filtered.map((r) => {
+                    const isLate = r.returnedLate;
+                    const isOnTime = r.returnedOnTime;
+                    const isActiveRow = r.status === "active";
+                    const statusBadge = isActiveRow ? (
+                      <Badge className="bg-amber-500 text-white hover:bg-amber-500">
+                        בהפסקה
+                      </Badge>
+                    ) : isOnTime ? (
+                      <Badge className="bg-green-600 text-white hover:bg-green-600">
+                        חזר בזמן
+                      </Badge>
+                    ) : isLate ? (
+                      <Badge className="bg-red-600 text-white hover:bg-red-600">
+                        חזר באיחור
+                      </Badge>
+                    ) : (
+                      <Badge variant={BREAK_STATUS_TONE[r.status] ?? "secondary"}>
+                        {BREAK_STATUS_LABEL[r.status] ?? r.status}
+                      </Badge>
+                    );
+                    return (
+                      <tr key={r.id} className="border-t align-top">
+                        <td className="p-2 font-medium whitespace-nowrap">
+                          {r.full_name}
+                          {r.job_title ? (
+                            <div className="text-[11px] text-muted-foreground font-normal">
+                              {r.job_title}
+                            </div>
+                          ) : null}
+                        </td>
+                        <td className="p-2 whitespace-nowrap">{r.break_type}</td>
+                        <td className="p-2 whitespace-nowrap">{fmtT(r.displayStart)}</td>
+                        <td className="p-2 whitespace-nowrap">{fmtT(r.ends_at)}</td>
+                        <td className="p-2 whitespace-nowrap">{fmtT(r.completed_at)}</td>
+                        <td className="p-2 whitespace-nowrap">
+                          {r.overrunMin > 0 ? (
+                            <span className="text-red-600 font-bold">+{r.overrunMin} דק׳</span>
+                          ) : (
+                            <span className="text-muted-foreground">—</span>
+                          )}
+                        </td>
+                        <td className="p-2">{statusBadge}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            )}
+          </div>
+          <div className="text-xs text-muted-foreground mt-2">
+            סה״כ: {filtered.length} מתוך {log.length}
+            {deptName ? ` · מחלקה: ${deptName}` : ""}
+          </div>
         </DialogContent>
       </Dialog>
     </>
