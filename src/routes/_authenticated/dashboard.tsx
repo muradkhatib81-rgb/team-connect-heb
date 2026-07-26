@@ -2380,6 +2380,7 @@ function LeaveShortcutCard({ userId }: { userId: string }) {
         .from("leave_requests")
         .select(
           `id, status, kind, start_date, end_date, days_count, admin_note, dept_note,
+           admin_decided_at, dept_decided_at, admin_decider_name, dept_decider_name,
            leave_types(name),
            admin_decider:profiles!admin_decided_by(full_name, first_name, last_name),
            dept_decider:profiles!dept_decided_by(full_name, first_name, last_name)`,

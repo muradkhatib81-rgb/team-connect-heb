@@ -147,7 +147,7 @@ function leavePersonName(p: LeaveDecisionPerson): string {
 
 /**
  * Banner text for the employee leave-request card after manager decision.
- * Covers reject / cancel (and notes). Pending stays without a banner.
+ * Prefers denormalized *_decider_name (profiles embeds are often blocked by RLS).
  */
 export function leaveDecisionMessage(r: {
   status: string;
@@ -156,9 +156,19 @@ export function leaveDecisionMessage(r: {
   dept_note?: string | null;
   admin_decider?: LeaveDecisionPerson;
   dept_decider?: LeaveDecisionPerson;
+  admin_decider_name?: string | null;
+  dept_decider_name?: string | null;
+  admin_decided_at?: string | null;
+  dept_decided_at?: string | null;
 }): { text: string; tone: "rejected" | "cancelled" | "approved" } | null {
-  const who = leavePersonName(r.admin_decider ?? r.dept_decider);
+  const who =
+    (r.admin_decider_name || r.dept_decider_name || "").trim() ||
+    leavePersonName(r.admin_decider ?? r.dept_decider);
+  const atRaw = r.admin_decided_at || r.dept_decided_at;
+  const at = atRaw ? formatLeaveDateTime(atRaw) : "";
+  const when = at && at !== "—" ? ` · ${at}` : "";
   const note = (r.admin_note || r.dept_note || "").trim();
+  const notePart = note ? ` · ${note}` : "";
   const kindLabel =
     r.kind === "cancellation"
       ? "בקשת הביטול"
@@ -169,23 +179,26 @@ export function leaveDecisionMessage(r: {
   if (r.status === "rejected") {
     return {
       tone: "rejected",
-      text: note
-        ? `${kindLabel} נדחתה על ידי ${who} · ${note}`
-        : `${kindLabel} נדחתה על ידי ${who}`,
+      text: `${kindLabel} נדחתה על ידי ${who}${when}${notePart}`,
     };
   }
   if (r.status === "cancelled") {
     return {
       tone: "cancelled",
-      text: note
-        ? `החופשה בוטלה על ידי ${who} · ${note}`
-        : `החופשה בוטלה על ידי ${who}`,
+      text: `החופשה בוטלה על ידי ${who}${when}${notePart}`,
     };
   }
-  if (r.status === "approved" && (r.admin_decider || r.dept_decider)) {
+  if (
+    r.status === "approved" &&
+    (r.admin_decider_name ||
+      r.dept_decider_name ||
+      r.admin_decider ||
+      r.dept_decider ||
+      r.admin_decided_at)
+  ) {
     return {
       tone: "approved",
-      text: `${kindLabel} אושרה על ידי ${who}`,
+      text: `${kindLabel} אושרה על ידי ${who}${when}`,
     };
   }
   return null;

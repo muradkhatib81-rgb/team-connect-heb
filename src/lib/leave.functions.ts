@@ -33,6 +33,8 @@ export type LeaveRequestRow = {
   admin_decided_by: string | null;
   admin_decided_at: string | null;
   admin_note: string | null;
+  admin_decider_name?: string | null;
+  dept_decider_name?: string | null;
   balance_warning: boolean;
   leave_types?: { code: string; name: string; requires_attachment: boolean } | null;
   profiles?: { full_name: string | null; first_name: string | null; last_name: string | null } | null;

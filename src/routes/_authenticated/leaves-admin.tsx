@@ -392,18 +392,29 @@ function requestEmployeeName(r: LeaveRequestRow) {
   return empDisplayName(r.profiles ?? {});
 }
 
-function approverLabel(r: LeaveRequestRow): { name: string; at: string } | null {
+function decisionVerb(status: LeaveRequestRow["status"]): string {
+  if (status === "rejected") return "נדחה";
+  if (status === "cancelled") return "בוטל";
+  return "אושר";
+}
+
+function decisionActorLabel(
+  r: LeaveRequestRow,
+): { verb: string; name: string; at: string } | null {
+  const verb = decisionVerb(r.status);
   if (r.admin_decided_by && r.admin_decided_at) {
-    return {
-      name: empDisplayName(r.admin_decider ?? {}),
-      at: formatLeaveDateTime(r.admin_decided_at),
-    };
+    const name =
+      (r.admin_decider_name || "").trim() ||
+      (r.admin_decider ? empDisplayName(r.admin_decider) : "") ||
+      "מנהל";
+    return { verb, name, at: formatLeaveDateTime(r.admin_decided_at) };
   }
   if (r.dept_decided_by && r.dept_decided_at) {
-    return {
-      name: empDisplayName(r.dept_decider ?? {}),
-      at: formatLeaveDateTime(r.dept_decided_at),
-    };
+    const name =
+      (r.dept_decider_name || "").trim() ||
+      (r.dept_decider ? empDisplayName(r.dept_decider) : "") ||
+      "מנהל";
+    return { verb, name, at: formatLeaveDateTime(r.dept_decided_at) };
   }
   return null;
 }
@@ -481,7 +492,7 @@ function LeaveReportRow({
   const purgeFn = useServerFn(purgeLeaveRequest);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const life = leaveLifecycleVisual(row.status, row.end_date, undefined, row.kind);
-  const approved = approverLabel(row);
+  const decided = decisionActorLabel(row);
   const kindPrefix =
     row.kind === "cancellation" ? "ביטול · " : row.kind === "extension" ? "הארכה · " : "";
 
@@ -517,11 +528,12 @@ function LeaveReportRow({
             {" · "}
             <span className="font-medium text-foreground">{row.days_count} ימים</span>
           </div>
-          {approved && (
+          {decided && (
             <div className="text-xs text-muted-foreground">
-              אושר על ידי <span className="font-medium text-foreground">{approved.name}</span>
+              {decided.verb} על ידי{" "}
+              <span className="font-medium text-foreground">{decided.name}</span>
               {" · "}
-              {approved.at}
+              {decided.at}
             </div>
           )}
           {row.note && <p className="text-xs">{row.note}</p>}
@@ -812,7 +824,7 @@ function ActiveOnLeaveTab() {
             {items.map((item) => {
               if (item.source === "request") {
                 const r = item.row;
-                const approved = approverLabel(r);
+                const decided = decisionActorLabel(r);
                 return (
                   <li
                     key={`req-${r.id}`}
@@ -827,12 +839,12 @@ function ActiveOnLeaveTab() {
                         {" · "}
                         <span className="font-medium text-foreground">{r.days_count} ימים</span>
                       </div>
-                      {approved && (
+                      {decided && (
                         <div className="text-xs text-muted-foreground">
-                          אושר על ידי{" "}
-                          <span className="font-medium text-foreground">{approved.name}</span>
+                          {decided.verb} על ידי{" "}
+                          <span className="font-medium text-foreground">{decided.name}</span>
                           {" · "}
-                          {approved.at}
+                          {decided.at}
                         </div>
                       )}
                       <SickAttachmentButton row={r} />
