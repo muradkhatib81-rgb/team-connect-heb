@@ -192,10 +192,13 @@ function LeavesAdminPage() {
 
     return (
       <ul className="space-y-3">
-        {rows.map((r) => (
+        {rows.map((r) => {
+          const deptApproved =
+            stage === "admin" ? deptStageApprovedLabel(r) : null;
+          return (
           <li key={r.id} className="rounded-lg border p-3 text-sm">
             <div className="flex flex-wrap items-start justify-between gap-2">
-              <div>
+              <div className="min-w-0 space-y-1">
                 <div className="font-medium">
                   {displayName(r)} ·{" "}
                   {r.kind === "cancellation"
@@ -208,6 +211,15 @@ function LeavesAdminPage() {
                 <div className="text-muted-foreground">
                   {formatLeaveDateRange(r.start_date, r.end_date)} · {r.days_count} ימים
                 </div>
+                {deptApproved && (
+                  <div className="rounded-md border border-sky-200 bg-sky-50 px-2.5 py-1.5 text-xs text-sky-950 dark:border-sky-800 dark:bg-sky-950/40 dark:text-sky-100">
+                    ✅ אושר במחלקה על ידי{" "}
+                    <span className="font-semibold">{deptApproved.name}</span>
+                    {" · "}
+                    {deptApproved.at}
+                    <span className="text-muted-foreground"> · ממתין לאישור הנהלה</span>
+                  </div>
+                )}
                 {r.note && <p className="mt-1">{r.note}</p>}
                 {r.balance_warning && (
                   <p className="mt-1 text-xs text-amber-700">אזהרת יתרה</p>
@@ -245,7 +257,8 @@ function LeavesAdminPage() {
               )}
             </div>
           </li>
-        ))}
+          );
+        })}
       </ul>
     );
   }
@@ -419,6 +432,16 @@ function decisionActorLabel(
   return null;
 }
 
+/** Banner for admin-queue rows that already passed department approval. */
+function deptStageApprovedLabel(r: LeaveRequestRow): { name: string; at: string } | null {
+  if (!r.dept_decided_by || !r.dept_decided_at) return null;
+  const name =
+    (r.dept_decider_name || "").trim() ||
+    (r.dept_decider ? empDisplayName(r.dept_decider) : "") ||
+    "אחראי מחלקה";
+  return { name, at: formatLeaveDateTime(r.dept_decided_at) };
+}
+
 function statusBadgeForRow(r: LeaveRequestRow) {
   const life = leaveLifecycleVisual(r.status, r.end_date, undefined, r.kind);
   if (life === "active") {
@@ -493,6 +516,8 @@ function LeaveReportRow({
   const [confirmOpen, setConfirmOpen] = useState(false);
   const life = leaveLifecycleVisual(row.status, row.end_date, undefined, row.kind);
   const decided = decisionActorLabel(row);
+  const deptApproved =
+    row.status === "pending_admin" ? deptStageApprovedLabel(row) : null;
   const kindPrefix =
     row.kind === "cancellation" ? "ביטול · " : row.kind === "extension" ? "הארכה · " : "";
 
@@ -528,13 +553,23 @@ function LeaveReportRow({
             {" · "}
             <span className="font-medium text-foreground">{row.days_count} ימים</span>
           </div>
-          {decided && (
-            <div className="text-xs text-muted-foreground">
-              {decided.verb} על ידי{" "}
-              <span className="font-medium text-foreground">{decided.name}</span>
+          {deptApproved ? (
+            <div className="rounded-md border border-sky-200 bg-sky-50 px-2.5 py-1.5 text-xs text-sky-950 dark:border-sky-800 dark:bg-sky-950/40 dark:text-sky-100">
+              ✅ אושר במחלקה על ידי{" "}
+              <span className="font-semibold">{deptApproved.name}</span>
               {" · "}
-              {decided.at}
+              {deptApproved.at}
+              <span className="text-muted-foreground"> · ממתין לאישור הנהלה</span>
             </div>
+          ) : (
+            decided && (
+              <div className="text-xs text-muted-foreground">
+                {decided.verb} על ידי{" "}
+                <span className="font-medium text-foreground">{decided.name}</span>
+                {" · "}
+                {decided.at}
+              </div>
+            )
           )}
           {row.note && <p className="text-xs">{row.note}</p>}
           <SickAttachmentButton row={row} />

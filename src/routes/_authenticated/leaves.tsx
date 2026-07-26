@@ -122,10 +122,21 @@ function LeavesPage() {
     [myRequestsQ.data, minDate],
   );
 
-  /** Approved leave that is active today — can request extension */
+  /** Approved leave that is active today — can request extension (only while profile is on leave). */
   const activeLeaves = useMemo(
     () =>
-      approvedLeaves.filter((r) => r.start_date <= minDate && r.end_date >= minDate),
+      approvedLeaves.filter(
+        (r) =>
+          !!me?.on_leave &&
+          r.start_date <= minDate &&
+          r.end_date >= minDate,
+      ),
+    [approvedLeaves, minDate, me?.on_leave],
+  );
+
+  /** Future approved leaves — cancel request available before leave starts. */
+  const upcomingApprovedLeaves = useMemo(
+    () => approvedLeaves.filter((r) => r.start_date > minDate),
     [approvedLeaves, minDate],
   );
 
@@ -499,12 +510,10 @@ function LeavesPage() {
         </Card>
       )}
 
-      {approvedLeaves.filter((r) => !activeLeaves.some((a) => a.id === r.id)).length > 0 && (
+      {upcomingApprovedLeaves.length > 0 && (
         <Card className="space-y-3 p-4">
           <h2 className="font-medium">חופשות מאושרות עתידיות — בקשת ביטול</h2>
-          {approvedLeaves
-            .filter((r) => !activeLeaves.some((a) => a.id === r.id))
-            .map((r) => (
+          {upcomingApprovedLeaves.map((r) => (
               <div
                 key={r.id}
                 className="flex flex-wrap items-center justify-between gap-2 rounded-lg border p-3 text-sm"

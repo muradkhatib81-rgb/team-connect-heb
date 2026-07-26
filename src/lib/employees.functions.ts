@@ -30,6 +30,58 @@ async function findAuthUserIdByEmail(supabaseAdmin: AdminClient, email: string):
   return null;
 }
 
+/** Rebuild used/reserved from open leave_requests — source of truth after cancel. */
+async function reconcileLeaveBalanceCounters(
+  supabaseAdmin: AdminClient,
+  userId: string,
+): Promise<void> {
+  const [{ data: balances }, { data: requests }] = await Promise.all([
+    supabaseAdmin
+      .from("leave_balances")
+      .select("leave_type_id")
+      .eq("user_id", userId),
+    supabaseAdmin
+      .from("leave_requests")
+      .select("leave_type_id, days_count, kind, status")
+      .eq("user_id", userId)
+      .in("kind", ["leave", "extension"]),
+  ]);
+
+  const usedByType = new Map<string, number>();
+  const reservedByType = new Map<string, number>();
+  for (const row of requests ?? []) {
+    const r = row as {
+      leave_type_id: string;
+      days_count: number;
+      kind: string;
+      status: string;
+    };
+    const days = Number(r.days_count ?? 0);
+    if (r.status === "approved") {
+      usedByType.set(r.leave_type_id, (usedByType.get(r.leave_type_id) ?? 0) + days);
+    } else if (r.status === "pending_dept" || r.status === "pending_admin") {
+      reservedByType.set(
+        r.leave_type_id,
+        (reservedByType.get(r.leave_type_id) ?? 0) + days,
+      );
+    }
+  }
+
+  const nowIso = new Date().toISOString();
+  for (const bal of balances ?? []) {
+    const typeId = (bal as { leave_type_id: string }).leave_type_id;
+    await supabaseAdmin
+      .from("leave_balances")
+      .update({
+        used_days: usedByType.get(typeId) ?? 0,
+        reserved_days: reservedByType.get(typeId) ?? 0,
+        updated_at: nowIso,
+      })
+      .eq("user_id", userId)
+      .eq("leave_type_id", typeId);
+  }
+}
+
 /** Keep Supabase Auth login (email = id_number@domain) in sync with profile id_number changes. */
 async function syncEmployeeAuthIdentity(
   supabaseAdmin: AdminClient,
@@ -793,9 +845,10 @@ export const updateEmployee = createServerFn({ method: "POST" })
       (existingProfile.leave_start_date ?? null) !== leaveStart ||
       (existingProfile.leave_end_date ?? null) !== leaveEnd ||
       ((existingProfile as { leave_type_code?: string | null }).leave_type_code ?? null) !== leaveTypeCode;
-    if (leaveChanged) {
+
+    if (data.on_leave && leaveChanged) {
       await (context.supabase as any).rpc("write_leave_audit", {
-        _action: data.on_leave ? "manual_leave_set" : "manual_leave_cleared",
+        _action: "manual_leave_set",
         _request_id: null,
         _user_id: data.user_id,
         _payload: {
@@ -807,12 +860,14 @@ export const updateEmployee = createServerFn({ method: "POST" })
             on_leave: existingProfile.on_leave,
             leave_start_date: existingProfile.leave_start_date,
             leave_end_date: existingProfile.leave_end_date,
-            leave_type_code: (existingProfile as { leave_type_code?: string | null }).leave_type_code ?? null,
+            leave_type_code:
+              (existingProfile as { leave_type_code?: string | null })
+                .leave_type_code ?? null,
           },
         },
         _branch_id: context.branchId,
       });
-      if (data.on_leave && leaveStart && leaveEnd) {
+      if (leaveStart && leaveEnd) {
         await (supabaseAdmin as any).rpc("apply_leave_to_schedule_shifts", {
           _user_id: data.user_id,
           _start: leaveStart,
@@ -820,19 +875,173 @@ export const updateEmployee = createServerFn({ method: "POST" })
           _branch_id: context.branchId,
           _leave_type_code: leaveTypeCode,
         });
-      } else if (!data.on_leave) {
-        // Cleared via employee edit — same restore path as admin cancel / request cancel
-        const prevStart = (existingProfile.leave_start_date as string | null)?.slice(0, 10) ?? null;
-        const prevEnd = (existingProfile.leave_end_date as string | null)?.slice(0, 10) ?? null;
-        if (prevStart && prevEnd) {
-          await (supabaseAdmin as any).rpc("clear_leave_from_schedule_shifts", {
+      }
+    } else if (!data.on_leave) {
+      // Profile is not on leave — also cancel any open leave_requests so the
+      // employee page cannot keep showing הארכה / ביטול (covers re-save after
+      // an older clear that only flipped on_leave).
+      const todayJerusalem = new Intl.DateTimeFormat("en-CA", {
+        timeZone: "Asia/Jerusalem",
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit",
+      }).format(new Date());
+
+      const { data: openLeaves } = await supabaseAdmin
+        .from("leave_requests")
+        .select("id, days_count, leave_type_id, start_date, end_date, branch_id, kind, status")
+        .eq("user_id", data.user_id)
+        .in("status", ["approved", "pending_dept", "pending_admin"]);
+
+      const toCancel = (openLeaves ?? []).filter((row: any) => {
+        if (row.status === "pending_dept" || row.status === "pending_admin") {
+          return true;
+        }
+        return (
+          row.kind === "leave" &&
+          row.status === "approved" &&
+          String(row.end_date).slice(0, 10) >= todayJerusalem
+        );
+      });
+
+      const needsCancel = leaveChanged || toCancel.length > 0;
+      if (needsCancel) {
+        const { error: cancelErr } = await context.supabase.rpc(
+          "admin_cancel_active_leave",
+          {
             _user_id: data.user_id,
-            _start: prevStart,
-            _end: prevEnd,
+            _note: "בוטל מעריכת פרטי עובד",
+          },
+        );
+
+        if (cancelErr) {
+          await (context.supabase as any).rpc("write_leave_audit", {
+            _action: "manual_leave_cleared",
+            _request_id: null,
+            _user_id: data.user_id,
+            _payload: {
+              on_leave: false,
+              leave_start_date: null,
+              leave_end_date: null,
+              leave_type_code: null,
+              previous: {
+                on_leave: existingProfile.on_leave,
+                leave_start_date: existingProfile.leave_start_date,
+                leave_end_date: existingProfile.leave_end_date,
+                leave_type_code:
+                  (existingProfile as { leave_type_code?: string | null })
+                    .leave_type_code ?? null,
+              },
+              fallback_without_leave_approve: true,
+              cancel_err: cancelErr.message,
+            },
             _branch_id: context.branchId,
           });
+
+          const prevStart =
+            (existingProfile.leave_start_date as string | null)?.slice(0, 10) ??
+            null;
+          const prevEnd =
+            (existingProfile.leave_end_date as string | null)?.slice(0, 10) ??
+            null;
+          if (prevStart && prevEnd) {
+            await (supabaseAdmin as any).rpc("clear_leave_from_schedule_shifts", {
+              _user_id: data.user_id,
+              _start: prevStart,
+              _end: prevEnd,
+              _branch_id: context.branchId,
+            });
+          }
+
+          const { data: actorProf } = await supabaseAdmin
+            .from("profiles")
+            .select("full_name, first_name, last_name")
+            .eq("id", context.userId)
+            .maybeSingle();
+          const actorName =
+            (actorProf as any)?.full_name?.trim() ||
+            [(actorProf as any)?.first_name, (actorProf as any)?.last_name]
+              .filter(Boolean)
+              .join(" ")
+              .trim() ||
+            "מנהל";
+          const whenLocal = new Intl.DateTimeFormat("he-IL", {
+            timeZone: "Asia/Jerusalem",
+            day: "2-digit",
+            month: "2-digit",
+            year: "numeric",
+            hour: "2-digit",
+            minute: "2-digit",
+            hour12: false,
+            numberingSystem: "latn",
+          }).format(new Date());
+
+          for (const row of toCancel) {
+            const r = row as any;
+            const wasApprovedLeave =
+              r.kind === "leave" && r.status === "approved";
+
+            await supabaseAdmin
+              .from("leave_requests")
+              .update({
+                status: "cancelled",
+                admin_decided_by: context.userId,
+                admin_decided_at: new Date().toISOString(),
+                admin_decider_name: actorName,
+                admin_note: "בוטל מעריכת פרטי עובד",
+                updated_at: new Date().toISOString(),
+              })
+              .eq("id", r.id);
+
+            if (wasApprovedLeave && r.days_count != null && r.leave_type_id) {
+              const { data: bal } = await supabaseAdmin
+                .from("leave_balances")
+                .select("used_days")
+                .eq("user_id", data.user_id)
+                .eq("leave_type_id", r.leave_type_id)
+                .maybeSingle();
+              if (bal) {
+                await supabaseAdmin
+                  .from("leave_balances")
+                  .update({
+                    used_days: Math.max(
+                      0,
+                      Number(bal.used_days ?? 0) - Number(r.days_count),
+                    ),
+                    updated_at: new Date().toISOString(),
+                  })
+                  .eq("user_id", data.user_id)
+                  .eq("leave_type_id", r.leave_type_id);
+              }
+              if (r.start_date && r.end_date) {
+                await (supabaseAdmin as any).rpc("clear_leave_from_schedule_shifts", {
+                  _user_id: data.user_id,
+                  _start: r.start_date,
+                  _end: r.end_date,
+                  _branch_id: r.branch_id ?? context.branchId,
+                });
+              }
+            }
+          }
+
+          if (toCancel.length > 0) {
+            try {
+              await supabaseAdmin.from("schedule_notifications").insert({
+                user_id: data.user_id,
+                schedule_id: null,
+                message: `החופשה שלך בוטלה על ידי ${actorName} · ${whenLocal}`,
+                branch_id: context.branchId,
+              });
+            } catch {
+              /* non-fatal */
+            }
+          }
         }
       }
+
+      // Always rebuild counters from approved/pending requests (fixes balances
+      // left stale after an older cancel that only cleared the profile).
+      await reconcileLeaveBalanceCounters(supabaseAdmin, data.user_id);
     }
 
     if (nextIdNumber) {
