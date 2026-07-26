@@ -544,6 +544,8 @@ type OnLeaveListItem =
       leave_start_date: string | null;
       leave_end_date: string | null;
       leave_type_code: string | null;
+      set_by_name: string | null;
+      set_at: string | null;
     };
 
 function ActiveOnLeaveTab() {
@@ -596,6 +598,67 @@ function ActiveOnLeaveTab() {
     },
   });
 
+  const onLeaveProfileIds = useMemo(
+    () =>
+      (profilesQ.data ?? [])
+        .filter((p) => isEmployeeCurrentlyOnLeave(p, today))
+        .map((p) => p.id),
+    [profilesQ.data, today],
+  );
+
+  // Who set manual leave — latest leave_audit_log.manual_leave_set per employee.
+  const manualSettersQ = useQuery({
+    enabled: onLeaveProfileIds.length > 0,
+    queryKey: ["leave-admin-on-leave", "manual-setters", today, onLeaveProfileIds.slice().sort().join(",")],
+    queryFn: async () => {
+      const { data, error } = await (supabase as any)
+        .from("leave_audit_log")
+        .select("user_id, actor_id, occurred_at")
+        .eq("action", "manual_leave_set")
+        .in("user_id", onLeaveProfileIds)
+        .order("occurred_at", { ascending: false })
+        .limit(500);
+      if (error) throw error;
+
+      const latestByUser = new Map<string, { actor_id: string | null; at: string }>();
+      for (const row of data ?? []) {
+        const uid = row.user_id as string | null;
+        if (!uid || latestByUser.has(uid)) continue;
+        latestByUser.set(uid, {
+          actor_id: (row.actor_id as string | null) ?? null,
+          at: formatLeaveDateTime(row.occurred_at as string),
+        });
+      }
+
+      const actorIds = Array.from(
+        new Set(
+          Array.from(latestByUser.values())
+            .map((v) => v.actor_id)
+            .filter((id): id is string => !!id),
+        ),
+      );
+      const namesById = new Map<string, string>();
+      if (actorIds.length > 0) {
+        const { data: actors, error: actorsErr } = await supabase
+          .from("profiles")
+          .select("id, full_name, first_name, last_name")
+          .in("id", actorIds);
+        if (actorsErr) throw actorsErr;
+        for (const a of actors ?? []) {
+          namesById.set(a.id, empDisplayName(a));
+        }
+      }
+
+      const byUser = new Map<string, { name: string; at: string }>();
+      for (const [uid, info] of latestByUser) {
+        const name = info.actor_id ? namesById.get(info.actor_id) : null;
+        if (!name) continue;
+        byUser.set(uid, { name, at: info.at });
+      }
+      return byUser;
+    },
+  });
+
   const cancelMut = useMutation({
     mutationFn: async (uid: string) => {
       await cancelFn({ data: { user_id: uid, note: "ביטול ישיר מניהול חופשות" } });
@@ -620,6 +683,7 @@ function ActiveOnLeaveTab() {
   const items = useMemo((): OnLeaveListItem[] => {
     const requests = requestsQ.data ?? [];
     const coveredByRequest = new Set(requests.map((r) => r.user_id));
+    const setters = manualSettersQ.data;
     const list: OnLeaveListItem[] = requests.map((row) => ({ source: "request", row }));
 
     for (const p of profilesQ.data ?? []) {
@@ -629,6 +693,7 @@ function ActiveOnLeaveTab() {
         p.full_name ||
         [p.first_name, p.last_name].filter(Boolean).join(" ") ||
         "עובד";
+      const setter = setters?.get(p.id);
       list.push({
         source: "manual",
         user_id: p.id,
@@ -637,6 +702,8 @@ function ActiveOnLeaveTab() {
         leave_start_date: p.leave_start_date,
         leave_end_date: p.leave_end_date,
         leave_type_code: p.leave_type_code,
+        set_by_name: setter?.name ?? null,
+        set_at: setter?.at ?? null,
       });
     }
 
@@ -648,10 +715,13 @@ function ActiveOnLeaveTab() {
       return aStart.localeCompare(bStart);
     });
     return list;
-  }, [requestsQ.data, profilesQ.data, today]);
+  }, [requestsQ.data, profilesQ.data, manualSettersQ.data, today]);
 
-  const loading = requestsQ.isLoading || profilesQ.isLoading;
-  const error = requestsQ.error ?? profilesQ.error;
+  const loading =
+    requestsQ.isLoading ||
+    profilesQ.isLoading ||
+    (onLeaveProfileIds.length > 0 && manualSettersQ.isLoading);
+  const error = requestsQ.error ?? profilesQ.error ?? manualSettersQ.error;
 
   return (
     <>
@@ -751,7 +821,17 @@ function ActiveOnLeaveTab() {
                         </>
                       )}
                     </div>
-                    <div className="text-xs text-muted-foreground">הוזן ידנית מקובץ העובד</div>
+                    <div className="text-xs text-muted-foreground">
+                      הוזן ידנית מקובץ העובד
+                      {item.set_by_name && (
+                        <>
+                          {" · "}
+                          על ידי{" "}
+                          <span className="font-medium text-foreground">{item.set_by_name}</span>
+                          {item.set_at ? ` · ${item.set_at}` : ""}
+                        </>
+                      )}
+                    </div>
                   </div>
                   <div className="flex flex-col items-end gap-2 shrink-0">
                     <Badge className={LEAVE_LIFECYCLE_BADGE.active} variant="outline">
