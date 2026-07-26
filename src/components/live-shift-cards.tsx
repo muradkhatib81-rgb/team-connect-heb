@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Card } from "@/components/ui/card";
 import {
   Dialog,
   DialogContent,
@@ -19,6 +18,13 @@ import {
   scheduleScopeNeedsLoadedPermissions,
 } from "@/lib/schedule-manager-caps";
 import { isBranchLevelScheduleViewer } from "@/lib/schedule-visibility";
+import {
+  countLeaveDays,
+  formatLeaveDateRange,
+  isEmployeeOnLeaveOnDate,
+  leaveOffLabel,
+} from "@/lib/employee-leave";
+import { isNonEmployeeIdentity } from "@/lib/employee-identity";
 
 type TodayRow = {
   employee_id: string;
@@ -35,20 +41,27 @@ type EmployeeInfo = {
   department_name: string | null;
   /** Job-title flag: appear in app, but never in schedule headcount numbers/lists. */
   excluded_from_headcount: boolean;
+  on_leave: boolean;
+  leave_start_date: string | null;
+  leave_end_date: string | null;
+  leave_type_code: string | null;
 };
 
 type DisplayEmployee = EmployeeInfo & { start: string | null; end: string | null };
+
+const OFF_SHIFT_CODE = "off";
 
 /**
  * Dynamic shift summary cards for the Main Dashboard (branch-level viewers).
  *
  * - One card per active shift definition (ordered by sort_order).
- * - Counts = employees assigned to that shift **today** in published schedules
- *   for the current schedule week (בוקר / ערב / חופש — including חופש with no hours).
- * - Honors the existing headcount rule: profiles with excluded_from_headcount
- *   (תפקיד "לא נכלל במצבת") stay in the app but are omitted from these numbers
- *   and from the name lists opened from the cards.
- * - Realtime on schedule_shifts / schedules / shift_definitions.
+ * - Working shifts (בוקר / ערב / …) = published schedule assignments for today.
+ * - חופש (off) = anyone on leave today from any source that updates the profile
+ *   leave window (manual employee-file leave, approved leave request, or
+ *   schedule marking via apply_leave_to_schedule_shifts), plus anyone marked
+ *   חופש in a published schedule. They stay counted until the leave window
+ *   ends or is cleared.
+ * - Honors excluded_from_headcount (תפקיד "לא נכלל במצבת").
  */
 export function LiveShiftCardsSection() {
   const qc = useQueryClient();
@@ -135,19 +148,71 @@ export function LiveShiftCardsSection() {
     refetchOnMount: true,
   });
 
-  const empIds = useMemo(
+  // Branch staff + leave windows — same source as the dashboard "בחופשה" tile.
+  // Needed so חופש counts manual / approved leave even when no schedule is published.
+  const leaveEmpsQ = useQuery<EmployeeInfo[]>({
+    enabled: canView && permsReady && !!dateISO,
+    queryKey: ["dashboard-shift-cards", "leave-emps", dateISO, activeBranchId ?? "all"],
+    queryFn: async () => {
+      let q = supabase
+        .from("profiles")
+        .select(
+          "id, full_name, job_title, excluded_from_headcount, on_leave, leave_start_date, leave_end_date, leave_type_code, department_id, branch_id, departments(name)",
+        );
+      if (activeBranchId) q = q.eq("branch_id", activeBranchId);
+      const { data, error } = await q;
+      if (error) throw error;
+      return ((data ?? []) as any[])
+        .filter((row) => !isNonEmployeeIdentity(row))
+        .filter((row) =>
+          isEmployeeOnLeaveOnDate(
+            {
+              on_leave: !!row.on_leave,
+              leave_start_date: row.leave_start_date,
+              leave_end_date: row.leave_end_date,
+            },
+            dateISO,
+          ),
+        )
+        .map((row) => ({
+          id: row.id as string,
+          full_name: row.full_name as string,
+          job_title: (row.job_title as string | null) ?? null,
+          department_name:
+            (row.departments?.name as string | null | undefined) ?? null,
+          excluded_from_headcount: !!row.excluded_from_headcount,
+          on_leave: !!row.on_leave,
+          leave_start_date: (row.leave_start_date as string | null) ?? null,
+          leave_end_date: (row.leave_end_date as string | null) ?? null,
+          leave_type_code: (row.leave_type_code as string | null) ?? null,
+        }));
+    },
+    staleTime: 30_000,
+    refetchOnMount: true,
+  });
+
+  const scheduleEmpIds = useMemo(
     () => Array.from(new Set((rowsQ.data ?? []).map((r) => r.employee_id))),
     [rowsQ.data],
   );
 
-  const empsQ = useQuery<EmployeeInfo[]>({
-    enabled: empIds.length > 0,
-    queryKey: ["dashboard-shift-cards", "emps", empIds.sort().join(",")],
+  // Profiles for schedule assignees who are not already in the leave query result
+  // (working shifts still need names / headcount flags).
+  const scheduleOnlyIds = useMemo(() => {
+    const onLeave = new Set((leaveEmpsQ.data ?? []).map((e) => e.id));
+    return scheduleEmpIds.filter((id) => !onLeave.has(id));
+  }, [scheduleEmpIds, leaveEmpsQ.data]);
+
+  const scheduleEmpsQ = useQuery<EmployeeInfo[]>({
+    enabled: scheduleOnlyIds.length > 0,
+    queryKey: ["dashboard-shift-cards", "emps", scheduleOnlyIds.slice().sort().join(",")],
     queryFn: async () => {
       const { data, error } = await supabase
         .from("profiles")
-        .select("id, full_name, job_title, excluded_from_headcount, departments(name)")
-        .in("id", empIds);
+        .select(
+          "id, full_name, job_title, excluded_from_headcount, on_leave, leave_start_date, leave_end_date, leave_type_code, departments(name)",
+        )
+        .in("id", scheduleOnlyIds);
       if (error) throw error;
       return ((data ?? []) as any[]).map((row) => ({
         id: row.id as string,
@@ -156,6 +221,10 @@ export function LiveShiftCardsSection() {
         department_name:
           (row.departments?.name as string | null | undefined) ?? null,
         excluded_from_headcount: !!row.excluded_from_headcount,
+        on_leave: !!row.on_leave,
+        leave_start_date: (row.leave_start_date as string | null) ?? null,
+        leave_end_date: (row.leave_end_date as string | null) ?? null,
+        leave_type_code: (row.leave_type_code as string | null) ?? null,
       }));
     },
     staleTime: 60_000,
@@ -163,22 +232,36 @@ export function LiveShiftCardsSection() {
 
   // Realtime: keep the dashboard live without polling.
   useEffect(() => {
+    const invalidateToday = () => {
+      qc.invalidateQueries({ queryKey: ["dashboard-shift-cards", "today"] });
+      qc.invalidateQueries({ queryKey: ["dashboard-shift-cards", "leave-emps"] });
+    };
     const ch = supabase
       .channel("dashboard-shift-cards")
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "schedule_shifts" },
-        () => qc.invalidateQueries({ queryKey: ["dashboard-shift-cards", "today"] }),
+        invalidateToday,
       )
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "schedules" },
-        () => qc.invalidateQueries({ queryKey: ["dashboard-shift-cards", "today"] }),
+        invalidateToday,
       )
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "schedule_notifications" },
-        () => qc.invalidateQueries({ queryKey: ["dashboard-shift-cards", "today"] }),
+        invalidateToday,
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "profiles" },
+        () => qc.invalidateQueries({ queryKey: ["dashboard-shift-cards", "leave-emps"] }),
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "leave_requests" },
+        () => qc.invalidateQueries({ queryKey: ["dashboard-shift-cards", "leave-emps"] }),
       )
       .on(
         "postgres_changes",
@@ -191,48 +274,94 @@ export function LiveShiftCardsSection() {
     };
   }, [qc]);
 
-  // Group employees by shift code — published today only.
-  // Same headcount rule as the rest of the app: תפקיד marked
-  // "לא נכלל במצבת" stays visible elsewhere but is omitted from these numbers/lists.
+  // Group by shift: published assignments + profile leave windows for חופש.
+  // Same headcount rule: תפקיד "לא נכלל במצבת" omitted from numbers/lists.
   const byShift = useMemo(() => {
     const empMap = new Map<string, EmployeeInfo>();
-    for (const e of empsQ.data ?? []) empMap.set(e.id, e);
+    for (const e of leaveEmpsQ.data ?? []) empMap.set(e.id, e);
+    for (const e of scheduleEmpsQ.data ?? []) empMap.set(e.id, e);
+
+    const onLeaveToday = new Set<string>();
+    for (const e of leaveEmpsQ.data ?? []) {
+      if (!e.excluded_from_headcount) onLeaveToday.add(e.id);
+    }
+
     const byShift = new Map<string, DisplayEmployee[]>();
     const seenByShift = new Map<string, Set<string>>();
     for (const def of shiftDefsQ.list) {
       byShift.set(def.code, []);
       seenByShift.set(def.code, new Set());
     }
-    // Wait for profile flags before counting so excluded roles never flash into totals.
-    if (empIds.length > 0 && !empsQ.data) return byShift;
 
-    for (const r of rowsQ.data ?? []) {
-      const def = shiftDefsQ.map.get(r.shift);
-      if (!def || !def.is_active) continue;
-      const info = empMap.get(r.employee_id);
-      if (info?.excluded_from_headcount) continue;
-      const seen = seenByShift.get(r.shift);
-      if (!seen || seen.has(r.employee_id)) continue;
-      seen.add(r.employee_id);
-      const start = r.start_time ?? def.start_time ?? null;
-      const end = r.end_time ?? def.end_time ?? null;
-      const list = byShift.get(r.shift) ?? [];
+    // Wait for profile flags before counting so excluded roles never flash into totals.
+    const waitingScheduleEmps =
+      scheduleOnlyIds.length > 0 && !scheduleEmpsQ.data;
+    const waitingLeaveEmps = leaveEmpsQ.isLoading;
+    if (waitingScheduleEmps || waitingLeaveEmps) return byShift;
+
+    const pushEmp = (
+      shiftCode: string,
+      empId: string,
+      start: string | null,
+      end: string | null,
+    ) => {
+      const def = shiftDefsQ.map.get(shiftCode);
+      if (!def || !def.is_active) return;
+      const info = empMap.get(empId);
+      if (info?.excluded_from_headcount) return;
+      const seen = seenByShift.get(shiftCode);
+      if (!seen || seen.has(empId)) return;
+      seen.add(empId);
+      const list = byShift.get(shiftCode) ?? [];
       list.push({
-        id: r.employee_id,
+        id: empId,
         full_name: info?.full_name ?? "עובד",
         job_title: info?.job_title ?? null,
         department_name: info?.department_name ?? null,
         excluded_from_headcount: false,
+        on_leave: info?.on_leave ?? false,
+        leave_start_date: info?.leave_start_date ?? null,
+        leave_end_date: info?.leave_end_date ?? null,
+        leave_type_code: info?.leave_type_code ?? null,
         start: start ? formatHHMM(start) : null,
         end: end ? formatHHMM(end) : null,
       });
-      byShift.set(r.shift, list);
+      byShift.set(shiftCode, list);
+    };
+
+    for (const r of rowsQ.data ?? []) {
+      // Profile leave wins over a published בוקר/ערב cell (same as schedule UI).
+      const shiftCode = onLeaveToday.has(r.employee_id) ? OFF_SHIFT_CODE : r.shift;
+      const def = shiftDefsQ.map.get(shiftCode);
+      const start =
+        shiftCode === OFF_SHIFT_CODE
+          ? null
+          : r.start_time ?? def?.start_time ?? null;
+      const end =
+        shiftCode === OFF_SHIFT_CODE
+          ? null
+          : r.end_time ?? def?.end_time ?? null;
+      pushEmp(shiftCode, r.employee_id, start, end);
     }
+
+    // Leave from employee file / approved request — even with no published schedule.
+    for (const emp of leaveEmpsQ.data ?? []) {
+      pushEmp(OFF_SHIFT_CODE, emp.id, null, null);
+    }
+
     for (const list of byShift.values()) {
       list.sort((a, b) => a.full_name.localeCompare(b.full_name, "he"));
     }
     return byShift;
-  }, [rowsQ.data, empsQ.data, empIds.length, shiftDefsQ.list, shiftDefsQ.map]);
+  }, [
+    rowsQ.data,
+    leaveEmpsQ.data,
+    leaveEmpsQ.isLoading,
+    scheduleEmpsQ.data,
+    scheduleOnlyIds.length,
+    shiftDefsQ.list,
+    shiftDefsQ.map,
+  ]);
 
   const [openShift, setOpenShift] = useState<string | null>(null);
 
@@ -275,37 +404,72 @@ export function LiveShiftCardsSection() {
           </DialogHeader>
           {(() => {
             const list = openShift ? byShift.get(openShift) ?? [] : [];
+            const isOffList = openShift === OFF_SHIFT_CODE;
             if (list.length === 0) {
               return (
                 <p className="text-sm text-muted-foreground py-4 text-center">
-                  אין עובדים במשמרת זו היום
+                  {isOffList
+                    ? "אין עובדים בחופש היום"
+                    : "אין עובדים במשמרת זו היום"}
                 </p>
               );
             }
             return (
               <ul className="divide-y max-h-[60vh] overflow-y-auto">
-                {list.map((e) => (
-                  <li key={e.id} className="py-2 flex items-center justify-between gap-3">
-                    <div className="min-w-0">
-                      <div className="font-medium truncate">{e.full_name}</div>
-                      {e.department_name && (
-                        <div className="text-xs text-muted-foreground truncate">
-                          {e.department_name}
+                {list.map((e) => {
+                  if (isOffList) {
+                    const range = formatLeaveDateRange(
+                      e.leave_start_date,
+                      e.leave_end_date,
+                    );
+                    const days = countLeaveDays(
+                      e.leave_start_date,
+                      e.leave_end_date,
+                    );
+                    const typeLabel = leaveOffLabel(e.leave_type_code);
+                    return (
+                      <li key={e.id} className="py-2.5 space-y-0.5">
+                        <div className="font-medium truncate">{e.full_name}</div>
+                        {e.department_name && (
+                          <div className="text-xs text-muted-foreground truncate">
+                            {e.department_name}
+                          </div>
+                        )}
+                        <div className="text-xs text-muted-foreground flex flex-wrap gap-x-2 gap-y-0.5">
+                          <span>{typeLabel}</span>
+                          {range && <span>· {range}</span>}
+                          {days != null && (
+                            <span>
+                              · {days} {days === 1 ? "יום" : "ימים"}
+                            </span>
+                          )}
                         </div>
-                      )}
-                      {e.job_title && (
-                        <div className="text-[11px] text-muted-foreground/80 truncate">
-                          {e.job_title}
-                        </div>
-                      )}
-                    </div>
-                    {e.start && e.end && (
-                      <div className="text-xs tabular-nums text-muted-foreground" dir="ltr">
-                        {e.start}–{e.end}
+                      </li>
+                    );
+                  }
+                  return (
+                    <li key={e.id} className="py-2 flex items-center justify-between gap-3">
+                      <div className="min-w-0">
+                        <div className="font-medium truncate">{e.full_name}</div>
+                        {e.department_name && (
+                          <div className="text-xs text-muted-foreground truncate">
+                            {e.department_name}
+                          </div>
+                        )}
+                        {e.job_title && (
+                          <div className="text-[11px] text-muted-foreground/80 truncate">
+                            {e.job_title}
+                          </div>
+                        )}
                       </div>
-                    )}
-                  </li>
-                ))}
+                      {e.start && e.end && (
+                        <div className="text-xs tabular-nums text-muted-foreground" dir="ltr">
+                          {e.start}–{e.end}
+                        </div>
+                      )}
+                    </li>
+                  );
+                })}
               </ul>
             );
           })()}

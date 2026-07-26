@@ -140,3 +140,17 @@ export function formatLeaveDateRange(
   if (s && e) return `${formatLeaveDay(s)} – ${formatLeaveDay(e)}`;
   return formatLeaveDay(s ?? e);
 }
+
+/** Inclusive calendar-day count for a leave window (null if either bound is missing). */
+export function countLeaveDays(
+  start: string | null | undefined,
+  end: string | null | undefined,
+): number | null {
+  const s = dayOnly(start ?? null);
+  const e = dayOnly(end ?? null);
+  if (!s || !e) return null;
+  const startMs = new Date(`${s}T12:00:00`).getTime();
+  const endMs = new Date(`${e}T12:00:00`).getTime();
+  if (Number.isNaN(startMs) || Number.isNaN(endMs) || endMs < startMs) return null;
+  return Math.floor((endMs - startMs) / 86_400_000) + 1;
+}
