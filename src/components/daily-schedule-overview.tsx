@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "@tanstack/react-router";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import {
   Building2,
@@ -274,7 +274,6 @@ export function DailyScheduleOverview({
   showFullScheduleLink = true,
   className,
 }: DailyScheduleOverviewProps) {
-  const qc = useQueryClient();
   const { data: profile } = useAuth();
   const getOverviewFn = useServerFn(getDailyScheduleOverview);
   const getDeptFlagsFn = useServerFn(getDepartmentWeekScheduleFlags);
@@ -350,8 +349,7 @@ export function DailyScheduleOverview({
         },
       }),
     enabled: scope === "branch" || !!departmentId,
-    staleTime: 0,
-    refetchOnMount: "always",
+    staleTime: 30_000,
   });
 
   const deptFlagsQ = useQuery({
@@ -361,29 +359,10 @@ export function DailyScheduleOverview({
         data: { department_id: departmentId!, week_start: weekStart },
       }),
     enabled: scope === "department" && !!departmentId,
+    staleTime: 30_000,
   });
 
-  useEffect(() => {
-    const invalidate = () => {
-      qc.invalidateQueries({ queryKey: ["daily-schedule-overview"] });
-      qc.invalidateQueries({ queryKey: ["dept-schedule-flags"] });
-      qc.invalidateQueries({ queryKey: ["dashboard-shift-cards"] });
-    };
-    const ch = supabase
-      .channel(`daily-schedule-ov-${scope}-${departmentId ?? "branch"}-${weekStart}`)
-      .on("postgres_changes", { event: "*", schema: "public", table: "schedules" }, invalidate)
-      .on("postgres_changes", { event: "*", schema: "public", table: "schedule_shifts" }, invalidate)
-      .on("postgres_changes", { event: "*", schema: "public", table: "profiles" }, invalidate)
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "schedule_notifications" },
-        invalidate,
-      )
-      .subscribe();
-    return () => {
-      supabase.removeChannel(ch);
-    };
-  }, [scope, departmentId, weekStart, qc]);
+  // RealtimeBridge already invalidates daily-schedule-overview / dept-schedule-flags.
 
   const departments = useMemo(() => {
     const base = (q.data?.departments ?? []) as DeptScheduleMeta[];

@@ -469,7 +469,7 @@ function DeptHeadOnBreakSection() {
         department_name: string;
       }[];
     },
-    refetchInterval: 30_000,
+    refetchInterval: 60_000,
   });
 
   const dailyLogQ = useQuery({
@@ -498,31 +498,18 @@ function DeptHeadOnBreakSection() {
         approver_name: string | null;
       }[];
     },
-    refetchInterval: 60_000,
+    staleTime: 60_000,
   });
 
-  useEffect(() => {
-    const ch = supabase
-      .channel("dashboard-dept-on-break-rt")
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "break_requests" },
-        () => {
-          qc.invalidateQueries({ queryKey: ["dashboard-dept-on-break"] });
-          qc.invalidateQueries({ queryKey: ["dashboard-dept-daily-breaks"] });
-        },
-      )
-      .subscribe();
-    return () => {
-      supabase.removeChannel(ch);
-    };
-  }, [qc]);
+  // RealtimeBridge already invalidates dept on-break / daily-breaks keys.
 
   useEffect(() => {
+    // Tile late-split: 5s is enough. Open list keeps 1s for live overrun badges.
     if ((onBreakQ.data?.length ?? 0) === 0) return;
-    const t = setInterval(() => setOnBreakTick((n) => n + 1), 1000);
+    const ms = listKind !== null ? 1000 : 5000;
+    const t = setInterval(() => setOnBreakTick((n) => n + 1), ms);
     return () => clearInterval(t);
-  }, [onBreakQ.data?.length]);
+  }, [onBreakQ.data?.length, listKind]);
 
   const list = onBreakQ.data ?? [];
   const log = dailyLogQ.data ?? [];
@@ -2973,6 +2960,7 @@ function OnBreakSection({ profile: _profile }: { profile: any }) {
   const [logStatusFilter, setLogStatusFilter] = useState<string>("__all");
   const [logSort, setLogSort] = useState<"created" | "overrun" | "return">("created");
   const [confirmReturn, setConfirmReturn] = useState<{ id: string; userId: string; name: string } | null>(null);
+  const [onBreakTick, setOnBreakTick] = useState(0);
   // Parent mounts this for anyone with break view access; manage actions stay gated.
   const { canManageBreaks } = useCanManageBreaks();
   const { requiresApproval } = useBreakRequiresApproval();
@@ -3033,24 +3021,6 @@ function OnBreakSection({ profile: _profile }: { profile: any }) {
     },
   });
 
-  useEffect(() => {
-    const ch = supabase
-      .channel("dashboard-on-break-rt")
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "break_requests" },
-        () => {
-          qc.invalidateQueries({ queryKey: ["dashboard-on-break"] });
-          qc.invalidateQueries({ queryKey: ["dashboard-daily-breaks"] });
-          qc.invalidateQueries({ queryKey: ["dashboard-pending-breaks"] });
-        },
-      )
-      .subscribe();
-    return () => {
-      supabase.removeChannel(ch);
-    };
-  }, [qc]);
-
   const pendingCountQ = useQuery({
     enabled: canManageBreaks && requiresApproval,
     queryKey: ["dashboard-pending-breaks"],
@@ -3064,10 +3034,30 @@ function OnBreakSection({ profile: _profile }: { profile: any }) {
     },
   });
 
+  // Tile count only — full journal enrichment loads when the dialog opens.
+  const dailyLogCountQ = useQuery({
+    enabled: true,
+    queryKey: ["dashboard-daily-breaks-count"],
+    staleTime: 30_000,
+    queryFn: async () => {
+      const now = new Date();
+      const dayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      const dayEnd = new Date(dayStart.getTime() + 24 * 60 * 60 * 1000);
+      const { count, error } = await supabase
+        .from("break_requests")
+        .select("id", { count: "exact", head: true })
+        .gte("created_at", dayStart.toISOString())
+        .lt("created_at", dayEnd.toISOString());
+      if (error) throw error;
+      return count ?? 0;
+    },
+  });
+
   // Daily log: all break requests created today (Asia/Jerusalem)
   const dailyLogQ = useQuery({
-    enabled: true,
+    enabled: logOpen,
     queryKey: ["dashboard-daily-breaks"],
+    staleTime: 30_000,
     queryFn: async () => {
       const now = new Date();
       // Local Israel-day window. Use local midnight; Supabase will compare as UTC.
@@ -3202,6 +3192,7 @@ function OnBreakSection({ profile: _profile }: { profile: any }) {
       qc.invalidateQueries({ queryKey: ["dashboard-dept-daily-breaks"] });
       qc.invalidateQueries({ queryKey: ["dashboard-pending-breaks"] });
       qc.invalidateQueries({ queryKey: ["dashboard-daily-breaks"] });
+      qc.invalidateQueries({ queryKey: ["dashboard-daily-breaks-count"] });
       qc.invalidateQueries({ queryKey: ["dashboard", "stats"] });
       qc.invalidateQueries({ queryKey: ["employees-page-active-breaks"] });
       qc.invalidateQueries({ queryKey: ["all-break-requests"] });
@@ -3214,18 +3205,18 @@ function OnBreakSection({ profile: _profile }: { profile: any }) {
 
 
 
-  const [onBreakTick, setOnBreakTick] = useState(0);
-
-  // Live split: move overdue people into the late tile without waiting for refetch.
+  // Live split for late tile — 5s when closed, 1s while list dialog is open.
   useEffect(() => {
     if ((onBreakQ.data?.length ?? 0) === 0) return;
-    const t = setInterval(() => setOnBreakTick((n) => n + 1), 1000);
+    const ms = listKind !== null ? 1000 : 5000;
+    const t = setInterval(() => setOnBreakTick((n) => n + 1), ms);
     return () => clearInterval(t);
-  }, [onBreakQ.data?.length]);
+  }, [onBreakQ.data?.length, listKind]);
 
   const list = onBreakQ.data ?? [];
   const log = dailyLogQ.data ?? [];
-  void onBreakTick; // recompute on/late split every second
+  const logCount = dailyLogCountQ.data ?? log.length;
+  void onBreakTick; // recompute on/late split on tick
   const nowMs = Date.now();
   const onBreakNow = list.filter((r) => !isBreakOverdue(r.endsAt, nowMs));
   const lateList = list.filter((r) => isBreakOverdue(r.endsAt, nowMs));
@@ -3279,7 +3270,7 @@ function OnBreakSection({ profile: _profile }: { profile: any }) {
         />
         <StatCard
           label="יומן הפסקות"
-          value={log.length}
+          value={logCount}
           icon={Coffee}
           tone="muted"
           onClick={() => setLogOpen(true)}

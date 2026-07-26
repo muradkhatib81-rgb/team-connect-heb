@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState } from "react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMemo, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import {
   Dialog,
   DialogContent,
@@ -64,7 +64,6 @@ const OFF_SHIFT_CODE = "off";
  * - Honors excluded_from_headcount (תפקיד "לא נכלל במצבת").
  */
 export function LiveShiftCardsSection() {
-  const qc = useQueryClient();
   const { data: profile } = useAuth();
   const { activeBranchId } = useActiveBranch();
   const shiftDefsQ = useShiftDefinitions({ activeOnly: true });
@@ -230,50 +229,7 @@ export function LiveShiftCardsSection() {
     staleTime: 60_000,
   });
 
-  // Realtime: keep the dashboard live without polling.
-  useEffect(() => {
-    const invalidateToday = () => {
-      qc.invalidateQueries({ queryKey: ["dashboard-shift-cards", "today"] });
-      qc.invalidateQueries({ queryKey: ["dashboard-shift-cards", "leave-emps"] });
-    };
-    const ch = supabase
-      .channel("dashboard-shift-cards")
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "schedule_shifts" },
-        invalidateToday,
-      )
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "schedules" },
-        invalidateToday,
-      )
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "schedule_notifications" },
-        invalidateToday,
-      )
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "profiles" },
-        () => qc.invalidateQueries({ queryKey: ["dashboard-shift-cards", "leave-emps"] }),
-      )
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "leave_requests" },
-        () => qc.invalidateQueries({ queryKey: ["dashboard-shift-cards", "leave-emps"] }),
-      )
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "shift_definitions" },
-        () => qc.invalidateQueries({ queryKey: ["shift-definitions"] }),
-      )
-      .subscribe();
-    return () => {
-      supabase.removeChannel(ch);
-    };
-  }, [qc]);
-
+  // RealtimeBridge already invalidates dashboard-shift-cards.
   // Group by shift: published assignments + profile leave windows for חופש.
   // Same headcount rule: תפקיד "לא נכלל במצבת" omitted from numbers/lists.
   const byShift = useMemo(() => {

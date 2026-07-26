@@ -319,10 +319,9 @@ export function useActivateDueBreaksPoll(
     };
 
     void runActivation();
+    // Backup only — pg_cron + due setTimeout handle timely activation.
     const intervalMs =
-      opts?.plannedStartIso && !opts?.isActive
-        ? 5000
-        : 15000;
+      opts?.plannedStartIso && !opts?.isActive ? 30_000 : 60_000;
     const id = setInterval(() => void runActivation(), intervalMs);
 
     let dueTimer: ReturnType<typeof setTimeout> | undefined;
