@@ -21,23 +21,27 @@ async function getCallerCaps(supabase: any, userId: string) {
       supabase.from("departments").select("id").eq("manager_id", userId),
     ]);
   const roleSet = new Set((roles ?? []).map((r: any) => r.role));
-  const isMainAdmin = roleSet.has("main_admin");
+  const isMainAdmin = roleSet.has("main_admin") || roleSet.has("system_admin");
   const isBranchManager = roleSet.has("branch_manager");
   const isAssistantManager = roleSet.has("assistant_manager");
-  const isManager = isBranchManager || isAssistantManager;
+  const isGranularManager = isBranchManager || isAssistantManager;
+  const isManager = isGranularManager;
   const isAdmin = isMainAdmin || isManager;
   const p: any = perm ?? {};
   const canViewTasks =
-    isMainAdmin ||
-    isBranchManager ||
-    (isAssistantManager && !!p.can_view_tasks);
+    isMainAdmin || (isGranularManager && !!p.can_view_tasks);
   const canCreateTasks =
-    isMainAdmin || isBranchManager || (isAssistantManager && (!!p.can_manage_tasks || !!p.can_create_tasks));
+    isMainAdmin ||
+    (isGranularManager && (!!p.can_manage_tasks || !!p.can_create_tasks));
   const canEditTasks =
-    isMainAdmin || isBranchManager || (isAssistantManager && (!!p.can_manage_tasks || !!p.can_edit_tasks));
+    isMainAdmin ||
+    (isGranularManager && (!!p.can_manage_tasks || !!p.can_edit_tasks));
   const canDeleteTasks =
-    isMainAdmin || isBranchManager || (isAssistantManager && (!!p.can_manage_tasks || !!p.can_delete_tasks));
-  const canCloseTasks = isMainAdmin || isBranchManager || (isAssistantManager && (!!p.can_manage_tasks || !!p.can_approve_tasks));
+    isMainAdmin ||
+    (isGranularManager && (!!p.can_manage_tasks || !!p.can_delete_tasks));
+  const canCloseTasks =
+    isMainAdmin ||
+    (isGranularManager && (!!p.can_manage_tasks || !!p.can_approve_tasks));
   const isDeptManager = roleSet.has("department_manager");
   return {
     isMainAdmin,
@@ -46,9 +50,7 @@ async function getCallerCaps(supabase: any, userId: string) {
     isAdmin,
     canViewTasks,
     canManagePermissions:
-      isMainAdmin ||
-      isBranchManager ||
-      (isAssistantManager && !!p.can_manage_permissions),
+      isMainAdmin || (isGranularManager && !!p.can_manage_permissions),
     canCreateTasks,
     canEditTasks,
     canDeleteTasks,
@@ -1240,7 +1242,7 @@ export const resetUserPermissions = createServerFn({ method: "POST" })
       .eq("user_id", data.user_id);
     if (rolesError) throw new Error(rolesError.message);
     const roles = (targetRoles ?? []).map((r: any) => r.role as string);
-    if (!roles.includes("assistant_manager")) {
+    if (!roles.includes("assistant_manager") && !roles.includes("branch_manager")) {
       const { error } = await supabaseAdmin.rpc("sync_user_task_permissions", {
         _user_id: data.user_id,
       });
@@ -1319,8 +1321,12 @@ export const setUserPermissions = createServerFn({ method: "POST" })
       .eq("user_id", data.user_id);
     if (rolesError) throw new Error(rolesError.message);
     const roles = new Set((targetRoles ?? []).map((r: any) => r.role));
-    if (!roles.has("assistant_manager")) {
-      throw new Error("ניתן לערוך הרשאות מפורטות רק לסגן מנהל");
+    if (!roles.has("assistant_manager") && !roles.has("branch_manager")) {
+      throw new Error("ניתן לערוך הרשאות מפורטות רק למנהל סניף או סגן מנהל");
+    }
+    // Only platform owners may edit branch-manager grants
+    if (roles.has("branch_manager") && !caps.isMainAdmin) {
+      throw new Error("רק בעל המערכת יכול לערוך הרשאות של מנהל סניף");
     }
 
     const row: Record<string, any> = {
@@ -1402,7 +1408,10 @@ export const listBranchPermissionOverrides = createServerFn({ method: "GET" })
         const hasCustodyOverride =
           !!permRow &&
           CUSTODY_PERMISSION_KEYS.some((key) => !!permRow[key]);
-        const staleRole = !!permRow && role !== "assistant_manager";
+        const staleRole =
+          !!permRow &&
+          role !== "assistant_manager" &&
+          role !== "branch_manager";
         if (!hasScheduleOverride && !hasTaskOverride && !hasCustodyOverride && !staleRole)
           return null;
         return {

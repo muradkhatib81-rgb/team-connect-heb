@@ -32,6 +32,7 @@ import {
   DEPARTMENT_LABELS,
   highestRole,
   isAdmin,
+  isPlatformOwner,
   type AppRole,
 } from "@/lib/constants";
 import { isNonEmployeeIdentity } from "@/lib/employee-identity";
@@ -802,6 +803,7 @@ function AdminDashboard({
             navigate({ to: "/employees", search: { filter: "all", dept: createForDept.id } as any });
           }}
           currentUserRoles={currentUserRoles}
+          canEditJobTitle={isPlatformOwner(currentUserRoles ?? [])}
         />
       )}
     </>

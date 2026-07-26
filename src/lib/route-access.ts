@@ -23,38 +23,39 @@ function isPlatformRole(roles: readonly string[]): boolean {
   return hasRole(roles, "system_admin", "main_admin");
 }
 
-function isPlatformOrBranchManager(roles: readonly string[]): boolean {
-  return isPlatformRole(roles) || hasRole(roles, "branch_manager");
+function isGranularManager(roles: readonly string[]): boolean {
+  return hasRole(roles, "branch_manager", "assistant_manager");
+}
+
+function grant(
+  input: RouteAccessInput,
+  key: keyof NonNullable<RouteGuardPermissions>,
+): boolean {
+  return isGranularManager(input.roles) && !!input.permissions?.[key];
 }
 
 function canManageEmployees(input: RouteAccessInput): boolean {
-  const { permissions, roles } = input;
   return (
-    isPlatformOrBranchManager(roles) ||
-    (roles.includes("assistant_manager") &&
-      !!(
-        permissions?.can_add_employee ||
-        permissions?.can_edit_employee ||
-        permissions?.can_delete_employee ||
-        permissions?.can_reset_employee_password
-      ))
+    isPlatformRole(input.roles) ||
+    grant(input, "can_add_employee") ||
+    grant(input, "can_edit_employee") ||
+    grant(input, "can_delete_employee") ||
+    grant(input, "can_reset_employee_password")
   );
 }
 
 function canViewEmployeesDirectory(input: RouteAccessInput): boolean {
-  const { permissions, roles } = input;
   return (
     canManageEmployees(input) ||
-    (roles.includes("assistant_manager") &&
-      !!(permissions?.can_view_all_employees || permissions?.can_view_employee_details))
+    grant(input, "can_view_all_employees") ||
+    grant(input, "can_view_employee_details")
   );
 }
 
 function hasScheduleDirectoryAccess(input: RouteAccessInput): boolean {
-  const { permissions, roles } = input;
   return (
-    isPlatformOrBranchManager(roles) ||
-    (roles.includes("assistant_manager") && hasAnyScheduleViewPerm(permissions))
+    isPlatformRole(input.roles) ||
+    (isGranularManager(input.roles) && hasAnyScheduleViewPerm(input.permissions))
   );
 }
 
@@ -68,15 +69,15 @@ export function canAccessRoute(input: RouteAccessInput): boolean {
 
   if (pathname === "/employee-of-month") {
     return (
-      isPlatformOrBranchManager(roles) ||
-      (roles.includes("assistant_manager") && !!permissions?.can_manage_employee_of_month)
+      isPlatformRole(roles) ||
+      grant(input, "can_manage_employee_of_month")
     );
   }
 
   if (pathname === "/employees") {
     // Department heads may open a read-only, RLS-scoped view of their department.
     // Branch schedule operators need employee directory access to build schedules.
-    // Assistants with view-only grants may open the directory without write actions.
+    // Assistants/BM with view-only grants may open the directory without write actions.
     return (
       canViewEmployeesDirectory(input) ||
       roles.includes("department_manager") ||
@@ -86,40 +87,36 @@ export function canAccessRoute(input: RouteAccessInput): boolean {
 
   if (pathname === "/permissions") {
     return (
-      isPlatformOrBranchManager(roles) ||
-      (roles.includes("assistant_manager") && !!permissions?.can_manage_permissions)
+      isPlatformRole(roles) ||
+      grant(input, "can_manage_permissions")
     );
   }
 
   if (pathname === "/company-settings") {
     return (
       isPlatformRole(roles) ||
-      (roles.includes("assistant_manager") &&
-        !!permissions?.can_manage_company_settings) ||
+      grant(input, "can_manage_company_settings") ||
       !!permissions?.can_manage_schedule
     );
   }
 
   if (pathname === "/departments") {
     return (
-      isPlatformOrBranchManager(roles) ||
+      isPlatformRole(roles) ||
       roles.includes("department_manager") ||
-      (roles.includes("assistant_manager") && !!permissions?.can_manage_departments) ||
+      grant(input, "can_manage_departments") ||
       hasScheduleDirectoryAccess(input)
     );
   }
 
   if (pathname === "/leaves-admin") {
     return (
-      isPlatformOrBranchManager(roles) ||
+      isPlatformRole(roles) ||
       roles.includes("department_manager") ||
-      (roles.includes("assistant_manager") &&
-        !!(
-          permissions?.can_view_leave ||
-          permissions?.can_approve_leave ||
-          permissions?.can_reject_leave ||
-          permissions?.can_edit_leave_balance
-        ))
+      grant(input, "can_view_leave") ||
+      grant(input, "can_approve_leave") ||
+      grant(input, "can_reject_leave") ||
+      grant(input, "can_edit_leave_balance")
     );
   }
 

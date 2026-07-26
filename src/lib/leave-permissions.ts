@@ -6,16 +6,11 @@ import {
 import type { AppRole } from "@/lib/constants";
 
 /**
- * Leave UI/access driven by role first; granular grants only where noted.
- *
- * Cards / routes:
- * - employee → request leave only
- * - department_manager → request + dept pending queue
- * - assistant_manager → request + pending queue (admin stage via grants)
- * - branch_manager → pending queue only (no personal request card)
+ * Leave UI/access: platform owners always; BM / assistant via grants;
+ * department managers keep dept-stage queue by role.
  *
  * Balance / leave-system edits:
- * - platform owner (system/main admin): always
+ * - platform owner: always
  * - branch_manager / assistant_manager: only with can_edit_leave_balance grant
  */
 export function resolveLeaveAccess(
@@ -34,51 +29,50 @@ export function resolveLeaveAccess(
     !isDeptManager &&
     (roles.includes("employee") || roles.length === 0 || roles.every((r) => r === "employee"));
 
+  const grant = (key: keyof UserTaskPermissions) =>
+    (isBranchManager || isAssistant) && permissions?.[key] === true;
+
   // Personal leave request card / /leaves — not for branch manager or platform owner
-  const showRequestCard = isDeptManager || isAssistant || isEmployeeOnly ||
+  const showRequestCard =
+    isDeptManager ||
+    isAssistant ||
+    isEmployeeOnly ||
     (!isPlatformOwner &&
       !isBranchManager &&
       !isDeptManager &&
       !isAssistant);
 
-  // Pending approvals card — by role
-  const showPendingQueueCard = isDeptManager || isAssistant || isBranchManager || isPlatformOwner;
-
-  const assistantGrant = (key: keyof UserTaskPermissions) =>
-    isAssistant && permissions?.[key] === true;
-
-  const branchLeaveGrant = (key: keyof UserTaskPermissions) =>
-    isBranchManager && permissions?.[key] === true;
-
-  // Approve/reject/view at admin stage
-  const canApprove =
-    isPlatformOwner || isBranchManager || assistantGrant("can_approve_leave");
-  const canReject =
-    isPlatformOwner || isBranchManager || assistantGrant("can_reject_leave");
+  const canApprove = isPlatformOwner || grant("can_approve_leave");
+  const canReject = isPlatformOwner || grant("can_reject_leave");
   const canView =
     isPlatformOwner ||
-    isBranchManager ||
     isDeptManager ||
-    assistantGrant("can_view_leave") ||
-    assistantGrant("can_approve_leave") ||
-    assistantGrant("can_reject_leave") ||
-    assistantGrant("can_edit_leave_balance");
+    grant("can_view_leave") ||
+    grant("can_approve_leave") ||
+    grant("can_reject_leave") ||
+    grant("can_edit_leave_balance");
 
-  // Balance / accrual / leave-system edits — NOT automatic for branch managers
   const canEditBalance =
+    isPlatformOwner || grant("can_edit_leave_balance");
+
+  // Pending queue: dept heads by role; BM/assistant when they have leave grants
+  const hasAdminLeaveQueue =
     isPlatformOwner ||
-    assistantGrant("can_edit_leave_balance") ||
-    branchLeaveGrant("can_edit_leave_balance");
+    grant("can_approve_leave") ||
+    grant("can_reject_leave") ||
+    grant("can_view_leave") ||
+    grant("can_edit_leave_balance");
+
+  const showPendingQueueCard = isDeptManager || hasAdminLeaveQueue;
 
   const canOpenLeaveAdmin = showPendingQueueCard || canEditBalance || canView;
   const canOpenLeavesPage = showRequestCard;
 
-  /** Which pending statuses this role handles on the queue card */
   const pendingQueueMode: "dept" | "admin" | "both" | "none" = isDeptManager
-    ? isAssistant || isBranchManager || isPlatformOwner
+    ? hasAdminLeaveQueue
       ? "both"
       : "dept"
-    : isAssistant || isBranchManager || isPlatformOwner
+    : hasAdminLeaveQueue
       ? "admin"
       : "none";
 

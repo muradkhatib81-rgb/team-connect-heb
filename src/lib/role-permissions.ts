@@ -1,7 +1,7 @@
 import type { AppRole } from "@/lib/constants";
 import { PERMISSION_KEYS } from "@/lib/tasks.functions";
 
-/** Baseline read-only permissions seeded for a new assistant manager. */
+/** Baseline read-only permissions seeded for a new assistant / branch manager. */
 export const DEFAULT_ASSISTANT_MANAGER_PERMISSIONS: Record<string, boolean> = {
   can_view_dashboard: true,
   can_view_all_employees: true,
@@ -9,6 +9,8 @@ export const DEFAULT_ASSISTANT_MANAGER_PERMISSIONS: Record<string, boolean> = {
   can_view_schedule: true,
   can_view_tasks: true,
 };
+
+export const DEFAULT_BRANCH_MANAGER_PERMISSIONS = DEFAULT_ASSISTANT_MANAGER_PERMISSIONS;
 
 export function emptyGranularPermissions(): Record<string, boolean> {
   const perms = Object.fromEntries(PERMISSION_KEYS.map((key) => [key, false])) as Record<
@@ -19,19 +21,20 @@ export function emptyGranularPermissions(): Record<string, boolean> {
   return perms;
 }
 
-const PLATFORM_ROLES: AppRole[] = ["main_admin", "system_admin", "branch_manager"];
+const PLATFORM_ROLES: AppRole[] = ["main_admin", "system_admin"];
 
 /** Which role drives granular `user_task_permissions` for this user. */
 export function effectivePermissionRole(roles: readonly AppRole[]): AppRole | null {
   const set = new Set(roles);
   if (PLATFORM_ROLES.some((role) => set.has(role))) return null;
+  if (set.has("branch_manager")) return "branch_manager";
   if (set.has("department_manager")) return "department_manager";
   if (set.has("assistant_manager")) return "assistant_manager";
   return null;
 }
 
 export function permissionsForEffectiveRole(role: AppRole | null): Record<string, boolean> | null {
-  if (role === "assistant_manager") {
+  if (role === "assistant_manager" || role === "branch_manager") {
     return {
       ...emptyGranularPermissions(),
       ...DEFAULT_ASSISTANT_MANAGER_PERMISSIONS,

@@ -64,11 +64,10 @@ function slugifyCode(name: string): string {
 function ShiftSettingsPage() {
   const qc = useQueryClient();
   const { data: me } = useAuth();
-  const isMainAdmin = !!me?.roles.includes("main_admin");
-  const isBranchManager = !!me?.roles.includes("branch_manager");
+  const isMainAdmin = !!me?.roles.includes("main_admin") || !!me?.roles.includes("system_admin");
 
   const permQ = useQuery({
-    enabled: !!me?.id && !isMainAdmin && !isBranchManager,
+    enabled: !!me?.id && !isMainAdmin,
     queryKey: ["my-shift-manage-perm", me?.id],
     queryFn: async () => {
       const { data } = await supabase
@@ -190,7 +189,7 @@ function ShiftSettingsPage() {
 
   if (!me) return null;
   // Quick canManage check (RLS will enforce server-side anyway)
-  const canManage = isMainAdmin || isBranchManager || !!permQ.data;
+  const canManage = isMainAdmin || !!permQ.data;
 
   if (!canManage) {
     return (

@@ -28,14 +28,16 @@ export function hasAnyScheduleViewPerm(
   return !!(perms?.can_view_schedule || hasAnyScheduleManagementPerm(perms));
 }
 
-/** Main admin, branch manager, or assistant with any schedule workflow permission. */
+/** Platform owner, or BM/assistant with any schedule workflow permission. */
 export function isBranchLevelScheduleManager(
   roles: readonly string[],
   perms?: ScheduleTaskPermissions | null,
 ): boolean {
   if (roles.includes("main_admin") || roles.includes("system_admin")) return true;
-  if (roles.includes("branch_manager")) return true;
-  if (roles.includes("assistant_manager") && hasAnyScheduleManagementPerm(perms)) {
+  if (
+    (roles.includes("branch_manager") || roles.includes("assistant_manager")) &&
+    hasAnyScheduleManagementPerm(perms)
+  ) {
     return true;
   }
   return false;
@@ -72,10 +74,10 @@ export function resolveScheduleManagerCaps(
   const isBranchManager = roles.includes("branch_manager");
   const isAssistantManager = roles.includes("assistant_manager");
   const isDeptMgr = roles.includes("department_manager");
+  const isGranular = isBranchManager || isAssistantManager;
   const branchLevel = isBranchLevelScheduleManager(roles, p);
-  const privileged = isMainAdmin || isBranchManager;
-  const assistantCanView =
-    isAssistantManager &&
+  const granularCanView =
+    isGranular &&
     !!(
       p.can_view_schedule ||
       p.can_create_schedule ||
@@ -92,21 +94,17 @@ export function resolveScheduleManagerCaps(
     isDeptMgr,
     isBranchMgr: branchLevel,
     isDeptHeadOnly: isDepartmentHeadOnlyScope(roles, p),
-    canView: privileged || assistantCanView || isDeptMgr,
+    canView: isMainAdmin || granularCanView || isDeptMgr,
     canCreate:
-      privileged ||
-      (isAssistantManager && !!p.can_create_schedule) ||
+      isMainAdmin ||
+      (isGranular && !!p.can_create_schedule) ||
       (isDeptMgr && !branchLevel),
     canEdit:
-      privileged ||
-      (isAssistantManager && (!!p.can_edit_schedule || !!p.can_manage_schedule)) ||
+      isMainAdmin ||
+      (isGranular && (!!p.can_edit_schedule || !!p.can_manage_schedule)) ||
       (isDeptMgr && !branchLevel),
-    canApprove:
-      privileged ||
-      (isAssistantManager && !!p.can_approve_schedule),
-    canPublishDirect:
-      privileged ||
-      (isAssistantManager && !!p.can_publish_schedule),
+    canApprove: isMainAdmin || (isGranular && !!p.can_approve_schedule),
+    canPublishDirect: isMainAdmin || (isGranular && !!p.can_publish_schedule),
   };
 }
 
@@ -123,7 +121,7 @@ export function resolveDashboardScheduleScope(args: {
 }): DashboardScheduleScope {
   const { caps, departmentId, managedDepartmentId } = args;
 
-  if (caps.isBranchMgr || (caps.isAssistantManager && caps.canView)) {
+  if (caps.isBranchMgr || ((caps.isAssistantManager || caps.isBranchManager) && caps.canView)) {
     return { kind: "branch" };
   }
 
@@ -142,5 +140,5 @@ export function resolveDashboardScheduleScope(args: {
 
 /** Roles whose branch-level schedule access depends on loaded task permissions. */
 export function scheduleScopeNeedsLoadedPermissions(roles: readonly string[]): boolean {
-  return roles.includes("assistant_manager");
+  return roles.includes("assistant_manager") || roles.includes("branch_manager");
 }

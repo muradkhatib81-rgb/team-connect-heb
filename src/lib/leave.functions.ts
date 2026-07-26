@@ -36,6 +36,14 @@ export type LeaveRequestRow = {
   balance_warning: boolean;
   leave_types?: { code: string; name: string; requires_attachment: boolean } | null;
   profiles?: { full_name: string | null; first_name: string | null; last_name: string | null } | null;
+  admin_decider?: { full_name: string | null; first_name: string | null; last_name: string | null } | null;
+  dept_decider?: { full_name: string | null; first_name: string | null; last_name: string | null } | null;
+  leave_request_attachments?: {
+    id: string;
+    file_name: string;
+    storage_path: string;
+    mime_type: string | null;
+  }[];
 };
 
 export const LEAVE_STATUS_LABEL: Record<LeaveRequestRow["status"], string> = {
@@ -223,6 +231,48 @@ export const registerLeaveAttachment = createServerFn({ method: "POST" })
     });
     if (error) throw new Error(error.message);
     return { ok: true };
+  });
+
+/** Signed URL for medical leave attachment — owner or leave viewers/approvers. */
+export const getLeaveAttachmentSignedUrl = createServerFn({ method: "POST" })
+  .middleware([requireBranchContext])
+  .inputValidator((data: unknown) =>
+    z.object({ attachment_id: z.string().uuid() }).parse(data),
+  )
+  .handler(async ({ data, context }) => {
+    const { data: att, error: aErr } = await sb(context.supabase)
+      .from("leave_request_attachments")
+      .select("id, storage_path, request_id, uploaded_by, leave_requests(user_id)")
+      .eq("id", data.attachment_id)
+      .maybeSingle();
+    if (aErr) throw new Error(aErr.message);
+    if (!att?.storage_path) throw new Error("המסמך לא נמצא");
+
+    const reqUser = (att as any).leave_requests?.user_id as string | undefined;
+    const isOwner =
+      att.uploaded_by === context.userId || reqUser === context.userId;
+    if (!isOwner) {
+      const { data: canView } = await sb(context.supabase).rpc("has_leave_perm", {
+        _user_id: context.userId,
+        _perm: "view",
+      });
+      const { data: canApprove } = await sb(context.supabase).rpc("has_leave_perm", {
+        _user_id: context.userId,
+        _perm: "approve",
+      });
+      if (!canView && !canApprove) {
+        throw new Error("אין הרשאה לצפות במסמך");
+      }
+    }
+
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { data: signed, error: sErr } = await supabaseAdmin.storage
+      .from("leave-attachments")
+      .createSignedUrl(att.storage_path, 60 * 30);
+    if (sErr || !signed?.signedUrl) {
+      throw new Error(sErr?.message ?? "לא ניתן לפתוח את המסמך");
+    }
+    return { url: signed.signedUrl };
   });
 
 /** Audit trail entry for manual leave toggles from employee edit. */

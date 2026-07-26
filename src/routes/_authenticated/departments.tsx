@@ -4,7 +4,7 @@ import { useServerFn } from "@tanstack/react-start";
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/use-auth";
-import { ROLE_LABELS, type AppRole } from "@/lib/constants";
+import { ROLE_LABELS, isPlatformOwner, type AppRole } from "@/lib/constants";
 import {
   hasBranchActionPermission,
   useCurrentPermissions,
@@ -582,6 +582,7 @@ function DeptEmployeesDialog({
           defaultDepartmentId={deptId}
           lockDepartment
           currentUserRoles={currentUserRoles}
+          canEditJobTitle={isPlatformOwner(currentUserRoles ?? [])}
           onClose={() => {
             setAddingEmployee(false);
             invalidateDepartmentEmployeeQueries(qc, deptId);

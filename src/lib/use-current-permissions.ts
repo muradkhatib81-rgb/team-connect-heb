@@ -35,21 +35,23 @@ export function useCurrentPermissions(userId: string | null | undefined) {
 }
 
 /**
- * Existing owner/branch-manager role authority remains unchanged. Granular
- * grants apply only to assistant managers, which is the role accepted by the
- * permission editor and its server-side setter.
+ * Platform owners always have authority. Branch managers and assistant
+ * managers only get a capability when it is explicitly granted in
+ * user_task_permissions (platform owner assigns grants).
  */
 export function hasBranchActionPermission(
   roles: readonly AppRole[],
   permissions: UserTaskPermissions | null | undefined,
   key: UserTaskPermissionKey,
 ): boolean {
-  if (
-    roles.includes("system_admin") ||
-    roles.includes("main_admin") ||
-    roles.includes("branch_manager")
-  ) {
+  if (roles.includes("system_admin") || roles.includes("main_admin")) {
     return true;
   }
-  return roles.includes("assistant_manager") && permissions?.[key] === true;
+  if (
+    roles.includes("branch_manager") ||
+    roles.includes("assistant_manager")
+  ) {
+    return permissions?.[key] === true;
+  }
+  return false;
 }

@@ -4,9 +4,12 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import {
   CheckCircle2,
+  FileText,
   Loader2,
   Palmtree,
   Settings2,
+  UserMinus,
+  Users,
   Wallet,
   XCircle,
 } from "lucide-react";
@@ -20,12 +23,20 @@ import {
   adjustLeaveBalance,
   adminCancelActiveLeave,
   decideLeaveRequest,
+  getLeaveAttachmentSignedUrl,
   listLeaveTypes,
   setLeaveAccrualRule,
   type LeaveRequestRow,
   type LeaveTypeRow,
 } from "@/lib/leave.functions";
-import { formatLeaveDateRange } from "@/lib/employee-leave";
+import {
+  formatLeaveDateRange,
+  formatLeaveDateTime,
+  leaveLifecycleVisual,
+  LEAVE_LIFECYCLE_BADGE,
+  LEAVE_LIFECYCLE_ROW,
+  leaveOffLabel,
+} from "@/lib/employee-leave";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -47,6 +58,16 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 export const Route = createFileRoute("/_authenticated/leaves-admin")({
   component: LeavesAdminPage,
@@ -80,7 +101,12 @@ function LeavesAdminPage() {
       const { data, error } = await (supabase as any)
         .from("leave_requests")
         .select(
-          "*, leave_types(code, name, requires_attachment), profiles!user_id(full_name, first_name, last_name)",
+          `*,
+          leave_types(code, name, requires_attachment),
+          profiles!user_id(full_name, first_name, last_name),
+          admin_decider:profiles!admin_decided_by(full_name, first_name, last_name),
+          dept_decider:profiles!dept_decided_by(full_name, first_name, last_name),
+          leave_request_attachments(id, file_name, storage_path, mime_type)`,
         )
         .order("submitted_at", { ascending: false })
         .limit(200);
@@ -249,6 +275,12 @@ function LeavesAdminPage() {
       <Tabs defaultValue="queue">
         <TabsList className="flex h-auto flex-wrap gap-1">
           <TabsTrigger value="queue">תור אישורים</TabsTrigger>
+          {leaveAccess.canApprove && (
+            <TabsTrigger value="on-leave">
+              <Users className="h-3.5 w-3.5" />
+              עובדים בחופשה
+            </TabsTrigger>
+          )}
           {(leaveAccess.canView || leaveAccess.canManageLeave) && (
             <TabsTrigger value="history">היסטוריה / דוח</TabsTrigger>
           )}
@@ -289,26 +321,24 @@ function LeavesAdminPage() {
           )}
         </TabsContent>
 
+        {leaveAccess.canApprove && (
+          <TabsContent value="on-leave">
+            <ActiveOnLeaveTab />
+          </TabsContent>
+        )}
+
         <TabsContent value="history">
           <Card className="space-y-3 p-4">
             <h2 className="font-medium">{historyTitle}</h2>
+            <p className="text-xs text-muted-foreground">
+              אדום = חופשה פעילה · ירוק = הסתיימה או בוטלה. חופשת מחלה — לחצו לפתיחת המסמך המצורף.
+            </p>
             {requestsQ.isLoading ? (
               <Loader2 className="h-5 w-5 animate-spin" />
             ) : (
-              <ul className="max-h-[28rem] space-y-2 overflow-y-auto">
+              <ul className="max-h-[32rem] space-y-2 overflow-y-auto">
                 {(requestsQ.data ?? []).map((r) => (
-                  <li key={r.id} className="rounded-lg border p-3 text-sm">
-                    <div className="flex flex-wrap items-center justify-between gap-2">
-                      <div>
-                        <span className="font-medium">{displayName(r)}</span>
-                        {" · "}
-                        {r.leave_types?.name} · {formatLeaveDateRange(r.start_date, r.end_date)}
-                      </div>
-                      <Badge className={LEAVE_STATUS_TONE[r.status]}>
-                        {LEAVE_STATUS_LABEL[r.status]}
-                      </Badge>
-                    </div>
-                  </li>
+                  <LeaveReportRow key={r.id} row={r} />
                 ))}
               </ul>
             )}
@@ -316,7 +346,7 @@ function LeavesAdminPage() {
         </TabsContent>
 
         <TabsContent value="balances">
-          <BalancesTab types={types} canCancel={leaveAccess.canApprove} />
+          <BalancesTab types={types} />
         </TabsContent>
 
         <TabsContent value="accrual">
@@ -357,16 +387,303 @@ function empDisplayName(e: {
   return e.full_name || [e.first_name, e.last_name].filter(Boolean).join(" ") || "עובד";
 }
 
-function BalancesTab({
-  types,
-  canCancel,
-}: {
-  types: LeaveTypeRow[];
-  canCancel: boolean;
-}) {
+function requestEmployeeName(r: LeaveRequestRow) {
+  return empDisplayName(r.profiles ?? {});
+}
+
+function approverLabel(r: LeaveRequestRow): { name: string; at: string } | null {
+  if (r.admin_decided_by && r.admin_decided_at) {
+    return {
+      name: empDisplayName(r.admin_decider ?? {}),
+      at: formatLeaveDateTime(r.admin_decided_at),
+    };
+  }
+  if (r.dept_decided_by && r.dept_decided_at) {
+    return {
+      name: empDisplayName(r.dept_decider ?? {}),
+      at: formatLeaveDateTime(r.dept_decided_at),
+    };
+  }
+  return null;
+}
+
+function statusBadgeForRow(r: LeaveRequestRow) {
+  const life = leaveLifecycleVisual(r.status, r.end_date, undefined, r.kind);
+  if (life === "active") {
+    return (
+      <Badge className={LEAVE_LIFECYCLE_BADGE.active} variant="outline">
+        חופשה פעילה
+      </Badge>
+    );
+  }
+  if (life === "done") {
+    const cancelled =
+      r.status === "cancelled" || r.kind === "cancellation";
+    return (
+      <Badge className={LEAVE_LIFECYCLE_BADGE.done} variant="outline">
+        {cancelled ? "בוטלה" : "הסתיימה"}
+      </Badge>
+    );
+  }
+  return (
+    <Badge className={LEAVE_STATUS_TONE[r.status]}>{LEAVE_STATUS_LABEL[r.status]}</Badge>
+  );
+}
+
+function SickAttachmentButton({ row }: { row: LeaveRequestRow }) {
+  const getUrlFn = useServerFn(getLeaveAttachmentSignedUrl);
+  const [busy, setBusy] = useState(false);
+  const attachments = row.leave_request_attachments ?? [];
+  const isSick = row.leave_types?.code === "sick";
+  if (!isSick || attachments.length === 0) return null;
+
+  async function openAttachment(id: string) {
+    setBusy(true);
+    try {
+      const { url } = await getUrlFn({ data: { attachment_id: id } });
+      window.open(url, "_blank", "noopener,noreferrer");
+    } catch (e: any) {
+      toast.error(e?.message ?? "לא ניתן לפתוח את המסמך");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="flex flex-wrap gap-2 pt-1">
+      {attachments.map((a) => (
+        <Button
+          key={a.id}
+          type="button"
+          size="sm"
+          variant="secondary"
+          disabled={busy}
+          className="gap-1.5"
+          onClick={() => openAttachment(a.id)}
+        >
+          {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <FileText className="h-3.5 w-3.5" />}
+          מסמך רפואי{attachments.length > 1 ? `: ${a.file_name}` : ""}
+        </Button>
+      ))}
+    </div>
+  );
+}
+
+function LeaveReportRow({ row }: { row: LeaveRequestRow }) {
+  const life = leaveLifecycleVisual(row.status, row.end_date, undefined, row.kind);
+  const approved = approverLabel(row);
+  const kindPrefix =
+    row.kind === "cancellation" ? "ביטול · " : row.kind === "extension" ? "הארכה · " : "";
+
+  return (
+    <li
+      className={`rounded-lg border p-3 text-sm space-y-1.5 ${
+        life ? LEAVE_LIFECYCLE_ROW[life] : ""
+      }`}
+    >
+      <div className="flex flex-wrap items-start justify-between gap-2">
+        <div className="min-w-0 space-y-1">
+          <div className="font-medium">
+            {requestEmployeeName(row)}
+            {" · "}
+            {kindPrefix}
+            {row.leave_types?.name ?? "חופשה"}
+          </div>
+          <div className="text-muted-foreground">
+            {formatLeaveDateRange(row.start_date, row.end_date)}
+            {" · "}
+            <span className="font-medium text-foreground">{row.days_count} ימים</span>
+          </div>
+          {approved && (
+            <div className="text-xs text-muted-foreground">
+              אושר על ידי <span className="font-medium text-foreground">{approved.name}</span>
+              {" · "}
+              {approved.at}
+            </div>
+          )}
+          {row.note && <p className="text-xs">{row.note}</p>}
+          <SickAttachmentButton row={row} />
+        </div>
+        {statusBadgeForRow(row)}
+      </div>
+    </li>
+  );
+}
+
+function todayIsoJerusalem(): string {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Jerusalem",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(new Date());
+}
+
+/** Managers with approve permission — not department heads. */
+function ActiveOnLeaveTab() {
+  const qc = useQueryClient();
+  const cancelFn = useServerFn(adminCancelActiveLeave);
+  const [cancelTarget, setCancelTarget] = useState<LeaveRequestRow | null>(null);
+  const today = todayIsoJerusalem();
+
+  const onLeaveQ = useQuery({
+    queryKey: ["leave-admin-on-leave", today],
+    queryFn: async () => {
+      const { data, error } = await (supabase as any)
+        .from("leave_requests")
+        .select(
+          `*,
+          leave_types(code, name, requires_attachment),
+          profiles!user_id(full_name, first_name, last_name),
+          admin_decider:profiles!admin_decided_by(full_name, first_name, last_name),
+          dept_decider:profiles!dept_decided_by(full_name, first_name, last_name),
+          leave_request_attachments(id, file_name, storage_path, mime_type)`,
+        )
+        .eq("status", "approved")
+        .eq("kind", "leave")
+        .gte("end_date", today)
+        .order("start_date", { ascending: true })
+        .limit(300);
+      if (error) throw error;
+      return (data ?? []) as LeaveRequestRow[];
+    },
+  });
+
+  const cancelMut = useMutation({
+    mutationFn: async (uid: string) => {
+      await cancelFn({ data: { user_id: uid, note: "ביטול ישיר מניהול חופשות" } });
+    },
+    onSuccess: () => {
+      toast.success("החופשה בוטלה — הסידור והתראת העובד עודכנו");
+      setCancelTarget(null);
+      qc.invalidateQueries({ queryKey: ["leave-admin-on-leave"] });
+      qc.invalidateQueries({ queryKey: ["leave-admin-requests"] });
+      qc.invalidateQueries({ queryKey: ["leave-admin-balances"] });
+      qc.invalidateQueries({ queryKey: ["employees"] });
+      qc.invalidateQueries({ queryKey: ["schedule"] });
+      qc.invalidateQueries({ queryKey: ["schedules"] });
+      qc.invalidateQueries({ queryKey: ["emp-dash-notif"] });
+      qc.invalidateQueries({ queryKey: ["dashboard"] });
+      qc.invalidateQueries({ queryKey: ["notifications"] });
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  const rows = onLeaveQ.data ?? [];
+
+  return (
+    <>
+      <Card className="space-y-3 p-4">
+        <div>
+          <h2 className="font-medium">עובדים בחופשה</h2>
+          <p className="mt-1 text-xs text-muted-foreground">
+            חופשות פעילות (אדום). ביטול מעדכן את הסידור ומודיע לעובד. אחראי מחלקה אינו יכול לבטל מכאן.
+          </p>
+        </div>
+        {onLeaveQ.isLoading ? (
+          <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+        ) : onLeaveQ.isError ? (
+          <p className="text-sm text-destructive">
+            לא ניתן לטעון: {(onLeaveQ.error as Error).message}
+          </p>
+        ) : rows.length === 0 ? (
+          <p className="text-sm text-muted-foreground">אין עובדים בחופשה כרגע.</p>
+        ) : (
+          <ul className="max-h-[32rem] space-y-2 overflow-y-auto">
+            {rows.map((r) => {
+              const approved = approverLabel(r);
+              return (
+                <li
+                  key={r.id}
+                  className={`flex flex-wrap items-start justify-between gap-3 rounded-lg border p-3 text-sm ${LEAVE_LIFECYCLE_ROW.active}`}
+                >
+                  <div className="min-w-0 space-y-1">
+                    <div className="font-medium">
+                      {requestEmployeeName(r)} · {r.leave_types?.name ?? leaveOffLabel(null)}
+                    </div>
+                    <div className="text-muted-foreground">
+                      {formatLeaveDateRange(r.start_date, r.end_date)}
+                      {" · "}
+                      <span className="font-medium text-foreground">{r.days_count} ימים</span>
+                    </div>
+                    {approved && (
+                      <div className="text-xs text-muted-foreground">
+                        אושר על ידי{" "}
+                        <span className="font-medium text-foreground">{approved.name}</span>
+                        {" · "}
+                        {approved.at}
+                      </div>
+                    )}
+                    <SickAttachmentButton row={r} />
+                  </div>
+                  <div className="flex flex-col items-end gap-2 shrink-0">
+                    <Badge className={LEAVE_LIFECYCLE_BADGE.active} variant="outline">
+                      חופשה פעילה
+                    </Badge>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="text-destructive border-destructive/40 hover:bg-destructive/10"
+                      onClick={() => setCancelTarget(r)}
+                    >
+                      <UserMinus className="h-4 w-4" />
+                      ביטול חופשה
+                    </Button>
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
+        )}
+      </Card>
+
+      <AlertDialog
+        open={!!cancelTarget}
+        onOpenChange={(o) => !o && !cancelMut.isPending && setCancelTarget(null)}
+      >
+        <AlertDialogContent dir="rtl">
+          <AlertDialogHeader>
+            <AlertDialogTitle>לבטל את החופשה?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {cancelTarget && (
+                <>
+                  יבוטל החופש של{" "}
+                  <span className="font-medium text-foreground">
+                    {requestEmployeeName(cancelTarget)}
+                  </span>
+                  {formatLeaveDateRange(cancelTarget.start_date, cancelTarget.end_date)
+                    ? ` (${formatLeaveDateRange(cancelTarget.start_date, cancelTarget.end_date)})`
+                    : ""}
+                  . הסידור יתעדכן, והעובד יקבל התראה בדשבורד עם שמך ותאריך הביטול.
+                </>
+              )}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter className="gap-2 sm:justify-start">
+            <AlertDialogAction
+              disabled={cancelMut.isPending}
+              onClick={(ev) => {
+                ev.preventDefault();
+                if (cancelTarget) cancelMut.mutate(cancelTarget.user_id);
+              }}
+            >
+              {cancelMut.isPending ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                "כן, בטל חופשה"
+              )}
+            </AlertDialogAction>
+            <AlertDialogCancel disabled={cancelMut.isPending}>חזרה</AlertDialogCancel>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </>
+  );
+}
+
+function BalancesTab({ types }: { types: LeaveTypeRow[] }) {
   const qc = useQueryClient();
   const adjustFn = useServerFn(adjustLeaveBalance);
-  const cancelFn = useServerFn(adminCancelActiveLeave);
   const [userId, setUserId] = useState("");
   const [leaveTypeId, setLeaveTypeId] = useState("");
   const [delta, setDelta] = useState("1");
@@ -428,17 +745,6 @@ function BalancesTab({
       setReason("");
       qc.invalidateQueries({ queryKey: ["leave-admin-balances"] });
       qc.invalidateQueries({ queryKey: ["my-leave-balances"] });
-    },
-    onError: (e: Error) => toast.error(e.message),
-  });
-
-  const cancelMut = useMutation({
-    mutationFn: async (uid: string) => {
-      await cancelFn({ data: { user_id: uid, note: "ביטול ישיר מהנהלה" } });
-    },
-    onSuccess: () => {
-      toast.success("החופשה בוטלה");
-      qc.invalidateQueries({ queryKey: ["leave-admin-requests"] });
     },
     onError: (e: Error) => toast.error(e.message),
   });
@@ -529,16 +835,6 @@ function BalancesTab({
                     {" · "}
                     {b.leave_types?.name} · זמין {available}
                   </div>
-                  {canCancel && (
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      disabled={cancelMut.isPending}
-                      onClick={() => cancelMut.mutate(b.user_id)}
-                    >
-                      ביטול חופשה פעילה
-                    </Button>
-                  )}
                 </li>
               );
             })}

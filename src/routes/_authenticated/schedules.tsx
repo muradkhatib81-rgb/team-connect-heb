@@ -1159,9 +1159,21 @@ function SchedulesPage() {
       ((visible.status === "draft" || visible.status === "rejected") &&
         visible.created_by === me?.id));
 
-  function setShift(empId: string, day: string, shift: Shift) {
+  function setShift(empId: string, day: string, value: string) {
     editsDirtyRef.current = true;
+    let shift: Shift;
+    let leaveType: string | null = null;
+    if (value === "off:regular" || value === "off:sick") {
+      shift = "off";
+      leaveType = value === "off:sick" ? "sick" : "regular";
+    } else {
+      shift = value as Shift;
+    }
     setEdits((prev) => ({ ...prev, [empId]: { ...(prev[empId] ?? {}), [day]: shift } }));
+    setLeaveTypeByCell((prev) => ({
+      ...prev,
+      [`${empId}|${day}`]: leaveType,
+    }));
     if (!canEditScheduleTimes) {
       setTimeEdits((prev) => ({
         ...prev,
@@ -1243,7 +1255,8 @@ function SchedulesPage() {
           resolved === "off"
             ? leaveTypeByCell[`${emp}|${day}`] ??
               (onLeave ? ((empRow as any)?.leave_type_code as string | null) : null) ??
-              (onLeave ? "regular" : null)
+              // Manual off without explicit type → regular (matches picker default)
+              "regular"
             : null;
         list.push({
           employee_id: emp,
@@ -2366,8 +2379,12 @@ function SchedulesPage() {
                         <td key={day} className="p-2 align-top">
                           <div className="relative space-y-1">
                             <Select
-                              value={cur ?? ""}
-                              onValueChange={(v) => setShift(emp.id, day, v as Shift)}
+                              value={
+                                cur === "off"
+                                  ? `off:${cellLeaveType === "sick" ? "sick" : "regular"}`
+                                  : (cur ?? "")
+                              }
+                              onValueChange={(v) => setShift(emp.id, day, v)}
                             >
                               <SelectTrigger
                                 className={`h-9 ${
@@ -2380,15 +2397,35 @@ function SchedulesPage() {
                                 </SelectValue>
                               </SelectTrigger>
                               <SelectContent>
-                                {activeShifts.map((s) => (
-                                  <SelectItem key={s.code} value={s.code}>
-                                    <span
-                                      className="inline-block size-2 rounded-full me-2 align-middle"
-                                      style={{ backgroundColor: s.color }}
-                                    />
-                                    {s.name}
-                                  </SelectItem>
-                                ))}
+                                {activeShifts.flatMap((s) => {
+                                  if (s.code === "off") {
+                                    return [
+                                      <SelectItem key="off:regular" value="off:regular">
+                                        <span
+                                          className="inline-block size-2 rounded-full me-2 align-middle"
+                                          style={{ backgroundColor: s.color }}
+                                        />
+                                        חופש רגיל
+                                      </SelectItem>,
+                                      <SelectItem key="off:sick" value="off:sick">
+                                        <span
+                                          className="inline-block size-2 rounded-full me-2 align-middle"
+                                          style={{ backgroundColor: s.color }}
+                                        />
+                                        חופש מחלה
+                                      </SelectItem>,
+                                    ];
+                                  }
+                                  return [
+                                    <SelectItem key={s.code} value={s.code}>
+                                      <span
+                                        className="inline-block size-2 rounded-full me-2 align-middle"
+                                        style={{ backgroundColor: s.color }}
+                                      />
+                                      {s.name}
+                                    </SelectItem>,
+                                  ];
+                                })}
                               </SelectContent>
                             </Select>
                             {cur && def?.start_time && def?.end_time && (

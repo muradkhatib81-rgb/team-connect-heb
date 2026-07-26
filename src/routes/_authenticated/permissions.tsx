@@ -248,6 +248,8 @@ export function PermissionsPage() {
   const qc = useQueryClient();
   const { data: me } = useAuth();
   const isMainAdmin = !!me?.roles.includes("main_admin");
+  const isPlatformOwner =
+    isMainAdmin || !!me?.roles.includes("system_admin");
   const ownPermissionsQ = useCurrentPermissions(me?.id);
   const allowed = me
     ? hasBranchActionPermission(
@@ -259,14 +261,14 @@ export function PermissionsPage() {
   const canEditRoles = me
     ? hasBranchActionPermission(me.roles, ownPermissionsQ.data, "can_manage_users")
     : false;
-  const roleOptions = isMainAdmin
+  const roleOptions = isPlatformOwner
     ? ROLE_OPTIONS
     : ROLE_OPTIONS.filter((r) => r !== "main_admin" && r !== "branch_manager");
   const canEditRowRole = (row: Row) =>
     row.id !== me?.id &&
     !roleMutation.isPending &&
     canEditRoles &&
-    (isMainAdmin || (row.role !== "main_admin" && row.role !== "branch_manager"));
+    (isPlatformOwner || (row.role !== "main_admin" && row.role !== "branch_manager"));
 
   const query = useQuery({
     enabled: allowed,
@@ -338,8 +340,12 @@ export function PermissionsPage() {
     );
   }
 
-  // Granular grants are assistant-only on the server; do not offer dead BM cards.
-  const managers = (query.data ?? []).filter((r) => r.role === "assistant_manager");
+  // Granular grants for assistants always; branch managers only for platform owners.
+  const managers = (query.data ?? []).filter(
+    (r) =>
+      r.role === "assistant_manager" ||
+      (isPlatformOwner && r.role === "branch_manager"),
+  );
 
   const listOverridesFn = useServerFn(listBranchPermissionOverrides);
   const overridesQ = useQuery({
@@ -374,7 +380,7 @@ export function PermissionsPage() {
           <div className="flex justify-center py-12"><Loader2 className="size-6 animate-spin text-primary" /></div>
         ) : (
           <div className="grid gap-3">
-            {query.data?.filter((row) => isMainAdmin || (row.role !== "main_admin" && row.role !== "branch_manager")).map((row) => (
+            {query.data?.filter((row) => isPlatformOwner || (row.role !== "main_admin" && row.role !== "branch_manager")).map((row) => (
               <Card key={row.id} className="card-elevated p-4 flex flex-wrap items-center gap-4">
                 <div className="size-10 rounded-full bg-accent text-accent-foreground flex items-center justify-center font-semibold shrink-0">
                   {row.full_name?.charAt(0) || "?"}
@@ -400,7 +406,8 @@ export function PermissionsPage() {
                     <p className="text-[10px] text-muted-foreground mt-1 text-center">אינך יכול לערוך את עצמך</p>
                   ) : null}
                 </div>
-                {row.role === "assistant_manager" &&
+                { (row.role === "assistant_manager" ||
+                  (isPlatformOwner && row.role === "branch_manager")) &&
                   allowed &&
                   row.id !== me?.id && (
                     <ResetPermissionsButtons userId={row.id} compact />
@@ -447,14 +454,18 @@ export function PermissionsPage() {
               <div className="flex-1">
                 <h2 className="text-xl font-bold">הרשאות מפורטות למנהלים</h2>
                 <p className="text-sm text-muted-foreground mt-1">
-                  הענקה/הסרה של הרשאות פעולה לסגני מנהל בסניף. השינוי נשמר ונכנס לתוקף מיד.
+                  {isPlatformOwner
+                    ? "הענקה/הסרה של הרשאות פעולה למנהלי סניף ולסגני מנהל. מנהל סניף אינו מקבל הרשאות אוטומטית — רק מה שמוענק כאן."
+                    : "הענקה/הסרה של הרשאות פעולה לסגני מנהל בסניף. השינוי נשמר ונכנס לתוקף מיד."}
                 </p>
               </div>
               {managers.length >= 2 && <CopyPermsButton managers={managers} />}
             </div>
             {managers.length === 0 ? (
               <Card className="card-elevated p-6 text-sm text-muted-foreground text-center">
-                אין סגני מנהל להגדרה.
+                {isPlatformOwner
+                  ? "אין מנהלי סניף או סגני מנהל להגדרה."
+                  : "אין סגני מנהל להגדרה."}
               </Card>
             ) : (
               <div className="grid gap-3">

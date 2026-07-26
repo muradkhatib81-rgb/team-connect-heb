@@ -38,7 +38,6 @@ function BreaksAdminPage() {
   const { data: me } = useAuth();
   const qc = useQueryClient();
   const isMainAdmin = !!me?.roles.includes("main_admin");
-  const isBranchManager = !!me?.roles.includes("branch_manager");
   const { canManageBreaks, isLoading: managePermLoading } = useCanManageBreaks();
   const { requiresApproval } = useBreakRequiresApproval();
   const isBreaksManager = canManageBreaks;
@@ -177,7 +176,7 @@ function BreaksAdminPage() {
             </TabsTrigger>
           )}
           <TabsTrigger value="settings">הגדרות הפסקות</TabsTrigger>
-          {(isMainAdmin || isBranchManager) && (
+          {(isMainAdmin || isBreaksManager) && (
             <TabsTrigger value="permissions">הרשאות בקשת הפסקה</TabsTrigger>
           )}
           {isMainAdmin && (
@@ -204,7 +203,7 @@ function BreaksAdminPage() {
           </Card>
         </TabsContent>
 
-        {(isMainAdmin || isBranchManager) && (
+        {(isMainAdmin || isBreaksManager) && (
           <TabsContent value="permissions">
             <BreakRequestPermissionsCard />
           </TabsContent>

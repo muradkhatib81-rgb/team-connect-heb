@@ -23,6 +23,7 @@ import {
   ROLE_LABELS,
   ROLE_OPTIONS,
   isAdmin,
+  isPlatformOwner,
   type AppRole,
 } from "@/lib/constants";
 import { Card } from "@/components/ui/card";
@@ -239,6 +240,8 @@ function EmployeesPage() {
   const canManageUserRoles = me
     ? hasBranchActionPermission(me.roles, permissionsQ.data, "can_manage_users")
     : false;
+  /** Job title (תפקיד) field — platform owners only; hidden for BM / assistant. */
+  const canEditJobTitle = me ? isPlatformOwner(me.roles) : false;
 
   function exportEmployeesCsv() {
     const rows = [
@@ -728,6 +731,7 @@ function EmployeesPage() {
           depts={deptsQuery.data ?? []}
           currentRoles={rolesQuery.data?.[editing.id] ?? []}
           canEditRoles={canManageUserRoles}
+          canEditJobTitle={canEditJobTitle}
           canDelete={canDeleteEmployee && editing.id !== me.id}
           currentUserRoles={me.roles}
           onDelete={() => {
@@ -756,6 +760,7 @@ function EmployeesPage() {
           }}
           currentUserRoles={me?.roles}
           canManageRoles={canManageUserRoles}
+          canEditJobTitle={canEditJobTitle}
         />
       )}
     </div>
@@ -831,6 +836,7 @@ export function CreateEmployeeDialog({
   lockDepartment,
   currentUserRoles,
   canManageRoles,
+  canEditJobTitle = false,
 }: {
   depts: DeptOption[];
   onClose: () => void;
@@ -840,6 +846,7 @@ export function CreateEmployeeDialog({
   lockDepartment?: boolean;
   currentUserRoles?: AppRole[];
   canManageRoles?: boolean;
+  canEditJobTitle?: boolean;
 }) {
   const qc = useQueryClient();
   const createFn = useServerFn(createEmployee);
@@ -1084,19 +1091,21 @@ export function CreateEmployeeDialog({
                 </SelectContent>
               </Select>
             </Field>
-            <Field label="תפקיד">
-              <Select value={form.job_title || "__none__"} onValueChange={(v) => setForm({ ...form, job_title: v === "__none__" ? "" : v })}>
-                <SelectTrigger><SelectValue placeholder="ללא תפקיד" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="__none__">ללא תפקיד</SelectItem>
-                  {(jobTitlesQ.data ?? []).map((t) => (
-                    <SelectItem key={t.id} value={t.name}>
-                      {t.name}{t.excluded_from_headcount ? " (לא נכלל במצבת)" : ""}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </Field>
+            {canEditJobTitle && (
+              <Field label="תפקיד">
+                <Select value={form.job_title || "__none__"} onValueChange={(v) => setForm({ ...form, job_title: v === "__none__" ? "" : v })}>
+                  <SelectTrigger><SelectValue placeholder="ללא תפקיד" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__none__">ללא תפקיד</SelectItem>
+                    {(jobTitlesQ.data ?? []).map((t) => (
+                      <SelectItem key={t.id} value={t.name}>
+                        {t.name}{t.excluded_from_headcount ? " (לא נכלל במצבת)" : ""}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </Field>
+            )}
             <Field label="סיסמה ראשונית">
               <Input
                 type="password"
@@ -1524,6 +1533,7 @@ function EditEmployeeDialog({
   depts,
   currentRoles,
   canEditRoles,
+  canEditJobTitle = false,
   canDelete,
   onDelete,
   onClose,
@@ -1533,6 +1543,7 @@ function EditEmployeeDialog({
   depts: DeptOption[];
   currentRoles: AppRole[];
   canEditRoles: boolean;
+  canEditJobTitle?: boolean;
   canDelete: boolean;
   onDelete: () => void;
   onClose: () => void;
@@ -1682,19 +1693,21 @@ function EditEmployeeDialog({
                 </SelectContent>
               </Select>
             </Field>
-            <Field label="תפקיד">
-              <Select value={form.job_title || "__none__"} onValueChange={(v) => setForm({ ...form, job_title: v === "__none__" ? "" : v })}>
-                <SelectTrigger><SelectValue placeholder="ללא תפקיד" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="__none__">ללא תפקיד</SelectItem>
-                  {(jobTitlesQ.data ?? []).map((t) => (
-                    <SelectItem key={t.id} value={t.name}>
-                      {t.name}{t.excluded_from_headcount ? " (לא נכלל במצבת)" : ""}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </Field>
+            {canEditJobTitle && (
+              <Field label="תפקיד">
+                <Select value={form.job_title || "__none__"} onValueChange={(v) => setForm({ ...form, job_title: v === "__none__" ? "" : v })}>
+                  <SelectTrigger><SelectValue placeholder="ללא תפקיד" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__none__">ללא תפקיד</SelectItem>
+                    {(jobTitlesQ.data ?? []).map((t) => (
+                      <SelectItem key={t.id} value={t.name}>
+                        {t.name}{t.excluded_from_headcount ? " (לא נכלל במצבת)" : ""}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </Field>
+            )}
             {canEditRoles && (
               <Field label="הרשאה">
                 <Select value={form.role} onValueChange={(v) => setForm({ ...form, role: v as AppRole })}>
