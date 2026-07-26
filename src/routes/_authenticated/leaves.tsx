@@ -16,7 +16,7 @@ import {
   type LeaveTypeRow,
 } from "@/lib/leave.functions";
 import { useLeaveAccess } from "@/lib/leave-permissions";
-import { formatLeaveDateRange } from "@/lib/employee-leave";
+import { formatLeaveDateRange, leaveDecisionMessage } from "@/lib/employee-leave";
 import { HebrewDateInput } from "@/components/hebrew-datetime";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -101,7 +101,10 @@ function LeavesPage() {
       const { data, error } = await (supabase as any)
         .from("leave_requests")
         .select(
-          "*, leave_types(code, name, requires_attachment)",
+          `*,
+          leave_types(code, name, requires_attachment),
+          admin_decider:profiles!admin_decided_by(full_name, first_name, last_name),
+          dept_decider:profiles!dept_decided_by(full_name, first_name, last_name)`,
         )
         .eq("user_id", me!.id)
         .order("submitted_at", { ascending: false })
@@ -533,7 +536,9 @@ function LeavesPage() {
           <p className="text-sm text-muted-foreground">אין בקשות עדיין</p>
         ) : (
           <ul className="space-y-2">
-            {(myRequestsQ.data ?? []).map((r) => (
+            {(myRequestsQ.data ?? []).map((r) => {
+              const decision = leaveDecisionMessage(r);
+              return (
               <li key={r.id} className="rounded-lg border p-3 text-sm">
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <div className="font-medium">
@@ -548,12 +553,26 @@ function LeavesPage() {
                     {LEAVE_STATUS_LABEL[r.status]}
                   </Badge>
                 </div>
+                {decision && (
+                  <p
+                    className={
+                      decision.tone === "rejected"
+                        ? "mt-2 rounded-md border border-rose-200 bg-rose-50 px-2 py-1.5 text-xs text-rose-900"
+                        : decision.tone === "cancelled"
+                          ? "mt-2 rounded-md border border-amber-200 bg-amber-50 px-2 py-1.5 text-xs text-amber-950"
+                          : "mt-2 rounded-md border border-emerald-200 bg-emerald-50 px-2 py-1.5 text-xs text-emerald-900"
+                    }
+                  >
+                    {decision.text}
+                  </p>
+                )}
                 {r.balance_warning && (
                   <p className="mt-1 text-xs text-amber-700">נשלח עם אזהרת יתרה</p>
                 )}
                 {r.note && <p className="mt-1 text-muted-foreground">{r.note}</p>}
               </li>
-            ))}
+              );
+            })}
           </ul>
         )}
       </Card>

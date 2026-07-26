@@ -130,6 +130,67 @@ export const LEAVE_LIFECYCLE_BADGE: Record<"active" | "done", string> = {
   done: "bg-emerald-100 text-emerald-900 border-emerald-200",
 };
 
+type LeaveDecisionPerson = {
+  full_name?: string | null;
+  first_name?: string | null;
+  last_name?: string | null;
+} | null | undefined;
+
+function leavePersonName(p: LeaveDecisionPerson): string {
+  if (!p) return "ההנהלה";
+  const n =
+    p.full_name ||
+    [p.first_name, p.last_name].filter(Boolean).join(" ") ||
+    "";
+  return n.trim() || "ההנהלה";
+}
+
+/**
+ * Banner text for the employee leave-request card after manager decision.
+ * Covers reject / cancel (and notes). Pending stays without a banner.
+ */
+export function leaveDecisionMessage(r: {
+  status: string;
+  kind?: string | null;
+  admin_note?: string | null;
+  dept_note?: string | null;
+  admin_decider?: LeaveDecisionPerson;
+  dept_decider?: LeaveDecisionPerson;
+}): { text: string; tone: "rejected" | "cancelled" | "approved" } | null {
+  const who = leavePersonName(r.admin_decider ?? r.dept_decider);
+  const note = (r.admin_note || r.dept_note || "").trim();
+  const kindLabel =
+    r.kind === "cancellation"
+      ? "בקשת הביטול"
+      : r.kind === "extension"
+        ? "בקשת ההארכה"
+        : "בקשת החופשה";
+
+  if (r.status === "rejected") {
+    return {
+      tone: "rejected",
+      text: note
+        ? `${kindLabel} נדחתה על ידי ${who} · ${note}`
+        : `${kindLabel} נדחתה על ידי ${who}`,
+    };
+  }
+  if (r.status === "cancelled") {
+    return {
+      tone: "cancelled",
+      text: note
+        ? `החופשה בוטלה על ידי ${who} · ${note}`
+        : `החופשה בוטלה על ידי ${who}`,
+    };
+  }
+  if (r.status === "approved" && (r.admin_decider || r.dept_decider)) {
+    return {
+      tone: "approved",
+      text: `${kindLabel} אושרה על ידי ${who}`,
+    };
+  }
+  return null;
+}
+
 export function formatLeaveDateRange(
   start: string | null | undefined,
   end: string | null | undefined,

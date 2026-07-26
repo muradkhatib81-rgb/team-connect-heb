@@ -61,6 +61,7 @@ import { formatHeDateTime } from "@/lib/date-format";
 import {
   formatLeaveDateRange,
   isEmployeeCurrentlyOnLeave,
+  leaveDecisionMessage,
 } from "@/lib/employee-leave";
 import { formatScheduleDayHe } from "@/lib/schedule-week";
 import { resolveScheduleManagerCaps, resolveDashboardScheduleScope, scheduleScopeNeedsLoadedPermissions } from "@/lib/schedule-manager-caps";
@@ -2377,15 +2378,20 @@ function LeaveShortcutCard({ userId }: { userId: string }) {
     queryFn: async () => {
       const { data, error } = await (supabase as any)
         .from("leave_requests")
-        .select("id, status, kind, start_date, end_date, days_count, leave_types(name)")
+        .select(
+          `id, status, kind, start_date, end_date, days_count, admin_note, dept_note,
+           leave_types(name),
+           admin_decider:profiles!admin_decided_by(full_name, first_name, last_name),
+           dept_decider:profiles!dept_decided_by(full_name, first_name, last_name)`,
+        )
         .eq("user_id", userId)
-        .in("status", ["pending_dept", "pending_admin", "approved"])
+        .in("status", ["pending_dept", "pending_admin", "approved", "rejected", "cancelled"])
         .order("submitted_at", { ascending: false })
-        .limit(10);
+        .limit(15);
       if (error) throw error;
       return data ?? [];
     },
-    staleTime: 30_000,
+    staleTime: 15_000,
     retry: false,
   });
 
@@ -2421,6 +2427,11 @@ function LeaveShortcutCard({ userId }: { userId: string }) {
     (r: any) => r.status === "pending_dept" || r.status === "pending_admin",
   );
   const approvedUpcoming = myRows.filter((r: any) => r.status === "approved");
+  const newest = myRows[0] as any | undefined;
+  const decisionBanner =
+    newest && (newest.status === "rejected" || newest.status === "cancelled")
+      ? leaveDecisionMessage(newest)
+      : null;
   const queueCount = pendingQueueQ.data ?? 0;
 
   const goLeaves = () => navigate({ to: "/leaves" });
@@ -2484,7 +2495,15 @@ function LeaveShortcutCard({ userId }: { userId: string }) {
           onKeyDown={(e) => {
             if (e.key === "Enter" || e.key === " ") goLeaves();
           }}
-          className={`${DASH_TILE} cursor-pointer border border-emerald-300/50 bg-emerald-50/50 hover:bg-emerald-50`}
+          className={`${DASH_TILE} cursor-pointer border ${
+            decisionBanner && pendingMine.length === 0
+              ? decisionBanner.tone === "rejected"
+                ? "border-rose-300/70 bg-rose-50/70 hover:bg-rose-50"
+                : decisionBanner.tone === "cancelled"
+                  ? "border-amber-300/70 bg-amber-50/70 hover:bg-amber-50"
+                  : "border-emerald-300/50 bg-emerald-50/50 hover:bg-emerald-50"
+              : "border-emerald-300/50 bg-emerald-50/50 hover:bg-emerald-50"
+          }`}
         >
           <div className="flex h-full w-full items-center gap-2.5">
             <div className={`${DASH_TILE_ICON} bg-emerald-200/60 text-emerald-900`}>
@@ -2495,9 +2514,11 @@ function LeaveShortcutCard({ userId }: { userId: string }) {
               <p className={DASH_TILE_SUB}>
                 {pendingMine.length > 0
                   ? `${pendingMine.length} בקשות ממתינות`
-                  : approvedUpcoming.length > 0
-                    ? `${formatLeaveDateRange(approvedUpcoming[0].start_date, approvedUpcoming[0].end_date)}`
-                    : "הגשה ומעקב סטטוס"}
+                  : decisionBanner
+                    ? decisionBanner.text
+                    : approvedUpcoming.length > 0
+                      ? `${formatLeaveDateRange(approvedUpcoming[0].start_date, approvedUpcoming[0].end_date)}`
+                      : "הגשה ומעקב סטטוס"}
               </p>
             </div>
             <div className={DASH_TILE_TRAIL}>

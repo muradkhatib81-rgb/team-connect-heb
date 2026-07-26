@@ -938,6 +938,28 @@ function RealtimeBridge({ uid }: { uid: string }) {
       .on("postgres_changes", { event: "*", schema: "public", table: "break_settings" }, () =>
         qc.invalidateQueries({ queryKey: ["break-settings"] }),
       )
+      .on("postgres_changes", { event: "*", schema: "public", table: "leave_requests" }, () => {
+        qc.invalidateQueries({ queryKey: ["my-leave-requests"] });
+        qc.invalidateQueries({ queryKey: ["leave-admin-requests"] });
+        qc.invalidateQueries({ queryKey: ["leave-admin-on-leave"] });
+        qc.invalidateQueries({ queryKey: ["dashboard-my-leave"] });
+        qc.invalidateQueries({ queryKey: ["dashboard-leave-queue"] });
+        qc.invalidateQueries({ queryKey: ["dashboard-shift-cards"] });
+        qc.invalidateQueries({ queryKey: ["my-leave-balances"] });
+        qc.invalidateQueries({ queryKey: ["leave-admin-balances"] });
+        qc.invalidateQueries({ queryKey: ["auth", "me"] });
+      })
+      .on("postgres_changes", { event: "*", schema: "public", table: "leave_balances" }, () => {
+        qc.invalidateQueries({ queryKey: ["my-leave-balances"] });
+        qc.invalidateQueries({ queryKey: ["leave-admin-balances"] });
+      })
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "leave_employee_accrual_rates" },
+        () => {
+          qc.invalidateQueries({ queryKey: ["leave-emp-accrual-rates"] });
+        },
+      )
       .on("postgres_changes", { event: "*", schema: "public", table: "messages" }, () => {
         qc.invalidateQueries({ queryKey: ["communications"] });
         qc.invalidateQueries({ queryKey: ["shell-comm-unread", uid] });
