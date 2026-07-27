@@ -48,20 +48,25 @@ export function MorningBoard() {
   const q = useQuery({
     enabled: !!activeBranchId,
     queryKey: ["morning-board", activeBranchId],
+    staleTime: 60_000,
     queryFn: async () => {
       const { data, error } = await supabase
         .from("morning_board_items")
-        .select("*")
+        .select(
+          "id, branch_id, item_type, title, description, storage_path, mime_type, is_pinned, display_order, priority, style, starts_at, expires_at, created_at, created_by",
+        )
         .eq("branch_id", activeBranchId!)
         .order("is_pinned", { ascending: false })
         .order("display_order", { ascending: true })
         .order("created_at", { ascending: true });
       if (error) throw error;
       const rows = (data ?? []) as unknown as MorningBoardItem[];
+      const now = Date.now();
       const urls: Record<string, string | null> = {};
       await Promise.all(
         rows
           .filter((r) => r.storage_path)
+          .filter((r) => !r.expires_at || new Date(r.expires_at).getTime() > now)
           .map(async (r) => {
             urls[r.id] = await signedUrl(r.storage_path);
           }),

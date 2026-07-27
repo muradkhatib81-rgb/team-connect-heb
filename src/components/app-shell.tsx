@@ -857,14 +857,16 @@ function RealtimeBridge({ uid }: { uid: string }) {
           if (!affected || affected === uid) qc.invalidateQueries({ queryKey: ["auth", "me"] });
           qc.invalidateQueries({ queryKey: ["employees"] });
           qc.invalidateQueries({ queryKey: ["departments"] });
-          qc.invalidateQueries({ queryKey: ["dashboard"] });
+          qc.invalidateQueries({ queryKey: ["dashboard", "stats"] });
+          qc.invalidateQueries({ queryKey: ["dashboard-shift-cards"] });
           qc.invalidateQueries({ queryKey: ["dept-employees"] });
         },
       )
       .on("postgres_changes", { event: "*", schema: "public", table: "departments" }, () => {
         qc.invalidateQueries({ queryKey: ["auth", "me"] });
         qc.invalidateQueries({ queryKey: ["departments"] });
-        qc.invalidateQueries({ queryKey: ["dashboard"] });
+        qc.invalidateQueries({ queryKey: ["dashboard", "stats"] });
+        qc.invalidateQueries({ queryKey: ["dashboard", "department-managers"] });
         qc.invalidateQueries({ queryKey: ["departments-list"] });
       })
       .on("postgres_changes", { event: "*", schema: "public", table: "job_titles" }, () => {
@@ -886,7 +888,6 @@ function RealtimeBridge({ uid }: { uid: string }) {
       )
       .on("postgres_changes", { event: "*", schema: "public", table: "tasks" }, () => {
         qc.invalidateQueries({ queryKey: ["tasks"] });
-        qc.invalidateQueries({ queryKey: ["dashboard"] });
         qc.invalidateQueries({ queryKey: ["dashboard", "tasks-stats"] });
       })
       .on("postgres_changes", { event: "*", schema: "public", table: "task_recurrences" }, () =>
@@ -926,7 +927,8 @@ function RealtimeBridge({ uid }: { uid: string }) {
         qc.invalidateQueries({ queryKey: ["breaks-admin"] });
         qc.invalidateQueries({ queryKey: ["dashboard-breaks"] });
         qc.invalidateQueries({ queryKey: ["break-stats"] });
-        qc.invalidateQueries({ queryKey: ["dashboard"] });
+        // Prefer specific keys — avoid prefix ["dashboard"] which also refetches admin headcount.
+        qc.invalidateQueries({ queryKey: ["dashboard", "stats"] });
         qc.invalidateQueries({ queryKey: ["my-active-break"] });
         qc.invalidateQueries({ queryKey: ["my-break-shortcut"] });
         qc.invalidateQueries({ queryKey: ["my-breaks-today"] });

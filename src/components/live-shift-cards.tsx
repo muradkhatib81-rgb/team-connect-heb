@@ -153,10 +153,14 @@ export function LiveShiftCardsSection() {
     enabled: canView && permsReady && !!dateISO,
     queryKey: ["dashboard-shift-cards", "leave-emps", dateISO, activeBranchId ?? "all"],
     queryFn: async () => {
+      // Prefer server filter: flagged on_leave OR leave window covering today.
       let q = supabase
         .from("profiles")
         .select(
           "id, full_name, job_title, excluded_from_headcount, on_leave, leave_start_date, leave_end_date, leave_type_code, department_id, branch_id, departments(name)",
+        )
+        .or(
+          `on_leave.eq.true,and(leave_start_date.lte.${dateISO},leave_end_date.gte.${dateISO})`,
         );
       if (activeBranchId) q = q.eq("branch_id", activeBranchId);
       const { data, error } = await q;

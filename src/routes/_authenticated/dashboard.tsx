@@ -534,6 +534,7 @@ function DeptHeadOnBreakSection() {
     refetchInterval: 60_000,
   });
 
+  // Full journal stays cached for the tile count; enrich only when dialog is open.
   const dailyLogQ = useQuery({
     queryKey: ["dashboard-dept-daily-breaks"],
     queryFn: async () => {
@@ -575,6 +576,7 @@ function DeptHeadOnBreakSection() {
 
   const list = onBreakQ.data ?? [];
   const log = dailyLogQ.data ?? [];
+  const logCount = log.length;
   void onBreakTick;
   const nowMs = Date.now();
   const onBreakNow = list.filter((r) => !isBreakOverdue(r.ends_at, nowMs));
@@ -590,13 +592,16 @@ function DeptHeadOnBreakSection() {
   const fmtT = (iso: string | null) => fmtBreakTime(iso) || "—";
   const deptName = list[0]?.department_name ?? log[0]?.department_name ?? null;
 
-  const employees = Array.from(
-    new Map(log.map((r) => [r.user_id, r.full_name])).entries(),
-  ).sort((a, b) => a[1].localeCompare(b[1], "he"));
-  const types = Array.from(new Set(log.map((r) => r.break_type))).sort();
-  const statuses = Array.from(new Set(log.map((r) => r.status)));
+  const employees = logOpen
+    ? Array.from(new Map(log.map((r) => [r.user_id, r.full_name])).entries()).sort((a, b) =>
+        a[1].localeCompare(b[1], "he"),
+      )
+    : [];
+  const types = logOpen ? Array.from(new Set(log.map((r) => r.break_type))).sort() : [];
+  const statuses = logOpen ? Array.from(new Set(log.map((r) => r.status))) : [];
 
-  const enriched = log.map((r) => {
+  const enriched = logOpen
+    ? log.map((r) => {
     const startedMs = r.started_at ? new Date(r.started_at).getTime() : null;
     const endsMs = r.ends_at ? new Date(r.ends_at).getTime() : null;
     const completedMs = r.completed_at ? new Date(r.completed_at).getTime() : null;
@@ -622,7 +627,8 @@ function DeptHeadOnBreakSection() {
       returnedOnTime: !!returnedOnTime,
       returnedLate,
     };
-  });
+  })
+    : [];
 
   const filtered = enriched.filter((r) => {
     if (logEmpFilter !== "__all" && r.user_id !== logEmpFilter) return false;
@@ -668,10 +674,10 @@ function DeptHeadOnBreakSection() {
         />
         <StatCard
           label="יומן הפסקות"
-          value={log.length}
+          value={logCount}
           icon={Coffee}
           tone="muted"
-          badge={log.length}
+          badge={logCount}
           attention={journalAttn.needsAttention}
           onClick={() => {
             journalAttn.markSeen();
@@ -1631,10 +1637,18 @@ function SchedulesStatsSection({ profile }: { profile: any }) {
       canManageOwnDeptSchedule,
     ],
     queryFn: async () => {
-      const [{ data: scheds }, { data: deptRows }] = await Promise.all([
-        supabase.from("schedules").select("id, status, department_id, week_start, week_end, published_at, updated_at"),
-        supabase.from("departments").select("id, name, is_active").eq("is_active", true).order("name"),
-      ]);
+      // Only current-week rows (+ all pending for approvers). Dept draft/published
+      // tiles come from getWeekDepartmentStates — avoid shipping full schedule history
+      // and unused schedule_shifts aggregates.
+      const weekOrPending = canApprove
+        ? `and(week_start.lte.${weekEnd},week_end.gte.${weekStart}),status.eq.pending_approval`
+        : `and(week_start.lte.${weekEnd},week_end.gte.${weekStart})`;
+      const { data: scheds, error: schedErr } = await supabase
+        .from("schedules")
+        .select("id, status, department_id, week_start, week_end, published_at, updated_at")
+        .or(weekOrPending);
+      if (schedErr) throw schedErr;
+
       const all = (scheds ?? []) as {
         id: string;
         status: string;
@@ -1645,135 +1659,30 @@ function SchedulesStatsSection({ profile }: { profile: any }) {
         updated_at: string | null;
       }[];
 
-      let managedDeptIds: string[] | null = null;
-      if (canManageOwnDeptSchedule && !canViewBranchScheduleOverview) {
-        const { data: managedDepts } = await supabase
-          .from("departments")
-          .select("id")
-          .eq("manager_id", profile.id)
-          .eq("is_active", true);
-        managedDeptIds = (managedDepts ?? []).map((d) => d.id);
-        if (managedDeptIds.length === 0 && profile.department_id) {
-          managedDeptIds = [profile.department_id];
-        }
-      }
-
-      const scoped = canViewBranchScheduleOverview
-        ? all
-        : managedDeptIds?.length
-          ? all.filter((s) => managedDeptIds!.includes(s.department_id))
-          : all.filter(
-              (s) =>
-                s.department_id === profile.department_id &&
-                s.status === "approved" &&
-                !!s.published_at,
-            );
-      const currentWeekScoped = scoped.filter((s) => s.week_start <= weekEnd && weekStart <= s.week_end);
-
+      const currentWeekScoped = all.filter(
+        (s) => s.week_start <= weekEnd && weekStart <= s.week_end,
+      );
       const pending = currentWeekScoped.filter((s) => s.status === "pending_approval").length;
       const approved = currentWeekScoped.filter((s) => s.status === "approved").length;
 
-      // ALL pending schedules (across every week) for the approval alert.
-      const pendingAllList = (canApprove
-        ? all.filter((s) => s.status === "pending_approval")
-        : []
+      const pendingAllList = (
+        canApprove ? all.filter((s) => s.status === "pending_approval") : []
       ).sort((a, b) => (a.week_start < b.week_start ? -1 : 1));
-      const pendingAll = pendingAllList.length;
-      const pendingFirst = pendingAllList[0] ?? null;
-      const pendingIds = pendingAllList.map((s) => s.id);
 
-      // Three-state workflow for the current week (exact week_start match).
-      let allDepts = (deptRows ?? []) as { id: string; name: string }[];
-      if (managedDeptIds?.length) {
-        const allowed = new Set(managedDeptIds);
-        allDepts = allDepts.filter((d) => allowed.has(d.id));
-      }
-      const weekSchedules = all.filter((s) => s.week_start === weekStart);
-      const schedByDept = new Map(weekSchedules.map((s) => [s.department_id, s]));
-
-      const noScheduleDepts = allDepts.filter((d) => !schedByDept.has(d.id));
-      const draftDepts = allDepts.filter((d) => {
-        const s = schedByDept.get(d.id);
-        return s && !(s.status === "approved" && !!s.published_at);
-      });
-      const publishedDepts = allDepts.filter((d) => {
-        const s = schedByDept.get(d.id);
-        return s && s.status === "approved" && !!s.published_at;
-      });
-
-      // Legacy: departments without submitted schedule (overlap-based, for backward compat)
-      const submittedDeptIds = new Set(
-        all
-          .filter(
-            (s) =>
-              (s.status === "pending_approval" || s.status === "approved") &&
-              s.week_start <= weekEnd &&
-              weekStart <= s.week_end,
-          )
-          .map((s) => s.department_id),
-      );
-      const notSubmittedDepts = allDepts.filter((d) => !submittedDeptIds.has(d.id));
-
-      // Weekly approved schedules covering the current week (overlap)
-      const weekScheds = scoped.filter(
-        (s) =>
-          s.status === "approved" &&
-          (canViewBranchScheduleOverview || canManageOwnDeptSchedule || !!s.published_at) &&
-          s.week_start <= weekEnd &&
-          weekStart <= s.week_end,
-      );
-      const ids = weekScheds.map((s) => s.id);
-      const weekCounts: Record<string, { morning: number; evening: number; off: number }> = {};
-      const modifiedCells: Record<string, { morning: boolean; evening: boolean; off: boolean }> = {};
-      for (const d of weekDays) {
-        weekCounts[d] = { morning: 0, evening: 0, off: 0 };
-        modifiedCells[d] = { morning: false, evening: false, off: false };
-      }
-      if (ids.length) {
-        const { data: shifts } = await supabase
-          .from("schedule_shifts")
-          .select("shift, day_date, published_shift")
-          .in("schedule_id", ids)
-          .gte("day_date", weekStart)
-          .lte("day_date", weekEnd);
-        for (const s of (shifts ?? []) as { shift: string; day_date: string; published_shift: string | null }[]) {
-          const b = weekCounts[s.day_date];
-          if (b && (s.shift === "morning" || s.shift === "evening" || s.shift === "off")) {
-            (b as any)[s.shift] += 1;
-          }
-          const m = modifiedCells[s.day_date];
-          // Mark ONLY the actual updated cell (the new shift value) — never the
-          // previous shift, and never the entire day/row.
-          if (
-            m &&
-            s.published_shift != null &&
-            (s.shift ?? null) !== (s.published_shift ?? null)
-          ) {
-            const cur = s.shift as "morning" | "evening" | "off" | null;
-            if (cur === "morning" || cur === "evening" || cur === "off") m[cur] = true;
-          }
-        }
-      }
+      const emptyDepts: { id: string; name: string }[] = [];
       return {
         pending,
-        pendingAll,
-        pendingFirst,
-        pendingIds,
+        pendingAll: pendingAllList.length,
+        pendingFirst: pendingAllList[0] ?? null,
+        pendingIds: pendingAllList.map((s) => s.id),
         approved,
-        weekCounts,
-        hasAnyApproved: ids.length > 0,
-        modifiedCells,
-        notSubmittedCount: notSubmittedDepts.length,
-        notSubmittedDepts,
-        noScheduleCount: noScheduleDepts.length,
-        noScheduleDepts,
-        draftCount: draftDepts.length,
-        draftDepts,
-        publishedCount: publishedDepts.length,
-        publishedDepts,
+        noScheduleCount: 0,
+        noScheduleDepts: emptyDepts,
+        draftCount: 0,
+        draftDepts: emptyDepts,
+        publishedCount: 0,
+        publishedDepts: emptyDepts,
       };
-
-
     },
   });
 
@@ -1787,38 +1696,43 @@ function SchedulesStatsSection({ profile }: { profile: any }) {
     queryFn: () => getWeekDeptStatesFn({ data: { week_start: weekStart } }),
   });
 
-  if (!canViewBranchScheduleOverview) return null;
-
-  if (statsQ.isLoading || !statsQ.data) return null;
+  // Hooks must run before any conditional return (loading / permission gate).
   const baseS = statsQ.data;
-  const s = deptStatesQ.data
-    ? {
-        ...baseS,
-        noScheduleDepts: deptStatesQ.data.noSchedule,
-        noScheduleCount: deptStatesQ.data.noSchedule.length,
-        draftDepts: deptStatesQ.data.draft,
-        draftCount: deptStatesQ.data.draft.length,
-        publishedDepts: deptStatesQ.data.published,
-        publishedCount: deptStatesQ.data.published.length,
-      }
-    : baseS;
+  const s = baseS
+    ? deptStatesQ.data
+      ? {
+          ...baseS,
+          noScheduleDepts: deptStatesQ.data.noSchedule,
+          noScheduleCount: deptStatesQ.data.noSchedule.length,
+          draftDepts: deptStatesQ.data.draft,
+          draftCount: deptStatesQ.data.draft.length,
+          publishedDepts: deptStatesQ.data.published,
+          publishedCount: deptStatesQ.data.published.length,
+        }
+      : baseS
+    : null;
 
-  const pendingSchedSig = canApprove
-    ? attentionSignatureFromIds((s as { pendingIds?: string[] }).pendingIds ?? [])
-    : s.pending > 0
-      ? `week:${weekStart}:n:${s.pending}`
-      : "";
+  const pendingSchedSig =
+    s && canApprove
+      ? attentionSignatureFromIds((s as { pendingIds?: string[] }).pendingIds ?? [])
+      : s && s.pending > 0
+        ? `week:${weekStart}:n:${s.pending}`
+        : "";
   const { needsAttention: pendingSchedAttention, markSeen: markPendingSchedSeen } =
     useDashboardCardAttention(profile.id, "schedules-pending", pendingSchedSig);
 
-  const noSchedSig = attentionSignatureFromIds(s.noScheduleDepts.map((d) => d.id));
-  const draftSig = attentionSignatureFromIds(s.draftDepts.map((d) => d.id));
-  const publishedSig = attentionSignatureFromIds(s.publishedDepts.map((d) => d.id));
-  const approvedSig = s.approved > 0 ? `week:${weekStart}:n:${s.approved}` : "";
+  const noSchedSig = attentionSignatureFromIds((s?.noScheduleDepts ?? []).map((d) => d.id));
+  const draftSig = attentionSignatureFromIds((s?.draftDepts ?? []).map((d) => d.id));
+  const publishedSig = attentionSignatureFromIds((s?.publishedDepts ?? []).map((d) => d.id));
+  const approvedSig = s && s.approved > 0 ? `week:${weekStart}:n:${s.approved}` : "";
   const noSchedAttn = useDashboardCardAttention(profile.id, "schedules-no-schedule", noSchedSig);
   const draftAttn = useDashboardCardAttention(profile.id, "schedules-draft", draftSig);
   const publishedAttn = useDashboardCardAttention(profile.id, "schedules-published", publishedSig);
   const approvedAttn = useDashboardCardAttention(profile.id, "schedules-approved", approvedSig);
+
+  if (!canViewBranchScheduleOverview) return null;
+  if (statsQ.isLoading || !s) return null;
+  if (deptStatesQ.isLoading && !deptStatesQ.data) return null;
 
   const goPending = () => {
     markPendingSchedSeen();
@@ -2678,24 +2592,44 @@ async function fetchMyBreakDashboardRows(userId: string) {
   const rows = (data ?? []) as any[];
   if (!rows.length) return { primary: null, next: null, all: [] as any[] };
 
-  const enriched = await Promise.all(
-    rows.map(async (row) => {
-      const { data: setting } = await supabase
-        .from("break_settings")
-        .select("name")
-        .eq("id", row.break_setting_id)
-        .maybeSingle();
-      let approver: { full_name: string; role_label: string | null; job_title: string | null } | null = null;
-      if (row.approved_by) {
-        const { data: ap } = await (supabase as any).rpc("get_profiles_basic_info", {
-          user_ids: [row.approved_by],
-        });
-        const rec = Array.isArray(ap) ? ap[0] : null;
-        if (rec) approver = { full_name: rec.full_name, role_label: rec.role_label, job_title: rec.job_title };
-      }
-      return { ...row, setting_name: (setting as any)?.name ?? "הפסקה", approver };
-    }),
+  const settingIds = Array.from(
+    new Set(rows.map((r) => r.break_setting_id).filter(Boolean)),
+  ) as string[];
+  const approverIds = Array.from(
+    new Set(rows.map((r) => r.approved_by).filter(Boolean)),
+  ) as string[];
+
+  const [settingsRes, approversRes] = await Promise.all([
+    settingIds.length
+      ? supabase.from("break_settings").select("id, name").in("id", settingIds)
+      : Promise.resolve({ data: [] as { id: string; name: string }[] }),
+    approverIds.length
+      ? (supabase as any).rpc("get_profiles_basic_info", { user_ids: approverIds })
+      : Promise.resolve({ data: [] as any[] }),
+  ]);
+
+  const settingNameById = new Map(
+    ((settingsRes.data ?? []) as { id: string; name: string }[]).map((s) => [s.id, s.name]),
   );
+  const approverById = new Map<
+    string,
+    { full_name: string; role_label: string | null; job_title: string | null }
+  >();
+  for (const rec of (approversRes.data ?? []) as any[]) {
+    if (rec?.id) {
+      approverById.set(rec.id, {
+        full_name: rec.full_name,
+        role_label: rec.role_label,
+        job_title: rec.job_title,
+      });
+    }
+  }
+
+  const enriched = rows.map((row) => ({
+    ...row,
+    setting_name: settingNameById.get(row.break_setting_id) ?? "הפסקה",
+    approver: row.approved_by ? approverById.get(row.approved_by) ?? null : null,
+  }));
 
   const primary = pickPrimaryBreak(enriched);
   const active = pickActiveBreak(enriched);

@@ -90,7 +90,7 @@ export function EmployeeOfMonthSection() {
   // for the currently active branch.
   const q = useQuery({
     queryKey: ["eom", "current", activeBranchId, year, month],
-    refetchOnMount: "always",
+    staleTime: 60_000,
     queryFn: async () => {
       const { data: rows, error } = await supabase
         .from("employee_of_month")

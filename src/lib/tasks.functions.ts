@@ -182,9 +182,15 @@ async function fetchScopedTasks(
   branchId: string | null,
   departmentScope: string | null,
   selectCols = "*",
+  opts?: { excludeClosed?: boolean },
 ) {
+  const applyStatus = (q: any) =>
+    opts?.excludeClosed ? q.neq("status", "closed") : q;
+
   if (!branchId) {
-    let q = supabase.from("tasks").select(selectCols).order("created_at", { ascending: false });
+    let q = applyStatus(
+      supabase.from("tasks").select(selectCols).order("created_at", { ascending: false }),
+    );
     if (departmentScope) q = q.eq("department_id", departmentScope);
     const { data, error } = await q;
     if (error) throw new Error(error.message);
@@ -193,11 +199,13 @@ async function fetchScopedTasks(
 
   const [{ data: byBranch, error: branchErr }, { data: depts, error: deptErr }] =
     await Promise.all([
-      supabase
-        .from("tasks")
-        .select(selectCols)
-        .eq("branch_id", branchId)
-        .order("created_at", { ascending: false }),
+      applyStatus(
+        supabase
+          .from("tasks")
+          .select(selectCols)
+          .eq("branch_id", branchId)
+          .order("created_at", { ascending: false }),
+      ),
       supabase.from("departments").select("id").eq("branch_id", branchId),
     ]);
   if (branchErr) throw new Error(branchErr.message);
@@ -208,11 +216,13 @@ async function fetchScopedTasks(
     (row: TaskStatRow) => !departmentScope || row.department_id === departmentScope,
   );
 
-  const { data: orphans, error: orphanErr } = await supabase
-    .from("tasks")
-    .select(selectCols)
-    .is("branch_id", null)
-    .order("created_at", { ascending: false });
+  const { data: orphans, error: orphanErr } = await applyStatus(
+    supabase
+      .from("tasks")
+      .select(selectCols)
+      .is("branch_id", null)
+      .order("created_at", { ascending: false }),
+  );
   if (orphanErr) throw new Error(orphanErr.message);
 
   const legacy = (orphans ?? []).filter(
@@ -344,6 +354,7 @@ async function fetchTasksForDashboardStats(
     branchId,
     departmentScope,
     "id, status, due_at, department_id, branch_id, created_at",
+    { excludeClosed: true },
   ) as Promise<TaskStatRow[]>;
 }
 
