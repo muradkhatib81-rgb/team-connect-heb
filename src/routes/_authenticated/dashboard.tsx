@@ -4,6 +4,10 @@ import { useServerFn } from "@tanstack/react-start";
 import { publishAllWeekSchedules, getWeekDepartmentStates } from "@/lib/schedules.functions";
 import { getDashboardTaskStats } from "@/lib/tasks.functions";
 import { useEffect, useMemo, useState } from "react";
+import {
+  attentionSignatureFromIds,
+  useDashboardCardAttention,
+} from "@/lib/use-dashboard-card-attention";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -43,6 +47,8 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 /** Shared tile size for all dashboard summary/shortcut cards (matches leave cards). */
 const DASH_TILE =
   "card-elevated flex h-full min-h-[4.75rem] p-3 transition-colors";
+const DASH_TILE_ATTENTION =
+  "border-2 border-destructive bg-destructive/10 ring-2 ring-destructive/40 hover:bg-destructive/15";
 const DASH_TILE_GRID = "grid grid-cols-1 items-stretch gap-2 sm:grid-cols-2";
 const DASH_TILE_ICON =
   "flex size-8 shrink-0 items-center justify-center rounded-lg";
@@ -103,6 +109,11 @@ function DashboardPage() {
   const admin = profile ? isAdmin(profile.roles) : false;
   const isDeptManager = profile ? profile.roles.includes("department_manager") : false;
   const permissionsQ = useCurrentPermissions(profile?.id);
+  const scheduleCapsForBreaks = useMemo(
+    () => resolveScheduleManagerCaps(profile?.roles ?? [], permissionsQ.data),
+    [profile?.roles, permissionsQ.data],
+  );
+  const isDeptHeadOnlyBreaks = scheduleCapsForBreaks.isDeptHeadOnly;
   const canCreateEmployee = profile
     ? hasBranchActionPermission(
         profile.roles,
@@ -324,10 +335,14 @@ function DashboardPage() {
           <BreakShortcutCard userId={profile.id} />
           <LeaveShortcutCard userId={profile.id} />
           <SchedulesStatsSection profile={profile} />
-          {!admin && isDeptManager && <DeptHeadOnBreakSection />}
-          <TasksStatsSection stats={tasksStatsQuery.data} loading={tasksStatsQuery.isLoading} />
-          {/* Branch-level journal only — dept heads use DeptHeadOnBreakSection (own dept). */}
-          {canViewBreaks && !(isDeptManager && !admin) && (
+          {isDeptHeadOnlyBreaks && <DeptHeadOnBreakSection />}
+          <TasksStatsSection
+            stats={tasksStatsQuery.data}
+            loading={tasksStatsQuery.isLoading}
+            userId={profile.id}
+          />
+          {/* Branch-level journal — never for dept-head-only (own-dept section above). */}
+          {canViewBreaks && !isDeptHeadOnlyBreaks && (
             <OnBreakSection profile={profile} />
           )}
 
@@ -395,13 +410,27 @@ function DashboardLeaveBanner({ profile }: { profile: { leave_start_date?: strin
 function TasksStatsSection({
   stats,
   loading,
+  userId,
 }: {
   stats?: { open: number; in_progress: number; completed: number; overdue: number };
   loading: boolean;
+  userId: string;
 }) {
   const navigate = useNavigate();
+  const openSig = stats && stats.open > 0 ? `n:${stats.open}` : "";
+  const progressSig = stats && stats.in_progress > 0 ? `n:${stats.in_progress}` : "";
+  const doneSig = stats && stats.completed > 0 ? `n:${stats.completed}` : "";
+  const overdueSig = stats && stats.overdue > 0 ? `n:${stats.overdue}` : "";
+  const openAttn = useDashboardCardAttention(userId, "tasks-open", openSig);
+  const progressAttn = useDashboardCardAttention(userId, "tasks-progress", progressSig);
+  const doneAttn = useDashboardCardAttention(userId, "tasks-done", doneSig);
+  const overdueAttn = useDashboardCardAttention(userId, "tasks-overdue", overdueSig);
+
   if (loading || !stats) return null;
-  const go = (status: string) => navigate({ to: "/tasks", search: { status } as any });
+  const go = (status: string, markSeen: () => void) => {
+    markSeen();
+    navigate({ to: "/tasks", search: { status } as any });
+  };
   return (
     <section>
       <div className="flex items-center justify-between mb-4">
@@ -414,10 +443,42 @@ function TasksStatsSection({
         </Link>
       </div>
       <div className={DASH_TILE_GRID}>
-        <StatCard label="פתוחות" value={stats.open} icon={ListTodo} tone="primary" onClick={() => go("new")} />
-        <StatCard label="בביצוע" value={stats.in_progress} icon={Clock} tone="success" onClick={() => go("in_progress")} />
-        <StatCard label="הוגשו / הושלמו" value={stats.completed} icon={CheckCircle2} tone="muted" onClick={() => go("pending_approval")} />
-        <StatCard label="באיחור" value={stats.overdue} icon={AlertTriangle} tone="warning" onClick={() => go("overdue")} />
+        <StatCard
+          label="פתוחות"
+          value={stats.open}
+          icon={ListTodo}
+          tone="primary"
+          badge={stats.open}
+          attention={openAttn.needsAttention}
+          onClick={() => go("new", openAttn.markSeen)}
+        />
+        <StatCard
+          label="בביצוע"
+          value={stats.in_progress}
+          icon={Clock}
+          tone="success"
+          badge={stats.in_progress}
+          attention={progressAttn.needsAttention}
+          onClick={() => go("in_progress", progressAttn.markSeen)}
+        />
+        <StatCard
+          label="הוגשו / הושלמו"
+          value={stats.completed}
+          icon={CheckCircle2}
+          tone="muted"
+          badge={stats.completed}
+          attention={doneAttn.needsAttention}
+          onClick={() => go("pending_approval", doneAttn.markSeen)}
+        />
+        <StatCard
+          label="באיחור"
+          value={stats.overdue}
+          icon={AlertTriangle}
+          tone="warning"
+          badge={stats.overdue}
+          attention={overdueAttn.needsAttention}
+          onClick={() => go("overdue", overdueAttn.markSeen)}
+        />
       </div>
     </section>
   );
@@ -441,6 +502,7 @@ function isBreakOverdue(endsAt: string | null, nowMs = Date.now()) {
 }
 
 function DeptHeadOnBreakSection() {
+  const { data: me } = useAuth();
   const qc = useQueryClient();
   const [listKind, setListKind] = useState<"onBreak" | "late" | null>(null);
   const [logOpen, setLogOpen] = useState(false);
@@ -517,6 +579,12 @@ function DeptHeadOnBreakSection() {
   const nowMs = Date.now();
   const onBreakNow = list.filter((r) => !isBreakOverdue(r.ends_at, nowMs));
   const lateList = list.filter((r) => isBreakOverdue(r.ends_at, nowMs));
+  const onBreakSig = attentionSignatureFromIds(onBreakNow.map((r) => r.id));
+  const lateSig = attentionSignatureFromIds(lateList.map((r) => r.id));
+  const onBreakAttn = useDashboardCardAttention(me?.id, "dept-on-break-now", onBreakSig);
+  const lateAttn = useDashboardCardAttention(me?.id, "dept-on-break-late", lateSig);
+  const journalSig = attentionSignatureFromIds(log.map((r) => r.id));
+  const journalAttn = useDashboardCardAttention(me?.id, "dept-break-journal", journalSig);
   const dialogList =
     listKind === "late" ? lateList : listKind === "onBreak" ? onBreakNow : [];
   const fmtT = (iso: string | null) => fmtBreakTime(iso) || "—";
@@ -579,25 +647,36 @@ function DeptHeadOnBreakSection() {
           value={onBreakNow.length}
           icon={Coffee}
           tone={onBreakNow.length > 0 ? "warning" : "primary"}
-          onClick={() => setListKind("onBreak")}
           badge={onBreakNow.length}
-          pulse={onBreakNow.length > 0}
+          attention={onBreakAttn.needsAttention}
+          onClick={() => {
+            onBreakAttn.markSeen();
+            setListKind("onBreak");
+          }}
         />
         <StatCard
           label="עובדים מאחרים מהפסקה"
           value={lateList.length}
           icon={AlertTriangle}
-          tone={lateList.length > 0 ? "danger" : "muted"}
-          onClick={() => setListKind("late")}
+          tone="muted"
           badge={lateList.length}
-          pulse={lateList.length > 0}
+          attention={lateAttn.needsAttention}
+          onClick={() => {
+            lateAttn.markSeen();
+            setListKind("late");
+          }}
         />
         <StatCard
           label="יומן הפסקות"
           value={log.length}
           icon={Coffee}
           tone="muted"
-          onClick={() => setLogOpen(true)}
+          badge={log.length}
+          attention={journalAttn.needsAttention}
+          onClick={() => {
+            journalAttn.markSeen();
+            setLogOpen(true);
+          }}
         />
       </div>
 
@@ -1093,6 +1172,7 @@ function EmployeeDashboard({ profile }: { profile: any }) {
 }
 
 function EmployeeNotificationsCard({ userId }: { userId: string }) {
+  const navigate = useNavigate();
   const q = useQuery({
     queryKey: ["emp-dash-notif", userId],
     queryFn: async () => {
@@ -1106,12 +1186,59 @@ function EmployeeNotificationsCard({ userId }: { userId: string }) {
     },
   });
   const items = q.data ?? [];
+  const unread = items.filter((n: any) => !n.read_at);
+  const notifSig = attentionSignatureFromIds(unread.map((n: any) => String(n.id)));
+  const { needsAttention, markSeen } = useDashboardCardAttention(
+    userId,
+    "notifications-card",
+    notifSig,
+  );
+
+  const openCard = () => {
+    markSeen();
+    navigate({ to: "/schedules" });
+  };
+
   return (
-    <Card className="card-elevated p-4">
-      <h2 className="font-semibold text-base flex items-center gap-2 mb-3">
-        <AlertTriangle className="size-5 text-primary" />
-        התראות
-      </h2>
+    <Card
+      role="button"
+      tabIndex={0}
+      onClick={openCard}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          openCard();
+        }
+      }}
+      className={
+        needsAttention
+          ? `card-elevated p-4 cursor-pointer transition-all ${DASH_TILE_ATTENTION}`
+          : "card-elevated p-4 cursor-pointer hover:shadow-md hover:ring-1 hover:ring-primary/30 transition-all"
+      }
+    >
+      <div className="flex items-center justify-between mb-3">
+        <h2
+          className={
+            needsAttention
+              ? "font-semibold text-base flex items-center gap-2 text-destructive"
+              : "font-semibold text-base flex items-center gap-2"
+          }
+        >
+          <AlertTriangle className={`size-5 ${needsAttention ? "text-destructive" : "text-primary"}`} />
+          התראות
+          {unread.length > 0 && (
+            <span
+              className={
+                needsAttention
+                  ? "inline-flex items-center justify-center min-w-[24px] h-6 px-1.5 rounded-full bg-destructive text-destructive-foreground text-xs font-bold shadow-md"
+                  : "inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 rounded-full bg-destructive text-destructive-foreground text-[11px] font-bold"
+              }
+            >
+              {unread.length > 99 ? "99+" : unread.length}
+            </span>
+          )}
+        </h2>
+      </div>
       {items.length === 0 ? (
         <p className="text-sm text-muted-foreground">אין התראות חדשות.</p>
       ) : (
@@ -1147,22 +1274,44 @@ function EmployeeNewMessagesCard({ userId }: { userId: string }) {
     },
   });
   const items = q.data ?? [];
+  const msgSig = attentionSignatureFromIds(
+    items.map((r: any) => String(r.message_id)),
+  );
+  const { needsAttention, markSeen } = useDashboardCardAttention(
+    userId,
+    "messages-new",
+    msgSig,
+  );
   const navigate = useNavigate();
+  const goInbox = () => {
+    markSeen();
+    navigate({ to: "/communications", search: { tab: "inbox" } as any });
+  };
   return (
     <Card
       role="button"
       tabIndex={0}
-      onClick={() => navigate({ to: "/communications", search: { tab: "inbox" } as any })}
+      onClick={goInbox}
       onKeyDown={(e) => {
         if (e.key === "Enter" || e.key === " ") {
           e.preventDefault();
-          navigate({ to: "/communications", search: { tab: "inbox" } as any });
+          goInbox();
         }
       }}
-      className="card-elevated p-4 cursor-pointer hover:shadow-md hover:ring-1 hover:ring-primary/30 transition-all"
+      className={
+        needsAttention
+          ? `card-elevated p-4 cursor-pointer transition-all ${DASH_TILE_ATTENTION}`
+          : "card-elevated p-4 cursor-pointer hover:shadow-md hover:ring-1 hover:ring-primary/30 transition-all"
+      }
     >
       <div className="flex items-center justify-between mb-3">
-        <h2 className="font-semibold text-base flex items-center gap-2">
+        <h2
+          className={
+            needsAttention
+              ? "font-semibold text-base flex items-center gap-2 text-destructive"
+              : "font-semibold text-base flex items-center gap-2"
+          }
+        >
           📨 הודעות חדשות
           {items.length > 0 && (
             <span className="inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 rounded-full bg-destructive text-destructive-foreground text-[11px] font-bold">
@@ -1182,6 +1331,7 @@ function EmployeeNewMessagesCard({ userId }: { userId: string }) {
                 type="button"
                 onClick={(e) => {
                   e.stopPropagation();
+                  markSeen();
                   navigate({
                     to: "/communications",
                     search: { tab: "inbox", msg: r.message_id } as any,
@@ -1205,7 +1355,6 @@ function EmployeeNewMessagesCard({ userId }: { userId: string }) {
 
 
 function StatCard({
-
   label,
   value,
   icon: Icon,
@@ -1213,6 +1362,7 @@ function StatCard({
   onClick,
   badge,
   pulse,
+  attention,
 }: {
   label: string;
   value: number;
@@ -1221,25 +1371,30 @@ function StatCard({
   onClick?: () => void;
   badge?: number;
   pulse?: boolean;
+  /** Red until opened — color only; does not change permissions. */
+  attention?: boolean;
 }) {
+  const effectiveTone = attention ? "danger" : tone;
+  // Attention cards always show a clear count badge (value), even if badge prop omitted.
+  const badgeCount = badge != null ? badge : attention && value > 0 ? value : 0;
   const toneClass = {
     primary: "bg-primary/10 text-primary",
     success: "bg-success/10 text-success",
     muted: "bg-muted text-muted-foreground",
     warning: "bg-orange-500/10 text-orange-600",
     danger: "bg-destructive/20 text-destructive",
-  }[tone];
+  }[effectiveTone];
   const cardClass =
-    tone === "danger"
+    effectiveTone === "danger"
       ? `${DASH_TILE} cursor-pointer bg-destructive/10 border-2 border-destructive ring-2 ring-destructive/40 hover:bg-destructive/15`
       : `${DASH_TILE} cursor-pointer hover:bg-accent/30`;
   const inner = (
-    <Card className={cardClass + (pulse ? " animate-pulse" : "")}>
+    <Card className={cardClass + (pulse && !attention ? " animate-pulse" : "")}>
       <div className="flex h-full w-full items-center gap-2.5">
         <div className="min-w-0 flex-1 self-center text-right">
           <p
             className={
-              tone === "danger"
+              effectiveTone === "danger"
                 ? "line-clamp-2 text-sm font-semibold leading-tight text-destructive"
                 : "line-clamp-2 text-sm font-semibold leading-tight"
             }
@@ -1249,7 +1404,7 @@ function StatCard({
           <p
             className={
               "mt-0.5 text-2xl font-bold tabular-nums leading-none " +
-              (tone === "danger" ? "text-destructive" : "")
+              (effectiveTone === "danger" ? "text-destructive" : "")
             }
           >
             {value}
@@ -1257,9 +1412,15 @@ function StatCard({
         </div>
         <div className={`relative ${DASH_TILE_ICON} ${toneClass}`}>
           <Icon className="size-4" />
-          {!!badge && badge > 0 && (
-            <span className="absolute -top-1.5 -right-1.5 flex h-5 min-w-[20px] items-center justify-center rounded-full bg-destructive px-1.5 text-[11px] font-bold text-destructive-foreground shadow">
-              {badge > 99 ? "99+" : badge}
+          {badgeCount > 0 && (
+            <span
+              className={
+                attention
+                  ? "absolute -top-2 -right-2 flex h-6 min-w-[24px] items-center justify-center rounded-full bg-destructive px-1.5 text-xs font-bold text-destructive-foreground shadow-md ring-2 ring-background"
+                  : "absolute -top-1.5 -right-1.5 flex h-5 min-w-[20px] items-center justify-center rounded-full bg-destructive px-1.5 text-[11px] font-bold text-destructive-foreground shadow"
+              }
+            >
+              {badgeCount > 99 ? "99+" : badgeCount}
             </span>
           )}
         </div>
@@ -1519,6 +1680,7 @@ function SchedulesStatsSection({ profile }: { profile: any }) {
       ).sort((a, b) => (a.week_start < b.week_start ? -1 : 1));
       const pendingAll = pendingAllList.length;
       const pendingFirst = pendingAllList[0] ?? null;
+      const pendingIds = pendingAllList.map((s) => s.id);
 
       // Three-state workflow for the current week (exact week_start match).
       let allDepts = (deptRows ?? []) as { id: string; name: string }[];
@@ -1596,6 +1758,7 @@ function SchedulesStatsSection({ profile }: { profile: any }) {
         pending,
         pendingAll,
         pendingFirst,
+        pendingIds,
         approved,
         weekCounts,
         hasAnyApproved: ids.length > 0,
@@ -1639,8 +1802,26 @@ function SchedulesStatsSection({ profile }: { profile: any }) {
         publishedCount: deptStatesQ.data.published.length,
       }
     : baseS;
-  const goSchedules = () => navigate({ to: "/schedules" });
+
+  const pendingSchedSig = canApprove
+    ? attentionSignatureFromIds((s as { pendingIds?: string[] }).pendingIds ?? [])
+    : s.pending > 0
+      ? `week:${weekStart}:n:${s.pending}`
+      : "";
+  const { needsAttention: pendingSchedAttention, markSeen: markPendingSchedSeen } =
+    useDashboardCardAttention(profile.id, "schedules-pending", pendingSchedSig);
+
+  const noSchedSig = attentionSignatureFromIds(s.noScheduleDepts.map((d) => d.id));
+  const draftSig = attentionSignatureFromIds(s.draftDepts.map((d) => d.id));
+  const publishedSig = attentionSignatureFromIds(s.publishedDepts.map((d) => d.id));
+  const approvedSig = s.approved > 0 ? `week:${weekStart}:n:${s.approved}` : "";
+  const noSchedAttn = useDashboardCardAttention(profile.id, "schedules-no-schedule", noSchedSig);
+  const draftAttn = useDashboardCardAttention(profile.id, "schedules-draft", draftSig);
+  const publishedAttn = useDashboardCardAttention(profile.id, "schedules-published", publishedSig);
+  const approvedAttn = useDashboardCardAttention(profile.id, "schedules-approved", approvedSig);
+
   const goPending = () => {
+    markPendingSchedSeen();
     // Approver shortcut: if exactly one pending schedule exists, open it directly
     // in the editor/approval view. Otherwise show the full pending list.
     if (canApprove && s.pendingAll === 1 && s.pendingFirst) {
@@ -1665,12 +1846,23 @@ function SchedulesStatsSection({ profile }: { profile: any }) {
             label="ממתינים לאישור"
             value={canApprove ? s.pendingAll : s.pending}
             icon={Clock}
-            tone={canApprove && s.pendingAll > 0 ? "danger" : "warning"}
-            badge={canApprove ? s.pendingAll : undefined}
-            pulse={canApprove && s.pendingAll > 0}
+            tone="warning"
+            badge={canApprove ? s.pendingAll : s.pending}
+            attention={pendingSchedAttention}
             onClick={goPending}
           />
-          <StatCard label="מאושרים" value={s.approved} icon={CheckCircle2} tone="success" onClick={() => setApprovedOpen(true)} />
+          <StatCard
+            label="מאושרים"
+            value={s.approved}
+            icon={CheckCircle2}
+            tone="success"
+            badge={s.approved}
+            attention={approvedAttn.needsAttention}
+            onClick={() => {
+              approvedAttn.markSeen();
+              setApprovedOpen(true);
+            }}
+          />
         </div>
       )}
 
@@ -1681,21 +1873,36 @@ function SchedulesStatsSection({ profile }: { profile: any }) {
             value={s.noScheduleCount}
             icon={Building2}
             tone="warning"
-            onClick={() => setNotSubmittedOpen(true)}
+            badge={s.noScheduleCount}
+            attention={noSchedAttn.needsAttention}
+            onClick={() => {
+              noSchedAttn.markSeen();
+              setNotSubmittedOpen(true);
+            }}
           />
           <StatCard
             label="מחלקות עם סידור עבודה שמור"
             value={s.draftCount}
             icon={CalendarDays}
             tone="primary"
-            onClick={() => setDraftOpen(true)}
+            badge={s.draftCount}
+            attention={draftAttn.needsAttention}
+            onClick={() => {
+              draftAttn.markSeen();
+              setDraftOpen(true);
+            }}
           />
           <StatCard
             label="מחלקות עם סידור עבודה שפורסם"
             value={s.publishedCount}
             icon={CheckCircle2}
             tone="success"
-            onClick={() => setPublishedOpen(true)}
+            badge={s.publishedCount}
+            attention={publishedAttn.needsAttention}
+            onClick={() => {
+              publishedAttn.markSeen();
+              setPublishedOpen(true);
+            }}
           />
         </div>
       )}
@@ -2678,7 +2885,7 @@ function LeaveShortcutCard({ userId }: { userId: string }) {
     queryFn: async () => {
       let q = (supabase as any)
         .from("leave_requests")
-        .select("id, status", { count: "exact", head: true });
+        .select("id");
       if (leaveAccess.pendingQueueMode === "dept") {
         q = q.eq("status", "pending_dept");
       } else if (leaveAccess.pendingQueueMode === "both") {
@@ -2686,9 +2893,13 @@ function LeaveShortcutCard({ userId }: { userId: string }) {
       } else {
         q = q.eq("status", "pending_admin");
       }
-      const { count, error } = await q;
+      const { data, error } = await q;
       if (error) throw error;
-      return count ?? 0;
+      const ids = ((data ?? []) as { id: string }[]).map((r) => r.id);
+      return {
+        count: ids.length,
+        signature: attentionSignatureFromIds(ids),
+      };
     },
     staleTime: 30_000,
     retry: false,
@@ -2704,10 +2915,30 @@ function LeaveShortcutCard({ userId }: { userId: string }) {
     newest && (newest.status === "rejected" || newest.status === "cancelled")
       ? leaveDecisionMessage(newest)
       : null;
-  const queueCount = pendingQueueQ.data ?? 0;
+  const queueCount = pendingQueueQ.data?.count ?? 0;
+  const leaveQueueSig = pendingQueueQ.data?.signature ?? "";
+  const { needsAttention: leaveQueueAttention, markSeen: markLeaveQueueSeen } =
+    useDashboardCardAttention(userId, "leave-pending-queue", leaveQueueSig);
 
-  const goLeaves = () => navigate({ to: "/leaves" });
-  const goAdmin = () => navigate({ to: "/leaves-admin" });
+  const leaveMineSig =
+    pendingMine.length > 0
+      ? attentionSignatureFromIds(pendingMine.map((r: any) => String(r.id)))
+      : decisionBanner && newest
+        ? `decision:${newest.id}:${newest.status}`
+        : approvedUpcoming.length > 0
+          ? attentionSignatureFromIds(approvedUpcoming.map((r: any) => String(r.id)))
+          : "";
+  const { needsAttention: leaveMineAttention, markSeen: markLeaveMineSeen } =
+    useDashboardCardAttention(userId, "leave-my-requests", leaveMineSig);
+
+  const goLeaves = () => {
+    markLeaveMineSeen();
+    navigate({ to: "/leaves" });
+  };
+  const goAdmin = () => {
+    markLeaveQueueSeen();
+    navigate({ to: "/leaves-admin" });
+  };
 
   const queueTitle = leaveAccess.isDeptManager && leaveAccess.pendingQueueMode === "dept"
     ? "בקשות חופשה במחלקה"
@@ -2740,18 +2971,42 @@ function LeaveShortcutCard({ userId }: { userId: string }) {
           onKeyDown={(e) => {
             if (e.key === "Enter" || e.key === " ") goAdmin();
           }}
-          className={`${DASH_TILE} cursor-pointer border border-amber-300/60 bg-amber-50/70 hover:bg-amber-50`}
+          className={
+            leaveQueueAttention
+              ? `${DASH_TILE} cursor-pointer ${DASH_TILE_ATTENTION}`
+              : `${DASH_TILE} cursor-pointer border border-amber-300/60 bg-amber-50/70 hover:bg-amber-50`
+          }
         >
           <div className="flex h-full w-full items-center gap-2.5">
-            <div className={`${DASH_TILE_ICON} bg-amber-200/70 text-amber-900`}>
+            <div
+              className={
+                leaveQueueAttention
+                  ? `${DASH_TILE_ICON} bg-destructive/20 text-destructive`
+                  : `${DASH_TILE_ICON} bg-amber-200/70 text-amber-900`
+              }
+            >
               <Palmtree className="size-4" />
             </div>
             <div className="min-w-0 flex-1 self-center">
-              <h3 className={DASH_TILE_TITLE}>{queueTitle}</h3>
+              <h3
+                className={
+                  leaveQueueAttention
+                    ? `${DASH_TILE_TITLE} text-destructive`
+                    : DASH_TILE_TITLE
+                }
+              >
+                {queueTitle}
+              </h3>
               <p className={DASH_TILE_SUB}>{queueSubtitle}</p>
             </div>
             <div className={DASH_TILE_TRAIL}>
-              <Badge className="bg-amber-600 px-1.5 py-0 text-xs text-white hover:bg-amber-600">
+              <Badge
+                className={
+                  leaveQueueAttention
+                    ? "bg-destructive px-2 py-0.5 text-sm font-bold text-destructive-foreground hover:bg-destructive shadow-md"
+                    : "bg-amber-600 px-1.5 py-0 text-xs text-white hover:bg-amber-600"
+                }
+              >
                 {queueCount}
               </Badge>
             </div>
@@ -2767,22 +3022,40 @@ function LeaveShortcutCard({ userId }: { userId: string }) {
           onKeyDown={(e) => {
             if (e.key === "Enter" || e.key === " ") goLeaves();
           }}
-          className={`${DASH_TILE} cursor-pointer border ${
-            decisionBanner && pendingMine.length === 0
-              ? decisionBanner.tone === "rejected"
-                ? "border-rose-300/70 bg-rose-50/70 hover:bg-rose-50"
-                : decisionBanner.tone === "cancelled"
-                  ? "border-amber-300/70 bg-amber-50/70 hover:bg-amber-50"
-                  : "border-emerald-300/50 bg-emerald-50/50 hover:bg-emerald-50"
-              : "border-emerald-300/50 bg-emerald-50/50 hover:bg-emerald-50"
-          }`}
+          className={
+            leaveMineAttention
+              ? `${DASH_TILE} cursor-pointer ${DASH_TILE_ATTENTION}`
+              : `${DASH_TILE} cursor-pointer border ${
+                  decisionBanner && pendingMine.length === 0
+                    ? decisionBanner.tone === "rejected"
+                      ? "border-rose-300/70 bg-rose-50/70 hover:bg-rose-50"
+                      : decisionBanner.tone === "cancelled"
+                        ? "border-amber-300/70 bg-amber-50/70 hover:bg-amber-50"
+                        : "border-emerald-300/50 bg-emerald-50/50 hover:bg-emerald-50"
+                    : "border-emerald-300/50 bg-emerald-50/50 hover:bg-emerald-50"
+                }`
+          }
         >
           <div className="flex h-full w-full items-center gap-2.5">
-            <div className={`${DASH_TILE_ICON} bg-emerald-200/60 text-emerald-900`}>
+            <div
+              className={
+                leaveMineAttention
+                  ? `${DASH_TILE_ICON} bg-destructive/20 text-destructive`
+                  : `${DASH_TILE_ICON} bg-emerald-200/60 text-emerald-900`
+              }
+            >
               <Palmtree className="size-4" />
             </div>
             <div className="min-w-0 flex-1 self-center">
-              <h3 className={DASH_TILE_TITLE}>בקשת חופשה</h3>
+              <h3
+                className={
+                  leaveMineAttention
+                    ? `${DASH_TILE_TITLE} text-destructive`
+                    : DASH_TILE_TITLE
+                }
+              >
+                בקשת חופשה
+              </h3>
               <p className={DASH_TILE_SUB}>
                 {pendingMine.length > 0
                   ? `${pendingMine.length} בקשות ממתינות`
@@ -2794,6 +3067,21 @@ function LeaveShortcutCard({ userId }: { userId: string }) {
               </p>
             </div>
             <div className={DASH_TILE_TRAIL}>
+              {(leaveMineAttention || pendingMine.length > 0) && (
+                <Badge
+                  className={
+                    leaveMineAttention
+                      ? "bg-destructive px-1.5 py-0 text-xs font-bold text-destructive-foreground hover:bg-destructive"
+                      : "bg-emerald-700 px-1.5 py-0 text-xs text-white hover:bg-emerald-700"
+                  }
+                >
+                  {pendingMine.length > 0
+                    ? pendingMine.length
+                    : leaveMineAttention
+                      ? "!"
+                      : 0}
+                </Badge>
+              )}
               <Button
                 size="sm"
                 className="h-7 gap-1 px-2 text-xs"
@@ -2948,7 +3236,7 @@ type ManagerOnBreakRow = {
   approverName: string;
 };
 
-function OnBreakSection({ profile: _profile }: { profile: any }) {
+function OnBreakSection({ profile }: { profile: any }) {
   const qc = useQueryClient();
   const navigate = useNavigate();
   const [listKind, setListKind] = useState<"onBreak" | "late" | null>(null);
@@ -3025,16 +3313,25 @@ function OnBreakSection({ profile: _profile }: { profile: any }) {
     enabled: canManageBreaks && requiresApproval,
     queryKey: ["dashboard-pending-breaks"],
     queryFn: async () => {
-      const { count, error } = await supabase
+      const { data, error } = await supabase
         .from("break_requests")
-        .select("id", { count: "exact", head: true })
+        .select("id")
         .eq("status", "pending_approval");
       if (error) throw error;
-      return count ?? 0;
+      const ids = ((data ?? []) as { id: string }[]).map((r) => r.id);
+      return {
+        count: ids.length,
+        signature: attentionSignatureFromIds(ids),
+      };
     },
   });
 
-  // Tile count only — full journal enrichment loads when the dialog opens.
+  const pendingBreakCount = pendingCountQ.data?.count ?? 0;
+  const pendingBreakSig = pendingCountQ.data?.signature ?? "";
+  const { needsAttention: pendingBreakAttention, markSeen: markPendingBreakSeen } =
+    useDashboardCardAttention(profile?.id, "breaks-pending", pendingBreakSig);
+
+  // Tile count + ids for attention signature — full journal enrichment loads when dialog opens.
   const dailyLogCountQ = useQuery({
     enabled: true,
     queryKey: ["dashboard-daily-breaks-count"],
@@ -3043,13 +3340,17 @@ function OnBreakSection({ profile: _profile }: { profile: any }) {
       const now = new Date();
       const dayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
       const dayEnd = new Date(dayStart.getTime() + 24 * 60 * 60 * 1000);
-      const { count, error } = await supabase
+      const { data, error } = await supabase
         .from("break_requests")
-        .select("id", { count: "exact", head: true })
+        .select("id")
         .gte("created_at", dayStart.toISOString())
         .lt("created_at", dayEnd.toISOString());
       if (error) throw error;
-      return count ?? 0;
+      const ids = ((data ?? []) as { id: string }[]).map((r) => r.id);
+      return {
+        count: ids.length,
+        signature: attentionSignatureFromIds(ids),
+      };
     },
   });
 
@@ -3215,11 +3516,19 @@ function OnBreakSection({ profile: _profile }: { profile: any }) {
 
   const list = onBreakQ.data ?? [];
   const log = dailyLogQ.data ?? [];
-  const logCount = dailyLogCountQ.data ?? log.length;
+  const logCount = dailyLogCountQ.data?.count ?? log.length;
+  const journalSig =
+    dailyLogCountQ.data?.signature ??
+    attentionSignatureFromIds(log.map((r) => r.id));
   void onBreakTick; // recompute on/late split on tick
   const nowMs = Date.now();
   const onBreakNow = list.filter((r) => !isBreakOverdue(r.endsAt, nowMs));
   const lateList = list.filter((r) => isBreakOverdue(r.endsAt, nowMs));
+  const onBreakSig = attentionSignatureFromIds(onBreakNow.map((r) => r.id));
+  const lateSig = attentionSignatureFromIds(lateList.map((r) => r.id));
+  const onBreakAttn = useDashboardCardAttention(profile?.id, "branch-on-break-now", onBreakSig);
+  const lateAttn = useDashboardCardAttention(profile?.id, "branch-on-break-late", lateSig);
+  const journalAttn = useDashboardCardAttention(profile?.id, "branch-break-journal", journalSig);
   const dialogList = listKind === "late" ? lateList : listKind === "onBreak" ? onBreakNow : [];
 
   const fmtT = (iso: string | null) =>
@@ -3242,12 +3551,15 @@ function OnBreakSection({ profile: _profile }: { profile: any }) {
         {canManageBreaks && requiresApproval && (
           <StatCard
             label="בקשות הפסקה ממתינות לאישור"
-            value={pendingCountQ.data ?? 0}
+            value={pendingBreakCount}
             icon={Clock}
-            tone={(pendingCountQ.data ?? 0) > 0 ? "danger" : "warning"}
-            onClick={() => navigate({ to: "/breaks-admin" })}
-            badge={pendingCountQ.data ?? 0}
-            pulse={(pendingCountQ.data ?? 0) > 0}
+            tone="warning"
+            onClick={() => {
+              markPendingBreakSeen();
+              navigate({ to: "/breaks-admin" });
+            }}
+            badge={pendingBreakCount}
+            attention={pendingBreakAttention}
           />
         )}
         <StatCard
@@ -3255,25 +3567,36 @@ function OnBreakSection({ profile: _profile }: { profile: any }) {
           value={onBreakNow.length}
           icon={Coffee}
           tone={onBreakNow.length > 0 ? "warning" : "primary"}
-          onClick={() => setListKind("onBreak")}
+          onClick={() => {
+            onBreakAttn.markSeen();
+            setListKind("onBreak");
+          }}
           badge={onBreakNow.length}
-          pulse={onBreakNow.length > 0}
+          attention={onBreakAttn.needsAttention}
         />
         <StatCard
           label="עובדים מאחרים מהפסקה"
           value={lateList.length}
           icon={AlertTriangle}
-          tone={lateList.length > 0 ? "danger" : "muted"}
-          onClick={() => setListKind("late")}
+          tone="muted"
+          onClick={() => {
+            lateAttn.markSeen();
+            setListKind("late");
+          }}
           badge={lateList.length}
-          pulse={lateList.length > 0}
+          attention={lateAttn.needsAttention}
         />
         <StatCard
           label="יומן הפסקות"
           value={logCount}
           icon={Coffee}
           tone="muted"
-          onClick={() => setLogOpen(true)}
+          badge={logCount}
+          attention={journalAttn.needsAttention}
+          onClick={() => {
+            journalAttn.markSeen();
+            setLogOpen(true);
+          }}
         />
         {canManageBreaks && (
           <Card
@@ -3370,7 +3693,13 @@ function OnBreakSection({ profile: _profile }: { profile: any }) {
 
             return (
               <>
-                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-2 mb-3">
+                <div
+                  className={
+                    departments.length > 1
+                      ? "grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-2 mb-3"
+                      : "grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-2 mb-3"
+                  }
+                >
                   <Input
                     placeholder="🔎 חיפוש..."
                     value={logSearch}
@@ -3385,15 +3714,17 @@ function OnBreakSection({ profile: _profile }: { profile: any }) {
                       ))}
                     </SelectContent>
                   </Select>
-                  <Select value={logDeptFilter} onValueChange={setLogDeptFilter}>
-                    <SelectTrigger><SelectValue placeholder="מחלקה" /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="__all">כל המחלקות</SelectItem>
-                      {departments.map((d) => (
-                        <SelectItem key={d} value={d}>{d}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  {departments.length > 1 && (
+                    <Select value={logDeptFilter} onValueChange={setLogDeptFilter}>
+                      <SelectTrigger><SelectValue placeholder="מחלקה" /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="__all">כל המחלקות</SelectItem>
+                        {departments.map((d) => (
+                          <SelectItem key={d} value={d}>{d}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  )}
                   <Select value={logTypeFilter} onValueChange={setLogTypeFilter}>
                     <SelectTrigger><SelectValue placeholder="סוג הפסקה" /></SelectTrigger>
                     <SelectContent>
@@ -3437,7 +3768,9 @@ function OnBreakSection({ profile: _profile }: { profile: any }) {
                         <tr>
                           <th className="text-right p-2">👤 עובד</th>
                           <th className="text-right p-2">💼 תפקיד</th>
-                          <th className="text-right p-2">🏬 מחלקה</th>
+                          {departments.length > 1 && (
+                            <th className="text-right p-2">🏬 מחלקה</th>
+                          )}
                           <th className="text-right p-2">☕ סוג</th>
                           <th className="text-right p-2">👤 אישר</th>
                           <th className="text-right p-2">🕒 התחלה / מתוכננת</th>
@@ -3489,7 +3822,9 @@ function OnBreakSection({ profile: _profile }: { profile: any }) {
                                 {r.roleLabel ?? "—"}
                                 {r.jobTitle ? ` · ${r.jobTitle}` : ""}
                               </td>
-                              <td className="p-2 whitespace-nowrap">{r.department}</td>
+                              {departments.length > 1 && (
+                                <td className="p-2 whitespace-nowrap">{r.department}</td>
+                              )}
                               <td className="p-2 whitespace-nowrap">{r.type}</td>
                               <td className="p-2 whitespace-nowrap">{r.approverName}</td>
                               <td className="p-2 whitespace-nowrap">
