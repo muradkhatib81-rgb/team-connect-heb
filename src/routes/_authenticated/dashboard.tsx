@@ -57,7 +57,7 @@ const DASH_TILE_SUB =
   "mt-0.5 line-clamp-1 text-[11px] leading-snug text-muted-foreground";
 const DASH_TILE_TRAIL =
   "flex h-7 w-[4.75rem] shrink-0 items-center justify-end";
-import { Users, UserCheck, UserX, Building2, Loader2, Plane, ListTodo, Clock, CheckCircle2, AlertTriangle, CalendarDays, User, Coffee, Send, UserPlus, Palmtree, ChevronDown } from "lucide-react";
+import { Users, Building2, Loader2, Plane, ListTodo, Clock, CheckCircle2, AlertTriangle, CalendarDays, User, Coffee, Send, UserPlus, Palmtree, ChevronDown } from "lucide-react";
 import {
   Collapsible,
   CollapsibleContent,
@@ -1075,7 +1075,6 @@ function DeptManagerDashboard({
   };
   loading: boolean;
 }) {
-  const navigate = useNavigate();
   if (loading || !data) {
     return (
       <div className="flex justify-center py-12">
@@ -1094,12 +1093,6 @@ function DeptManagerDashboard({
   const emps = data.employees;
   const mgrOnLeave = data.manager ? isEmployeeCurrentlyOnLeave(data.manager as DeptEmp) : false;
   const total = emps.length;
-  const active = emps.filter((e) => e.is_active && !isEmployeeCurrentlyOnLeave(e)).length;
-  const onLeave =
-    emps.filter((e) => isEmployeeCurrentlyOnLeave(e)).length + (mgrOnLeave ? 1 : 0);
-  const inactive = emps.filter((e) => !e.is_active).length;
-  const go = (filter: "all" | "active" | "inactive" | "on_leave" | "on_break" = "all") =>
-    navigate({ to: "/employees", search: { filter, dept: data.dept!.id } as any });
   const mgr = data.manager;
   const mgrInitial = (mgr?.full_name || "?").charAt(0);
 
@@ -1139,14 +1132,6 @@ function DeptManagerDashboard({
           </div>
         </Card>
       )}
-
-      <section className={DASH_TILE_GRID}>
-        <StatCard label="עובדי המחלקה" value={total} icon={Users} tone="primary" onClick={() => go("all")} />
-        <StatCard label="פעילים" value={active} icon={UserCheck} tone="success" onClick={() => go("active")} />
-        <StatCard label="בחופש" value={onLeave} icon={Plane} tone="warning" onClick={() => go("on_leave")} />
-        <StatCard label="לא פעילים" value={inactive} icon={UserX} tone="muted" onClick={() => go("inactive")} />
-      </section>
-
 
       <section>
         <div className="flex items-center justify-between mb-4">
