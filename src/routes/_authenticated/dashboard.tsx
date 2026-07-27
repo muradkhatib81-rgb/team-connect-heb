@@ -54,7 +54,7 @@ const DASH_TILE_ICON =
   "flex size-8 shrink-0 items-center justify-center rounded-lg";
 const DASH_TILE_TITLE = "text-sm font-semibold leading-tight";
 const DASH_TILE_SUB =
-  "mt-0.5 line-clamp-2 min-h-[2rem] text-[11px] leading-snug text-muted-foreground";
+  "mt-0.5 line-clamp-1 text-[11px] leading-snug text-muted-foreground";
 const DASH_TILE_TRAIL =
   "flex h-7 w-[4.75rem] shrink-0 items-center justify-end";
 import { Users, UserCheck, UserX, Building2, Loader2, Plane, ListTodo, Clock, CheckCircle2, AlertTriangle, CalendarDays, User, Coffee, Send, UserPlus, Palmtree, ChevronDown } from "lucide-react";
@@ -331,21 +331,17 @@ function DashboardPage() {
 
       <EmployeeOfMonthSection />
 
-      <DashboardSchedulePanel profile={profile} />
-
       <LiveShiftCardsSection />
+
+      {(admin || isDeptManager) && <SchedulesStatsSection profile={profile} />}
+
+      <DashboardSchedulePanel profile={profile} />
 
       {admin || isDeptManager ? (
         <>
           <BreakShortcutCard userId={profile.id} />
           <LeaveShortcutCard userId={profile.id} />
-          <SchedulesStatsSection profile={profile} />
           {isDeptHeadOnlyBreaks && <DeptHeadOnBreakSection />}
-          <TasksStatsSection
-            stats={tasksStatsQuery.data}
-            loading={tasksStatsQuery.isLoading}
-            userId={profile.id}
-          />
           {/* Branch-level journal — never for dept-head-only (own-dept section above). */}
           {canViewBreaks && !isDeptHeadOnlyBreaks && (
             <OnBreakSection profile={profile} />
@@ -365,9 +361,13 @@ function DashboardPage() {
             <DeptManagerDashboard data={deptManagerQuery.data} loading={deptManagerQuery.isLoading} />
           )}
 
-          <div className="grid grid-cols-1 gap-4">
-            <EmployeeNewMessagesCard userId={profile.id} />
-          </div>
+          <TasksStatsSection
+            stats={tasksStatsQuery.data}
+            loading={tasksStatsQuery.isLoading}
+            userId={profile.id}
+          />
+
+          <EmployeeNewMessagesCard userId={profile.id} />
         </>
       ) : (
         <EmployeeDashboard profile={profile} />
@@ -422,6 +422,8 @@ function TasksStatsSection({
   userId: string;
 }) {
   const navigate = useNavigate();
+  const [tasksOpen, setTasksOpen] = useState(false);
+
   const openSig = stats && stats.open > 0 ? `n:${stats.open}` : "";
   const progressSig = stats && stats.in_progress > 0 ? `n:${stats.in_progress}` : "";
   const doneSig = stats && stats.completed > 0 ? `n:${stats.completed}` : "";
@@ -431,60 +433,134 @@ function TasksStatsSection({
   const doneAttn = useDashboardCardAttention(userId, "tasks-done", doneSig);
   const overdueAttn = useDashboardCardAttention(userId, "tasks-overdue", overdueSig);
 
+  // Outer card lights when any inner bucket changes; clears when the section is opened.
+  const sectionSig = [openSig, progressSig, doneSig, overdueSig].filter(Boolean).join("|");
+  const sectionAttn = useDashboardCardAttention(userId, "tasks-section", sectionSig);
+
   if (loading || !stats) return null;
+
   const go = (status: string, markSeen: () => void) => {
     markSeen();
     navigate({ to: "/tasks", search: { status } as any });
   };
+
+  const activeCount = stats.open + stats.in_progress + stats.overdue;
+  const sectionNeedsAttention = sectionAttn.needsAttention;
+
   return (
     <section>
-      <div className="flex items-center justify-between mb-4">
-        <h2 className="text-lg font-semibold flex items-center gap-2">
-          <ListTodo className="size-5 text-primary" />
-          משימות
-        </h2>
-        <Link to="/tasks" className="text-sm text-primary hover:underline">
-          לכל המשימות ←
-        </Link>
-      </div>
-      <div className={DASH_TILE_GRID}>
-        <StatCard
-          label="פתוחות"
-          value={stats.open}
-          icon={ListTodo}
-          tone="primary"
-          badge={stats.open}
-          attention={openAttn.needsAttention}
-          onClick={() => go("new", openAttn.markSeen)}
-        />
-        <StatCard
-          label="בביצוע"
-          value={stats.in_progress}
-          icon={Clock}
-          tone="success"
-          badge={stats.in_progress}
-          attention={progressAttn.needsAttention}
-          onClick={() => go("in_progress", progressAttn.markSeen)}
-        />
-        <StatCard
-          label="הוגשו / הושלמו"
-          value={stats.completed}
-          icon={CheckCircle2}
-          tone="muted"
-          badge={stats.completed}
-          attention={doneAttn.needsAttention}
-          onClick={() => go("pending_approval", doneAttn.markSeen)}
-        />
-        <StatCard
-          label="באיחור"
-          value={stats.overdue}
-          icon={AlertTriangle}
-          tone="warning"
-          badge={stats.overdue}
-          attention={overdueAttn.needsAttention}
-          onClick={() => go("overdue", overdueAttn.markSeen)}
-        />
-      </div>
+      <Collapsible
+        open={tasksOpen}
+        onOpenChange={(open) => {
+          setTasksOpen(open);
+          if (open) sectionAttn.markSeen();
+        }}
+      >
+        <Card
+          className={
+            sectionNeedsAttention && !tasksOpen
+              ? `card-elevated overflow-hidden ${DASH_TILE_ATTENTION}`
+              : "card-elevated overflow-hidden"
+          }
+        >
+          <div className="flex items-stretch gap-1 p-3">
+            <CollapsibleTrigger asChild>
+              <button
+                type="button"
+                className="flex min-w-0 flex-1 items-center gap-2.5 rounded-md text-right outline-none transition-colors hover:bg-accent/30 focus-visible:ring-2 focus-visible:ring-ring"
+              >
+                <div
+                  className={
+                    sectionNeedsAttention && !tasksOpen
+                      ? `${DASH_TILE_ICON} bg-destructive/20 text-destructive`
+                      : `${DASH_TILE_ICON} bg-primary/15 text-primary`
+                  }
+                >
+                  <ListTodo className="size-4" />
+                </div>
+                <div className="min-w-0 flex-1 self-center">
+                  <h3
+                    className={
+                      sectionNeedsAttention && !tasksOpen
+                        ? `${DASH_TILE_TITLE} text-destructive`
+                        : DASH_TILE_TITLE
+                    }
+                  >
+                    משימות
+                  </h3>
+                  <p className="mt-0.5 text-[11px] leading-snug text-muted-foreground">
+                    {activeCount > 0
+                      ? `${activeCount} משימות פעילות · ${stats.completed} הוגשו`
+                      : stats.completed > 0
+                        ? `${stats.completed} הוגשו / הושלמו`
+                        : "אין משימות פעילות כרגע"}
+                  </p>
+                </div>
+                <div className={`${DASH_TILE_TRAIL} gap-1.5`}>
+                  {sectionNeedsAttention && !tasksOpen ? (
+                    <Badge variant="destructive" className="rounded-full px-2">
+                      {Math.max(activeCount, 1)}
+                    </Badge>
+                  ) : null}
+                  <ChevronDown
+                    className={`size-4 text-muted-foreground transition-transform ${
+                      tasksOpen ? "rotate-180" : ""
+                    }`}
+                  />
+                </div>
+              </button>
+            </CollapsibleTrigger>
+            <Link
+              to="/tasks"
+              className="shrink-0 self-center px-2 text-xs text-primary hover:underline"
+              onClick={() => sectionAttn.markSeen()}
+            >
+              לכל המשימות
+            </Link>
+          </div>
+
+          <CollapsibleContent>
+            <div className={`border-t p-3 ${DASH_TILE_GRID}`}>
+              <StatCard
+                label="פתוחות"
+                value={stats.open}
+                icon={ListTodo}
+                tone="primary"
+                badge={stats.open}
+                attention={openAttn.needsAttention}
+                onClick={() => go("new", openAttn.markSeen)}
+              />
+              <StatCard
+                label="בביצוע"
+                value={stats.in_progress}
+                icon={Clock}
+                tone="success"
+                badge={stats.in_progress}
+                attention={progressAttn.needsAttention}
+                onClick={() => go("in_progress", progressAttn.markSeen)}
+              />
+              <StatCard
+                label="הוגשו / הושלמו"
+                value={stats.completed}
+                icon={CheckCircle2}
+                tone="muted"
+                badge={stats.completed}
+                attention={doneAttn.needsAttention}
+                onClick={() => go("pending_approval", doneAttn.markSeen)}
+              />
+              <StatCard
+                label="באיחור"
+                value={stats.overdue}
+                icon={AlertTriangle}
+                tone="warning"
+                badge={stats.overdue}
+                attention={overdueAttn.needsAttention}
+                onClick={() => go("overdue", overdueAttn.markSeen)}
+              />
+            </div>
+          </CollapsibleContent>
+        </Card>
+      </Collapsible>
     </section>
   );
 }
@@ -516,6 +592,7 @@ function DeptHeadOnBreakSection() {
   const [logTypeFilter, setLogTypeFilter] = useState("__all");
   const [logStatusFilter, setLogStatusFilter] = useState("__all");
   const [onBreakTick, setOnBreakTick] = useState(0);
+  const [breaksOpen, setBreaksOpen] = useState(false);
 
   const onBreakQ = useQuery({
     queryKey: ["dashboard-dept-on-break"],
@@ -592,6 +669,10 @@ function DeptHeadOnBreakSection() {
   const lateAttn = useDashboardCardAttention(me?.id, "dept-on-break-late", lateSig);
   const journalSig = attentionSignatureFromIds(log.map((r) => r.id));
   const journalAttn = useDashboardCardAttention(me?.id, "dept-break-journal", journalSig);
+  const sectionSig = [onBreakSig, lateSig, journalSig].filter(Boolean).join("|");
+  const sectionAttn = useDashboardCardAttention(me?.id, "dept-breaks-section", sectionSig);
+  const alertCount = onBreakNow.length + lateList.length;
+  const sectionNeedsAttention = sectionAttn.needsAttention;
   const dialogList =
     listKind === "late" ? lateList : listKind === "onBreak" ? onBreakNow : [];
   const fmtT = (iso: string | null) => fmtBreakTime(iso) || "—";
@@ -652,44 +733,111 @@ function DeptHeadOnBreakSection() {
 
   return (
     <>
-      <div className={DASH_TILE_GRID}>
-        <StatCard
-          label="עובדים בהפסקה כעת"
-          value={onBreakNow.length}
-          icon={Coffee}
-          tone={onBreakNow.length > 0 ? "warning" : "primary"}
-          badge={onBreakNow.length}
-          attention={onBreakAttn.needsAttention}
-          onClick={() => {
-            onBreakAttn.markSeen();
-            setListKind("onBreak");
-          }}
-        />
-        <StatCard
-          label="עובדים מאחרים מהפסקה"
-          value={lateList.length}
-          icon={AlertTriangle}
-          tone="muted"
-          badge={lateList.length}
-          attention={lateAttn.needsAttention}
-          onClick={() => {
-            lateAttn.markSeen();
-            setListKind("late");
-          }}
-        />
-        <StatCard
-          label="יומן הפסקות"
-          value={logCount}
-          icon={Coffee}
-          tone="muted"
-          badge={logCount}
-          attention={journalAttn.needsAttention}
-          onClick={() => {
-            journalAttn.markSeen();
-            setLogOpen(true);
-          }}
-        />
-      </div>
+      <Collapsible
+        open={breaksOpen}
+        onOpenChange={(open) => {
+          setBreaksOpen(open);
+          if (open) sectionAttn.markSeen();
+        }}
+      >
+        <Card
+          className={
+            sectionNeedsAttention && !breaksOpen
+              ? `card-elevated overflow-hidden ${DASH_TILE_ATTENTION}`
+              : "card-elevated overflow-hidden"
+          }
+        >
+          <div className="flex items-stretch gap-1 p-3">
+            <CollapsibleTrigger asChild>
+              <button
+                type="button"
+                className="flex min-w-0 flex-1 items-center gap-2.5 rounded-md text-right outline-none transition-colors hover:bg-accent/30 focus-visible:ring-2 focus-visible:ring-ring"
+              >
+                <div
+                  className={
+                    sectionNeedsAttention && !breaksOpen
+                      ? `${DASH_TILE_ICON} bg-destructive/20 text-destructive`
+                      : `${DASH_TILE_ICON} bg-primary/15 text-primary`
+                  }
+                >
+                  <Coffee className="size-4" />
+                </div>
+                <div className="min-w-0 flex-1 self-center">
+                  <h3
+                    className={
+                      sectionNeedsAttention && !breaksOpen
+                        ? `${DASH_TILE_TITLE} text-destructive`
+                        : DASH_TILE_TITLE
+                    }
+                  >
+                    הפסקות
+                  </h3>
+                  <p className="mt-0.5 text-[11px] leading-snug text-muted-foreground">
+                    {alertCount > 0
+                      ? `${onBreakNow.length} בהפסקה · ${lateList.length} מאחרים · יומן ${logCount}`
+                      : logCount > 0
+                        ? `יומן היום: ${logCount}`
+                        : "אין פעילות הפסקות כרגע"}
+                  </p>
+                </div>
+                <div className={`${DASH_TILE_TRAIL} gap-1.5`}>
+                  {sectionNeedsAttention && !breaksOpen ? (
+                    <Badge variant="destructive" className="rounded-full px-2">
+                      {Math.max(alertCount, logCount, 1)}
+                    </Badge>
+                  ) : null}
+                  <ChevronDown
+                    className={`size-4 text-muted-foreground transition-transform ${
+                      breaksOpen ? "rotate-180" : ""
+                    }`}
+                  />
+                </div>
+              </button>
+            </CollapsibleTrigger>
+          </div>
+
+          <CollapsibleContent>
+            <div className={`border-t p-3 ${DASH_TILE_GRID}`}>
+              <StatCard
+                label="עובדים בהפסקה כעת"
+                value={onBreakNow.length}
+                icon={Coffee}
+                tone={onBreakNow.length > 0 ? "warning" : "primary"}
+                badge={onBreakNow.length}
+                attention={onBreakAttn.needsAttention}
+                onClick={() => {
+                  onBreakAttn.markSeen();
+                  setListKind("onBreak");
+                }}
+              />
+              <StatCard
+                label="עובדים מאחרים מהפסקה"
+                value={lateList.length}
+                icon={AlertTriangle}
+                tone="muted"
+                badge={lateList.length}
+                attention={lateAttn.needsAttention}
+                onClick={() => {
+                  lateAttn.markSeen();
+                  setListKind("late");
+                }}
+              />
+              <StatCard
+                label="יומן הפסקות"
+                value={logCount}
+                icon={Coffee}
+                tone="muted"
+                badge={logCount}
+                attention={journalAttn.needsAttention}
+                onClick={() => {
+                  journalAttn.markSeen();
+                  setLogOpen(true);
+                }}
+              />
+            </div>
+          </CollapsibleContent>
+        </Card>
+      </Collapsible>
 
       <Dialog
         open={listKind !== null}
@@ -1070,9 +1218,6 @@ function AdminDashboard({
       </div>
     );
   }
-  const go = (filter: string) =>
-    navigate({ to: "/employees", search: { filter, dept: "all" } as any });
-
   const deptCount = stats.departments.length;
   const staffInDepts = stats.departments.reduce(
     (n, d) => n + (stats.byDept[d.id] ?? 0),
@@ -1081,13 +1226,6 @@ function AdminDashboard({
 
   return (
     <>
-      <section className={DASH_TILE_GRID}>
-        <StatCard label="👥 סך עובדים" value={stats.total} icon={Users} tone="primary" onClick={() => go("all")} />
-        <StatCard label="🟢 עובדים פעילים" value={stats.active} icon={UserCheck} tone="success" onClick={() => go("active")} />
-        <StatCard label="🏖️ בחופשה" value={stats.onLeave} icon={Plane} tone="warning" onClick={() => go("on_leave")} />
-        <StatCard label="❌ עובדים לא פעילים" value={stats.inactive} icon={UserX} tone="muted" onClick={() => go("inactive")} />
-      </section>
-
       <section>
         {deptCount === 0 ? (
           <Card className="card-elevated p-6 text-sm text-muted-foreground">
@@ -1138,9 +1276,9 @@ function AdminDashboard({
                           className="min-w-0 flex-1 text-right outline-none"
                           onClick={() => onSelectDept?.(d.id)}
                         >
-                          <p className="truncate text-sm font-semibold">{d.name}</p>
+                          <p className="truncate text-base font-bold leading-snug">{d.name}</p>
                           {canViewDepartments && (
-                            <p className="mt-0.5 truncate text-xs text-muted-foreground">
+                            <p className="mt-0.5 truncate text-sm font-bold text-destructive">
                               אחראי: {departmentManagerNames?.[d.id] ?? "לא מונה"}
                             </p>
                           )}
@@ -1307,6 +1445,7 @@ function EmployeeNewMessagesCard({ userId }: { userId: string }) {
     },
   });
   const items = q.data ?? [];
+  const count = items.length;
   const msgSig = attentionSignatureFromIds(
     items.map((r: any) => String(r.message_id)),
   );
@@ -1333,54 +1472,50 @@ function EmployeeNewMessagesCard({ userId }: { userId: string }) {
       }}
       className={
         needsAttention
-          ? `card-elevated p-4 cursor-pointer transition-all ${DASH_TILE_ATTENTION}`
-          : "card-elevated p-4 cursor-pointer hover:shadow-md hover:ring-1 hover:ring-primary/30 transition-all"
+          ? `card-elevated overflow-hidden ${DASH_TILE_ATTENTION}`
+          : "card-elevated overflow-hidden hover:bg-accent/30"
       }
     >
-      <div className="flex items-center justify-between mb-3">
-        <h2
-          className={
-            needsAttention
-              ? "font-semibold text-base flex items-center gap-2 text-destructive"
-              : "font-semibold text-base flex items-center gap-2"
-          }
-        >
-          📨 הודעות חדשות
-          {items.length > 0 && (
-            <span className="inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 rounded-full bg-destructive text-destructive-foreground text-[11px] font-bold">
-              {items.length}
-            </span>
-          )}
-        </h2>
-        <span className="text-sm text-primary">לכל ההודעות ←</span>
-      </div>
-      {items.length === 0 ? (
-        <p className="text-sm text-muted-foreground">אין הודעות חדשות.</p>
-      ) : (
-        <ul className="divide-y">
-          {items.map((r: any) => (
-            <li key={r.message_id} className="py-2 text-sm">
-              <button
-                type="button"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  markSeen();
-                  navigate({
-                    to: "/communications",
-                    search: { tab: "inbox", msg: r.message_id } as any,
-                  });
-                }}
-                className="text-right hover:underline font-medium block w-full"
+      <div className="flex items-stretch gap-1 p-3">
+        <div className="flex min-w-0 flex-1 items-center gap-2.5 text-right">
+          <div
+            className={
+              needsAttention
+                ? `${DASH_TILE_ICON} bg-destructive/20 text-destructive`
+                : `${DASH_TILE_ICON} bg-primary/15 text-primary`
+            }
+          >
+            <Send className="size-4" />
+          </div>
+          <div className="min-w-0 flex-1 self-center">
+            <h3
+              className={
+                needsAttention
+                  ? `${DASH_TILE_TITLE} text-destructive`
+                  : DASH_TILE_TITLE
+              }
+            >
+              הודעות חדשות
+            </h3>
+            <p className="mt-0.5 text-[11px] leading-snug text-muted-foreground">
+              {count > 0
+                ? `יש ${count} הודעות שלא נקראו`
+                : "אין הודעות חדשות כרגע"}
+            </p>
+          </div>
+          <div className={`${DASH_TILE_TRAIL} gap-1.5`}>
+            {count > 0 ? (
+              <Badge
+                variant={needsAttention ? "destructive" : "secondary"}
+                className="rounded-full px-2"
               >
-                {r.message.title}
-              </button>
-              <p className="text-xs text-muted-foreground mt-0.5">
-                {new Date(r.delivered_at ?? r.message.created_at).toLocaleString("he-IL")}
-              </p>
-            </li>
-          ))}
-        </ul>
-      )}
+                {count > 99 ? "99+" : count}
+              </Badge>
+            ) : null}
+            <span className="text-xs text-primary">למרכז תקשורת</span>
+          </div>
+        </div>
+      </div>
     </Card>
   );
 }
@@ -1576,6 +1711,7 @@ function SchedulesStatsSection({ profile }: { profile: any }) {
   const [notSubmittedOpen, setNotSubmittedOpen] = useState(false);
   const [draftOpen, setDraftOpen] = useState(false);
   const [publishedOpen, setPublishedOpen] = useState(false);
+  const [schedulesOpen, setSchedulesOpen] = useState(false);
   const publishAllFn = useServerFn(publishAllWeekSchedules);
 
   const permsQ = useQuery({
@@ -1757,9 +1893,22 @@ function SchedulesStatsSection({ profile }: { profile: any }) {
   const publishedAttn = useDashboardCardAttention(profile.id, "schedules-published", publishedSig);
   const approvedAttn = useDashboardCardAttention(profile.id, "schedules-approved", approvedSig);
 
+  const sectionSig = [pendingSchedSig, approvedSig, noSchedSig, draftSig, publishedSig]
+    .filter(Boolean)
+    .join("|");
+  const sectionAttn = useDashboardCardAttention(
+    profile.id,
+    "schedules-status-section",
+    sectionSig,
+  );
+
   if (!canViewBranchScheduleOverview) return null;
   if (statsQ.isLoading || !s) return null;
   if (deptStatesQ.isLoading && !deptStatesQ.data) return null;
+
+  const pendingValue = canApprove ? s.pendingAll : s.pending;
+  const alertCount = pendingValue + s.noScheduleCount;
+  const sectionNeedsAttention = sectionAttn.needsAttention;
 
   const goPending = () => {
     markPendingSchedSeen();
@@ -1781,72 +1930,139 @@ function SchedulesStatsSection({ profile }: { profile: any }) {
 
   return (
     <section className="space-y-4">
-      {canViewBranchScheduleOverview && (
-        <div className={DASH_TILE_GRID}>
-          <StatCard
-            label="ממתינים לאישור"
-            value={canApprove ? s.pendingAll : s.pending}
-            icon={Clock}
-            tone="warning"
-            badge={canApprove ? s.pendingAll : s.pending}
-            attention={pendingSchedAttention}
-            onClick={goPending}
-          />
-          <StatCard
-            label="מאושרים"
-            value={s.approved}
-            icon={CheckCircle2}
-            tone="success"
-            badge={s.approved}
-            attention={approvedAttn.needsAttention}
-            onClick={() => {
-              approvedAttn.markSeen();
-              setApprovedOpen(true);
-            }}
-          />
-        </div>
-      )}
+      <Collapsible
+        open={schedulesOpen}
+        onOpenChange={(open) => {
+          setSchedulesOpen(open);
+          if (open) sectionAttn.markSeen();
+        }}
+      >
+        <Card
+          className={
+            sectionNeedsAttention && !schedulesOpen
+              ? `card-elevated overflow-hidden ${DASH_TILE_ATTENTION}`
+              : "card-elevated overflow-hidden"
+          }
+        >
+          <div className="flex items-stretch gap-1 p-3">
+            <CollapsibleTrigger asChild>
+              <button
+                type="button"
+                className="flex min-w-0 flex-1 items-center gap-2.5 rounded-md text-right outline-none transition-colors hover:bg-accent/30 focus-visible:ring-2 focus-visible:ring-ring"
+              >
+                <div
+                  className={
+                    sectionNeedsAttention && !schedulesOpen
+                      ? `${DASH_TILE_ICON} bg-destructive/20 text-destructive`
+                      : `${DASH_TILE_ICON} bg-primary/15 text-primary`
+                  }
+                >
+                  <CalendarDays className="size-4" />
+                </div>
+                <div className="min-w-0 flex-1 self-center">
+                  <h3
+                    className={
+                      sectionNeedsAttention && !schedulesOpen
+                        ? `${DASH_TILE_TITLE} text-destructive`
+                        : DASH_TILE_TITLE
+                    }
+                  >
+                    סטטוס סידורי עבודה
+                  </h3>
+                  <p className="mt-0.5 text-[11px] leading-snug text-muted-foreground">
+                    {`${pendingValue} ממתינים · ${s.approved} מאושרים · ${s.noScheduleCount} ללא סידור · ${s.draftCount} שמורים · ${s.publishedCount} מפורסמים`}
+                  </p>
+                </div>
+                <div className={`${DASH_TILE_TRAIL} gap-1.5`}>
+                  {sectionNeedsAttention && !schedulesOpen ? (
+                    <Badge variant="destructive" className="rounded-full px-2">
+                      {Math.max(alertCount, 1)}
+                    </Badge>
+                  ) : null}
+                  <ChevronDown
+                    className={`size-4 text-muted-foreground transition-transform ${
+                      schedulesOpen ? "rotate-180" : ""
+                    }`}
+                  />
+                </div>
+              </button>
+            </CollapsibleTrigger>
+            <Link
+              to="/schedules"
+              className="shrink-0 self-center px-2 text-xs text-primary hover:underline"
+              onClick={() => sectionAttn.markSeen()}
+            >
+              לסידורים
+            </Link>
+          </div>
 
-      {canViewBranchScheduleOverview && (
-        <div className={DASH_TILE_GRID}>
-          <StatCard
-            label="מחלקות שטרם הוכן להן סידור עבודה"
-            value={s.noScheduleCount}
-            icon={Building2}
-            tone="warning"
-            badge={s.noScheduleCount}
-            attention={noSchedAttn.needsAttention}
-            onClick={() => {
-              noSchedAttn.markSeen();
-              setNotSubmittedOpen(true);
-            }}
-          />
-          <StatCard
-            label="מחלקות עם סידור עבודה שמור"
-            value={s.draftCount}
-            icon={CalendarDays}
-            tone="primary"
-            badge={s.draftCount}
-            attention={draftAttn.needsAttention}
-            onClick={() => {
-              draftAttn.markSeen();
-              setDraftOpen(true);
-            }}
-          />
-          <StatCard
-            label="מחלקות עם סידור עבודה שפורסם"
-            value={s.publishedCount}
-            icon={CheckCircle2}
-            tone="success"
-            badge={s.publishedCount}
-            attention={publishedAttn.needsAttention}
-            onClick={() => {
-              publishedAttn.markSeen();
-              setPublishedOpen(true);
-            }}
-          />
-        </div>
-      )}
+          <CollapsibleContent>
+            <div className={`border-t p-3 space-y-2`}>
+              <div className={DASH_TILE_GRID}>
+                <StatCard
+                  label="ממתינים לאישור"
+                  value={pendingValue}
+                  icon={Clock}
+                  tone="warning"
+                  badge={pendingValue}
+                  attention={pendingSchedAttention}
+                  onClick={goPending}
+                />
+                <StatCard
+                  label="מאושרים"
+                  value={s.approved}
+                  icon={CheckCircle2}
+                  tone="success"
+                  badge={s.approved}
+                  attention={approvedAttn.needsAttention}
+                  onClick={() => {
+                    approvedAttn.markSeen();
+                    setApprovedOpen(true);
+                  }}
+                />
+              </div>
+              <div className={DASH_TILE_GRID}>
+                <StatCard
+                  label="מחלקות שטרם הוכן להן סידור עבודה"
+                  value={s.noScheduleCount}
+                  icon={Building2}
+                  tone="warning"
+                  badge={s.noScheduleCount}
+                  attention={noSchedAttn.needsAttention}
+                  onClick={() => {
+                    noSchedAttn.markSeen();
+                    setNotSubmittedOpen(true);
+                  }}
+                />
+                <StatCard
+                  label="מחלקות עם סידור עבודה שמור"
+                  value={s.draftCount}
+                  icon={CalendarDays}
+                  tone="primary"
+                  badge={s.draftCount}
+                  attention={draftAttn.needsAttention}
+                  onClick={() => {
+                    draftAttn.markSeen();
+                    setDraftOpen(true);
+                  }}
+                />
+                <StatCard
+                  label="מחלקות עם סידור עבודה שפורסם"
+                  value={s.publishedCount}
+                  icon={CheckCircle2}
+                  tone="success"
+                  badge={s.publishedCount}
+                  attention={publishedAttn.needsAttention}
+                  onClick={() => {
+                    publishedAttn.markSeen();
+                    setPublishedOpen(true);
+                  }}
+                />
+              </div>
+            </div>
+          </CollapsibleContent>
+        </Card>
+      </Collapsible>
 
       <ApprovedSchedulesDialog
         open={approvedOpen}
@@ -2910,11 +3126,11 @@ function LeaveShortcutCard({ userId }: { userId: string }) {
   const queueSubtitle =
     leaveAccess.pendingQueueMode === "dept"
       ? queueCount > 0
-        ? `יש ${queueCount} בקשות של עובדי המחלקה שממתינות לאישורך.`
-        : "אין כרגע בקשות ממתינות במחלקה."
+        ? `${queueCount} בקשות ממתינות במחלקה`
+        : "אין בקשות ממתינות במחלקה"
       : queueCount > 0
-        ? `יש ${queueCount} בקשות שממתינות לטיפול שלך.`
-        : "אין כרגע בקשות ממתינות לאישור.";
+        ? `${queueCount} בקשות ממתינות לאישור`
+        : "אין בקשות ממתינות לאישור";
 
   if (!leaveAccess.showRequestCard && !leaveAccess.showPendingQueueCard) {
     return null;
@@ -2964,7 +3180,7 @@ function LeaveShortcutCard({ userId }: { userId: string }) {
               <Badge
                 className={
                   leaveQueueAttention
-                    ? "bg-destructive px-2 py-0.5 text-sm font-bold text-destructive-foreground hover:bg-destructive shadow-md"
+                    ? "bg-destructive px-1.5 py-0 text-xs font-bold text-destructive-foreground hover:bg-destructive shadow-md"
                     : "bg-amber-600 px-1.5 py-0 text-xs text-white hover:bg-amber-600"
                 }
               >
@@ -3027,7 +3243,7 @@ function LeaveShortcutCard({ userId }: { userId: string }) {
                       : "הגשה ומעקב סטטוס"}
               </p>
             </div>
-            <div className={DASH_TILE_TRAIL}>
+            <div className={`${DASH_TILE_TRAIL} w-auto min-w-[4.75rem] gap-1.5`}>
               {(leaveMineAttention || pendingMine.length > 0) && (
                 <Badge
                   className={
@@ -3210,6 +3426,7 @@ function OnBreakSection({ profile }: { profile: any }) {
   const [logSort, setLogSort] = useState<"created" | "overrun" | "return">("created");
   const [confirmReturn, setConfirmReturn] = useState<{ id: string; userId: string; name: string } | null>(null);
   const [onBreakTick, setOnBreakTick] = useState(0);
+  const [breaksOpen, setBreaksOpen] = useState(false);
   // Parent mounts this for anyone with break view access; manage actions stay gated.
   const { canManageBreaks } = useCanManageBreaks();
   const { requiresApproval } = useBreakRequiresApproval();
@@ -3490,6 +3707,16 @@ function OnBreakSection({ profile }: { profile: any }) {
   const onBreakAttn = useDashboardCardAttention(profile?.id, "branch-on-break-now", onBreakSig);
   const lateAttn = useDashboardCardAttention(profile?.id, "branch-on-break-late", lateSig);
   const journalAttn = useDashboardCardAttention(profile?.id, "branch-break-journal", journalSig);
+  const sectionSig = [pendingBreakSig, onBreakSig, lateSig, journalSig]
+    .filter(Boolean)
+    .join("|");
+  const sectionAttn = useDashboardCardAttention(
+    profile?.id,
+    "branch-breaks-section",
+    sectionSig,
+  );
+  const alertCount = pendingBreakCount + onBreakNow.length + lateList.length;
+  const sectionNeedsAttention = sectionAttn.needsAttention;
   const dialogList = listKind === "late" ? lateList : listKind === "onBreak" ? onBreakNow : [];
 
   const fmtT = (iso: string | null) =>
@@ -3508,70 +3735,155 @@ function OnBreakSection({ profile }: { profile: any }) {
 
   return (
     <>
-      <div className={DASH_TILE_GRID}>
-        {canManageBreaks && requiresApproval && (
-          <StatCard
-            label="בקשות הפסקה ממתינות לאישור"
-            value={pendingBreakCount}
-            icon={Clock}
-            tone="warning"
-            onClick={() => {
-              markPendingBreakSeen();
-              navigate({ to: "/breaks-admin" });
-            }}
-            badge={pendingBreakCount}
-            attention={pendingBreakAttention}
-          />
-        )}
-        <StatCard
-          label="עובדים בהפסקה כעת"
-          value={onBreakNow.length}
-          icon={Coffee}
-          tone={onBreakNow.length > 0 ? "warning" : "primary"}
-          onClick={() => {
-            onBreakAttn.markSeen();
-            setListKind("onBreak");
-          }}
-          badge={onBreakNow.length}
-          attention={onBreakAttn.needsAttention}
-        />
-        <StatCard
-          label="עובדים מאחרים מהפסקה"
-          value={lateList.length}
-          icon={AlertTriangle}
-          tone="muted"
-          onClick={() => {
-            lateAttn.markSeen();
-            setListKind("late");
-          }}
-          badge={lateList.length}
-          attention={lateAttn.needsAttention}
-        />
-        <StatCard
-          label="יומן הפסקות"
-          value={logCount}
-          icon={Coffee}
-          tone="muted"
-          badge={logCount}
-          attention={journalAttn.needsAttention}
-          onClick={() => {
-            journalAttn.markSeen();
-            setLogOpen(true);
-          }}
-        />
-        {canManageBreaks && (
-          <Card
-            className="card-elevated p-4 flex items-center justify-between cursor-pointer hover:bg-muted/40"
-            onClick={() => navigate({ to: "/breaks-admin" })}
-          >
-            <div>
-              <p className="text-xs text-muted-foreground">ניהול בקשות הפסקה</p>
-              <p className="font-medium mt-1">פתח מסך הפסקות</p>
+      <Collapsible
+        open={breaksOpen}
+        onOpenChange={(open) => {
+          setBreaksOpen(open);
+          if (open) sectionAttn.markSeen();
+        }}
+      >
+        <Card
+          className={
+            sectionNeedsAttention && !breaksOpen
+              ? `card-elevated overflow-hidden ${DASH_TILE_ATTENTION}`
+              : "card-elevated overflow-hidden"
+          }
+        >
+          <div className="flex items-stretch gap-1 p-3">
+            <CollapsibleTrigger asChild>
+              <button
+                type="button"
+                className="flex min-w-0 flex-1 items-center gap-2.5 rounded-md text-right outline-none transition-colors hover:bg-accent/30 focus-visible:ring-2 focus-visible:ring-ring"
+              >
+                <div
+                  className={
+                    sectionNeedsAttention && !breaksOpen
+                      ? `${DASH_TILE_ICON} bg-destructive/20 text-destructive`
+                      : `${DASH_TILE_ICON} bg-primary/15 text-primary`
+                  }
+                >
+                  <Coffee className="size-4" />
+                </div>
+                <div className="min-w-0 flex-1 self-center">
+                  <h3
+                    className={
+                      sectionNeedsAttention && !breaksOpen
+                        ? `${DASH_TILE_TITLE} text-destructive`
+                        : DASH_TILE_TITLE
+                    }
+                  >
+                    הפסקות
+                  </h3>
+                  <p className="mt-0.5 text-[11px] leading-snug text-muted-foreground">
+                    {pendingBreakCount > 0
+                      ? `${pendingBreakCount} ממתינות · ${onBreakNow.length} בהפסקה · ${lateList.length} מאחרים`
+                      : alertCount > 0
+                        ? `${onBreakNow.length} בהפסקה · ${lateList.length} מאחרים · יומן ${logCount}`
+                        : logCount > 0
+                          ? `יומן היום: ${logCount}`
+                          : "אין פעילות הפסקות כרגע"}
+                  </p>
+                </div>
+                <div className={`${DASH_TILE_TRAIL} gap-1.5`}>
+                  {sectionNeedsAttention && !breaksOpen ? (
+                    <Badge variant="destructive" className="rounded-full px-2">
+                      {Math.max(pendingBreakCount + onBreakNow.length + lateList.length, 1)}
+                    </Badge>
+                  ) : null}
+                  <ChevronDown
+                    className={`size-4 text-muted-foreground transition-transform ${
+                      breaksOpen ? "rotate-180" : ""
+                    }`}
+                  />
+                </div>
+              </button>
+            </CollapsibleTrigger>
+            {canManageBreaks ? (
+              <button
+                type="button"
+                className="shrink-0 self-center px-2 text-xs text-primary hover:underline"
+                onClick={() => {
+                  sectionAttn.markSeen();
+                  navigate({ to: "/breaks-admin" });
+                }}
+              >
+                ניהול
+              </button>
+            ) : null}
+          </div>
+
+          <CollapsibleContent>
+            <div className={`border-t p-3 ${DASH_TILE_GRID}`}>
+              {canManageBreaks && requiresApproval && (
+                <StatCard
+                  label="בקשות הפסקה ממתינות לאישור"
+                  value={pendingBreakCount}
+                  icon={Clock}
+                  tone="warning"
+                  onClick={() => {
+                    markPendingBreakSeen();
+                    navigate({ to: "/breaks-admin" });
+                  }}
+                  badge={pendingBreakCount}
+                  attention={pendingBreakAttention}
+                />
+              )}
+              <StatCard
+                label="עובדים בהפסקה כעת"
+                value={onBreakNow.length}
+                icon={Coffee}
+                tone={onBreakNow.length > 0 ? "warning" : "primary"}
+                onClick={() => {
+                  onBreakAttn.markSeen();
+                  setListKind("onBreak");
+                }}
+                badge={onBreakNow.length}
+                attention={onBreakAttn.needsAttention}
+              />
+              <StatCard
+                label="עובדים מאחרים מהפסקה"
+                value={lateList.length}
+                icon={AlertTriangle}
+                tone="muted"
+                onClick={() => {
+                  lateAttn.markSeen();
+                  setListKind("late");
+                }}
+                badge={lateList.length}
+                attention={lateAttn.needsAttention}
+              />
+              <StatCard
+                label="יומן הפסקות"
+                value={logCount}
+                icon={Coffee}
+                tone="muted"
+                badge={logCount}
+                attention={journalAttn.needsAttention}
+                onClick={() => {
+                  journalAttn.markSeen();
+                  setLogOpen(true);
+                }}
+              />
+              {canManageBreaks && (
+                <Card
+                  className={`${DASH_TILE} cursor-pointer hover:bg-accent/30`}
+                  onClick={() => navigate({ to: "/breaks-admin" })}
+                >
+                  <div className="flex h-full w-full items-center gap-2.5">
+                    <div className={`${DASH_TILE_ICON} bg-primary/15 text-primary`}>
+                      <Coffee className="size-4" />
+                    </div>
+                    <div className="min-w-0 flex-1 self-center text-right">
+                      <p className={DASH_TILE_TITLE}>ניהול בקשות הפסקה</p>
+                      <p className={DASH_TILE_SUB}>פתח מסך הפסקות</p>
+                    </div>
+                  </div>
+                </Card>
+              )}
             </div>
-            <Coffee className="size-5 text-primary" />
-          </Card>
-        )}
-      </div>
+          </CollapsibleContent>
+        </Card>
+      </Collapsible>
 
       <Dialog open={logOpen} onOpenChange={setLogOpen}>
         <DialogContent className="max-w-6xl">

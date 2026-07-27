@@ -329,9 +329,14 @@ export function LiveShiftCardsSection() {
   if (shiftDefsQ.list.length === 0) return null;
 
   return (
-    <section className="space-y-3">
-      <h2 className="text-lg font-semibold">משמרות היום</h2>
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+    <section className="space-y-2">
+      <h2 className="text-sm font-semibold">משמרות היום</h2>
+      <div
+        className="grid gap-2"
+        style={{
+          gridTemplateColumns: `repeat(${Math.min(shiftDefsQ.list.length, 4)}, minmax(0, 1fr))`,
+        }}
+      >
         {shiftDefsQ.list.map((def) => {
           const list = byShift.get(def.code) ?? [];
           const count = list.length;
@@ -458,32 +463,30 @@ const ShiftCard = ({
     <button
       type="button"
       onClick={onOpen}
-      className="text-right rounded-xl border bg-card p-4 hover:shadow-md hover:-translate-y-0.5 transition focus:outline-none focus:ring-2 focus:ring-ring"
+      className="flex min-h-[4.75rem] w-full items-center gap-2 rounded-xl border bg-card p-3 text-right transition-colors hover:bg-accent/30 focus:outline-none focus:ring-2 focus:ring-ring"
       aria-label={`${name}: ${countLabel}`}
     >
-      <div className="flex items-start justify-between gap-2">
-        <div className="min-w-0">
-          <div className="flex items-center gap-2">
-            <span
-              aria-hidden
-              className="inline-block size-2.5 rounded-full shrink-0"
-              style={{ backgroundColor: color }}
-            />
-            <span className="font-semibold truncate">{name}</span>
-          </div>
-          {defaultRange && (
-            <div className="text-[11px] text-muted-foreground mt-0.5 tabular-nums" dir="ltr">
-              {defaultRange}
-            </div>
-          )}
+      <div className="min-w-0 flex-1 self-center">
+        <div className="flex items-center gap-2">
+          <span
+            aria-hidden
+            className="inline-block size-2.5 shrink-0 rounded-full"
+            style={{ backgroundColor: color }}
+          />
+          <span className="truncate text-sm font-semibold leading-tight">{name}</span>
         </div>
-        <Users className="size-4 text-muted-foreground shrink-0" />
+        {defaultRange ? (
+          <div className="mt-0.5 text-[11px] tabular-nums text-muted-foreground" dir="ltr">
+            {defaultRange}
+          </div>
+        ) : null}
+        <div className="mt-0.5 text-[11px] text-muted-foreground">{countLabel}</div>
       </div>
-      <div className="mt-3 flex items-baseline gap-1.5">
-        <span className="text-3xl font-bold tabular-nums" style={{ color }}>
+      <div className="flex h-7 w-[4.75rem] shrink-0 items-center justify-end gap-1">
+        <span className="text-2xl font-bold tabular-nums leading-none" style={{ color }}>
           {count}
         </span>
-        <span className="text-xs text-muted-foreground">{countLabel}</span>
+        <Users className="size-3.5 shrink-0 text-muted-foreground" />
       </div>
     </button>
   );

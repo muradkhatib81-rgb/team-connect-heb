@@ -147,15 +147,15 @@ export function ManagementOnShiftCard() {
   const rows = q.data ?? [];
 
   return (
-    <Card className="p-5 border-primary/20 bg-gradient-to-br from-primary/5 via-background to-background shadow-soft">
-      <div className="flex items-start justify-between gap-3 mb-4 flex-wrap">
+    <Card className="border-primary/20 bg-gradient-to-br from-primary/5 via-background to-background p-3 shadow-soft">
+      <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
         <div className="flex items-center gap-2">
-          <div className="size-9 rounded-lg bg-primary/15 text-primary flex items-center justify-center">
-            <ShieldCheck className="size-5" />
+          <div className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-primary/15 text-primary">
+            <ShieldCheck className="size-4" />
           </div>
-          <div>
-            <h2 className="text-base font-bold leading-tight">👔 הנהלה במשמרת</h2>
-            <p className="text-xs text-muted-foreground">
+          <div className="min-w-0">
+            <h2 className="text-sm font-bold leading-tight">הנהלה במשמרת</h2>
+            <p className="text-[11px] leading-snug text-muted-foreground">
               מנהלי הסניף שנמצאים כרגע במשמרת
             </p>
           </div>
@@ -166,28 +166,28 @@ export function ManagementOnShiftCard() {
               <Button
                 variant="destructive"
                 size="sm"
-                className="gap-2"
+                className="h-7 gap-1.5 px-2 text-xs"
                 disabled={endMut.isPending}
                 onClick={() => endMut.mutate()}
               >
                 {endMut.isPending ? (
-                  <Loader2 className="size-4 animate-spin" />
+                  <Loader2 className="size-3.5 animate-spin" />
                 ) : (
-                  <LogOut className="size-4" />
+                  <LogOut className="size-3.5" />
                 )}
                 סיימתי משמרת
               </Button>
             ) : (
               <Button
                 size="sm"
-                className="gap-2"
+                className="h-7 gap-1.5 px-2 text-xs"
                 disabled={startMut.isPending}
                 onClick={() => startMut.mutate()}
               >
                 {startMut.isPending ? (
-                  <Loader2 className="size-4 animate-spin" />
+                  <Loader2 className="size-3.5 animate-spin" />
                 ) : (
-                  <LogIn className="size-4" />
+                  <LogIn className="size-3.5" />
                 )}
                 אני במשמרת
               </Button>
@@ -197,59 +197,57 @@ export function ManagementOnShiftCard() {
       </div>
 
       {q.isLoading ? (
-        <div className="flex items-center justify-center py-8 text-muted-foreground">
-          <Loader2 className="size-5 animate-spin" />
+        <div className="flex items-center justify-center py-4 text-muted-foreground">
+          <Loader2 className="size-4 animate-spin" />
         </div>
       ) : rows.length === 0 ? (
-        <div className="flex flex-col items-center justify-center gap-2 py-10 border border-dashed rounded-xl bg-muted/30">
-          <div className="size-11 rounded-full bg-muted flex items-center justify-center">
-            <ShieldCheck className="size-5 text-muted-foreground" />
-          </div>
-          <p className="text-sm font-medium text-muted-foreground">
+        <div className="flex items-center justify-center gap-2 rounded-lg border border-dashed bg-muted/30 px-3 py-3">
+          <ShieldCheck className="size-4 shrink-0 text-muted-foreground" />
+          <p className="text-xs font-medium text-muted-foreground">
             אין הנהלה במשמרת כרגע
           </p>
         </div>
       ) : (
-        <ul className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+        <ul className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
           {rows.map((r) => (
             <li
               key={r.id}
-              className="relative overflow-hidden rounded-xl border bg-card shadow-sm hover:shadow-md transition-shadow"
+              className="relative overflow-hidden rounded-lg border bg-card"
             >
               <span
                 aria-hidden
-                className="absolute inset-y-0 left-0 w-1.5 bg-gradient-to-b from-red-500 to-red-600"
+                className="absolute inset-y-0 left-0 w-1 bg-gradient-to-b from-red-500 to-red-600"
               />
-              <div className="flex flex-col items-center text-center gap-3 p-5 pl-6">
+              <div className="flex items-center gap-2.5 py-2 pl-3 pr-2.5">
                 <div className="relative shrink-0">
-                  <Avatar className="size-16 ring-2 ring-background shadow-md">
+                  <Avatar className="size-9 ring-1 ring-background">
                     <AvatarImage src={r.avatar_url ?? undefined} alt={r.full_name ?? ""} />
-                    <AvatarFallback className="text-lg font-semibold">
+                    <AvatarFallback className="text-xs font-semibold">
                       {employeeNameInitial({ full_name: r.full_name })}
                     </AvatarFallback>
                   </Avatar>
                   <span
                     aria-label="במשמרת"
-                    className="absolute -bottom-0.5 -right-0.5 size-3.5 rounded-full bg-emerald-500 ring-2 ring-card"
-                  >
-                    <span className="absolute inset-0 rounded-full bg-emerald-500 animate-ping opacity-60" />
-                  </span>
+                    className="absolute -bottom-0.5 -right-0.5 size-2.5 rounded-full bg-emerald-500 ring-2 ring-card"
+                  />
                 </div>
-                <div className="min-w-0 w-full">
-                  <p className="text-xl sm:text-2xl font-extrabold leading-tight tracking-tight text-foreground break-words">
+                <div className="min-w-0 flex-1 text-right">
+                  <p className="truncate text-sm font-bold leading-tight text-foreground">
                     {r.full_name}
                   </p>
-                  <p className="text-sm font-semibold text-red-600 dark:text-red-400 mt-1">
+                  <p className="mt-0.5 truncate text-xs font-semibold text-red-600 dark:text-red-400">
                     {r.job_title ?? (r.role ? (ROLE_LABELS[r.role] ?? r.role) : "הנהלה")}
                   </p>
-                  <div className="flex items-center justify-center gap-1 mt-2 text-[11px] text-muted-foreground">
-                    <CalendarDays className="size-3" />
-                    <span>{dateDMY(r.started_at)}</span>
-                  </div>
-                  <div className="flex items-center justify-center gap-1 mt-0.5 text-[11px] text-muted-foreground">
-                    <Clock className="size-3" />
-                    <span>שעת התחלה: {timeHM(r.started_at)}</span>
-                  </div>
+                  <p className="mt-0.5 flex flex-wrap items-center justify-end gap-x-2 gap-y-0.5 text-[10px] text-muted-foreground">
+                    <span className="inline-flex items-center gap-0.5">
+                      <CalendarDays className="size-2.5" />
+                      {dateDMY(r.started_at)}
+                    </span>
+                    <span className="inline-flex items-center gap-0.5">
+                      <Clock className="size-2.5" />
+                      {timeHM(r.started_at)}
+                    </span>
+                  </p>
                 </div>
               </div>
             </li>
