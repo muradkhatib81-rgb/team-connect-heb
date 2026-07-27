@@ -57,7 +57,12 @@ const DASH_TILE_SUB =
   "mt-0.5 line-clamp-2 min-h-[2rem] text-[11px] leading-snug text-muted-foreground";
 const DASH_TILE_TRAIL =
   "flex h-7 w-[4.75rem] shrink-0 items-center justify-end";
-import { Users, UserCheck, UserX, Building2, Loader2, Plane, ListTodo, Clock, CheckCircle2, AlertTriangle, CalendarDays, User, Coffee, Send, UserPlus, Palmtree } from "lucide-react";
+import { Users, UserCheck, UserX, Building2, Loader2, Plane, ListTodo, Clock, CheckCircle2, AlertTriangle, CalendarDays, User, Coffee, Send, UserPlus, Palmtree, ChevronDown } from "lucide-react";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible";
 import { useLeaveAccess } from "@/lib/leave-permissions";
 import { LEAVE_STATUS_LABEL } from "@/lib/leave.functions";
 import { Link, useNavigate } from "@tanstack/react-router";
@@ -1057,6 +1062,7 @@ function AdminDashboard({
 }) {
   const navigate = useNavigate();
   const [createForDept, setCreateForDept] = useState<DeptRow | null>(null);
+  const [deptsOpen, setDeptsOpen] = useState(false);
   if (loading || !stats) {
     return (
       <div className="flex justify-center py-12">
@@ -1066,8 +1072,12 @@ function AdminDashboard({
   }
   const go = (filter: string) =>
     navigate({ to: "/employees", search: { filter, dept: "all" } as any });
-  const goDept = (id: string) =>
-    navigate({ to: "/employees", search: { filter: "all", dept: id } as any });
+
+  const deptCount = stats.departments.length;
+  const staffInDepts = stats.departments.reduce(
+    (n, d) => n + (stats.byDept[d.id] ?? 0),
+    0,
+  );
 
   return (
     <>
@@ -1079,68 +1089,85 @@ function AdminDashboard({
       </section>
 
       <section>
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="text-lg font-semibold flex items-center gap-2">
-            <Building2 className="size-5 text-primary" />
-            עובדים לפי מחלקה
-          </h2>
-          <Link to="/employees" className="text-sm text-primary hover:underline">
-            לכל העובדים ←
-          </Link>
-        </div>
-        {stats.departments.length === 0 ? (
+        {deptCount === 0 ? (
           <Card className="card-elevated p-6 text-sm text-muted-foreground">
             עדיין לא הוגדרו מחלקות. ניתן להוסיף דרך מסך ניהול המחלקות.
           </Card>
         ) : (
-          <div className={DASH_TILE_GRID}>
-            {stats.departments.map((d) => (
-              <Card
-                key={d.id}
-                className={`${DASH_TILE} cursor-pointer text-right hover:bg-accent/30`}
-                onClick={() => onSelectDept?.(d.id)}
-                role="button"
-                tabIndex={0}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" || e.key === " ") {
-                    e.preventDefault();
-                    onSelectDept?.(d.id);
-                  }
-                }}
-              >
-                <div className="flex h-full w-full items-center justify-between gap-2.5">
-                  <div className="min-w-0 self-center">
-                    <p className={`${DASH_TILE_TITLE} truncate`}>{d.name}</p>
-                    {canViewDepartments && (
-                      <p className="mt-1 truncate text-sm font-bold text-primary">
-                        אחראי המחלקה:{" "}
-                        {departmentManagerNames?.[d.id] ?? "לא מונה"}
+          <Collapsible open={deptsOpen} onOpenChange={setDeptsOpen}>
+            <Card className="card-elevated overflow-hidden">
+              <div className="flex items-stretch gap-1 p-3">
+                <CollapsibleTrigger asChild>
+                  <button
+                    type="button"
+                    className="flex min-w-0 flex-1 items-center gap-2.5 rounded-md text-right outline-none transition-colors hover:bg-accent/30 focus-visible:ring-2 focus-visible:ring-ring"
+                  >
+                    <div className={`${DASH_TILE_ICON} bg-primary/15 text-primary`}>
+                      <Building2 className="size-4" />
+                    </div>
+                    <div className="min-w-0 flex-1 self-center">
+                      <h3 className={DASH_TILE_TITLE}>עובדים לפי מחלקה</h3>
+                      <p className="mt-0.5 text-[11px] leading-snug text-muted-foreground">
+                        {deptCount} מחלקות · {staffInDepts} עובדים
                       </p>
-                    )}
-                    <p className="mt-1 text-xs font-semibold text-muted-foreground">
-                      {stats.byDept[d.id] ?? 0} עובדים
-                    </p>
-                  </div>
-                  {canCreateEmployee && (
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant="outline"
-                      className="h-7 shrink-0 gap-1 px-2 text-xs"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setCreateForDept(d);
-                      }}
-                      title="הוסף עובד למחלקה"
-                    >
-                      <UserPlus className="size-3" />
-                      הוסף
-                    </Button>
-                  )}
-                </div>
-              </Card>
-            ))}
-          </div>
+                    </div>
+                    <div className={DASH_TILE_TRAIL}>
+                      <ChevronDown
+                        className={`size-4 text-muted-foreground transition-transform ${
+                          deptsOpen ? "rotate-180" : ""
+                        }`}
+                      />
+                    </div>
+                  </button>
+                </CollapsibleTrigger>
+                <Link
+                  to="/employees"
+                  className="shrink-0 self-center px-2 text-xs text-primary hover:underline"
+                >
+                  לכל העובדים
+                </Link>
+              </div>
+
+              <CollapsibleContent>
+                <ul className="max-h-[min(60vh,28rem)] divide-y overflow-y-auto border-t">
+                  {stats.departments.map((d) => (
+                    <li key={d.id}>
+                      <div className="flex items-center gap-2 px-3 py-2.5 hover:bg-accent/30">
+                        <button
+                          type="button"
+                          className="min-w-0 flex-1 text-right outline-none"
+                          onClick={() => onSelectDept?.(d.id)}
+                        >
+                          <p className="truncate text-sm font-semibold">{d.name}</p>
+                          {canViewDepartments && (
+                            <p className="mt-0.5 truncate text-xs text-muted-foreground">
+                              אחראי: {departmentManagerNames?.[d.id] ?? "לא מונה"}
+                            </p>
+                          )}
+                          <p className="mt-0.5 text-[11px] font-medium text-muted-foreground">
+                            {stats.byDept[d.id] ?? 0} עובדים
+                          </p>
+                        </button>
+                        {canCreateEmployee && (
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="outline"
+                            className="h-7 shrink-0 gap-1 px-2 text-xs"
+                            onClick={() => setCreateForDept(d)}
+                            title="הוסף עובד למחלקה"
+                          >
+                            <UserPlus className="size-3" />
+                            הוסף
+                          </Button>
+                        )}
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              </CollapsibleContent>
+            </Card>
+          </Collapsible>
         )}
       </section>
 
