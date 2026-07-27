@@ -65,6 +65,31 @@ export type ResolvedScheduleManagerCaps = {
   canPublishDirect: boolean;
 };
 
+/**
+ * Custom shift hours + cell notes: platform owner, branch manager, or
+ * branch-level operators with edit/approve/publish — never dept-head-only.
+ */
+export function canEditScheduleTimes(
+  caps: Pick<
+    ResolvedScheduleManagerCaps,
+    | "isMainAdmin"
+    | "isBranchManager"
+    | "isDeptHeadOnly"
+    | "canEdit"
+    | "canApprove"
+    | "canPublishDirect"
+  >,
+): boolean {
+  if (caps.isDeptHeadOnly) return false;
+  return (
+    caps.isMainAdmin ||
+    caps.isBranchManager ||
+    caps.canEdit ||
+    caps.canApprove ||
+    caps.canPublishDirect
+  );
+}
+
 export function resolveScheduleManagerCaps(
   roles: readonly string[],
   perms?: ScheduleTaskPermissions | null,

@@ -78,6 +78,7 @@ import {
   type ScheduleViewerCaps,
 } from "@/lib/schedule-visibility";
 import {
+  canEditScheduleTimes as resolveCanEditScheduleTimes,
   resolveScheduleManagerCaps,
 } from "@/lib/schedule-manager-caps";
 import { useShiftDefinitions } from "@/lib/use-shift-definitions";
@@ -230,8 +231,9 @@ function SchedulesPage() {
     isBranchMgr || (isAssistantManager && canView);
   const isEmployee = !isMainAdmin && !canViewBranchSchedules && !isDeptMgr;
 
-  const canEditScheduleTimes =
-    isMainAdmin || isBranchManager || canEdit || canApprove || canPublishDirect;
+  const canEditScheduleTimes = resolveCanEditScheduleTimes(managerCaps);
+  /** Exclude-from-schedule: branch/platform operators only — not dept-head-only. */
+  const canManageScheduleExclusion = canEditScheduleTimes;
   /** Dept heads submit for approval only; no standalone draft save. */
   const canSaveScheduleDraft = !isDeptHeadOnly;
   const canSeeScheduleQueues = canApprove || canPublishDirect;
@@ -1171,9 +1173,10 @@ function SchedulesPage() {
     editsDirtyRef.current = true;
     let shift: Shift;
     let leaveType: string | null = null;
-    if (value === "off:regular" || value === "off:sick") {
+    // Schedule editor only offers regular leave; sick comes from employee leave / requests.
+    if (value === "off" || value === "off:regular" || value === "off:sick") {
       shift = "off";
-      leaveType = value === "off:sick" ? "sick" : "regular";
+      leaveType = "regular";
     } else {
       shift = value as Shift;
     }
@@ -1261,10 +1264,9 @@ function SchedulesPage() {
         const onLeave = empRow ? isEmployeeOnLeaveOnDate(empRow, day) : false;
         const leaveCode =
           resolved === "off"
-            ? leaveTypeByCell[`${emp}|${day}`] ??
-              (onLeave ? ((empRow as any)?.leave_type_code as string | null) : null) ??
-              // Manual off without explicit type → regular (matches picker default)
-              "regular"
+            ? onLeave
+              ? (((empRow as any)?.leave_type_code as string | null) ?? "regular")
+              : "regular"
             : null;
         list.push({
           employee_id: emp,
@@ -1326,7 +1328,8 @@ function SchedulesPage() {
       || (visible.status === "approved" && (isMainAdmin || canPublishDirect))
       || (visible.status === "pending_approval" && (isMainAdmin || canApprove || canPublishDirect)));
 
-  const canToggleScheduleExclusion = !isEmployee && !!visible && editable;
+  const canToggleScheduleExclusion =
+    canManageScheduleExclusion && !isEmployee && !!visible && editable;
 
   const canShowApprove =
     !!visible &&
@@ -2271,7 +2274,7 @@ function SchedulesPage() {
                             בחופש
                           </Badge>
                         )}
-                        {canToggleScheduleExclusion && (
+                        {canToggleScheduleExclusion && emp.id !== me?.id && (
                           <Button
                             type="button"
                             variant={emp.excluded_from_schedule ? "secondary" : "ghost"}
@@ -2396,7 +2399,7 @@ function SchedulesPage() {
                             <Select
                               value={
                                 cur === "off"
-                                  ? `off:${cellLeaveType === "sick" ? "sick" : "regular"}`
+                                  ? "off:regular"
                                   : (cur ?? "")
                               }
                               onValueChange={(v) => setShift(emp.id, day, v)}
@@ -2421,13 +2424,6 @@ function SchedulesPage() {
                                           style={{ backgroundColor: s.color }}
                                         />
                                         חופש רגיל
-                                      </SelectItem>,
-                                      <SelectItem key="off:sick" value="off:sick">
-                                        <span
-                                          className="inline-block size-2 rounded-full me-2 align-middle"
-                                          style={{ backgroundColor: s.color }}
-                                        />
-                                        חופש מחלה
                                       </SelectItem>,
                                     ];
                                   }

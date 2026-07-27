@@ -2,7 +2,10 @@ import { createServerFn } from "@tanstack/react-start";
 import { requireBranchContext } from "@/integrations/supabase/active-branch.server";
 import { z } from "zod";
 import { isEmployeeOnLeaveOnDate } from "@/lib/employee-leave";
-import { resolveScheduleManagerCaps } from "@/lib/schedule-manager-caps";
+import {
+  canEditScheduleTimes,
+  resolveScheduleManagerCaps,
+} from "@/lib/schedule-manager-caps";
 import {
   canViewScheduleContent,
   isBranchLevelScheduleViewer,
@@ -28,31 +31,26 @@ async function getCaps(supabase: any, userId: string) {
   };
 }
 
-/** Custom shift hours — platform owner, branch/assistant managers, or granular approve/publish only. */
-function canEditScheduleTimes(caps: {
-  isMainAdmin: boolean;
-  isBranchManager: boolean;
-  canEdit: boolean;
-  canApprove: boolean;
-  canPublishDirect: boolean;
-}) {
-  return (
-    caps.isMainAdmin ||
-    caps.isBranchManager ||
-    caps.canEdit ||
-    caps.canApprove ||
-    caps.canPublishDirect
-  );
-}
-
-function stripShiftCustomTimes<
-  T extends { shift: string; start_time?: string | null; end_time?: string | null },
->(shifts: T[]): T[] {
-  return shifts.map((s) => ({
-    ...s,
-    start_time: null,
-    end_time: null,
-  }));
+/** Manual schedule offs are always regular; sick only from employee leave profile. */
+function normalizeManualOffLeaveTypes<
+  T extends {
+    employee_id: string;
+    day_date: string;
+    shift: string;
+    leave_type_code?: string | null;
+  },
+>(deptEmployees: any[], shifts: T[]): T[] {
+  return shifts.map((s) => {
+    if (s.shift !== "off") return { ...s, leave_type_code: null };
+    const emp = deptEmployees.find((e: any) => e.id === s.employee_id);
+    if (emp && isEmployeeOnLeaveOnDate(emp, s.day_date)) {
+      return {
+        ...s,
+        leave_type_code: emp.leave_type_code ?? s.leave_type_code ?? "regular",
+      };
+    }
+    return { ...s, leave_type_code: "regular" };
+  });
 }
 
 async function getDepartmentScheduleEmployees(supabase: any, departmentId: string) {
@@ -512,18 +510,18 @@ export const saveScheduleShifts = createServerFn({ method: "POST" })
     const schedulableIds = new Set(
       schedulableDepartmentEmployees(deptEmployees).map((e: any) => e.id as string),
     );
-    const shiftsInputRaw = applyEmptyOffToShifts(
-      sched,
+    const shiftsInputRaw = normalizeManualOffLeaveTypes(
       deptEmployees,
-      applyLeaveOffToShifts(
+      applyEmptyOffToShifts(
         sched,
         deptEmployees,
-        data.shifts.filter((s) => schedulableIds.has(s.employee_id)),
+        applyLeaveOffToShifts(
+          sched,
+          deptEmployees,
+          data.shifts.filter((s) => schedulableIds.has(s.employee_id)),
+        ),
       ),
     );
-    const shiftsInput = canEditScheduleTimes(caps)
-      ? shiftsInputRaw
-      : stripShiftCustomTimes(shiftsInputRaw);
 
     // Snapshot existing shifts for change detection + preserve published_shift snapshot
     const { data: existingShifts } = await context.supabase
@@ -532,6 +530,26 @@ export const saveScheduleShifts = createServerFn({ method: "POST" })
         "employee_id, day_date, shift, published_shift, published_note, published_start_time, published_end_time, submitted_shift, submitted_note, submitted_start_time, submitted_end_time, note, start_time, end_time, branch_id",
       )
       .eq("schedule_id", data.schedule_id);
+
+    const canEditTimesAndNotes = canEditScheduleTimes(caps);
+    const timeMap = new Map<string, { start: string | null; end: string | null }>();
+    for (const s of existingShifts ?? []) {
+      timeMap.set(`${s.employee_id}|${s.day_date}`, {
+        start: (s as { start_time?: string | null }).start_time ?? null,
+        end: (s as { end_time?: string | null }).end_time ?? null,
+      });
+    }
+    const shiftsInput = canEditTimesAndNotes
+      ? shiftsInputRaw
+      : shiftsInputRaw.map((s) => {
+          const prev = timeMap.get(`${s.employee_id}|${s.day_date}`);
+          return {
+            ...s,
+            start_time: prev?.start ?? null,
+            end_time: prev?.end ?? null,
+          };
+        });
+
     const beforeSigs = new Set((existingShifts ?? []).map(scheduleCellSaveSignature));
     const afterSigs = new Set(shiftsInput.map(scheduleCellSaveSignature));
     const changed =
@@ -591,7 +609,7 @@ export const saveScheduleShifts = createServerFn({ method: "POST" })
       });
       noteMap.set(key, row.note ?? null);
     }
-    const canEditNotes = canEditScheduleTimes(caps);
+    const canEditNotes = canEditTimesAndNotes;
 
     // Replace all shifts for the schedule (simpler + atomic-ish)
     const { error: delErr } = await context.supabase
@@ -1190,7 +1208,7 @@ export const rejectSchedule = createServerFn({ method: "POST" })
     return { ok: true };
   });
 
-// ---------- Toggle employee schedule exclusion (roles/permissions unchanged) ----------
+// ---------- Toggle employee schedule exclusion (branch/platform operators only) ----------
 export const setEmployeeScheduleExclusion = createServerFn({ method: "POST" })
   .middleware([requireBranchContext])
   .inputValidator((d: unknown) =>
@@ -1204,16 +1222,11 @@ export const setEmployeeScheduleExclusion = createServerFn({ method: "POST" })
   )
   .handler(async ({ data, context }) => {
     const caps = await getCaps(context.supabase, context.userId);
-    if (
-      !(
-        caps.isMainAdmin ||
-        caps.isBranchMgr ||
-        caps.canCreate ||
-        caps.canApprove ||
-        caps.canPublishDirect
-      )
-    ) {
+    if (!canEditScheduleTimes(caps)) {
       throw new Error("אין הרשאה");
+    }
+    if (data.user_id === context.userId) {
+      throw new Error("לא ניתן להחריג את עצמך מהסידור");
     }
 
     const { data: profile, error: pErr } = await context.supabase
@@ -1224,11 +1237,6 @@ export const setEmployeeScheduleExclusion = createServerFn({ method: "POST" })
     if (pErr || !profile) throw new Error("עובד לא נמצא");
     if (context.branchId && profile.branch_id !== context.branchId) {
       throw new Error("עובד לא נמצא בסניף הפעיל");
-    }
-    if (caps.isDeptHeadOnly) {
-      if (profile.department_id !== caps.departmentId) {
-        throw new Error("אין הרשאה לעדכן עובד מחלקה אחרת");
-      }
     }
 
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
