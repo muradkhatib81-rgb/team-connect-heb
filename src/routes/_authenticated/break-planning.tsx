@@ -129,11 +129,11 @@ function BreakPlanningPage() {
     },
   });
 
-  // Department heads may view/edit/end their own breaks, but must not use
-  // multi-row planning (הוסף שורה). They request new breaks via /breaks.
+  // Keep multi-row planning (הוסף שורה) out of employee self-service.
+  // New break requests should be submitted from /breaks.
   const isDeptHeadOnly =
     !!me?.roles.includes("department_manager") && !isAdmin(me.roles);
-  const canPlanBreaks = breakNav.isVisible && !isDeptHeadOnly;
+  const canPlanBreaks = breakNav.isVisible && isAdmin(me.roles);
   const canEditOwnBreaks = breakNav.isVisible;
 
   const rows = todayQ.data ?? [];

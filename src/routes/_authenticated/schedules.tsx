@@ -522,7 +522,28 @@ function SchedulesPage() {
       const rows = await getSchedulesFn({
         data: { week_start: weekStart, department_id: selectedDept! },
       });
-      return (rows ?? [])[0] ?? null;
+      const exact = (rows ?? [])[0] ?? null;
+      if (exact) return exact;
+
+      // Some legacy/edge schedules can overlap the week without matching the
+      // exact week_start key. Keep employee read view from appearing empty when
+      // dashboard already shows a valid published schedule.
+      if (isEmployee) {
+        const { data: overlapRows, error } = await supabase
+          .from("schedules")
+          .select("*")
+          .eq("department_id", selectedDept!)
+          .eq("status", "approved")
+          .not("published_at", "is", null)
+          .lte("week_start", weekEnd)
+          .gte("week_end", weekStart)
+          .order("published_at", { ascending: false })
+          .limit(1);
+        if (error) throw error;
+        return (overlapRows ?? [])[0] ?? null;
+      }
+
+      return null;
     },
   });
 
