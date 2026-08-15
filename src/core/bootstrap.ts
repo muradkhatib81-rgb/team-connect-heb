@@ -158,6 +158,7 @@ for (const flag of [
   { key: "platform.maintenance_mode", enabled: false },
   { key: "platform.global_analytics", enabled: true },
   { key: "platform.beta_billing", enabled: false },
+  { key: "platform.beta_ai", enabled: true },
 ] as const) {
   featureFlagManager.register({
     id: generateUUID(),

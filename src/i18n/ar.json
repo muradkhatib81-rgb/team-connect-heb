@@ -704,6 +704,8 @@
     "monitoring": "المراقبة والتوافر",
     "realtime": "إدارة Real-Time",
     "billing": "الفوترة والاشتراكات",
+    "platformAi": "إدارة AI",
+    "aiAssistant": "مساعد AI",
     "featureFlags": "علامات الميزات",
     "analytics": "التحليلات العامة",
     "platformOwners": "أصحاب النظام",
@@ -716,6 +718,75 @@
     "companyUsers": "مستخدمو الشركة",
     "companyReports": "تقارير الشركة",
     "companySettingsTab": "إعدادات الشركة"
+  },
+  "ai": {
+    "title": "مساعد AI",
+    "subtitle": "اسأل أسئلتك — المساعد يجيب ضمن صلاحياتك وحصتك.",
+    "assistantTitle": {
+      "employee": "مساعد الموظف",
+      "manager": "مساعد تقارير المدير",
+      "platform_owner": "مساعد المنصة"
+    },
+    "remainingMinutes": "متبقي {{count}} د",
+    "emptyChat": "اسأل سؤالك — المساعد يجيب ضمن صلاحياتك.",
+    "thinking": "جاري التفكير…",
+    "inputPlaceholder": "اكتب سؤالك…",
+    "scope": {
+      "company": "شركة",
+      "branch": "فرع",
+      "user": "مستخدم"
+    },
+    "grantSource": {
+      "manual_free": "مجاني (يدوي)",
+      "manual_paid": "مدفوع / يدوي",
+      "billing_plan": "حسب الاشتراك",
+      "platform": "المنصة"
+    },
+    "assistantKind": {
+      "employee": "موظف",
+      "manager": "مدير",
+      "platform_owner": "مالك المنصة"
+    },
+    "defaultProvider": "افتراضي",
+    "unlimited": "بدون حد",
+    "minutesUsed": "{{used}} مستخدم",
+    "minutesPerMonth": "{{count}} د/شهر",
+    "minutesPerMonthUnlimited": "بدون حد · د/شهر",
+    "platformAdmin": {
+      "pageTitle": "إدارة AI",
+      "pageSubtitle": "منح الوصول، المزودون، الاستخدام، والربط بالاشتراك — لمالك المنصة فقط.",
+      "newGrant": "منحة جديدة",
+      "tabs": {
+        "grants": "المنح",
+        "providers": "المزودون",
+        "billing": "خطط الاشتراك",
+        "usage": "الاستخدام",
+        "settings": "الإعدادات"
+      },
+      "noGrants": "لا توجد منح AI",
+      "noUsage": "لا توجد أحداث استخدام",
+      "grantDialogTitle": "منحة AI جديدة",
+      "scopeLabel": "النطاق",
+      "grantSourceLabel": "مصدر المنحة",
+      "planLabel": "الخطة",
+      "providerLabel": "المزود (فارغ = افتراضي)",
+      "minutesLabel": "الدقائق (فارغ = بدون حد)",
+      "defaultProviderSetting": "المزود الافتراضي",
+      "ownerQuotaLabel": "دقائق شهرية لمالك المنصة (فارغ = بدون حد)",
+      "globallyEnabled": "AI مفعّل عالمياً",
+      "selectPlaceholder": "اختر…",
+      "grantSaved": "تم حفظ المنحة",
+      "grantDeleted": "تم حذف المنحة"
+    },
+    "errors": {
+      "noManagePermission": "لا توجد صلاحية لإدارة AI",
+      "noAccess": "لا يوجد وصول لمساعد AI أو انتهت الحصة.",
+      "planNotFound": "لم تُعثر على إعدادات AI لهذه الخطة",
+      "selectScope": "يرجى اختيار النطاق",
+      "billingPlanCompanyOnly": "منح الاشتراك متاحة على مستوى الشركة فقط",
+      "geminiNotConfigured": "مفتاح Gemini غير مُعدّ على الخادم (GEMINI_API_KEY).",
+      "providerNotRegistered": "مزود AI غير مسجّل: {{code}}"
+    }
   },
   "common": {
     "profile": "الملف الشخصي",

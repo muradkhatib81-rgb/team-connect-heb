@@ -704,6 +704,8 @@
     "monitoring": "ניטור וזמינות",
     "realtime": "ניהול Real-Time",
     "billing": "חיוב ומנויים",
+    "platformAi": "ניהול AI",
+    "aiAssistant": "עוזר AI",
     "featureFlags": "דגלי פיצ'רים",
     "analytics": "אנליטיקס גלובלי",
     "platformOwners": "בעלי מערכת",
@@ -716,6 +718,75 @@
     "companyUsers": "משתמשי החברה",
     "companyReports": "דוחות החברה",
     "companySettingsTab": "הגדרות החברה"
+  },
+  "ai": {
+    "title": "עוזר AI",
+    "subtitle": "שאל/י שאלות — העוזר עונה בהתאם להרשאות ולמכסה שלך.",
+    "assistantTitle": {
+      "employee": "עוזר אישי לעובד",
+      "manager": "עוזר דוחות למנהל",
+      "platform_owner": "עוזר בעל הפלטפורמה"
+    },
+    "remainingMinutes": "{{count}} דק׳ נותרו",
+    "emptyChat": "שאל/י שאלה — העוזר עונה בהתאם להרשאות שלך.",
+    "thinking": "חושב…",
+    "inputPlaceholder": "הקלד/י שאלה…",
+    "scope": {
+      "company": "חברה",
+      "branch": "סניף",
+      "user": "משתמש"
+    },
+    "grantSource": {
+      "manual_free": "חינם (ידני)",
+      "manual_paid": "שולם / ידני",
+      "billing_plan": "לפי מנוי",
+      "platform": "פלטפורמה"
+    },
+    "assistantKind": {
+      "employee": "עובד",
+      "manager": "מנהל",
+      "platform_owner": "בעל פלטפורמה"
+    },
+    "defaultProvider": "ברירת מחדל",
+    "unlimited": "ללא הגבלה",
+    "minutesUsed": "{{used}} בשימוש",
+    "minutesPerMonth": "{{count}} דק׳/חודש",
+    "minutesPerMonthUnlimited": "ללא הגבלה · דק׳/חודש",
+    "platformAdmin": {
+      "pageTitle": "ניהול AI",
+      "pageSubtitle": "מנות גישה, ספקים, שימוש וקישור למנוי — בשליטת בעל הפלטפורמה בלבד",
+      "newGrant": "מנה חדשה",
+      "tabs": {
+        "grants": "מנות",
+        "providers": "ספקים",
+        "billing": "תוכניות מנוי",
+        "usage": "שימוש",
+        "settings": "הגדרות"
+      },
+      "noGrants": "אין מנות AI",
+      "noUsage": "אין אירועי שימוש",
+      "grantDialogTitle": "מנת AI חדשה",
+      "scopeLabel": "היקף",
+      "grantSourceLabel": "מקור מנה",
+      "planLabel": "תוכנית",
+      "providerLabel": "ספק (ריק = ברירת מחדל)",
+      "minutesLabel": "דקות (ריק = ללא הגבלה)",
+      "defaultProviderSetting": "ספק ברירת מחדל",
+      "ownerQuotaLabel": "מכסת דקות חודשית לבעל הפלטפורמה (ריק = ללא הגבלה)",
+      "globallyEnabled": "AI פעיל גלובלית",
+      "selectPlaceholder": "בחר…",
+      "grantSaved": "המנה נשמרה",
+      "grantDeleted": "המנה נמחקה"
+    },
+    "errors": {
+      "noManagePermission": "אין הרשאה לנהל AI",
+      "noAccess": "אין גישה לעוזר AI או שהמכסה נגמרה.",
+      "planNotFound": "לא נמצאה הגדרת AI לתוכנית זו",
+      "selectScope": "יש לבחור היקף",
+      "billingPlanCompanyOnly": "מנוי billing_plan רק ברמת חברה",
+      "geminiNotConfigured": "מפתח Gemini לא מוגדר בשרת (GEMINI_API_KEY).",
+      "providerNotRegistered": "ספק AI לא רשום: {{code}}"
+    }
   },
   "common": {
     "profile": "פרופיל",

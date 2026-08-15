@@ -8,6 +8,7 @@
 
 export * as Platform from "./platform";
 export * as Companies from "./companies";
+export * as Ai from "./ai";
 export * as Branches from "./branches";
 export * as Departments from "./departments";
 export * as Employees from "./employees";

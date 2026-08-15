@@ -32,6 +32,7 @@ import {
   Package,
   ClipboardList,
   ChevronDown,
+  Sparkles,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
@@ -63,6 +64,7 @@ import {
   useCurrentPermissions,
 } from "@/lib/use-current-permissions";
 import { fetchCustodyUserCaps } from "@/lib/custody-workflow";
+import { useAiAccess } from "@/lib/use-ai-access";
 
 interface NavItem {
   to: string;
@@ -162,6 +164,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   const breakSelfServiceNav = useBreakSelfServiceNavVisible();
   const { canManageBreaks } = useCanManageBreaks();
   const leaveAccess = useLeaveAccess();
+  const aiAccessQ = useAiAccess();
   const permissionsQ = useCurrentPermissions(profile?.id);
   const custodyCapsQ = useQuery({
     enabled: !!profile?.id,
@@ -291,6 +294,13 @@ export function AppShell({ children }: { children: ReactNode }) {
       section: branchSection,
     },
     {
+      to: "/ai-assistant",
+      label: t("nav.aiAssistant"),
+      icon: Sparkles,
+      visible: !!aiAccessQ.data?.allowed,
+      section: branchSection,
+    },
+    {
       to: canOpenCustodySettings ? "/custody-settings" : "/custody-log",
       label: t("nav.custodySystem"),
       icon: Package,
@@ -394,6 +404,13 @@ export function AppShell({ children }: { children: ReactNode }) {
       to: "/platform/billing",
       label: t("nav.billing"),
       icon: CreditCard,
+      visible: isPlatformOwner,
+      section: t("nav.platformSection"),
+    },
+    {
+      to: "/platform/ai",
+      label: t("nav.platformAi"),
+      icon: Sparkles,
       visible: isPlatformOwner,
       section: t("nav.platformSection"),
     },

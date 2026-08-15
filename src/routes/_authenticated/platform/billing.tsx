@@ -13,6 +13,8 @@ import {
 import { usePlatformContext, useCompanyContext } from "@/platform";
 import type { BillingPlan } from "@/core/managers/billing-manager";
 import type { UUID } from "@/core";
+import { useServerFn } from "@tanstack/react-start";
+import { syncCompanyAiGrantFromBillingPlan } from "@/lib/ai.functions";
 
 export const Route = createFileRoute("/_authenticated/platform/billing")({
   component: PlatformBillingPage,
@@ -37,6 +39,7 @@ function PlatformBillingPage() {
   const { runtime } = usePlatformContext();
   const { companies, isLoading: companiesLoading } = useCompanyContext();
   const qc = useQueryClient();
+  const syncAiGrantFn = useServerFn(syncCompanyAiGrantFromBillingPlan);
 
   const subscriptionQuery = useQuery({
     queryKey: SUBSCRIPTION_QUERY_KEY,
@@ -61,8 +64,14 @@ function PlatformBillingPage() {
   });
 
   const setCompanyPlanMut = useMutation({
-    mutationFn: async ({ companyId, plan }: { companyId: UUID; plan: BillingPlan }) =>
-      runtime.setCompanyBillingPlan(companyId, plan),
+    mutationFn: async ({ companyId, plan }: { companyId: UUID; plan: BillingPlan }) => {
+      runtime.setCompanyBillingPlan(companyId, plan);
+      try {
+        await syncAiGrantFn({ data: { companyId, plan } });
+      } catch {
+        // AI tables may not be migrated yet — billing plan still updates.
+      }
+    },
     onSuccess: () => qc.invalidateQueries({ queryKey: COMPANY_PLANS_QUERY_KEY }),
   });
 

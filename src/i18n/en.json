@@ -704,6 +704,8 @@
     "monitoring": "Monitoring & Availability",
     "realtime": "Real-Time Management",
     "billing": "Billing & Subscriptions",
+    "platformAi": "AI Management",
+    "aiAssistant": "AI Assistant",
     "featureFlags": "Feature Flags",
     "analytics": "Global Analytics",
     "platformOwners": "System Owners",
@@ -716,6 +718,75 @@
     "companyUsers": "Company Users",
     "companyReports": "Company Reports",
     "companySettingsTab": "Company Settings"
+  },
+  "ai": {
+    "title": "AI Assistant",
+    "subtitle": "Ask questions — the assistant answers within your permissions and quota.",
+    "assistantTitle": {
+      "employee": "Employee Assistant",
+      "manager": "Manager Reports Assistant",
+      "platform_owner": "Platform Assistant"
+    },
+    "remainingMinutes": "{{count}} min left",
+    "emptyChat": "Ask a question — the assistant answers within your permissions.",
+    "thinking": "Thinking…",
+    "inputPlaceholder": "Type your question…",
+    "scope": {
+      "company": "Company",
+      "branch": "Branch",
+      "user": "User"
+    },
+    "grantSource": {
+      "manual_free": "Free (manual)",
+      "manual_paid": "Paid / manual",
+      "billing_plan": "Billing plan",
+      "platform": "Platform"
+    },
+    "assistantKind": {
+      "employee": "Employee",
+      "manager": "Manager",
+      "platform_owner": "Platform owner"
+    },
+    "defaultProvider": "Default",
+    "unlimited": "Unlimited",
+    "minutesUsed": "{{used}} used",
+    "minutesPerMonth": "{{count}} min/month",
+    "minutesPerMonthUnlimited": "Unlimited · min/month",
+    "platformAdmin": {
+      "pageTitle": "AI Management",
+      "pageSubtitle": "Grants, providers, usage, and billing — platform owner only.",
+      "newGrant": "New grant",
+      "tabs": {
+        "grants": "Grants",
+        "providers": "Providers",
+        "billing": "Billing plans",
+        "usage": "Usage",
+        "settings": "Settings"
+      },
+      "noGrants": "No AI grants",
+      "noUsage": "No usage events",
+      "grantDialogTitle": "New AI grant",
+      "scopeLabel": "Scope",
+      "grantSourceLabel": "Grant source",
+      "planLabel": "Plan",
+      "providerLabel": "Provider (empty = default)",
+      "minutesLabel": "Minutes (empty = unlimited)",
+      "defaultProviderSetting": "Default provider",
+      "ownerQuotaLabel": "Platform owner monthly minutes (empty = unlimited)",
+      "globallyEnabled": "AI enabled globally",
+      "selectPlaceholder": "Select…",
+      "grantSaved": "Grant saved",
+      "grantDeleted": "Grant deleted"
+    },
+    "errors": {
+      "noManagePermission": "No permission to manage AI",
+      "noAccess": "No AI assistant access or quota exhausted.",
+      "planNotFound": "No AI settings found for this plan",
+      "selectScope": "Please select a scope",
+      "billingPlanCompanyOnly": "Billing plan grants apply to companies only",
+      "geminiNotConfigured": "Gemini API key is not configured on the server (GEMINI_API_KEY).",
+      "providerNotRegistered": "AI provider not registered: {{code}}"
+    }
   },
   "common": {
     "profile": "Profile",
