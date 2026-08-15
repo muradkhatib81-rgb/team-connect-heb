@@ -1206,12 +1206,12 @@ function SchedulesPage() {
       ...prev,
       [`${empId}|${day}`]: leaveType,
     }));
-    if (!canEditScheduleTimes) {
-      setTimeEdits((prev) => ({
-        ...prev,
-        [empId]: { ...(prev[empId] ?? {}), [day]: { start: null, end: null } },
-      }));
-    }
+    // Always reset custom times when shift type changes so the new shift's
+    // default hours take effect instead of carrying over old manual values.
+    setTimeEdits((prev) => ({
+      ...prev,
+      [empId]: { ...(prev[empId] ?? {}), [day]: { start: null, end: null } },
+    }));
   }
 
   function setCellTime(empId: string, day: string, which: "start" | "end", value: string) {
