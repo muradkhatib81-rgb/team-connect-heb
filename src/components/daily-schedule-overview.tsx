@@ -584,27 +584,36 @@ export function DailyScheduleOverview({
                             : "אין עובדים בסידור ליום זה"}
                         </p>
                       ) : (
-                        <ul className="space-y-1.5 ps-1 mt-2">
+                        <ul
+                          className={cn(
+                            "ps-1 mt-2",
+                            displayRows.length > 4
+                              ? "grid grid-cols-2 gap-1"
+                              : "space-y-1.5",
+                          )}
+                        >
                           {displayRows.map((emp) => {
                             const tone = shiftTone(emp.shift);
+                            const compact = displayRows.length > 4;
                             return (
                               <li
                                 key={emp.id}
                                 className={cn(
-                                  "flex flex-wrap items-center justify-between gap-2 rounded-md border px-2 py-1.5",
+                                  "flex items-center justify-between gap-1 rounded-md border",
+                                  compact ? "px-1.5 py-1" : "flex-wrap gap-2 px-2 py-1.5",
                                   tone.row,
                                   emp.isSelf && "ring-2 ring-primary ring-offset-1",
                                   emp.isModified && "ring-2 ring-orange-500",
                                 )}
                               >
-                                <div className="flex items-center gap-2 min-w-0">
+                                <div className="flex items-center gap-1 min-w-0 overflow-hidden">
                                   <Badge
                                     variant="outline"
                                     className={cn("shrink-0 text-[10px]", tone.badge)}
                                   >
                                     {emp.shiftLabel}
                                   </Badge>
-                                  <span className="font-medium text-sm truncate">
+                                  <span className={cn("font-medium truncate", compact ? "text-xs" : "text-sm")}>
                                     {emp.full_name}
                                   </span>
                                   {emp.isSelf && (
@@ -618,7 +627,7 @@ export function DailyScheduleOverview({
                                       aria-label="משמרת עודכנה לאחר פרסום"
                                     />
                                   )}
-                                  {emp.note && (
+                                  {!compact && emp.note && (
                                     <span
                                       className={cn(
                                         "text-[10px] text-red-600 shrink-0 truncate max-w-[4.5rem] font-medium",
@@ -630,7 +639,7 @@ export function DailyScheduleOverview({
                                     </span>
                                   )}
                                 </div>
-                                {emp.timeRange && (
+                                {emp.timeRange && !compact && (
                                   <span
                                     className={cn(
                                       "text-xs text-muted-foreground tabular-nums shrink-0 inline-flex items-center gap-1 rounded px-0.5",
@@ -645,6 +654,14 @@ export function DailyScheduleOverview({
                                         aria-label="שעות עודכנו"
                                       />
                                     )}
+                                  </span>
+                                )}
+                                {emp.timeRange && compact && (
+                                  <span
+                                    className="text-[10px] text-muted-foreground tabular-nums shrink-0"
+                                    dir="ltr"
+                                  >
+                                    {emp.timeRange}
                                   </span>
                                 )}
                               </li>
