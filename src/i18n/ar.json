@@ -776,7 +776,9 @@
       "globallyEnabled": "AI مفعّل عالمياً",
       "selectPlaceholder": "اختر…",
       "grantSaved": "تم حفظ المنحة",
-      "grantDeleted": "تم حذف المنحة"
+      "grantDeleted": "تم حذف المنحة",
+      "dbNotReady": "جداول AI غير مُثبتة بعد على Supabase.",
+      "dbNotReadyHint": "شغّل migration: 20260816003000_ai_assistant_foundation.sql في SQL Editor."
     },
     "errors": {
       "noManagePermission": "لا توجد صلاحية لإدارة AI",

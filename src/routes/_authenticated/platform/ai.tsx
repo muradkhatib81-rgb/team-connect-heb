@@ -137,9 +137,16 @@ function PlatformAiPage() {
   });
 
   const settings = settingsQ.data;
+  const dbNotReady = grantsQ.isError || providersQ.isError;
 
   return (
     <div className="space-y-6">
+      {dbNotReady && (
+        <Card className="border-amber-200 bg-amber-50/80 p-4 text-sm text-amber-900">
+          <p className="font-medium">{t("ai.platformAdmin.dbNotReady")}</p>
+          <p className="mt-1 text-amber-800">{t("ai.platformAdmin.dbNotReadyHint")}</p>
+        </Card>
+      )}
       <header className="flex items-center gap-3">
         <div className="size-11 shrink-0 rounded-xl bg-primary/10 text-primary flex items-center justify-center">
           <Sparkles className="size-6" />

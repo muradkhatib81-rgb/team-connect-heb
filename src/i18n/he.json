@@ -776,7 +776,9 @@
       "globallyEnabled": "AI פעיל גלובלית",
       "selectPlaceholder": "בחר…",
       "grantSaved": "המנה נשמרה",
-      "grantDeleted": "המנה נמחקה"
+      "grantDeleted": "המנה נמחקה",
+      "dbNotReady": "טבלאות AI עדיין לא הותקנו ב-Supabase.",
+      "dbNotReadyHint": "הרץ את migration: 20260816003000_ai_assistant_foundation.sql ב-SQL Editor."
     },
     "errors": {
       "noManagePermission": "אין הרשאה לנהל AI",

@@ -776,7 +776,9 @@
       "globallyEnabled": "AI enabled globally",
       "selectPlaceholder": "Select…",
       "grantSaved": "Grant saved",
-      "grantDeleted": "Grant deleted"
+      "grantDeleted": "Grant deleted",
+      "dbNotReady": "AI tables are not installed on Supabase yet.",
+      "dbNotReadyHint": "Run migration: 20260816003000_ai_assistant_foundation.sql in the SQL Editor."
     },
     "errors": {
       "noManagePermission": "No permission to manage AI",
