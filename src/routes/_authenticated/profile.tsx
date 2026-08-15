@@ -1,10 +1,11 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useAuth } from "@/lib/use-auth";
+import { useQuery } from "@tanstack/react-query";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Loader2, KeyRound, User } from "lucide-react";
+import { Loader2, KeyRound, User, Umbrella } from "lucide-react";
 import { ROLE_LABELS, isPlatformOwner, supportContactInstruction } from "@/lib/constants";
-import { EmployeeOfMonthSection } from "@/components/employee-of-month-section";
+
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Plane } from "lucide-react";
@@ -12,6 +13,7 @@ import {
   formatLeaveDateRange,
   isEmployeeCurrentlyOnLeave,
 } from "@/lib/employee-leave";
+import { supabase } from "@/integrations/supabase/client";
 
 
 export const Route = createFileRoute("/_authenticated/profile")({
@@ -20,6 +22,27 @@ export const Route = createFileRoute("/_authenticated/profile")({
 
 function ProfilePage() {
   const { data: me, isLoading } = useAuth();
+
+  const balancesQ = useQuery({
+    enabled: !!me?.id,
+    queryKey: ["my-leave-balances", me?.id],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("leave_balances")
+        .select("manual_balance, accrued_days, used_days, reserved_days, leave_types(name, code)")
+        .eq("user_id", me!.id);
+      if (error) throw error;
+      return (data ?? []).map((row: any) => ({
+        name: row.leave_types?.name ?? row.leave_types?.code ?? "חופשה",
+        available:
+          (row.manual_balance ?? 0) +
+          (row.accrued_days ?? 0) -
+          (row.used_days ?? 0) -
+          (row.reserved_days ?? 0),
+      }));
+    },
+    staleTime: 60_000,
+  });
 
   if (isLoading || !me) {
     return (
@@ -96,7 +119,35 @@ function ProfilePage() {
         </Button>
       </Card>
 
-      <EmployeeOfMonthSection />
+      <Card className="p-6 space-y-4">
+        <div className="flex items-center gap-2 mb-1">
+          <Umbrella className="size-4 text-primary" />
+          <h2 className="font-semibold text-base">יתרות חופשה</h2>
+        </div>
+        {balancesQ.isLoading ? (
+          <div className="flex justify-center py-4">
+            <Loader2 className="size-5 animate-spin text-primary" />
+          </div>
+        ) : !balancesQ.data?.length ? (
+          <p className="text-sm text-muted-foreground text-center py-2">אין יתרות רשומות</p>
+        ) : (
+          balancesQ.data.map((b) => (
+            <div
+              key={b.name}
+              className="flex items-center justify-between gap-3 border-b border-border/60 pb-3 last:border-0 last:pb-0"
+            >
+              <span className="text-sm text-muted-foreground">{b.name}</span>
+              <span className="text-sm font-semibold tabular-nums">
+                {b.available % 1 === 0
+                  ? b.available.toFixed(0)
+                  : b.available.toFixed(1)}{" "}
+                ימים
+              </span>
+            </div>
+          ))
+        )}
+      </Card>
+
     </div>
   );
 }
