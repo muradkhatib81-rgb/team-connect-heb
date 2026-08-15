@@ -9,6 +9,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { cn } from "@/lib/utils";
 import { formatHeDateTime } from "@/lib/date-format";
 import { markMessageRead } from "@/lib/communications.functions";
+import i18n from "@/i18n";
 
 type Kind = "schedule" | "message";
 
@@ -141,7 +142,7 @@ export function NotificationsBell() {
   return (
     <Popover>
       <PopoverTrigger asChild>
-        <Button variant="ghost" size="icon" className="relative" aria-label="התראות">
+        <Button variant="ghost" size="icon" className="relative" aria-label={i18n.t("common.notifications")}>
           <Bell className="size-5" />
           {unreadCount > 0 && (
             <span className="absolute -top-0.5 -left-0.5 min-w-[18px] h-[18px] px-1 rounded-full bg-destructive text-destructive-foreground text-[10px] font-bold flex items-center justify-center">
@@ -150,22 +151,22 @@ export function NotificationsBell() {
           )}
         </Button>
       </PopoverTrigger>
-      <PopoverContent align="end" className="w-96 p-0" dir="rtl">
+      <PopoverContent align="end" className="w-96 p-0">
         <div className="flex items-center justify-between border-b px-3 py-2">
-          <p className="text-sm font-semibold">מרכז התראות</p>
+          <p className="text-sm font-semibold">{i18n.t("dashboard.notifCenter")}</p>
           {unreadCount > 0 && (
             <button
               type="button"
               onClick={() => markAllRead.mutate()}
               className="text-xs text-primary hover:underline"
             >
-              סמן הכל כנקרא
+              {i18n.t("dashboard.markAllRead")}
             </button>
           )}
         </div>
         <div className="max-h-96 overflow-y-auto">
           {items.length === 0 ? (
-            <p className="text-sm text-muted-foreground text-center py-8">אין התראות חדשות</p>
+            <p className="text-sm text-muted-foreground text-center py-8">{i18n.t("dashboard.noNewNotifs")}</p>
           ) : (
             <ul className="divide-y">
               {items.map((n) => {

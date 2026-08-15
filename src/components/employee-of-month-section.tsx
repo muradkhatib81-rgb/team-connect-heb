@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Trophy, Settings, Loader2, UserRound } from "lucide-react";
 
 import { supabase } from "@/integrations/supabase/client";
+import i18n from "@/i18n";
 import { useCanManageEom } from "@/lib/use-eom-perm";
 import { useActiveBranch } from "@/lib/use-active-branch";
 import { branchScopedFilter } from "@/integrations/supabase/active-branch";
@@ -140,8 +141,9 @@ export function EmployeeOfMonthSection() {
 
   const list = q.data?.list ?? [];
   const count = list.length;
-  const title = count >= 2 ? "🏆 עובדי החודש" : "🏆 עובד החודש";
-  const monthLabel = `${HEBREW_MONTHS[month - 1]} ${year}`;
+  const title = count >= 2 ? i18n.t("dashboard.eomTitlePlural") : i18n.t("dashboard.eomTitle");
+  const months = i18n.t("dashboard.months", { returnObjects: true }) as string[];
+  const monthLabel = `${months[month - 1] ?? HEBREW_MONTHS[month - 1]} ${year}`;
 
   return (
     <section>
@@ -157,7 +159,7 @@ export function EmployeeOfMonthSection() {
           <Button asChild size="sm" variant="outline" className="shrink-0">
             <Link to="/employee-of-month">
               <Settings className="size-4" />
-              ניהול
+              {i18n.t("dashboard.manage")}
             </Link>
           </Button>
         )}
@@ -177,10 +179,10 @@ export function EmployeeOfMonthSection() {
           <div className="flex justify-center mb-2">
             <Trophy className="size-5 text-amber-500" />
           </div>
-          <h3 className="font-bold text-base">🏆 עובד החודש</h3>
-          <p className="text-sm text-muted-foreground mt-2">טרם נבחר עובד החודש.</p>
+          <h3 className="font-bold text-base">{i18n.t("dashboard.eomTitle")}</h3>
+          <p className="text-sm text-muted-foreground mt-2">{i18n.t("dashboard.eomNotSelected")}</p>
           {canManage && (
-            <p className="text-xs text-muted-foreground mt-1">לחץ על "ניהול" כדי לבחור.</p>
+            <p className="text-xs text-muted-foreground mt-1">{i18n.t("dashboard.eomClickManage")}</p>
           )}
         </Card>
 

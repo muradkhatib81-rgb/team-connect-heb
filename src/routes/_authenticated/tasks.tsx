@@ -6,6 +6,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/use-auth";
 import { isAdmin, isPlatformOwner, type AppRole } from "@/lib/constants";
 import { isNonEmployeeIdentity } from "@/lib/employee-identity";
+import i18n from "@/i18n";
 import {
   createTask,
   updateTask,
@@ -130,19 +131,45 @@ interface DeptOption { id: string; name: string }
 interface EmpOption { id: string; full_name: string; department_id: string | null; branch_id?: string | null }
 
 const STATUS_LABEL: Record<TaskStatus, string> = {
-  new: "חדש",
-  in_progress: "בביצוע",
-  pending_approval: "ממתין לאישור אחראי מחלקה",
-  pending_closure: "ממתין לסגירה",
-  completed: "הושלמה",
-  closed: "נסגרה",
+  new: i18n.t("tasks.statusNew"),
+  in_progress: i18n.t("tasks.statusInProgress"),
+  pending_approval: i18n.t("tasks.statusPendingApproval"),
+  pending_closure: i18n.t("tasks.statusPendingClosure"),
+  completed: i18n.t("tasks.statusCompleted"),
+  closed: i18n.t("tasks.statusClosed"),
 };
+function getStatusLabel(s: string): string {
+  const map: Record<string, string> = {
+    new: "tasks.statusNew",
+    in_progress: "tasks.statusInProgress",
+    pending_approval: "tasks.statusPendingApproval",
+    pending_closure: "tasks.statusPendingClosure",
+    completed: "tasks.statusCompleted",
+    closed: "tasks.statusClosed",
+  };
+  return i18n.t(map[s] ?? s);
+}
 const PRIORITY_LABEL: Record<TaskPriority, string> = {
-  low: "נמוכה",
-  medium: "בינונית",
-  high: "גבוהה",
+  low: i18n.t("tasks.priorityLow"),
+  medium: i18n.t("tasks.priorityMedium"),
+  high: i18n.t("tasks.priorityHigh"),
 };
-const FREQ_LABEL = { daily: "יומי", weekly: "שבועי", monthly: "חודשי" } as const;
+function getPriorityLabel(p: string): string {
+  const map: Record<string, string> = {
+    low: "tasks.priorityLow",
+    medium: "tasks.priorityMedium",
+    high: "tasks.priorityHigh",
+  };
+  return i18n.t(map[p] ?? p);
+}
+function getFreqLabel(f: string): string {
+  const map: Record<string, string> = {
+    daily: "tasks.freqDaily",
+    weekly: "tasks.freqWeekly",
+    monthly: "tasks.freqMonthly",
+  };
+  return i18n.t(map[f] ?? f);
+}
 const DOW_LABELS = ["א'", "ב'", "ג'", "ד'", "ה'", "ו'", "ש'"];
 
 interface TasksSearch { status?: string; due?: string }
@@ -267,14 +294,14 @@ function TasksPage() {
     <div className="space-y-6">
       <header className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="text-2xl sm:text-3xl font-bold">משימות</h1>
+          <h1 className="text-2xl sm:text-3xl font-bold">{i18n.t("tasks.title")}</h1>
           <p className="text-sm text-muted-foreground mt-1">
-            ניהול ומעקב משימות לעובדי הסניף
+            {i18n.t("tasks.subtitle")}
           </p>
         </div>
         {canCreateAny && (
           <Button onClick={() => setOpenCreate(true)} className="gap-2">
-            <Plus className="size-4" /> משימה חדשה
+            <Plus className="size-4" /> {i18n.t("tasks.newTask")}
           </Button>
         )}
       </header>
@@ -283,18 +310,18 @@ function TasksPage() {
         <TabsList>
           <TabsTrigger value="tasks" className="gap-2">
             <ListTodo className="size-4" />
-            משימות
+            {i18n.t("tasks.tabTasks")}
           </TabsTrigger>
           <TabsTrigger value="recurring" className="gap-2">
             <Repeat className="size-4" />
-            משימות חוזרות
+            {i18n.t("tasks.tabRecurring")}
           </TabsTrigger>
         </TabsList>
 
         <TabsContent value="tasks" className="space-y-4 mt-4">
           <div className="flex flex-wrap items-center gap-3">
             <Input
-              placeholder="חיפוש לפי כותרת או תיאור"
+              placeholder={i18n.t("tasks.searchPlaceholder")}
               value={search2}
               onChange={(e) => setSearch2(e.target.value)}
               className="max-w-xs"
@@ -304,14 +331,14 @@ function TasksPage() {
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">הכול</SelectItem>
-                <SelectItem value="new">חדש</SelectItem>
-                <SelectItem value="in_progress">בביצוע</SelectItem>
-                <SelectItem value="pending_approval">ממתין לאישור אחראי מחלקה</SelectItem>
-                <SelectItem value="pending_closure">ממתין לסגירה</SelectItem>
-                <SelectItem value="completed">הושלמה</SelectItem>
-                <SelectItem value="closed">נסגרה (ארכיון)</SelectItem>
-                <SelectItem value="overdue">באיחור</SelectItem>
+                <SelectItem value="all">{i18n.t("tasks.filterAll")}</SelectItem>
+                <SelectItem value="new">{i18n.t("tasks.filterNew")}</SelectItem>
+                <SelectItem value="in_progress">{i18n.t("tasks.filterInProgress")}</SelectItem>
+                <SelectItem value="pending_approval">{i18n.t("tasks.filterPendingApproval")}</SelectItem>
+                <SelectItem value="pending_closure">{i18n.t("tasks.filterPendingClosure")}</SelectItem>
+                <SelectItem value="completed">{i18n.t("tasks.filterCompleted")}</SelectItem>
+                <SelectItem value="closed">{i18n.t("tasks.filterClosed")}</SelectItem>
+                <SelectItem value="overdue">{i18n.t("tasks.filterOverdue")}</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -322,7 +349,7 @@ function TasksPage() {
             </div>
           ) : filtered.length === 0 ? (
             <Card className="card-elevated p-6 text-sm text-muted-foreground text-center">
-              אין משימות להצגה
+              {i18n.t("tasks.noTasks")}
             </Card>
           ) : (
             <div className="space-y-3">
@@ -400,36 +427,36 @@ function TaskCard({
             <div className="flex items-center gap-2 flex-wrap">
               <h3 className="font-semibold truncate">{task.title}</h3>
               <Badge variant={priorityVariant(task.priority)} className="rounded-full text-xs">
-                {PRIORITY_LABEL[task.priority]}
+                {getPriorityLabel(task.priority)}
               </Badge>
               <Badge variant={statusVariant(task.status)} className="rounded-full text-xs">
-                {STATUS_LABEL[task.status]}
+                {getStatusLabel(task.status)}
               </Badge>
               {overdue && (
                 <Badge variant="destructive" className="rounded-full text-xs gap-1">
-                  <AlertTriangle className="size-3" /> באיחור
+                  <AlertTriangle className="size-3" /> {i18n.t("tasks.overdue")}
                 </Badge>
               )}
               {task.recurrence_id && (
                 <Badge variant="outline" className="rounded-full text-xs gap-1">
-                  <Repeat className="size-3" /> חוזרת
+                  <Repeat className="size-3" /> {i18n.t("tasks.recurring")}
                 </Badge>
               )}
             </div>
             <div className="text-xs text-muted-foreground mt-1.5 flex flex-wrap gap-x-3 gap-y-1">
-              {dept && <span>מחלקה: {dept.name}</span>}
+              {dept && <span>{i18n.t("tasks.dept")} {dept.name}</span>}
               {task.due_at && (
                 <span className="flex items-center gap-1">
                   <Clock className="size-3" />
-                  יעד: {formatHeDateTime(task.due_at)}
+                  {i18n.t("tasks.due")} {formatHeDateTime(task.due_at)}
                 </span>
               )}
-              {completedBy && <span>בוצע ע״י: {completedBy.full_name}</span>}
+              {completedBy && <span>{i18n.t("tasks.completedBy")} {completedBy.full_name}</span>}
             </div>
           </div>
           <div className="flex items-center gap-1 shrink-0" onClick={(e) => e.stopPropagation()}>
             {canEdit && (
-              <Button variant="ghost" size="icon" onClick={onEdit} aria-label="עריכה">
+              <Button variant="ghost" size="icon" onClick={onEdit} aria-label={i18n.t("tasks.editAriaLabel")}>
                 <Pencil className="size-4" />
               </Button>
             )}
@@ -478,11 +505,11 @@ function DeleteTaskBtn({
   const m = useMutation({
     mutationFn: () => del({ data: { id } }),
     onSuccess: () => {
-      toast.success("המשימה נמחקה");
+      toast.success(i18n.t("tasks.taskDeleted"));
       qc.invalidateQueries({ queryKey: ["tasks"] });
       onDeleted?.();
     },
-    onError: (e: any) => toast.error(e?.message ?? "שגיאה במחיקה"),
+    onError: (e: any) => toast.error(e?.message ?? i18n.t("tasks.deleteError")),
   });
   return (
     <>
@@ -500,7 +527,7 @@ function DeleteTaskBtn({
           variant="ghost"
           size="icon"
           onClick={() => setOpen(true)}
-          aria-label="מחיקה"
+          aria-label={i18n.t("tasks.deleteAriaLabel")}
           className="text-destructive"
         >
           <Trash2 className="size-4" />
@@ -509,12 +536,12 @@ function DeleteTaskBtn({
       <AlertDialog open={open} onOpenChange={setOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>למחוק את המשימה?</AlertDialogTitle>
-            <AlertDialogDescription>פעולה זו לא ניתנת לביטול.</AlertDialogDescription>
+            <AlertDialogTitle>{i18n.t("tasks.deleteConfirmTitle")}</AlertDialogTitle>
+            <AlertDialogDescription>{i18n.t("tasks.deleteConfirmDesc")}</AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>ביטול</AlertDialogCancel>
-            <AlertDialogAction onClick={() => m.mutate()}>מחק</AlertDialogAction>
+            <AlertDialogCancel>{i18n.t("tasks.cancel")}</AlertDialogCancel>
+            <AlertDialogAction onClick={() => m.mutate()}>{i18n.t("tasks.delete")}</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
@@ -568,8 +595,8 @@ function TaskDetailDialog({
   const canApprove = !!approveRpc.data;
   const canMarkDone = canExecute;
   const submitLabel = task.requires_approval
-    ? "סיימתי - שלח לאישור"
-    : "סיימתי - סגור משימה";
+    ? i18n.t("tasks.submitDoneApproval")
+    : i18n.t("tasks.submitDoneClose");
 
   const [employeeNote, setEmployeeNote] = useState(task.employee_note ?? "");
   const [rejectNote, setRejectNote] = useState("");
@@ -578,53 +605,53 @@ function TaskDetailDialog({
   const startProgress = useMutation({
     mutationFn: () => upd({ data: { id: task.id, status: "in_progress" } }),
     onSuccess: () => {
-      toast.success("המשימה הועברה לביצוע");
+      toast.success(i18n.t("tasks.taskMovedToProgress"));
       qc.invalidateQueries({ queryKey: ["tasks"] });
     },
-    onError: (e: any) => toast.error(e?.message ?? "שגיאה"),
+    onError: (e: any) => toast.error(e?.message ?? i18n.t("tasks.genericError")),
   });
 
   const submitDone = useMutation({
     mutationFn: () =>
       markPending({ data: { id: task.id, employee_note: employeeNote || undefined } }),
     onSuccess: () => {
-      toast.success("נשלח לאישור");
+      toast.success(i18n.t("tasks.sentForApproval"));
       qc.invalidateQueries({ queryKey: ["tasks"] });
       onClose();
     },
-    onError: (e: any) => toast.error(e?.message ?? "שגיאה"),
+    onError: (e: any) => toast.error(e?.message ?? i18n.t("tasks.genericError")),
   });
 
   const approveM = useMutation({
     mutationFn: () => approve({ data: { id: task.id } }),
     onSuccess: () => {
-      toast.success("המשימה אושרה");
+      toast.success(i18n.t("tasks.taskApproved"));
       qc.invalidateQueries({ queryKey: ["tasks"] });
       onClose();
     },
-    onError: (e: any) => toast.error(e?.message ?? "שגיאה"),
+    onError: (e: any) => toast.error(e?.message ?? i18n.t("tasks.genericError")),
   });
 
   const rejectM = useMutation({
     mutationFn: () =>
       reject({ data: { id: task.id, rejection_note: rejectNote || undefined } }),
     onSuccess: () => {
-      toast.success("המשימה הוחזרה לביצוע");
+      toast.success(i18n.t("tasks.taskReturnedToProgress"));
       qc.invalidateQueries({ queryKey: ["tasks"] });
       onClose();
     },
-    onError: (e: any) => toast.error(e?.message ?? "שגיאה"),
+    onError: (e: any) => toast.error(e?.message ?? i18n.t("tasks.genericError")),
   });
 
 
   const closeM = useMutation({
     mutationFn: () => close({ data: { id: task.id } }),
     onSuccess: () => {
-      toast.success("המשימה נסגרה והועברה לארכיון");
+      toast.success(i18n.t("tasks.taskClosed"));
       qc.invalidateQueries({ queryKey: ["tasks"] });
       onClose();
     },
-    onError: (e: any) => toast.error(e?.message ?? "שגיאה בסגירה"),
+    onError: (e: any) => toast.error(e?.message ?? i18n.t("tasks.closeError")),
   });
 
   const dept = deps?.departments.find((d) => d.id === task.department_id);
@@ -639,69 +666,69 @@ function TaskDetailDialog({
           <DialogTitle className="flex items-center gap-2 flex-wrap">
             {task.title}
             <Badge variant={statusVariant(task.status)} className="rounded-full text-xs">
-              {STATUS_LABEL[task.status]}
+              {getStatusLabel(task.status)}
             </Badge>
           </DialogTitle>
         </DialogHeader>
         <div className="space-y-4">
           {task.description && (
             <div>
-              <Label className="text-xs text-muted-foreground">תיאור</Label>
+              <Label className="text-xs text-muted-foreground">{i18n.t("tasks.description")}</Label>
               <p className="text-sm whitespace-pre-wrap mt-1">{task.description}</p>
             </div>
           )}
           <div className="grid grid-cols-2 gap-3 text-sm">
             <div>
-              <Label className="text-xs text-muted-foreground">מחלקה</Label>
+              <Label className="text-xs text-muted-foreground">{i18n.t("tasks.deptLabel")}</Label>
               <p>{dept?.name ?? "—"}</p>
             </div>
             <div>
-              <Label className="text-xs text-muted-foreground">עדיפות</Label>
-              <p>{PRIORITY_LABEL[task.priority]}</p>
+              <Label className="text-xs text-muted-foreground">{i18n.t("tasks.priority")}</Label>
+              <p>{getPriorityLabel(task.priority)}</p>
             </div>
             <div>
-              <Label className="text-xs text-muted-foreground">תאריך יצירה</Label>
+              <Label className="text-xs text-muted-foreground">{i18n.t("tasks.createdAt")}</Label>
               <p>{formatHeDateTime(task.created_at)}</p>
             </div>
             {task.due_at && (
               <div>
-                <Label className="text-xs text-muted-foreground">תאריך יעד</Label>
+                <Label className="text-xs text-muted-foreground">{i18n.t("tasks.dueAt")}</Label>
                 <p>{formatHeDateTime(task.due_at)}</p>
               </div>
             )}
             {task.completed_at && (
               <div>
-                <Label className="text-xs text-muted-foreground">סומן כבוצע</Label>
+                <Label className="text-xs text-muted-foreground">{i18n.t("tasks.completedAt")}</Label>
                 <p>{formatHeDateTime(task.completed_at)}</p>
               </div>
             )}
             {completedBy && (
               <div>
-                <Label className="text-xs text-muted-foreground">בוצע ע״י</Label>
+                <Label className="text-xs text-muted-foreground">{i18n.t("tasks.completedByLabel")}</Label>
                 <p>{completedBy.full_name}</p>
               </div>
             )}
             {task.approved_at && (
               <div>
-                <Label className="text-xs text-muted-foreground">אושר בתאריך</Label>
+                <Label className="text-xs text-muted-foreground">{i18n.t("tasks.approvedAt")}</Label>
                 <p>{formatHeDateTime(task.approved_at)}</p>
               </div>
             )}
             {approvedBy && (
               <div>
-                <Label className="text-xs text-muted-foreground">אושר ע״י</Label>
+                <Label className="text-xs text-muted-foreground">{i18n.t("tasks.approvedBy")}</Label>
                 <p>{approvedBy.full_name}</p>
               </div>
             )}
             {(task as any).closed_at && (
               <div>
-                <Label className="text-xs text-muted-foreground">נסגרה בתאריך</Label>
+                <Label className="text-xs text-muted-foreground">{i18n.t("tasks.closedAt")}</Label>
                 <p>{formatHeDateTime((task as any).closed_at)}</p>
               </div>
             )}
             {closedBy && (
               <div>
-                <Label className="text-xs text-muted-foreground">נסגרה ע״י</Label>
+                <Label className="text-xs text-muted-foreground">{i18n.t("tasks.closedBy")}</Label>
                 <p>{closedBy.full_name}</p>
               </div>
             )}
@@ -709,14 +736,14 @@ function TaskDetailDialog({
 
           {task.employee_note && (
             <div className="border-t pt-3">
-              <Label className="text-xs text-muted-foreground">הערת מבצע</Label>
+              <Label className="text-xs text-muted-foreground">{i18n.t("tasks.executorNote")}</Label>
               <p className="text-sm whitespace-pre-wrap mt-1">{task.employee_note}</p>
             </div>
           )}
 
           {task.rejection_note && (
             <div className="border-t pt-3">
-              <Label className="text-xs text-destructive">הוחזר עם הערה</Label>
+              <Label className="text-xs text-destructive">{i18n.t("tasks.rejectedNote")}</Label>
               <p className="text-sm whitespace-pre-wrap mt-1">{task.rejection_note}</p>
               {task.rejected_at && (
                 <p className="text-xs text-muted-foreground mt-1">
@@ -729,15 +756,15 @@ function TaskDetailDialog({
           {/* Mark-done input area: visible to dept members while task is active */}
           {canMarkDone && (
             <div className="border-t pt-4 space-y-3">
-              <Label>הערה על הביצוע (לא חובה)</Label>
+              <Label>{i18n.t("tasks.executionNoteLabel")}</Label>
               <Textarea
                 value={employeeNote}
                 onChange={(e) => setEmployeeNote(e.target.value)}
                 rows={3}
-                placeholder="פרט/י מה בוצע..."
+                placeholder={i18n.t("tasks.executionNotePlaceholder")}
               />
               <Label className="text-xs text-muted-foreground">
-                ניתן לצרף עד 5 תמונות כהוכחת ביצוע
+                {i18n.t("tasks.attachInfo")}
               </Label>
               <TaskImagesSection
                 taskId={task.id}
@@ -758,7 +785,7 @@ function TaskDetailDialog({
                   taskId={task.id}
                   canEdit={false}
                   userId={caps.profile?.id}
-                  title="תמונות המשימה"
+                  title={i18n.t("tasks.taskImages")}
                 />
               </div>
             )}
@@ -768,12 +795,12 @@ function TaskDetailDialog({
             <div className="border-t pt-4 space-y-3">
               {showReject ? (
                 <>
-                  <Label>הערה להחזרה</Label>
+                  <Label>{i18n.t("tasks.rejectNoteLabel")}</Label>
                   <Textarea
                     value={rejectNote}
                     onChange={(e) => setRejectNote(e.target.value)}
                     rows={3}
-                    placeholder="מדוע יש לבצע שוב?"
+                    placeholder={i18n.t("tasks.rejectNotePlaceholder")}
                   />
                   <div className="flex gap-2">
                     <Button
@@ -782,10 +809,10 @@ function TaskDetailDialog({
                       disabled={rejectM.isPending}
                     >
                       {rejectM.isPending && <Loader2 className="size-4 animate-spin ml-2" />}
-                      החזר לביצוע
+                      {i18n.t("tasks.returnToProgress")}
                     </Button>
                     <Button variant="outline" onClick={() => setShowReject(false)}>
-                      ביטול
+                      {i18n.t("tasks.cancel")}
                     </Button>
                   </div>
                 </>
@@ -796,10 +823,10 @@ function TaskDetailDialog({
                     disabled={approveM.isPending}
                   >
                     {approveM.isPending && <Loader2 className="size-4 animate-spin ml-2" />}
-                    אשר השלמה
+                    {i18n.t("tasks.approveCompletion")}
                   </Button>
                   <Button variant="outline" onClick={() => setShowReject(true)}>
-                    החזר לביצוע
+                    {i18n.t("tasks.returnToProgress")}
                   </Button>
                 </div>
               )}
@@ -810,9 +837,9 @@ function TaskDetailDialog({
           </div>
         </div>
         <DialogFooter className="gap-2 flex-wrap">
-          <Button variant="outline" onClick={onClose}>סגירה</Button>
+          <Button variant="outline" onClick={onClose}>{i18n.t("tasks.close")}</Button>
           {caps.canDeleteTasks && (caps.isOwner || canEditTaskContent(task, caps.profile?.id ?? "")) && (
-            <DeleteTaskBtn id={task.id} label="מחק משימה" onDeleted={onClose} />
+            <DeleteTaskBtn id={task.id} label={i18n.t("tasks.deleteTask")} onDeleted={onClose} />
           )}
           {canMarkDone && task.status === "new" && (
             <Button
@@ -820,7 +847,7 @@ function TaskDetailDialog({
               onClick={() => startProgress.mutate()}
               disabled={startProgress.isPending}
             >
-              התחל בביצוע
+              {i18n.t("tasks.startProgress")}
             </Button>
           )}
           {canMarkDone && (
@@ -836,7 +863,7 @@ function TaskDetailDialog({
               disabled={closeM.isPending}
             >
               {closeM.isPending && <Loader2 className="size-4 animate-spin ml-2" />}
-              סגור משימה
+              {i18n.t("tasks.closeTask")}
             </Button>
           )}
         </DialogFooter>
@@ -851,7 +878,7 @@ function TaskImagesSection({
   taskId,
   canEdit,
   userId,
-  title = "תמונות",
+  title = i18n.t("tasks.images"),
 }: {
   taskId: string;
   canEdit: boolean;
@@ -887,9 +914,9 @@ function TaskImagesSection({
 
   const upload = useMutation({
     mutationFn: async (file: File) => {
-      if (!userId) throw new Error("חסר משתמש");
+      if (!userId) throw new Error(i18n.t("tasks.missingUser"));
       if ((imagesQuery.data?.length ?? 0) >= 5)
-        throw new Error("ניתן להעלות עד 5 תמונות לכל משימה");
+        throw new Error(i18n.t("tasks.maxImagesTask"));
       const ext = file.name.split(".").pop() || "jpg";
       const path = `${userId}/${taskId}/${crypto.randomUUID()}.${ext}`;
       const { error } = await supabase.storage.from("task-images").upload(path, file);
@@ -897,16 +924,16 @@ function TaskImagesSection({
       await add({ data: { task_id: taskId, storage_path: path } });
     },
     onSuccess: () => {
-      toast.success("תמונה נוספה");
+      toast.success(i18n.t("tasks.imageAdded"));
       qc.invalidateQueries({ queryKey: ["task-images", taskId] });
     },
-    onError: (e: any) => toast.error(e?.message ?? "שגיאה בהעלאה"),
+    onError: (e: any) => toast.error(e?.message ?? i18n.t("tasks.uploadError")),
   });
 
   const remove = useMutation({
     mutationFn: (id: string) => del({ data: { id } }),
     onSuccess: () => {
-      toast.success("נמחק");
+      toast.success(i18n.t("tasks.imageDeleted"));
       qc.invalidateQueries({ queryKey: ["task-images", taskId] });
     },
   });
@@ -940,7 +967,7 @@ function TaskImagesSection({
               className="gap-2"
             >
               {upload.isPending ? <Loader2 className="size-4 animate-spin" /> : <ImagePlus className="size-4" />}
-              הוסף תמונה
+              {i18n.t("tasks.addImage")}
             </Button>
           </>
         )}
@@ -964,7 +991,7 @@ function TaskImagesSection({
                   type="button"
                   onClick={() => remove.mutate(img.id)}
                   className="absolute top-1 left-1 bg-destructive text-destructive-foreground rounded-full p-1"
-                  aria-label="מחק תמונה"
+                  aria-label={i18n.t("tasks.deleteImageAriaLabel")}
                 >
                   <X className="size-3" />
                 </button>
@@ -1022,9 +1049,9 @@ function RecurrenceImagesSection({
 
   const upload = useMutation({
     mutationFn: async (file: File) => {
-      if (!userId) throw new Error("חסר משתמש");
+      if (!userId) throw new Error(i18n.t("tasks.missingUser"));
       if ((imagesQuery.data?.length ?? 0) >= 5)
-        throw new Error("ניתן להעלות עד 5 תמונות הסבר");
+        throw new Error(i18n.t("tasks.maxImagesInstr"));
       const ext = file.name.split(".").pop() || "jpg";
       const path = `${userId}/recurrences/${recurrenceId}/${crypto.randomUUID()}.${ext}`;
       const { error } = await supabase.storage.from("task-images").upload(path, file);
@@ -1034,7 +1061,7 @@ function RecurrenceImagesSection({
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["rec-images", recurrenceId] });
     },
-    onError: (e: any) => toast.error(e?.message ?? "שגיאה בהעלאה"),
+    onError: (e: any) => toast.error(e?.message ?? i18n.t("tasks.uploadError")),
   });
 
   const remove = useMutation({
@@ -1049,7 +1076,7 @@ function RecurrenceImagesSection({
   return (
     <div className="space-y-2">
       <div className="flex items-center justify-between">
-        <Label>תמונות הסבר ({imagesQuery.data?.length ?? 0}/5)</Label>
+        <Label>{i18n.t("tasks.instrImages")} ({imagesQuery.data?.length ?? 0}/5)</Label>
         {canEdit && (imagesQuery.data?.length ?? 0) < 5 && (
           <>
             <input
@@ -1071,7 +1098,7 @@ function RecurrenceImagesSection({
               className="gap-2"
             >
               {upload.isPending ? <Loader2 className="size-4 animate-spin" /> : <ImagePlus className="size-4" />}
-              הוסף תמונה
+              {i18n.t("tasks.addImage")}
             </Button>
           </>
         )}
@@ -1092,7 +1119,7 @@ function RecurrenceImagesSection({
                 type="button"
                 onClick={() => remove.mutate(img.id)}
                 className="absolute top-1 left-1 bg-destructive text-destructive-foreground rounded-full p-1"
-                aria-label="מחק תמונה"
+                aria-label={i18n.t("tasks.deleteImageAriaLabel")}
               >
                 <X className="size-3" />
               </button>
@@ -1127,7 +1154,7 @@ function StagedImagesPicker({
   return (
     <div className="space-y-2">
       <div className="flex items-center justify-between">
-        <Label>תמונות הסבר ({files.length}/{max})</Label>
+        <Label>{i18n.t("tasks.instrImages")} ({files.length}/{max})</Label>
         {files.length < max && (
           <>
             <input
@@ -1139,7 +1166,7 @@ function StagedImagesPicker({
                 const f = e.target.files?.[0];
                 if (!f) return;
                 if (f.size > 10 * 1024 * 1024) {
-                  toast.error("קובץ גדול מדי (עד 10MB)");
+                  toast.error(i18n.t("tasks.fileTooLarge"));
                   return;
                 }
                 onChange([...files, f]);
@@ -1153,7 +1180,7 @@ function StagedImagesPicker({
               className="gap-2"
               onClick={() => fileRef.current?.click()}
             >
-              <ImagePlus className="size-4" /> הוסף תמונה
+              <ImagePlus className="size-4" /> {i18n.t("tasks.addImage")}
             </Button>
           </>
         )}
@@ -1172,7 +1199,7 @@ function StagedImagesPicker({
                 type="button"
                 onClick={() => onChange(files.filter((_, i) => i !== idx))}
                 className="absolute top-1 left-1 bg-destructive text-destructive-foreground rounded-full p-1"
-                aria-label="הסר"
+                aria-label={i18n.t("tasks.removeAriaLabel")}
               >
                 <X className="size-3" />
               </button>
@@ -1277,12 +1304,12 @@ function TaskFormDialog({
 
   const submit = useMutation({
     mutationFn: async () => {
-      if (!title.trim()) throw new Error("כותרת חובה");
+      if (!title.trim()) throw new Error(i18n.t("tasks.titleRequired"));
       if (
         targetScope === "single_department" &&
         !departmentId
       ) {
-        throw new Error("לא נמצאה מחלקה — ודא שהפרופיל שלך משויך למחלקה");
+        throw new Error(i18n.t("tasks.noDeptError"));
       }
       const dueIso = dueDate && dueTime ? combineToIso(dueDate, dueTime) : null;
       const basePayload: any = {
@@ -1311,7 +1338,7 @@ function TaskFormDialog({
               if (upErr) throw upErr;
               await addImg({ data: { task_id: newId, storage_path: path } });
             } catch (e: any) {
-              toast.error(`שגיאה בהעלאת תמונה: ${e?.message ?? ""}`);
+              toast.error(`${i18n.t("tasks.imageUploadError")} ${e?.message ?? ""}`);
             }
           }
         }
@@ -1320,47 +1347,47 @@ function TaskFormDialog({
       }
     },
     onSuccess: () => {
-      toast.success(mode === "create" ? "משימה נוצרה" : "המשימה עודכנה");
+      toast.success(mode === "create" ? i18n.t("tasks.taskCreated") : i18n.t("tasks.taskUpdated"));
       qc.invalidateQueries({ queryKey: ["tasks"] });
       onClose();
     },
-    onError: (e: any) => toast.error(e?.message ?? "שגיאה"),
+    onError: (e: any) => toast.error(e?.message ?? i18n.t("tasks.genericError")),
   });
 
   return (
     <Dialog open onOpenChange={(v) => !v && onClose()}>
       <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>{mode === "create" ? "משימה חדשה" : "עריכת משימה"}</DialogTitle>
+          <DialogTitle>{mode === "create" ? i18n.t("tasks.dialogCreateTitle") : i18n.t("tasks.dialogEditTitle")}</DialogTitle>
         </DialogHeader>
         <div className="space-y-3">
           <div>
-            <Label>כותרת</Label>
+            <Label>{i18n.t("tasks.formTitle")}</Label>
             <Input value={title} onChange={(e) => setTitle(e.target.value)} />
           </div>
           <div>
-            <Label>תיאור</Label>
+            <Label>{i18n.t("tasks.formDesc")}</Label>
             <Textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={3} />
           </div>
           {canPickAnyDept && (
             <div>
-              <Label>יעד המשימה</Label>
+              <Label>{i18n.t("tasks.formTarget")}</Label>
               <Select
                 value={targetScope}
                 onValueChange={(v) => setTargetScope(v as any)}
               >
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all_departments">🌍 כל המחלקות</SelectItem>
-                  <SelectItem value="departments">📂 מספר מחלקות</SelectItem>
-                  <SelectItem value="single_department">📁 מחלקה אחת</SelectItem>
+                  <SelectItem value="all_departments">{i18n.t("tasks.targetAll")}</SelectItem>
+                  <SelectItem value="departments">{i18n.t("tasks.targetMultiple")}</SelectItem>
+                  <SelectItem value="single_department">{i18n.t("tasks.targetSingle")}</SelectItem>
                 </SelectContent>
               </Select>
             </div>
           )}
           {targetScope === "single_department" && (
             <div>
-              <Label>מחלקה</Label>
+              <Label>{i18n.t("tasks.formDept")}</Label>
               {canPickAnyDept ? (
                 <Select value={departmentId} onValueChange={(v) => setDepartmentId(v)}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
@@ -1379,7 +1406,7 @@ function TaskFormDialog({
           )}
           {targetScope === "departments" && (
             <div>
-              <Label>מחלקות (בחירה מרובה)</Label>
+              <Label>{i18n.t("tasks.formMultiDept")}</Label>
               <div className="flex flex-wrap gap-2 p-2 border rounded-md max-h-40 overflow-y-auto">
                 {allowedDepartments.map((d) => {
                   const on = departmentIds.includes(d.id);
@@ -1406,21 +1433,21 @@ function TaskFormDialog({
             </div>
           )}
           <div>
-            <Label>ביצוע המשימה על ידי</Label>
+            <Label>{i18n.t("tasks.formExecutor")}</Label>
             <Select value={executorMode} onValueChange={(v) => setExecutorMode(v as any)}>
               <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">כל עובדי המחלקה</SelectItem>
-                <SelectItem value="single">עובד אחד</SelectItem>
-                <SelectItem value="multi">מספר עובדים</SelectItem>
+                <SelectItem value="all">{i18n.t("tasks.executorAll")}</SelectItem>
+                <SelectItem value="single">{i18n.t("tasks.executorSingle")}</SelectItem>
+                <SelectItem value="multi">{i18n.t("tasks.executorMulti")}</SelectItem>
               </SelectContent>
             </Select>
           </div>
           {executorMode === "single" && (
             <div>
-              <Label>עובד מבצע</Label>
+              <Label>{i18n.t("tasks.formSingleAssignee")}</Label>
               <Select value={singleAssignee} onValueChange={setSingleAssignee}>
-                <SelectTrigger><SelectValue placeholder="בחר עובד" /></SelectTrigger>
+                <SelectTrigger><SelectValue placeholder={i18n.t("tasks.selectEmployee")} /></SelectTrigger>
                 <SelectContent>
                   {eligibleEmployees.map((e) => (
                     <SelectItem key={e.id} value={e.id}>{e.full_name}</SelectItem>
@@ -1431,10 +1458,10 @@ function TaskFormDialog({
           )}
           {executorMode === "multi" && (
             <div>
-              <Label>עובדים מבצעים (בחירה מרובה)</Label>
+              <Label>{i18n.t("tasks.formMultiAssignee")}</Label>
               <div className="flex flex-wrap gap-2 p-2 border rounded-md max-h-40 overflow-y-auto">
                 {eligibleEmployees.length === 0 && (
-                  <span className="text-xs text-muted-foreground">בחר תחילה מחלקות</span>
+                  <span className="text-xs text-muted-foreground">{i18n.t("tasks.selectDeptFirst")}</span>
                 )}
                 {eligibleEmployees.map((e) => {
                   const on = assigneeIds.includes(e.id);
@@ -1467,32 +1494,32 @@ function TaskFormDialog({
               onChange={(e) => setRequiresApproval(e.target.checked)}
               className="size-4"
             />
-            נדרש אישור מנהל לאחר השלמת המשימה
+            {i18n.t("tasks.requiresApproval")}
           </label>
           <div className="grid grid-cols-3 gap-3">
             <div>
-              <Label>תאריך יעד</Label>
+              <Label>{i18n.t("tasks.formDueDate")}</Label>
               <HebrewDateInput value={dueDate} onChange={setDueDate} />
             </div>
             <div>
-              <Label>שעה</Label>
+              <Label>{i18n.t("tasks.formTime")}</Label>
               <HebrewTimeInput value={dueTime || "08:00"} onChange={setDueTime} />
             </div>
             <div>
-              <Label>עדיפות</Label>
+              <Label>{i18n.t("tasks.formPriority")}</Label>
               <Select value={priority} onValueChange={(v) => setPriority(v as TaskPriority)}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="low">נמוכה</SelectItem>
-                  <SelectItem value="medium">בינונית</SelectItem>
-                  <SelectItem value="high">גבוהה</SelectItem>
+                  <SelectItem value="low">{i18n.t("tasks.priorityLow")}</SelectItem>
+                  <SelectItem value="medium">{i18n.t("tasks.priorityMedium")}</SelectItem>
+                  <SelectItem value="high">{i18n.t("tasks.priorityHigh")}</SelectItem>
                 </SelectContent>
               </Select>
             </div>
           </div>
           {dueDate && dueTime && (
             <p className="text-xs text-muted-foreground">
-              תצוגה: {formatHeDateTime(combineToIso(dueDate, dueTime))}
+              {i18n.t("tasks.displayDate")} {formatHeDateTime(combineToIso(dueDate, dueTime))}
             </p>
           )}
           <div className="border-t pt-3">
@@ -1503,13 +1530,13 @@ function TaskFormDialog({
                 taskId={task.id}
                 canEdit={true}
                 userId={caps.profile?.id}
-                title="תמונות הסבר"
+                title={i18n.t("tasks.instrImages")}
               />
             ) : null}
           </div>
         </div>
         <DialogFooter>
-          <Button variant="outline" onClick={onClose}>ביטול</Button>
+          <Button variant="outline" onClick={onClose}>{i18n.t("tasks.cancelBtn")}</Button>
           <Button
             onClick={() => submit.mutate()}
             disabled={
@@ -1522,7 +1549,7 @@ function TaskFormDialog({
             }
           >
             {submit.isPending && <Loader2 className="size-4 animate-spin ml-2" />}
-            {mode === "create" ? "צור" : "עדכן"}
+            {mode === "create" ? i18n.t("tasks.createBtn") : i18n.t("tasks.updateBtn")}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -1566,10 +1593,10 @@ function RecurringSection({
   const remove = useMutation({
     mutationFn: (id: string) => del({ data: { id } }),
     onSuccess: () => {
-      toast.success("נמחק");
+      toast.success(i18n.t("tasks.recurringDeleted"));
       qc.invalidateQueries({ queryKey: ["recurrences"] });
     },
-    onError: (e: any) => toast.error(e?.message ?? "שגיאה"),
+    onError: (e: any) => toast.error(e?.message ?? i18n.t("tasks.genericError")),
   });
 
   const canCreate = caps.canManageTasks || caps.isDeptMgr;
@@ -1579,7 +1606,7 @@ function RecurringSection({
       {canCreate && (
         <div className="flex justify-end">
           <Button onClick={() => setOpenCreate(true)} className="gap-2">
-            <Plus className="size-4" /> משימה חוזרת חדשה
+            <Plus className="size-4" /> {i18n.t("tasks.newRecurring")}
           </Button>
         </div>
       )}
@@ -1589,7 +1616,7 @@ function RecurringSection({
         </div>
       ) : !recsQuery.data?.length ? (
         <Card className="card-elevated p-6 text-sm text-muted-foreground text-center">
-          אין משימות חוזרות
+          {i18n.t("tasks.noRecurring")}
         </Card>
       ) : (
         recsQuery.data.map((r) => {
@@ -1601,23 +1628,23 @@ function RecurringSection({
                   <div className="flex items-center gap-2 flex-wrap">
                     <h3 className="font-semibold truncate">{r.title}</h3>
                     <Badge variant="outline" className="rounded-full text-xs">
-                      {FREQ_LABEL[r.frequency]}
+                      {getFreqLabel(r.frequency)}
                     </Badge>
                     {!r.is_active && (
-                      <Badge variant="secondary" className="rounded-full text-xs">מושהה</Badge>
+                      <Badge variant="secondary" className="rounded-full text-xs">{i18n.t("tasks.suspended")}</Badge>
                     )}
                   </div>
                   <div className="text-xs text-muted-foreground mt-1.5 flex flex-wrap gap-x-3 gap-y-1">
-                    {dept && <span>מחלקה: {dept.name}</span>}
-                    <span>שעה: {r.time_of_day}</span>
+                    {dept && <span>{i18n.t("tasks.dept")} {dept.name}</span>}
+                    <span>{i18n.t("tasks.time")} {r.time_of_day}</span>
                     {r.frequency === "weekly" && r.days_of_week.length > 0 && (
-                      <span>ימים: {r.days_of_week.map((d) => DOW_LABELS[d]).join(", ")}</span>
+                      <span>{i18n.t("tasks.days")} {r.days_of_week.map((d) => DOW_LABELS[d]).join(", ")}</span>
                     )}
                     {r.frequency === "monthly" && r.day_of_month && (
-                      <span>יום בחודש: {r.day_of_month}</span>
+                      <span>{i18n.t("tasks.dayOfMonth")} {r.day_of_month}</span>
                     )}
                     {r.next_run_at && (
-                      <span>ריצה הבאה: {formatHeDateTime(r.next_run_at)}</span>
+                      <span>{i18n.t("tasks.nextRun")} {formatHeDateTime(r.next_run_at)}</span>
                     )}
                   </div>
                 </div>
@@ -1627,18 +1654,18 @@ function RecurringSection({
                       variant="ghost"
                       size="icon"
                       onClick={() => toggle.mutate(r)}
-                      aria-label={r.is_active ? "השהה" : "הפעל"}
+                      aria-label={r.is_active ? i18n.t("tasks.pauseAriaLabel") : i18n.t("tasks.resumeAriaLabel")}
                     >
                       {r.is_active ? <Pause className="size-4" /> : <Play className="size-4" />}
                     </Button>
-                    <Button variant="ghost" size="icon" onClick={() => setEdit(r)} aria-label="עריכה">
+                    <Button variant="ghost" size="icon" onClick={() => setEdit(r)} aria-label={i18n.t("tasks.editAriaLabel")}>
                       <Pencil className="size-4" />
                     </Button>
                     <Button
                       variant="ghost"
                       size="icon"
                       onClick={() => remove.mutate(r.id)}
-                      aria-label="מחיקה"
+                      aria-label={i18n.t("tasks.deleteAriaLabel")}
                       className="text-destructive"
                     >
                       <Trash2 className="size-4" />
@@ -1734,18 +1761,18 @@ function RecurrenceFormDialog({
               if (upErr) throw upErr;
               await addRecImg({ data: { recurrence_id: newId, storage_path: path } });
             } catch (e: any) {
-              toast.error(`שגיאה בהעלאת תמונה: ${e?.message ?? ""}`);
+              toast.error(`${i18n.t("tasks.imageUploadError")} ${e?.message ?? ""}`);
             }
           }
         }
       } else if (rec) await update({ data: { id: rec.id, ...payload } });
     },
     onSuccess: () => {
-      toast.success(mode === "create" ? "משימה חוזרת נוצרה" : "עודכן");
+      toast.success(mode === "create" ? i18n.t("tasks.recurringCreated") : i18n.t("tasks.recurringUpdated"));
       qc.invalidateQueries({ queryKey: ["recurrences"] });
       onClose();
     },
-    onError: (e: any) => toast.error(e?.message ?? "שגיאה"),
+    onError: (e: any) => toast.error(e?.message ?? i18n.t("tasks.genericError")),
   });
 
   function toggleDow(d: number) {
@@ -1757,20 +1784,20 @@ function RecurrenceFormDialog({
       <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>
-            {mode === "create" ? "משימה חוזרת חדשה" : "עריכת משימה חוזרת"}
+            {mode === "create" ? i18n.t("tasks.recurringCreateTitle") : i18n.t("tasks.recurringEditTitle")}
           </DialogTitle>
         </DialogHeader>
         <div className="space-y-3">
           <div>
-            <Label>כותרת</Label>
+            <Label>{i18n.t("tasks.formTitle")}</Label>
             <Input value={title} onChange={(e) => setTitle(e.target.value)} />
           </div>
           <div>
-            <Label>תיאור</Label>
+            <Label>{i18n.t("tasks.formDesc")}</Label>
             <Textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={2} />
           </div>
           <div>
-            <Label>מחלקה</Label>
+            <Label>{i18n.t("tasks.formDept")}</Label>
             {canPickAnyDept ? (
               <Select value={departmentId} onValueChange={(v) => setDepartmentId(v)}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
@@ -1786,36 +1813,36 @@ function RecurrenceFormDialog({
               </div>
             )}
             <p className="text-xs text-muted-foreground mt-1">
-              המשימה תייוצר עבור כל עובדי המחלקה
+              {i18n.t("tasks.recurringDeptNote")}
             </p>
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <Label>עדיפות</Label>
+              <Label>{i18n.t("tasks.formPriority")}</Label>
               <Select value={priority} onValueChange={(v) => setPriority(v as TaskPriority)}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="low">נמוכה</SelectItem>
-                  <SelectItem value="medium">בינונית</SelectItem>
-                  <SelectItem value="high">גבוהה</SelectItem>
+                  <SelectItem value="low">{i18n.t("tasks.priorityLow")}</SelectItem>
+                  <SelectItem value="medium">{i18n.t("tasks.priorityMedium")}</SelectItem>
+                  <SelectItem value="high">{i18n.t("tasks.priorityHigh")}</SelectItem>
                 </SelectContent>
               </Select>
             </div>
             <div>
-              <Label>תדירות</Label>
+              <Label>{i18n.t("tasks.formFrequency")}</Label>
               <Select value={frequency} onValueChange={(v) => setFrequency(v as RecRow["frequency"])}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="daily">יומי</SelectItem>
-                  <SelectItem value="weekly">שבועי</SelectItem>
-                  <SelectItem value="monthly">חודשי</SelectItem>
+                  <SelectItem value="daily">{i18n.t("tasks.freqDaily")}</SelectItem>
+                  <SelectItem value="weekly">{i18n.t("tasks.freqWeekly")}</SelectItem>
+                  <SelectItem value="monthly">{i18n.t("tasks.freqMonthly")}</SelectItem>
                 </SelectContent>
               </Select>
             </div>
           </div>
           {frequency === "weekly" && (
             <div>
-              <Label>ימים בשבוע</Label>
+              <Label>{i18n.t("tasks.formWeekdays")}</Label>
               <div className="flex gap-2 mt-2 flex-wrap">
                 {DOW_LABELS.map((lbl, i) => (
                   <Button
@@ -1833,7 +1860,7 @@ function RecurrenceFormDialog({
           )}
           {frequency === "monthly" && (
             <div>
-              <Label>יום בחודש (1-28)</Label>
+              <Label>{i18n.t("tasks.formDayOfMonth")}</Label>
               <Input
                 type="number"
                 min={1}
@@ -1845,12 +1872,12 @@ function RecurrenceFormDialog({
           )}
           <div className="grid grid-cols-2 gap-3 items-end">
             <div>
-              <Label>שעה</Label>
+              <Label>{i18n.t("tasks.formTime")}</Label>
               <HebrewTimeInput value={time || "08:00"} onChange={setTime} />
             </div>
           <div className="flex items-center gap-2">
               <Switch checked={active} onCheckedChange={setActive} />
-              <Label>פעיל</Label>
+              <Label>{i18n.t("tasks.formActive")}</Label>
             </div>
           </div>
           <div className="border-t pt-3">
@@ -1866,13 +1893,13 @@ function RecurrenceFormDialog({
           </div>
         </div>
         <DialogFooter>
-          <Button variant="outline" onClick={onClose}>ביטול</Button>
+          <Button variant="outline" onClick={onClose}>{i18n.t("tasks.cancelBtn")}</Button>
           <Button
             onClick={() => submit.mutate()}
             disabled={!title.trim() || !departmentId || submit.isPending}
           >
             {submit.isPending && <Loader2 className="size-4 animate-spin ml-2" />}
-            שמירה
+            {i18n.t("tasks.saveBtn")}
           </Button>
         </DialogFooter>
       </DialogContent>

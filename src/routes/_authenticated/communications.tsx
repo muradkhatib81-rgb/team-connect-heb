@@ -8,6 +8,7 @@ import { isNonEmployeeIdentity } from "@/lib/employee-identity";
 import { Card } from "@/components/ui/card";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
+import i18n from "@/i18n";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
@@ -87,12 +88,15 @@ export const Route = createFileRoute("/_authenticated/communications")({
 });
 
 // ---------------- Shared helpers ----------------
-const PRIORITY_LABEL: Record<CommPriority, string> = {
-  low: "נמוכה",
-  normal: "רגילה",
-  high: "גבוהה",
-  urgent: "דחופה",
-};
+function getPriorityLabel(p: string): string {
+  const map: Record<string, string> = {
+    low: "comm.priorityLow",
+    normal: "comm.priorityNormal",
+    high: "comm.priorityHigh",
+    urgent: "comm.priorityUrgent",
+  };
+  return i18n.t(map[p] ?? p);
+}
 const PRIORITY_CLASS: Record<CommPriority, string> = {
   low: "bg-muted text-foreground",
   normal: "bg-sky-100 text-sky-900",
@@ -101,7 +105,7 @@ const PRIORITY_CLASS: Record<CommPriority, string> = {
 };
 
 function PriorityBadge({ p }: { p: CommPriority }) {
-  return <Badge className={cn("border-0", PRIORITY_CLASS[p])}>{PRIORITY_LABEL[p]}</Badge>;
+  return <Badge className={cn("border-0", PRIORITY_CLASS[p])}>{getPriorityLabel(p)}</Badge>;
 }
 
 interface PermsRow {
@@ -208,14 +212,14 @@ function CommunicationsPage() {
       <header className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold flex items-center gap-2">
-            <Megaphone className="size-6 text-primary" /> מרכז תקשורת
+            <Megaphone className="size-6 text-primary" /> {i18n.t("comm.title")}
           </h1>
-          <p className="text-sm text-muted-foreground">הודעות פנימיות וארכיון</p>
+          <p className="text-sm text-muted-foreground">{i18n.t("comm.subtitle")}</p>
         </div>
         <div className="flex gap-2">
           {canSendMsg && (
             <Button onClick={() => setComposeOpen(true)} className="gap-2">
-              <PenSquare className="size-4" /> הודעה חדשה
+              <PenSquare className="size-4" /> {i18n.t("comm.newMessage")}
             </Button>
           )}
         </div>
@@ -224,15 +228,15 @@ function CommunicationsPage() {
       <Tabs value={canSeeSent ? tab : tab === "sent" ? "inbox" : tab} onValueChange={setTab}>
         <TabsList className={`grid ${canSeeSent ? "grid-cols-3" : "grid-cols-2"} w-full`}>
           <TabsTrigger value="inbox" className="gap-1.5">
-            <Inbox className="size-4" /> דואר נכנס
+            <Inbox className="size-4" /> {i18n.t("comm.tabInbox")}
           </TabsTrigger>
           {canSeeSent && (
             <TabsTrigger value="sent" className="gap-1.5">
-              <Send className="size-4" /> שנשלחו
+              <Send className="size-4" /> {i18n.t("comm.tabSent")}
             </TabsTrigger>
           )}
           <TabsTrigger value="archive" className="gap-1.5">
-            <Archive className="size-4" /> ארכיון
+            <Archive className="size-4" /> {i18n.t("comm.tabArchive")}
           </TabsTrigger>
         </TabsList>
 
@@ -357,7 +361,7 @@ function InboxTab({
         <div className="relative flex-1 min-w-[220px]">
           <Search className="absolute right-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
           <Input
-            placeholder="חיפוש..."
+            placeholder={i18n.t("comm.searchPlaceholder")}
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             className="pr-9"
@@ -368,9 +372,9 @@ function InboxTab({
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="all">הכל</SelectItem>
-            <SelectItem value="unread">לא נקראו</SelectItem>
-            <SelectItem value="important">חשובות/דחופות</SelectItem>
+            <SelectItem value="all">{i18n.t("comm.filterAll")}</SelectItem>
+            <SelectItem value="unread">{i18n.t("comm.filterUnread")}</SelectItem>
+            <SelectItem value="important">{i18n.t("comm.filterImportant")}</SelectItem>
           </SelectContent>
         </Select>
       </div>
@@ -378,7 +382,7 @@ function InboxTab({
       {q.isLoading ? (
         <Loader2 className="mx-auto size-5 animate-spin text-muted-foreground" />
       ) : filtered.length === 0 ? (
-        <Card className="p-8 text-center text-sm text-muted-foreground">אין הודעות להצגה</Card>
+        <Card className="p-8 text-center text-sm text-muted-foreground">{i18n.t("comm.noMessages")}</Card>
       ) : (
         <div className="space-y-2">
           {filtered.map((r) => (
@@ -398,12 +402,12 @@ function InboxTab({
                   <PriorityBadge p={r.message.priority} />
                   {r.message.requires_acknowledgment && (
                     <Badge variant="outline" className="gap-1 text-xs">
-                      <AlertCircle className="size-3" /> נדרש אישור
+                      <AlertCircle className="size-3" /> {i18n.t("comm.requiresAck")}
                     </Badge>
                   )}
                   {r.acknowledged_at && (
                     <Badge className="bg-emerald-100 text-emerald-900 border-0 gap-1 text-xs">
-                      <CheckCheck className="size-3" /> אושר
+                      <CheckCheck className="size-3" /> {i18n.t("comm.acknowledged")}
                     </Badge>
                   )}
                 </div>
@@ -477,12 +481,12 @@ function SentTab({
     <div className="space-y-6">
       <section className="space-y-2">
         <h3 className="text-sm font-semibold text-muted-foreground flex items-center gap-1.5">
-          <Send className="size-4" /> הודעות שנשלחו
+          <Send className="size-4" /> {i18n.t("comm.sentHeader")}
         </h3>
         {q.isLoading ? (
           <Loader2 className="mx-auto size-5 animate-spin text-muted-foreground" />
         ) : (q.data ?? []).length === 0 ? (
-          <Card className="p-6 text-center text-sm text-muted-foreground">לא שלחת הודעות עדיין</Card>
+          <Card className="p-6 text-center text-sm text-muted-foreground">{i18n.t("comm.noSent")}</Card>
         ) : (
           (q.data ?? []).map((m: any) => {
             const pct = m.stats.total ? Math.round((m.stats.read / m.stats.total) * 100) : 0;
@@ -499,18 +503,18 @@ function SentTab({
                       <PriorityBadge p={m.priority} />
                       {m.edited_at && (
                         <Badge variant="outline" className="gap-1 text-[10px]">
-                          <Pencil className="size-3" /> נערך
+                          <Pencil className="size-3" /> {i18n.t("comm.edited")}
                         </Badge>
                       )}
                     </div>
                     <p className="text-xs text-muted-foreground mt-0.5">
-                      נשלח {formatHeDateTime(m.created_at)}
-                      {m.edited_at && ` · עודכן ${formatHeDateTime(m.edited_at)}`}
+                      {i18n.t("comm.sentAt")} {formatHeDateTime(m.created_at)}
+                      {m.edited_at && ` · ${i18n.t("comm.updatedAt")} ${formatHeDateTime(m.edited_at)}`}
                     </p>
                   </div>
                   <div className="text-xs text-muted-foreground text-left">
-                    <div>{m.stats.read}/{m.stats.total} קראו ({pct}%)</div>
-                    {m.requires_acknowledgment && <div>{m.stats.ack}/{m.stats.total} אישרו</div>}
+                    <div>{i18n.t("comm.readStats").replace("{read}", m.stats.read).replace("{total}", m.stats.total).replace("{pct}", String(pct))}</div>
+                    {m.requires_acknowledgment && <div>{i18n.t("comm.ackStats").replace("{ack}", m.stats.ack).replace("{total}", m.stats.total)}</div>}
                   </div>
                 </div>
               </Card>
@@ -566,9 +570,9 @@ function ArchiveTab({ userId, canDelete }: { userId: string; canDelete: boolean 
   return (
     <div className="space-y-6">
       <section>
-        <h3 className="text-sm font-semibold mb-2 text-muted-foreground">הודעות בארכיון</h3>
+        <h3 className="text-sm font-semibold mb-2 text-muted-foreground">{i18n.t("comm.archiveTitle")}</h3>
         {(msgsQ.data ?? []).length === 0 ? (
-          <Card className="p-6 text-center text-sm text-muted-foreground">ריק</Card>
+          <Card className="p-6 text-center text-sm text-muted-foreground">{i18n.t("comm.archiveEmpty")}</Card>
         ) : (
           <div className="space-y-2">
             {(msgsQ.data ?? []).map((r: any) => (
@@ -576,7 +580,7 @@ function ArchiveTab({ userId, canDelete }: { userId: string; canDelete: boolean 
                 <div className="min-w-0">
                   <p className="text-sm font-medium truncate">{r.message.title}</p>
                   <p className="text-xs text-muted-foreground">
-                    בוטל ב-{formatHeDateTime(r.archived_at)}
+                    {i18n.t("comm.archivedAt")}{formatHeDateTime(r.archived_at)}
                   </p>
                 </div>
                 <div className="flex gap-1">
@@ -586,7 +590,7 @@ function ArchiveTab({ userId, canDelete }: { userId: string; canDelete: boolean 
                     onClick={() => restoreMsg.mutate(r.message_id)}
                     className="gap-1.5"
                   >
-                    <RotateCcw className="size-4" /> שחזר
+                    <RotateCcw className="size-4" /> {i18n.t("comm.restore")}
                   </Button>
                   {canDelete && (
                     <Button
@@ -594,7 +598,7 @@ function ArchiveTab({ userId, canDelete }: { userId: string; canDelete: boolean 
                       variant="ghost"
                       className="text-destructive gap-1.5"
                       onClick={() => {
-                        if (confirm("למחוק לצמיתות?")) delMsg.mutate(r.message_id);
+                        if (confirm(i18n.t("comm.deletePermConfirm"))) delMsg.mutate(r.message_id);
                       }}
                     >
                       <Trash2 className="size-4" />
@@ -693,15 +697,15 @@ function MessageDetailDialog({
   const ackMut = useMutation({
     mutationFn: () => acknowledgeMessage(messageId),
     onSuccess: () => {
-      toast.success("האישור נשמר");
+      toast.success(i18n.t("comm.ackSaved"));
       qc.invalidateQueries({ queryKey: ["comm"] });
     },
-    onError: (e: any) => toast.error(e?.message ?? "שגיאה"),
+    onError: (e: any) => toast.error(e?.message ?? i18n.t("comm.genericError")),
   });
   const archMut = useMutation({
     mutationFn: () => archiveMessage(messageId, true),
     onSuccess: () => {
-      toast.success("הועבר לארכיון");
+      toast.success(i18n.t("comm.movedToArchive"));
       qc.invalidateQueries({ queryKey: ["comm"] });
       onClose();
     },
@@ -709,11 +713,11 @@ function MessageDetailDialog({
   const permDelMut = useMutation({
     mutationFn: () => permanentDeleteMessage(messageId),
     onSuccess: () => {
-      toast.success("נמחק לצמיתות");
+      toast.success(i18n.t("comm.deletedPermanently"));
       qc.invalidateQueries({ queryKey: ["comm"] });
       onClose();
     },
-    onError: (e: any) => toast.error(e?.message ?? "שגיאה במחיקה"),
+    onError: (e: any) => toast.error(e?.message ?? i18n.t("comm.deleteError")),
   });
 
   const [editOpen, setEditOpen] = useState(false);
@@ -730,13 +734,13 @@ function MessageDetailDialog({
         ) : d.missing ? (
           <>
             <DialogHeader>
-              <DialogTitle>הפריט אינו קיים עוד.</DialogTitle>
+              <DialogTitle>{i18n.t("comm.itemNotFound")}</DialogTitle>
               <DialogDescription>
-                הודעה זו נמחקה או אינה זמינה. ההתראה הישנה הוסרה מהמערכת.
+                {i18n.t("comm.itemNotFoundDesc")}
               </DialogDescription>
             </DialogHeader>
             <DialogFooter>
-              <Button onClick={onClose}>סגור</Button>
+              <Button onClick={onClose}>{i18n.t("comm.close")}</Button>
             </DialogFooter>
           </>
         ) : (
@@ -747,12 +751,12 @@ function MessageDetailDialog({
                 <PriorityBadge p={d.msg.priority} />
                 {d.msg.requires_acknowledgment && (
                   <Badge variant="outline" className="gap-1">
-                    <AlertCircle className="size-3" /> נדרש אישור
+                    <AlertCircle className="size-3" /> {i18n.t("comm.requiresAck")}
                   </Badge>
                 )}
                 {d.msg.edited_at && (
                   <Badge variant="outline" className="gap-1">
-                    <Pencil className="size-3" /> נערך
+                    <Pencil className="size-3" /> {i18n.t("comm.edited")}
                   </Badge>
                 )}
               </DialogTitle>
@@ -761,7 +765,7 @@ function MessageDetailDialog({
                 {d.msg.edited_at && (
                   <>
                     <br />
-                    נערך לאחרונה ע״י {d.editor_name ?? "—"} · {formatHeDateTime(d.msg.edited_at)}
+                    {i18n.t("comm.lastEdited").replace("{name}", d.editor_name ?? "—").replace("{date}", formatHeDateTime(d.msg.edited_at))}
                   </>
                 )}
               </DialogDescription>
@@ -775,7 +779,7 @@ function MessageDetailDialog({
 
             {d.atts.length > 0 && (
               <div className="space-y-1.5">
-                <p className="text-xs font-semibold text-muted-foreground">קבצים מצורפים</p>
+                <p className="text-xs font-semibold text-muted-foreground">{i18n.t("comm.attachments")}</p>
                 {d.atts.map((a: any) => (
                   <AttachmentLink key={a.id} att={a} />
                 ))}
@@ -794,22 +798,22 @@ function MessageDetailDialog({
                 <>
                   {d.msg.requires_acknowledgment && (
                     <Button onClick={() => ackMut.mutate()} className="gap-1.5" disabled={ackMut.isPending}>
-                      <CheckCheck className="size-4" /> קראתי והבנתי
+                      <CheckCheck className="size-4" /> {i18n.t("comm.ackBtn")}
                     </Button>
                   )}
                   <Button variant="outline" onClick={() => archMut.mutate()} className="gap-1.5">
-                    <Archive className="size-4" /> 📁 העבר לארכיון
+                    <Archive className="size-4" /> {i18n.t("comm.archiveBtn")}
                   </Button>
                 </>
               )}
               {viewerMode === "sent" && canViewReceipts && (
                 <Button variant="outline" className="gap-1.5" onClick={() => setReceiptsOpen(true)}>
-                  <Eye className="size-4" /> 👁️ אישורי קריאה
+                  <Eye className="size-4" /> {i18n.t("comm.readReceiptsBtn")}
                 </Button>
               )}
               {viewerMode === "sent" && canManage && (
                 <Button variant="outline" className="gap-1.5" onClick={() => setEditOpen(true)}>
-                  <Pencil className="size-4" /> ערוך
+                  <Pencil className="size-4" /> {i18n.t("comm.editBtn")}
                 </Button>
               )}
               {viewerMode === "sent" && (canDelete || d.msg.sender_id === userId) && (
@@ -818,7 +822,7 @@ function MessageDetailDialog({
                   className="text-destructive gap-1.5"
                   onClick={() => setDelOpen(true)}
                 >
-                  <Trash2 className="size-4" /> מחק
+                  <Trash2 className="size-4" /> {i18n.t("comm.deleteBtn")}
                 </Button>
               )}
             </DialogFooter>
@@ -846,17 +850,17 @@ function MessageDetailDialog({
             <AlertDialog open={delOpen} onOpenChange={setDelOpen}>
               <AlertDialogContent dir="rtl">
                 <AlertDialogHeader>
-                  <AlertDialogTitle>⚠️ אישור מחיקה</AlertDialogTitle>
+                  <AlertDialogTitle>{i18n.t("comm.deleteConfirmTitle")}</AlertDialogTitle>
                   <AlertDialogDescription>
-                    האם אתה בטוח שברצונך למחוק פריט זה?
+                    {i18n.t("comm.deleteConfirmLine1")}
                     <br />
-                    המחיקה תסיר את ההודעה ואת כל ההתראות הקשורות מכל הנמענים.
+                    {i18n.t("comm.deleteConfirmLine2")}
                     <br />
-                    לאחר המחיקה לא ניתן יהיה לשחזר את הנתונים.
+                    {i18n.t("comm.deleteConfirmLine3")}
                   </AlertDialogDescription>
                 </AlertDialogHeader>
                 <AlertDialogFooter className="gap-2 flex-wrap">
-                  <AlertDialogCancel>❌ ביטול</AlertDialogCancel>
+                  <AlertDialogCancel>{i18n.t("comm.cancelDelete")}</AlertDialogCancel>
                   <AlertDialogAction
                     className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
                     onClick={() => {
@@ -864,7 +868,7 @@ function MessageDetailDialog({
                       permDelMut.mutate();
                     }}
                   >
-                    🗑️ מחק
+                    {i18n.t("comm.confirmDelete")}
                   </AlertDialogAction>
                 </AlertDialogFooter>
               </AlertDialogContent>
@@ -903,57 +907,57 @@ function EditMessageDialog({
         file,
       }),
     onSuccess: () => {
-      toast.success("ההודעה עודכנה");
+      toast.success(i18n.t("comm.msgUpdated"));
       qc.invalidateQueries({ queryKey: ["comm"] });
       onClose();
     },
-    onError: (e: any) => toast.error(e?.message ?? "שגיאה"),
+    onError: (e: any) => toast.error(e?.message ?? i18n.t("comm.genericError")),
   });
 
   return (
     <Dialog open onOpenChange={(o) => !o && onClose()}>
       <DialogContent className="max-w-xl" dir="rtl">
         <DialogHeader>
-          <DialogTitle>עריכת הודעה</DialogTitle>
-          <DialogDescription>הנמענים שכבר קראו יקבלו התראה על העדכון</DialogDescription>
+          <DialogTitle>{i18n.t("comm.editDialogTitle")}</DialogTitle>
+          <DialogDescription>{i18n.t("comm.editDialogDesc")}</DialogDescription>
         </DialogHeader>
         <div className="space-y-3">
           <div>
-            <Label>כותרת</Label>
+            <Label>{i18n.t("comm.titleLabel")}</Label>
             <Input value={title} onChange={(e) => setTitle(e.target.value)} />
           </div>
           <div>
-            <Label>תוכן</Label>
+            <Label>{i18n.t("comm.contentLabel")}</Label>
             <Textarea rows={6} value={body} onChange={(e) => setBody(e.target.value)} />
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <Label>עדיפות</Label>
+              <Label>{i18n.t("comm.priorityLabel")}</Label>
               <Select value={priority} onValueChange={(v) => setPriority(v as CommPriority)}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="low">נמוכה</SelectItem>
-                  <SelectItem value="normal">רגילה</SelectItem>
-                  <SelectItem value="high">גבוהה</SelectItem>
-                  <SelectItem value="urgent">דחופה</SelectItem>
+                  <SelectItem value="low">{i18n.t("comm.priorityLow")}</SelectItem>
+                  <SelectItem value="normal">{i18n.t("comm.priorityNormal")}</SelectItem>
+                  <SelectItem value="high">{i18n.t("comm.priorityHigh")}</SelectItem>
+                  <SelectItem value="urgent">{i18n.t("comm.priorityUrgent")}</SelectItem>
                 </SelectContent>
               </Select>
             </div>
             <div className="flex items-end gap-2">
               <Switch id="edit-ack" checked={ack} onCheckedChange={setAck} />
-              <Label htmlFor="edit-ack">נדרש אישור קריאה</Label>
+              <Label htmlFor="edit-ack">{i18n.t("comm.ackRequiredLabel")}</Label>
             </div>
           </div>
           <div>
-            <Label>הוספת קובץ (אופציונלי)</Label>
+            <Label>{i18n.t("comm.attachLabel")}</Label>
             <Input type="file" onChange={(e) => setFile(e.target.files?.[0] ?? null)} />
           </div>
         </div>
         <DialogFooter>
-          <Button variant="outline" onClick={onClose}>ביטול</Button>
+          <Button variant="outline" onClick={onClose}>{i18n.t("comm.cancelBtn")}</Button>
           <Button onClick={() => mut.mutate()} disabled={mut.isPending || !title.trim() || !body.trim()}>
             {mut.isPending && <Loader2 className="ml-2 size-4 animate-spin" />}
-            שמור שינויים
+            {i18n.t("comm.saveBtn")}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -997,8 +1001,8 @@ function RecipientsBreakdown({
   return (
     <div className="border-t pt-3 space-y-2">
       <p className="text-sm font-semibold">
-        סטטוס נמענים — {read} מתוך {total} קראו ({readPct}%)
-        {requiresAck && ` · ${ack}/${total} אישרו (${ackPct}%)`}
+        {i18n.t("comm.readReceiptsHeaderStats").replace("{read}", String(read)).replace("{total}", String(total)).replace("{pct}", String(readPct))}
+        {requiresAck && ` · ${i18n.t("comm.ackHeaderStats").replace("{ack}", String(ack)).replace("{total}", String(total)).replace("{pct}", String(ackPct))}`}
       </p>
       <div className="max-h-48 overflow-y-auto border rounded-md divide-y">
         {recipients.map((r) => (
@@ -1012,11 +1016,11 @@ function RecipientsBreakdown({
             </div>
             <div className="flex gap-1">
               {r.acknowledged_at ? (
-                <Badge className="bg-emerald-100 text-emerald-900 border-0">אושר</Badge>
+                <Badge className="bg-emerald-100 text-emerald-900 border-0">{i18n.t("comm.badgeAcknowledged")}</Badge>
               ) : r.read_at ? (
-                <Badge className="bg-sky-100 text-sky-900 border-0">נקרא</Badge>
+                <Badge className="bg-sky-100 text-sky-900 border-0">{i18n.t("comm.badgeRead")}</Badge>
               ) : (
-                <Badge variant="outline">לא נקרא</Badge>
+                <Badge variant="outline">{i18n.t("comm.badgeUnread")}</Badge>
               )}
             </div>
           </div>
@@ -1126,11 +1130,11 @@ function ComposeMessageDialog({
         },
       }),
     onSuccess: () => {
-      toast.success("ההודעה נשלחה");
+      toast.success(i18n.t("comm.msgSent"));
       qc.invalidateQueries({ queryKey: ["comm"] });
       onOpenChange(false);
     },
-    onError: (e: any) => toast.error(e?.message ?? "שגיאה בשליחת ההודעה"),
+    onError: (e: any) => toast.error(e?.message ?? i18n.t("comm.sendError")),
   });
 
   function toggle(list: string[], setList: (v: string[]) => void, id: string) {
@@ -1141,16 +1145,16 @@ function ComposeMessageDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-xl max-h-[90vh] overflow-y-auto" dir="rtl">
         <DialogHeader>
-          <DialogTitle>הודעה חדשה</DialogTitle>
-          <DialogDescription>בחר נמענים והקלד את תוכן ההודעה</DialogDescription>
+          <DialogTitle>{i18n.t("comm.newMsgTitle")}</DialogTitle>
+          <DialogDescription>{i18n.t("comm.newMsgDesc")}</DialogDescription>
         </DialogHeader>
         <div className="space-y-3">
           <div>
-            <Label>כותרת</Label>
+            <Label>{i18n.t("comm.titleLabel")}</Label>
             <Input value={title} onChange={(e) => setTitle(e.target.value)} />
           </div>
           <div>
-            <Label>תוכן</Label>
+            <Label>{i18n.t("comm.contentLabel")}</Label>
             <Textarea
               value={body}
               onChange={(e) => setBody(e.target.value)}
@@ -1159,16 +1163,16 @@ function ComposeMessageDialog({
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <Label>עדיפות</Label>
+              <Label>{i18n.t("comm.priorityLabel")}</Label>
               <Select value={priority} onValueChange={(v: any) => setPriority(v)}>
                 <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="low">נמוכה</SelectItem>
-                  <SelectItem value="normal">רגילה</SelectItem>
-                  <SelectItem value="high">גבוהה</SelectItem>
-                  <SelectItem value="urgent">דחופה</SelectItem>
+                  <SelectItem value="low">{i18n.t("comm.priorityLow")}</SelectItem>
+                  <SelectItem value="normal">{i18n.t("comm.priorityNormal")}</SelectItem>
+                  <SelectItem value="high">{i18n.t("comm.priorityHigh")}</SelectItem>
+                  <SelectItem value="urgent">{i18n.t("comm.priorityUrgent")}</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -1179,21 +1183,21 @@ function ComposeMessageDialog({
                 onCheckedChange={setRequiresAck}
               />
               <Label htmlFor="req-ack" className="cursor-pointer">
-                נדרש אישור קריאה
+                {i18n.t("comm.ackRequiredLabel")}
               </Label>
             </div>
           </div>
 
           <div>
-            <Label>נמענים</Label>
+            <Label>{i18n.t("comm.recipientsPickerLabel")}</Label>
             <Select value={scope} onValueChange={(v: any) => setScope(v)}>
               <SelectTrigger>
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                {canAll && <SelectItem value="all">כל עובדי החברה</SelectItem>}
-                {canDept && <SelectItem value="departments">מחלקות</SelectItem>}
-                {canEmp && <SelectItem value="users">עובדים בודדים</SelectItem>}
+                {canAll && <SelectItem value="all">{i18n.t("comm.allEmployees")}</SelectItem>}
+                {canDept && <SelectItem value="departments">{i18n.t("comm.departments")}</SelectItem>}
+                {canEmp && <SelectItem value="users">{i18n.t("comm.individualEmployees")}</SelectItem>}
               </SelectContent>
             </Select>
           </div>
@@ -1231,7 +1235,7 @@ function ComposeMessageDialog({
 
           <div>
             <Label className="flex items-center gap-1.5">
-              <Paperclip className="size-4" /> קובץ מצורף (אופציונלי)
+              <Paperclip className="size-4" /> {i18n.t("comm.attachOptional")}
             </Label>
             <Input type="file" onChange={(e) => setFile(e.target.files?.[0] ?? null)} />
           </div>
@@ -1239,7 +1243,7 @@ function ComposeMessageDialog({
 
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>
-            ביטול
+            {i18n.t("comm.cancelBtn")}
           </Button>
           <Button
             disabled={!title.trim() || !body.trim() || sendMut.isPending}
@@ -1247,7 +1251,7 @@ function ComposeMessageDialog({
             className="gap-1.5"
           >
             {sendMut.isPending && <Loader2 className="size-4 animate-spin" />}
-            <Send className="size-4" /> שלח
+            <Send className="size-4" /> {i18n.t("comm.sendBtn")}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -1295,44 +1299,44 @@ function ReadReceiptsDialog({
       <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto" dir="rtl">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <Eye className="size-5" /> אישורי קריאה
+            <Eye className="size-5" /> {i18n.t("comm.readReceiptsTitle")}
           </DialogTitle>
-          <DialogDescription>פירוט מי קרא ומי טרם קרא</DialogDescription>
+          <DialogDescription>{i18n.t("comm.readReceiptsDesc")}</DialogDescription>
         </DialogHeader>
 
         {q.isLoading ? (
           <Loader2 className="mx-auto size-5 animate-spin text-muted-foreground" />
         ) : q.isError ? (
-          <p className="text-sm text-destructive">{(q.error as any)?.message ?? "שגיאה בטעינה"}</p>
+          <p className="text-sm text-destructive">{(q.error as any)?.message ?? i18n.t("comm.loadError")}</p>
         ) : (
           <>
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
               <Card className="p-3 text-center">
-                <p className="text-xs text-muted-foreground">נמענים</p>
+                <p className="text-xs text-muted-foreground">{i18n.t("comm.recipientsLabel")}</p>
                 <p className="text-2xl font-bold">{total}</p>
               </Card>
               <Card className="p-3 text-center bg-emerald-50">
-                <p className="text-xs text-emerald-900">קראו</p>
+                <p className="text-xs text-emerald-900">{i18n.t("comm.readLabel")}</p>
                 <p className="text-2xl font-bold text-emerald-900">{read}</p>
               </Card>
               <Card className="p-3 text-center bg-amber-50">
-                <p className="text-xs text-amber-900">לא קראו</p>
+                <p className="text-xs text-amber-900">{i18n.t("comm.unreadLabel")}</p>
                 <p className="text-2xl font-bold text-amber-900">{unread}</p>
               </Card>
               <Card className="p-3 text-center bg-sky-50">
-                <p className="text-xs text-sky-900">אחוז קריאה</p>
+                <p className="text-xs text-sky-900">{i18n.t("comm.readPctLabel")}</p>
                 <p className="text-2xl font-bold text-sky-900">{pct}%</p>
               </Card>
             </div>
 
             <Tabs defaultValue="read" className="mt-2">
               <TabsList className="grid grid-cols-2 w-full">
-                <TabsTrigger value="read">קראו ({read})</TabsTrigger>
-                <TabsTrigger value="unread">עדיין לא קראו ({unread})</TabsTrigger>
+                <TabsTrigger value="read">{i18n.t("comm.tabRead").replace("{n}", String(read))}</TabsTrigger>
+                <TabsTrigger value="unread">{i18n.t("comm.tabUnread").replace("{n}", String(unread))}</TabsTrigger>
               </TabsList>
               <TabsContent value="read" className="mt-3">
                 {readRows.length === 0 ? (
-                  <p className="text-sm text-muted-foreground text-center py-4">אף אחד עדיין לא קרא</p>
+                  <p className="text-sm text-muted-foreground text-center py-4">{i18n.t("comm.noneRead")}</p>
                 ) : (
                   <div className="border rounded-md divide-y max-h-72 overflow-y-auto">
                     {readRows.map((r) => (
@@ -1353,7 +1357,7 @@ function ReadReceiptsDialog({
               </TabsContent>
               <TabsContent value="unread" className="mt-3">
                 {unreadRows.length === 0 ? (
-                  <p className="text-sm text-muted-foreground text-center py-4">כולם קראו 🎉</p>
+                  <p className="text-sm text-muted-foreground text-center py-4">{i18n.t("comm.allRead")}</p>
                 ) : (
                   <div className="border rounded-md divide-y max-h-72 overflow-y-auto">
                     {unreadRows.map((r) => (
@@ -1372,7 +1376,7 @@ function ReadReceiptsDialog({
         )}
 
         <DialogFooter>
-          <Button variant="outline" onClick={onClose}>סגור</Button>
+          <Button variant="outline" onClick={onClose}>{i18n.t("comm.closeBtn")}</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

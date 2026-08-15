@@ -7,7 +7,9 @@ import {
   HeadContent,
   Scripts,
 } from "@tanstack/react-router";
-import { useEffect, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
+import { I18nextProvider } from "react-i18next";
+import i18n from "@/i18n";
 
 import appCss from "../styles.css?url";
 import { reportLovableError } from "../lib/lovable-error-reporting";
@@ -79,10 +81,10 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1, maximum-scale=1" },
       { name: "theme-color", content: "#0d8c8c" },
-      { title: "מערכת ניהול עובדים" },
-      { name: "description", content: "מערכת ניהול עובדים לניהול צוות, מחלקות ותפקידים בסניף." },
-      { property: "og:title", content: "מערכת ניהול עובדים" },
-      { name: "twitter:title", content: "מערכת ניהול עובדים" },
+      { title: i18n.t("common.appName") },
+      { name: "description", content: i18n.t("common.appName") },
+      { property: "og:title", content: i18n.t("common.appName") },
+      { name: "twitter:title", content: i18n.t("common.appName") },
       {
         property: "og:description",
         content: "מערכת ניהול עובדים לניהול צוות, מחלקות ותפקידים בסניף.",
@@ -184,8 +186,27 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
 });
 
 function RootShell({ children }: { children: ReactNode }) {
+  const [lang, setLang] = useState(() => {
+    const current = i18n.language;
+    return current === "en" || current === "ar" ? current : "he";
+  });
+  useEffect(() => {
+    const onChange = (lng: string) => {
+      const next = lng === "en" || lng === "ar" ? lng : "he";
+      setLang(next);
+      document.documentElement.dir = next === "en" ? "ltr" : "rtl";
+      document.documentElement.lang = next;
+      document.title = i18n.t("common.appName");
+    };
+    i18n.on("languageChanged", onChange);
+    onChange(i18n.language);
+    return () => {
+      i18n.off("languageChanged", onChange);
+    };
+  }, []);
+  const dir = lang === "en" ? "ltr" : "rtl";
   return (
-    <html lang="he" dir="rtl">
+    <html lang={lang} dir={dir}>
       <head>
         <HeadContent />
       </head>
@@ -212,10 +233,12 @@ function RootComponent() {
 
   return (
     <QueryClientProvider client={queryClient}>
-      <PlatformProvider>
-        <Outlet />
-        <Toaster position="top-center" richColors closeButton />
-      </PlatformProvider>
+      <I18nextProvider i18n={i18n}>
+        <PlatformProvider>
+          <Outlet />
+          <Toaster position="top-center" richColors closeButton />
+        </PlatformProvider>
+      </I18nextProvider>
     </QueryClientProvider>
   );
 }

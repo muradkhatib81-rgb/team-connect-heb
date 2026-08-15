@@ -4,6 +4,7 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/use-auth";
+import i18n from "@/i18n";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -109,20 +110,49 @@ export const Route = createFileRoute("/_authenticated/schedules")({
 
 // Shift codes are dynamic — labels and colors come from public.shift_definitions.
 type Shift = string;
-const STATUS_LABEL = {
-  draft: "טיוטה",
-  pending_approval: "ממתין לאישור",
-  approved: "מאושר",
-  rejected: "נדחה",
-} as const;
+const STATUS_LABEL: Record<string, string> = {
+  draft: i18n.t("schedules.statusDraft"),
+  pending_approval: i18n.t("schedules.statusPending"),
+  approved: i18n.t("schedules.statusApproved"),
+  rejected: i18n.t("schedules.statusRejected"),
+};
+function getStatusLabel(status: string): string {
+  const key: Record<string, string> = {
+    draft: "schedules.statusDraft",
+    pending_approval: "schedules.statusPending",
+    approved: "schedules.statusApproved",
+    rejected: "schedules.statusRejected",
+  };
+  return i18n.t(key[status] ?? "schedules.unknown");
+}
 const STATUS_VARIANT: Record<string, "default" | "secondary" | "outline" | "destructive"> = {
   draft: "secondary",
   pending_approval: "outline",
   approved: "default",
   rejected: "destructive",
 };
-const DAY_NAMES = ["ש'", "א'", "ב'", "ג'", "ד'", "ה'", "ו'"];
-const FULL_DAY_NAMES = ["שבת", "ראשון", "שני", "שלישי", "רביעי", "חמישי", "שישי"];
+function getDayNames(): string[] {
+  return [
+    i18n.t("schedules.dayShort.0"),
+    i18n.t("schedules.dayShort.1"),
+    i18n.t("schedules.dayShort.2"),
+    i18n.t("schedules.dayShort.3"),
+    i18n.t("schedules.dayShort.4"),
+    i18n.t("schedules.dayShort.5"),
+    i18n.t("schedules.dayShort.6"),
+  ];
+}
+function getFullDayNames(): string[] {
+  return [
+    i18n.t("schedules.dayFull.0"),
+    i18n.t("schedules.dayFull.1"),
+    i18n.t("schedules.dayFull.2"),
+    i18n.t("schedules.dayFull.3"),
+    i18n.t("schedules.dayFull.4"),
+    i18n.t("schedules.dayFull.5"),
+    i18n.t("schedules.dayFull.6"),
+  ];
+}
 
 type SchedulePersonMeta = {
   id: string;
@@ -969,7 +999,7 @@ function SchedulesPage() {
   const createMut = useMutation({
     mutationFn: () => createFn({ data: { department_id: selectedDept!, week_start: weekStart } }),
     onSuccess: () => {
-      toast.success("נוצרה טיוטה");
+      toast.success(i18n.t("schedules.savedDraft"));
       qc.invalidateQueries({ queryKey: ["schedule", selectedDept, weekStart] });
       qc.invalidateQueries({ queryKey: ["week-schedules", weekStart] });
       qc.invalidateQueries({ queryKey: ["dashboard-schedules"] });
@@ -983,7 +1013,7 @@ function SchedulesPage() {
       return saveFn({ data: { schedule_id: visible!.id, shifts: prepareShiftPayloadForPersist() } });
     },
     onSuccess: () => {
-      toast.success("נשמר");
+      toast.success(i18n.t("schedules.saved"));
       editsDirtyRef.current = false;
       qc.invalidateQueries({ queryKey: ["schedule", selectedDept, weekStart] });
       qc.invalidateQueries({ queryKey: ["schedule-shifts", visible?.id] });
@@ -1006,7 +1036,7 @@ function SchedulesPage() {
       return submitFn({ data: { schedule_id: visible!.id } });
     },
     onSuccess: (r: any) => {
-      toast.success(r?.published ? "סידור העבודה פורסם" : r?.approved ? "הסידור אושר וממתין לפרסום" : "נשלח לאישור");
+      toast.success(r?.published ? i18n.t("schedules.published") : r?.approved ? i18n.t("schedules.approvedPending") : i18n.t("schedules.sentForApproval"));
       editsDirtyRef.current = false;
       qc.invalidateQueries({ queryKey: ["schedule"] });
       qc.invalidateQueries({ queryKey: ["schedule-shifts", visible?.id] });
@@ -1031,7 +1061,7 @@ function SchedulesPage() {
       return approveFn({ data: { schedule_id: visible!.id } });
     },
     onSuccess: (r: any) => {
-      toast.success(r?.published ? "סידור העבודה פורסם" : "הסידור אושר וממתין לפרסום");
+      toast.success(r?.published ? i18n.t("schedules.published") : i18n.t("schedules.approvedPending"));
       editsDirtyRef.current = false;
       qc.invalidateQueries({ queryKey: ["schedule"] });
       qc.invalidateQueries({ queryKey: ["schedule-shifts", visible?.id] });
@@ -1055,7 +1085,7 @@ function SchedulesPage() {
       return publishFn({ data: { schedule_id: visible!.id } });
     },
     onSuccess: () => {
-      toast.success("סידור העבודה פורסם");
+      toast.success(i18n.t("schedules.published"));
       editsDirtyRef.current = false;
       qc.invalidateQueries({ queryKey: ["schedule"] });
       qc.invalidateQueries({ queryKey: ["schedule-shifts", visible?.id] });
@@ -1158,7 +1188,7 @@ function SchedulesPage() {
   const deleteMut = useMutation({
     mutationFn: () => deleteFn({ data: { schedule_id: visible!.id } }),
     onSuccess: () => {
-      toast.success("סידור העבודה נמחק");
+      toast.success(i18n.t("schedules.deleted"));
       setDeleteOpen(false);
       qc.invalidateQueries({ queryKey: ["schedule"] });
       qc.invalidateQueries({ queryKey: ["schedule", selectedDept, weekStart] });
@@ -1374,7 +1404,7 @@ function SchedulesPage() {
     () =>
       days.map((day, idx) => ({
         day,
-        label: FULL_DAY_NAMES[idx],
+        label: getFullDayNames()[idx],
         counts: activeShifts.map((s) => {
           const members: { employeeId: string; departmentId: string }[] = [];
           const seen = new Set<string>();
@@ -1597,7 +1627,7 @@ function SchedulesPage() {
                     </td>
                     <td className="p-3">
                       <Badge variant={STATUS_VARIANT[s.status]}>
-                        {STATUS_LABEL[s.status as keyof typeof STATUS_LABEL] ?? s.status}
+                        {getStatusLabel(s.status)}
                       </Badge>
                     </td>
                     <td className="p-3 text-xs text-muted-foreground">
@@ -1677,7 +1707,7 @@ function SchedulesPage() {
                     </td>
                     <td className="p-3">
                       <Badge variant={STATUS_VARIANT[p.status]}>
-                        {STATUS_LABEL[p.status as keyof typeof STATUS_LABEL]}
+                        {getStatusLabel(p.status)}
                       </Badge>
                     </td>
                     <td className="p-3 text-left">
@@ -1759,7 +1789,7 @@ function SchedulesPage() {
                     </td>
                     <td className="p-3">
                       <Badge variant={STATUS_VARIANT[a.status]}>
-                        {STATUS_LABEL[a.status as keyof typeof STATUS_LABEL]}
+                        {getStatusLabel(a.status)}
                       </Badge>
                     </td>
                     <td className="p-3 text-left">
@@ -1879,7 +1909,7 @@ function SchedulesPage() {
                           >
                             <span className="font-medium">{d.name}</span>
                             <Badge variant="outline" className="text-xs shrink-0">
-                              {deptsWithSchedule.has(d.id) ? "טיוטה — לא נשמר" : "ללא סידור"}
+                              {deptsWithSchedule.has(d.id) ? i18n.t("schedules.draftLabel") : i18n.t("schedules.noScheduleShort")}
                             </Badge>
                           </button>
                         </li>
@@ -1899,7 +1929,7 @@ function SchedulesPage() {
               onValueChange={(v) => setSelectedDept(v)}
             >
               <SelectTrigger>
-                <SelectValue placeholder="בחר מחלקה" />
+                <SelectValue placeholder={i18n.t("schedules.selectDept")} />
               </SelectTrigger>
               <SelectContent>
                 {(deptsQ.data ?? [])
@@ -1919,7 +1949,7 @@ function SchedulesPage() {
 
         {visible && (
           <Badge variant={STATUS_VARIANT[visible.status]} className="self-center">
-            {STATUS_LABEL[visible.status as keyof typeof STATUS_LABEL]}
+            {getStatusLabel(visible.status)}
           </Badge>
         )}
       </Card>
@@ -1959,8 +1989,7 @@ function SchedulesPage() {
                 <p>
                   סטטוס:{" "}
                   <span className="font-medium">
-                    {STATUS_LABEL[blockedAwaitingStatus as keyof typeof STATUS_LABEL] ??
-                      blockedAwaitingStatus}
+                    {getStatusLabel(blockedAwaitingStatus ?? "")}
                   </span>
                 </p>
               )}
@@ -1971,8 +2000,8 @@ function SchedulesPage() {
         <Card className="card-elevated p-8 text-center space-y-3">
           <p className="text-sm text-muted-foreground">
             {isEmployee
-              ? "אין סידור מאושר לשבוע זה."
-              : "לא קיים סידור לשבוע זה במחלקה זו."}
+              ? i18n.t("schedules.noApprovedSchedule")
+              : i18n.t("schedules.noSchedule")}
           </p>
           {canCreate && !isEmployee && !deptWeekFlagsQ.data?.hasSavedAwaitingPublish && (
             <Button onClick={() => createMut.mutate()} disabled={createMut.isPending}>
@@ -1986,21 +2015,21 @@ function SchedulesPage() {
           {/* Actor info: creator + editor + approver */}
           <Card className="card-elevated p-4 space-y-2">
             <SchedulePersonMetaRow
-              label="נוצר על ידי:"
+              label={i18n.t("schedules.createdBy")}
               person={decisionPersonQ.data?.creator ?? null}
-              fallback={decisionPersonQ.isLoading ? "נטען..." : "לא ידוע"}
+              fallback={decisionPersonQ.isLoading ? i18n.t("schedules.loading") : i18n.t("schedules.unknown")}
             />
             <SchedulePersonMetaRow
-              label="נערך על ידי:"
+              label={i18n.t("schedules.editedBy")}
               person={decisionPersonQ.data?.editor ?? null}
               className="text-amber-700 dark:text-amber-400"
-              fallback={decisionPersonQ.isLoading ? "נטען..." : "לא ידוע"}
+              fallback={decisionPersonQ.isLoading ? i18n.t("schedules.loading") : i18n.t("schedules.unknown")}
             />
             <SchedulePersonMetaRow
-              label="אושר על ידי:"
+              label={i18n.t("schedules.approvedBy")}
               person={decisionPersonQ.data?.approver ?? null}
               className="text-emerald-700 dark:text-emerald-400"
-              fallback={visible.status === "approved" ? (decisionPersonQ.isLoading ? "נטען..." : "לא ידוע") : "טרם אושר"}
+              fallback={visible.status === "approved" ? (decisionPersonQ.isLoading ? i18n.t("schedules.loading") : i18n.t("schedules.unknown")) : i18n.t("schedules.notApproved")}
             />
           </Card>
 
@@ -2027,7 +2056,7 @@ function SchedulesPage() {
                   <p>
                     סטטוס:{" "}
                     <span className="font-medium">
-                      {STATUS_LABEL[visible.status as keyof typeof STATUS_LABEL] ?? visible.status}
+                      {getStatusLabel(visible.status)}
                     </span>
                   </p>
                   <p className="text-muted-foreground">
@@ -2057,12 +2086,12 @@ function SchedulesPage() {
                 <div className="flex-1 min-w-0">
                   <p className="font-semibold text-sm">
                     {visible.status === "rejected"
-                      ? "הסידור נדחה — נדרשים תיקונים"
+                      ? i18n.t("schedules.statusRejectedMsg")
                       : !visible.published_at
-                        ? "הסידור אושר וממתין לפרסום"
+                        ? i18n.t("schedules.statusApprovedPending")
                         : decisionPersonQ.data?.editedBeforeApproval
-                          ? "הסידור נערך ואושר ופורסם"
-                          : "הסידור אושר ופורסם"}
+                          ? i18n.t("schedules.statusPublished")
+                          : i18n.t("schedules.statusApprovedPublished")}
                   </p>
                   <div className="text-xs text-muted-foreground mt-1 space-y-0.5">
                     <p>
@@ -2179,7 +2208,7 @@ function SchedulesPage() {
                   variant="default"
                 >
                   {submitMut.isPending ? <Loader2 className="size-4 animate-spin" /> : <Send className="size-4" />}
-                  {canPublishDirect ? "פרסם סידור עבודה" : "שלח לאישור"}
+                  {canPublishDirect ? i18n.t("schedules.publish") : i18n.t("schedules.sendForApproval")}
                 </Button>
 
                 <Button
@@ -2201,7 +2230,7 @@ function SchedulesPage() {
                 variant="default"
               >
                 {approveMut.isPending ? <Loader2 className="size-4 animate-spin" /> : canPublishDirect ? <Send className="size-4" /> : <CheckCircle2 className="size-4" />}
-                {canPublishDirect ? "פרסם סידור עבודה" : "אשר סידור"}
+                {canPublishDirect ? i18n.t("schedules.publish") : i18n.t("schedules.approveSchedule")}
               </Button>
             )}
             {canShowPublish && (
@@ -2239,7 +2268,7 @@ function SchedulesPage() {
                     const dayCounts = dailyShiftSummary[i]?.counts ?? [];
                     return (
                       <th key={d} className="p-2 text-center min-w-[110px] align-top">
-                        <div className="font-semibold">{DAY_NAMES[i]}</div>
+                        <div className="font-semibold">{getDayNames()[i]}</div>
                         <div className="text-xs text-muted-foreground">{formatHeDate(d)}</div>
                         {dayCounts.length > 0 && (
                           <div className="mt-1 flex flex-wrap gap-1 justify-center">
@@ -2250,7 +2279,7 @@ function SchedulesPage() {
                                 onClick={() =>
                                   setSummaryShiftPick({
                                     day: d,
-                                    dayLabel: FULL_DAY_NAMES[i],
+                                    dayLabel: getFullDayNames()[i],
                                     shiftName: s.name,
                                     members: s.members,
                                   })
@@ -2562,7 +2591,7 @@ function SchedulesPage() {
               }}
               disabled={publishAllMut.isPending}
             >
-              {publishAllMut.isPending ? <Loader2 className="size-4 animate-spin" /> : "פרסם"}
+                  {publishAllMut.isPending ? <Loader2 className="size-4 animate-spin" /> : i18n.t("schedules.publishShort")}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

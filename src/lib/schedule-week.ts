@@ -1,3 +1,5 @@
+import i18n from "@/i18n";
+
 /** Saturday-start ISO week helpers (matches schedules.tsx). */
 
 export function getScheduleWeek(reference = new Date()) {
@@ -24,6 +26,18 @@ export const SCHEDULE_DAY_NAMES = [
   "חמישי",
   "שישי",
 ] as const;
+
+export function getScheduleDayNames(): string[] {
+  return [
+    i18n.t("schedules.dayFull.0"),
+    i18n.t("schedules.dayFull.1"),
+    i18n.t("schedules.dayFull.2"),
+    i18n.t("schedules.dayFull.3"),
+    i18n.t("schedules.dayFull.4"),
+    i18n.t("schedules.dayFull.5"),
+    i18n.t("schedules.dayFull.6"),
+  ];
+}
 
 export type ScheduleShiftCode = "morning" | "evening" | "off";
 

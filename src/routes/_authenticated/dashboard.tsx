@@ -33,6 +33,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/use-auth";
 import {
   ROLE_LABELS,
+  getRoleLabel,
   DEPARTMENT_LABELS,
   highestRole,
   isAdmin,
@@ -58,6 +59,8 @@ const DASH_TILE_SUB =
 const DASH_TILE_TRAIL =
   "flex h-7 w-[4.75rem] shrink-0 items-center justify-end";
 import { Users, Building2, Loader2, Plane, ListTodo, Clock, CheckCircle2, AlertTriangle, CalendarDays, User, Coffee, Send, UserPlus, Palmtree, ChevronDown } from "lucide-react";
+import { useTranslation } from "react-i18next";
+import i18n from "@/i18n";
 import {
   Collapsible,
   CollapsibleContent,
@@ -108,7 +111,12 @@ export const Route = createFileRoute("/_authenticated/dashboard")({
 
 type DeptRow = { id: string; name: string; is_active: boolean };
 
+// Supabase join select strings — stored as constants to avoid code-splitter
+// parse errors with the relationship syntax (colon inside string literals).
+const MSG_RECIPIENTS_SELECT = "message_id, delivered_at, message:messages(id, title, created_at, deleted_at)";
+
 function DashboardPage() {
+  const { t } = useTranslation();
   const { data: profile } = useAuth();
   const { activeBranchId } = useActiveBranch();
   const admin = profile ? isAdmin(profile.roles) : false;
@@ -234,7 +242,7 @@ function DashboardPage() {
             manager.id,
             manager.full_name ||
               [manager.first_name, manager.last_name].filter(Boolean).join(" ") ||
-              "ללא שם",
+              i18n.t("dashboard.noName"),
           );
         }
       }
@@ -243,7 +251,7 @@ function DashboardPage() {
         (departments ?? []).map((department) => [
           department.id,
           department.manager_id
-            ? namesById.get(department.manager_id) ?? "אחראי מחלקה לא זמין"
+            ? namesById.get(department.manager_id) ?? i18n.t("dashboard.deptManagerUnavailable")
             : null,
         ]),
       ) as Record<string, string | null>;
@@ -314,15 +322,15 @@ function DashboardPage() {
       <CustodyDashboardSection />
 
       <header>
-        <p className="text-sm text-muted-foreground">שלום,</p>
+        <p className="text-sm text-muted-foreground">{t("dashboard.greeting")}</p>
         <h1 className="text-2xl sm:text-3xl font-bold mt-1">{profile.full_name}</h1>
         <div className="flex flex-wrap items-center gap-2 mt-3">
-          {top && <Badge variant="secondary" className="rounded-full">{ROLE_LABELS[top]}</Badge>}
+          {top && <Badge variant="secondary" className="rounded-full">{getRoleLabel(top)}</Badge>}
           <Badge variant="outline" className="rounded-full">
             {profile.department_name ?? "—"}
           </Badge>
           {!profile.is_active && (
-            <Badge variant="destructive" className="rounded-full">לא פעיל</Badge>
+            <Badge variant="destructive" className="rounded-full">{t("dashboard.inactive")}</Badge>
           )}
         </div>
       </header>
@@ -399,14 +407,14 @@ function DashboardLeaveBanner({ profile }: { profile: { leave_start_date?: strin
   return (
     <Alert className="border-amber-300 bg-gradient-to-l from-amber-50 to-orange-50/80 shadow-sm">
       <Plane className="size-5 text-amber-700" />
-      <AlertTitle className="text-amber-950 font-semibold text-base">את/ה בחופש כרגע</AlertTitle>
+      <AlertTitle className="text-amber-950 font-semibold text-base">{i18n.t("dashboard.onLeaveNow")}</AlertTitle>
       <AlertDescription className="text-amber-900 space-y-1">
         {rangeLabel && (
           <p>
-            תקופת החופשה: <span className="font-semibold">{rangeLabel}</span>
+            {i18n.t("dashboard.leavePeriod")} <span className="font-semibold">{rangeLabel}</span>
           </p>
         )}
-        <p className="font-medium">מאחלים לך חזרה מהירה — מקווים שתחזור/תחזרי אלינו בהקדם האפשרי.</p>
+        <p className="font-medium">{i18n.t("dashboard.wishReturn")}</p>
       </AlertDescription>
     </Alert>
   );
@@ -486,14 +494,14 @@ function TasksStatsSection({
                         : DASH_TILE_TITLE
                     }
                   >
-                    משימות
+                    {i18n.t("dashboard.tasks")}
                   </h3>
                   <p className="mt-0.5 text-[11px] leading-snug text-muted-foreground">
                     {activeCount > 0
-                      ? `${activeCount} משימות פעילות · ${stats.completed} הוגשו`
+                      ? `${activeCount} ${i18n.t("dashboard.tasks")} · ${stats.completed} ${i18n.t("dashboard.taskCompleted")}`
                       : stats.completed > 0
-                        ? `${stats.completed} הוגשו / הושלמו`
-                        : "אין משימות פעילות כרגע"}
+                        ? `${stats.completed} ${i18n.t("dashboard.taskCompleted")}`
+                        : i18n.t("dashboard.noActiveTasks")}
                   </p>
                 </div>
                 <div className={`${DASH_TILE_TRAIL} gap-1.5`}>
@@ -515,14 +523,14 @@ function TasksStatsSection({
               className="shrink-0 self-center px-2 text-xs text-primary hover:underline"
               onClick={() => sectionAttn.markSeen()}
             >
-              לכל המשימות
+              {i18n.t("dashboard.allTasks")}
             </Link>
           </div>
 
           <CollapsibleContent>
             <div className={`border-t p-3 ${DASH_TILE_GRID}`}>
               <StatCard
-                label="פתוחות"
+                label={i18n.t("dashboard.taskOpen")}
                 value={stats.open}
                 icon={ListTodo}
                 tone="primary"
@@ -531,7 +539,7 @@ function TasksStatsSection({
                 onClick={() => go("new", openAttn.markSeen)}
               />
               <StatCard
-                label="בביצוע"
+                label={i18n.t("dashboard.taskInProgress")}
                 value={stats.in_progress}
                 icon={Clock}
                 tone="success"
@@ -540,7 +548,7 @@ function TasksStatsSection({
                 onClick={() => go("in_progress", progressAttn.markSeen)}
               />
               <StatCard
-                label="הוגשו / הושלמו"
+                label={i18n.t("dashboard.taskCompleted")}
                 value={stats.completed}
                 icon={CheckCircle2}
                 tone="muted"
@@ -549,7 +557,7 @@ function TasksStatsSection({
                 onClick={() => go("pending_approval", doneAttn.markSeen)}
               />
               <StatCard
-                label="באיחור"
+                label={i18n.t("dashboard.taskOverdue")}
                 value={stats.overdue}
                 icon={AlertTriangle}
                 tone="warning"
@@ -770,14 +778,14 @@ function DeptHeadOnBreakSection() {
                         : DASH_TILE_TITLE
                     }
                   >
-                    הפסקות
+                    {i18n.t("dashboard.breaksSectionTitle")}
                   </h3>
                   <p className="mt-0.5 text-[11px] leading-snug text-muted-foreground">
                     {alertCount > 0
-                      ? `${onBreakNow.length} בהפסקה · ${lateList.length} מאחרים · יומן ${logCount}`
+                      ? i18n.t("dashboard.breaksSummary").replace("{n}", String(onBreakNow.length)).replace("{m}", String(lateList.length)).replace("{k}", String(logCount))
                       : logCount > 0
-                        ? `יומן היום: ${logCount}`
-                        : "אין פעילות הפסקות כרגע"}
+                        ? i18n.t("dashboard.breakLogToday").replace("{n}", String(logCount))
+                        : i18n.t("dashboard.noBreakActivity")}
                   </p>
                 </div>
                 <div className={`${DASH_TILE_TRAIL} gap-1.5`}>
@@ -799,7 +807,7 @@ function DeptHeadOnBreakSection() {
           <CollapsibleContent>
             <div className={`border-t p-3 ${DASH_TILE_GRID}`}>
               <StatCard
-                label="עובדים בהפסקה כעת"
+                label={i18n.t("dashboard.onBreakNow")}
                 value={onBreakNow.length}
                 icon={Coffee}
                 tone={onBreakNow.length > 0 ? "warning" : "primary"}
@@ -811,7 +819,7 @@ function DeptHeadOnBreakSection() {
                 }}
               />
               <StatCard
-                label="עובדים מאחרים מהפסקה"
+                label={i18n.t("dashboard.lateFromBreak")}
                 value={lateList.length}
                 icon={AlertTriangle}
                 tone="muted"
@@ -823,7 +831,7 @@ function DeptHeadOnBreakSection() {
                 }}
               />
               <StatCard
-                label="יומן הפסקות"
+                label={i18n.t("dashboard.breakLog")}
                 value={logCount}
                 icon={Coffee}
                 tone="muted"
@@ -849,7 +857,7 @@ function DeptHeadOnBreakSection() {
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Coffee className="size-5 text-primary" />
-              {listKind === "late" ? "עובדים מאחרים מהפסקה" : "עובדים בהפסקה כעת"}
+              {listKind === "late" ? i18n.t("dashboard.lateFromBreak") : i18n.t("dashboard.onBreakNow")}
               {deptName ? (
                 <span className="text-xs font-normal text-muted-foreground mr-2">
                   · {deptName}
@@ -865,8 +873,8 @@ function DeptHeadOnBreakSection() {
           ) : dialogList.length === 0 ? (
             <p className="text-sm text-muted-foreground py-6 text-center">
               {listKind === "late"
-                ? "אין עובדים מאחרים מהפסקה במחלקה כרגע."
-                : "אין עובדים בהפסקה במחלקה כרגע."}
+                ? i18n.t("dashboard.noLateBreaks")
+                : i18n.t("dashboard.noOnBreak")}
             </p>
           ) : (
             <div className="space-y-3 max-h-[60vh] overflow-y-auto">
@@ -888,19 +896,19 @@ function DeptHeadOnBreakSection() {
                     <div className="space-y-1">
                       <p className="font-semibold truncate">{r.full_name}</p>
                       <p className="text-sm text-muted-foreground">
-                        סוג הפסקה: {r.break_type}
+                        {i18n.t("dashboard.breakTypeLabel")} {r.break_type}
                         {r.duration_minutes ? ` · ${r.duration_minutes} דק׳` : ""}
                       </p>
                       <p className="text-sm text-muted-foreground">
-                        יצא: {fmtT(r.started_at)} · חזרה: {fmtT(r.ends_at)}
+                        {i18n.t("dashboard.breakLeftReturns").replace("{start}", fmtT(r.started_at)).replace("{end}", fmtT(r.ends_at))}
                       </p>
                       {overrunMs > 0 ? (
                         <Badge variant="destructive" className="mt-1">
-                          חריגה +{fmtHMS(overrunMs)}
+                          {i18n.t("dashboard.breakOverrunBadge").replace("{time}", fmtHMS(overrunMs))}
                         </Badge>
                       ) : endsTs ? (
                         <Badge variant="secondary" className="mt-1">
-                          נותר {fmtHMS(Math.max(0, remainingMs))}
+                          {i18n.t("dashboard.breakRemainingBadge").replace("{time}", fmtHMS(Math.max(0, remainingMs)))}
                         </Badge>
                       ) : null}
                     </div>
@@ -917,7 +925,7 @@ function DeptHeadOnBreakSection() {
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 flex-wrap">
               <Coffee className="size-5 text-primary" />
-              📋 יומן ההפסקות
+              {i18n.t("dashboard.breakLogTitle")}
               {deptName ? (
                 <Badge variant="secondary" className="rounded-full">
                   {deptName}
@@ -936,16 +944,16 @@ function DeptHeadOnBreakSection() {
 
           <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mb-3">
             <Input
-              placeholder="🔎 חיפוש..."
+              placeholder={i18n.t("dashboard.searchPlaceholder")}
               value={logSearch}
               onChange={(e) => setLogSearch(e.target.value)}
             />
             <Select value={logEmpFilter} onValueChange={setLogEmpFilter}>
               <SelectTrigger>
-                <SelectValue placeholder="עובד" />
+                <SelectValue placeholder={i18n.t("dashboard.employee")} />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="__all">כל עובדי המחלקה</SelectItem>
+                <SelectItem value="__all">{i18n.t("dashboard.allDeptEmployees")}</SelectItem>
                 {employees.map(([id, name]) => (
                   <SelectItem key={id} value={id}>
                     {name}
@@ -955,10 +963,10 @@ function DeptHeadOnBreakSection() {
             </Select>
             <Select value={logTypeFilter} onValueChange={setLogTypeFilter}>
               <SelectTrigger>
-                <SelectValue placeholder="סוג הפסקה" />
+                <SelectValue placeholder={i18n.t("dashboard.breakTypePlaceholder")} />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="__all">כל הסוגים</SelectItem>
+                <SelectItem value="__all">{i18n.t("dashboard.allTypes")}</SelectItem>
                 {types.map((t) => (
                   <SelectItem key={t} value={t}>
                     {t}
@@ -968,10 +976,10 @@ function DeptHeadOnBreakSection() {
             </Select>
             <Select value={logStatusFilter} onValueChange={setLogStatusFilter}>
               <SelectTrigger>
-                <SelectValue placeholder="סטטוס" />
+                <SelectValue placeholder={i18n.t("dashboard.statusPlaceholder")} />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="__all">כל הסטטוסים</SelectItem>
+                <SelectItem value="__all">{i18n.t("dashboard.allStatuses")}</SelectItem>
                 {statuses.map((s) => (
                   <SelectItem key={s} value={s}>
                     {BREAK_STATUS_LABEL[s] ?? s}
@@ -988,19 +996,19 @@ function DeptHeadOnBreakSection() {
               </div>
             ) : filtered.length === 0 ? (
               <p className="p-6 text-sm text-muted-foreground text-center">
-                אין רשומות הפסקה במחלקה להיום.
+                {i18n.t("dashboard.noBreakRecords")}
               </p>
             ) : (
               <table className="w-full text-xs sm:text-sm">
                 <thead className="bg-muted/40 sticky top-0">
                   <tr>
-                    <th className="text-right p-2">עובד</th>
-                    <th className="text-right p-2">סוג</th>
-                    <th className="text-right p-2">התחלה</th>
-                    <th className="text-right p-2">סיום מתוכנן</th>
-                    <th className="text-right p-2">חזרה</th>
-                    <th className="text-right p-2">חריגה</th>
-                    <th className="text-right p-2">סטטוס</th>
+                    <th className="text-right p-2">{i18n.t("dashboard.colEmployee")}</th>
+                    <th className="text-right p-2">{i18n.t("dashboard.colType")}</th>
+                    <th className="text-right p-2">{i18n.t("dashboard.colStart")}</th>
+                    <th className="text-right p-2">{i18n.t("dashboard.colPlannedEnd")}</th>
+                    <th className="text-right p-2">{i18n.t("dashboard.colReturn")}</th>
+                    <th className="text-right p-2">{i18n.t("dashboard.colOverrun")}</th>
+                    <th className="text-right p-2">{i18n.t("dashboard.colStatus")}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -1010,15 +1018,15 @@ function DeptHeadOnBreakSection() {
                     const isActiveRow = r.status === "active";
                     const statusBadge = isActiveRow ? (
                       <Badge className="bg-amber-500 text-white hover:bg-amber-500">
-                        בהפסקה
+                        {i18n.t("dashboard.onBreakBadge")}
                       </Badge>
                     ) : isOnTime ? (
                       <Badge className="bg-green-600 text-white hover:bg-green-600">
-                        חזר בזמן
+                        {i18n.t("dashboard.returnedOnTime")}
                       </Badge>
                     ) : isLate ? (
                       <Badge className="bg-red-600 text-white hover:bg-red-600">
-                        חזר באיחור
+                        {i18n.t("dashboard.returnedLate")}
                       </Badge>
                     ) : (
                       <Badge variant={BREAK_STATUS_TONE[r.status] ?? "secondary"}>
@@ -1055,8 +1063,8 @@ function DeptHeadOnBreakSection() {
             )}
           </div>
           <div className="text-xs text-muted-foreground mt-2">
-            סה״כ: {filtered.length} מתוך {log.length}
-            {deptName ? ` · מחלקה: ${deptName}` : ""}
+            {i18n.t("dashboard.logTotal").replace("{n}", String(filtered.length)).replace("{total}", String(log.length))}
+            {deptName ? i18n.t("dashboard.logDept").replace("{name}", deptName) : ""}
           </div>
         </DialogContent>
       </Dialog>
@@ -1085,7 +1093,7 @@ function DeptManagerDashboard({
   if (!data.dept) {
     return (
       <Card className="card-elevated p-6 text-sm text-muted-foreground">
-        עדיין לא שויכת כאחראי מחלקה. פנה/י להנהלה.
+        {i18n.t("dashboard.notAssignedDeptHead")}
       </Card>
     );
   }
@@ -1109,7 +1117,7 @@ function DeptManagerDashboard({
               )}
             </div>
             <div className="flex-1 min-w-0">
-              <div className="text-xs text-muted-foreground">👤 אחראי המחלקה</div>
+              <div className="text-xs text-muted-foreground">{i18n.t("dashboard.deptHead")}</div>
               <div className="font-semibold truncate">{mgr.full_name}</div>
               <div className="text-sm text-muted-foreground truncate flex items-center gap-2 flex-wrap">
                 <span>
@@ -1117,7 +1125,7 @@ function DeptManagerDashboard({
                   {mgr.job_title ? ` · ${mgr.job_title}` : ""}
                 </span>
                 {mgrOnLeave && (
-                  <Badge variant="secondary" className="rounded-full text-xs">בחופש</Badge>
+                  <Badge variant="secondary" className="rounded-full text-xs">{i18n.t("dashboard.onLeave")}</Badge>
                 )}
               </div>
               {mgrOnLeave && formatLeaveDateRange((mgr as DeptEmp).leave_start_date, (mgr as DeptEmp).leave_end_date) && (
@@ -1127,7 +1135,7 @@ function DeptManagerDashboard({
               )}
             </div>
             <div className="text-sm text-muted-foreground whitespace-nowrap">
-              עובדים במחלקה: <span className="font-semibold text-foreground">{total}</span>
+              {i18n.t("dashboard.deptEmployeesCount").replace("{n}", String(total))}
             </div>
           </div>
         </Card>
@@ -1135,17 +1143,17 @@ function DeptManagerDashboard({
 
       <section>
         <div className="flex items-center justify-between mb-4">
-          <h2 className="text-lg font-semibold flex items-center gap-2">
+            <h2 className="text-lg font-semibold flex items-center gap-2">
             <Building2 className="size-5 text-primary" />
-            עובדי {data.dept.name}
+            {i18n.t("dashboard.deptEmployeesTitle").replace("{name}", data.dept.name)}
           </h2>
           <Link to="/employees" className="text-sm text-primary hover:underline">
-            לרשימה המלאה ←
+            {i18n.t("dashboard.fullList")}
           </Link>
         </div>
         {emps.length === 0 ? (
           <Card className="card-elevated p-6 text-sm text-muted-foreground">
-            עדיין אין עובדים משויכים למחלקה זו.
+            {i18n.t("dashboard.noEmployeesInDept")}
           </Card>
         ) : (
           <div className={DASH_TILE_GRID}>
@@ -1157,12 +1165,12 @@ function DeptManagerDashboard({
                   </div>
                   <div className="min-w-0 flex-1 self-center">
                     <div className="flex items-center gap-2 flex-wrap">
-                      <p className="font-medium truncate">{e.full_name || "ללא שם"}</p>
+                      <p className="font-medium truncate">{e.full_name || i18n.t("dashboard.noName")}</p>
                       {!e.is_active && (
-                        <Badge variant="destructive" className="rounded-full text-xs">לא פעיל</Badge>
+                        <Badge variant="destructive" className="rounded-full text-xs">{i18n.t("dashboard.inactive")}</Badge>
                       )}
                       {isEmployeeCurrentlyOnLeave(e) && (
-                        <Badge variant="secondary" className="rounded-full text-xs">בחופש</Badge>
+                        <Badge variant="secondary" className="rounded-full text-xs">{i18n.t("dashboard.onLeave")}</Badge>
                       )}
                     </div>
                   </div>
@@ -1214,7 +1222,7 @@ function AdminDashboard({
       <section>
         {deptCount === 0 ? (
           <Card className="card-elevated p-6 text-sm text-muted-foreground">
-            עדיין לא הוגדרו מחלקות. ניתן להוסיף דרך מסך ניהול המחלקות.
+            {i18n.t("dashboard.noDepts")}
           </Card>
         ) : (
           <Collapsible open={deptsOpen} onOpenChange={setDeptsOpen}>
@@ -1229,9 +1237,9 @@ function AdminDashboard({
                       <Building2 className="size-4" />
                     </div>
                     <div className="min-w-0 flex-1 self-center">
-                      <h3 className={DASH_TILE_TITLE}>עובדים לפי מחלקה</h3>
+                      <h3 className={DASH_TILE_TITLE}>{i18n.t("dashboard.employeesByDept")}</h3>
                       <p className="mt-0.5 text-[11px] leading-snug text-muted-foreground">
-                        {deptCount} מחלקות · {staffInDepts} עובדים
+                        {i18n.t("dashboard.deptsEmployeesSummary").replace("{n}", String(deptCount)).replace("{m}", String(staffInDepts))}
                       </p>
                     </div>
                     <div className={DASH_TILE_TRAIL}>
@@ -1247,7 +1255,7 @@ function AdminDashboard({
                   to="/employees"
                   className="shrink-0 self-center px-2 text-xs text-primary hover:underline"
                 >
-                  לכל העובדים
+                  {i18n.t("dashboard.allEmployees")}
                 </Link>
               </div>
 
@@ -1264,11 +1272,11 @@ function AdminDashboard({
                           <p className="truncate text-base font-bold leading-snug">{d.name}</p>
                           {canViewDepartments && (
                             <p className="mt-0.5 truncate text-sm font-bold text-destructive">
-                              אחראי: {departmentManagerNames?.[d.id] ?? "לא מונה"}
+                              {i18n.t("dashboard.deptManagerLabel").replace("{name}", departmentManagerNames?.[d.id] ?? i18n.t("dashboard.notAssigned"))}
                             </p>
                           )}
                           <p className="mt-0.5 text-[11px] font-medium text-muted-foreground">
-                            {stats.byDept[d.id] ?? 0} עובדים
+                            {i18n.t("dashboard.nEmployees").replace("{n}", String(stats.byDept[d.id] ?? 0))}
                           </p>
                         </button>
                         {canCreateEmployee && (
@@ -1278,10 +1286,10 @@ function AdminDashboard({
                             variant="outline"
                             className="h-7 shrink-0 gap-1 px-2 text-xs"
                             onClick={() => setCreateForDept(d)}
-                            title="הוסף עובד למחלקה"
+                            title={i18n.t("dashboard.addEmployeeToDept")}
                           >
                             <UserPlus className="size-3" />
-                            הוסף
+                            {i18n.t("dashboard.add")}
                           </Button>
                         )}
                       </div>
@@ -1381,7 +1389,7 @@ function EmployeeNotificationsCard({ userId }: { userId: string }) {
           }
         >
           <AlertTriangle className={`size-5 ${needsAttention ? "text-destructive" : "text-primary"}`} />
-          התראות
+          {i18n.t("dashboard.notifications")}
           {unread.length > 0 && (
             <span
               className={
@@ -1396,7 +1404,7 @@ function EmployeeNotificationsCard({ userId }: { userId: string }) {
         </h2>
       </div>
       {items.length === 0 ? (
-        <p className="text-sm text-muted-foreground">אין התראות חדשות.</p>
+        <p className="text-sm text-muted-foreground">{i18n.t("dashboard.noNotifications")}</p>
       ) : (
         <ul className="divide-y">
           {items.map((n: any) => (
@@ -1419,7 +1427,7 @@ function EmployeeNewMessagesCard({ userId }: { userId: string }) {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("message_recipients")
-        .select("message_id, delivered_at, message:messages!inner(id, title, created_at, deleted_at)")
+        .select(MSG_RECIPIENTS_SELECT)
         .eq("user_id", userId)
         .is("read_at", null)
         .is("archived_at", null)
@@ -1480,12 +1488,12 @@ function EmployeeNewMessagesCard({ userId }: { userId: string }) {
                   : DASH_TILE_TITLE
               }
             >
-              הודעות חדשות
+              {i18n.t("dashboard.messages")}
             </h3>
             <p className="mt-0.5 text-[11px] leading-snug text-muted-foreground">
               {count > 0
-                ? `יש ${count} הודעות שלא נקראו`
-                : "אין הודעות חדשות כרגע"}
+                ? i18n.t("dashboard.unreadMessages").replace("{n}", String(count))
+                : i18n.t("dashboard.noMessages")}
             </p>
           </div>
           <div className={`${DASH_TILE_TRAIL} gap-1.5`}>
@@ -1497,7 +1505,7 @@ function EmployeeNewMessagesCard({ userId }: { userId: string }) {
                 {count > 99 ? "99+" : count}
               </Badge>
             ) : null}
-            <span className="text-xs text-primary">למרכז תקשורת</span>
+            <span className="text-xs text-primary">{i18n.t("dashboard.toComms")}</span>
           </div>
         </div>
       </div>
@@ -1680,10 +1688,10 @@ function DashboardScheduleHeader() {
     <div className="flex items-center justify-between">
       <h2 className="text-lg font-semibold flex items-center gap-2">
         <CalendarDays className="size-5 text-primary" />
-        סידורי עבודה
+        {i18n.t("dashboard.schedulesTitle")}
       </h2>
       <Link to="/schedules" className="text-sm text-primary hover:underline">
-        לסידורי העבודה ←
+        {i18n.t("dashboard.toSchedules")}
       </Link>
     </div>
   );
@@ -1754,12 +1762,12 @@ function SchedulesStatsSection({ profile }: { profile: any }) {
     mutationFn: () => publishAllFn({ data: { week_start: weekStart } }),
     onSuccess: (res: any) => {
       if (res?.published > 0) {
-        toast.success(`פורסמו ${res.published} סידורי עבודה`);
+        toast.success(i18n.t("dashboard.schedulesPublished").replace("{n}", String(res.published)));
       } else {
-        toast.info("אין סידורים לפרסום");
+        toast.info(i18n.t("dashboard.noSchedulesToPublish"));
       }
       if (res?.errors?.length) {
-        toast.warning(`לא פורסמו ${res.errors.length} סידורים`);
+        toast.warning(i18n.t("dashboard.schedulesPublishFailed").replace("{n}", String(res.errors.length)));
       }
       qc.invalidateQueries({ queryKey: ["dashboard-schedules"] });
       qc.invalidateQueries({ queryKey: ["emp-dash-schedule"] });
@@ -1768,7 +1776,7 @@ function SchedulesStatsSection({ profile }: { profile: any }) {
       qc.invalidateQueries({ queryKey: ["dashboard-dept-states"] });
       setDraftOpen(false);
     },
-    onError: (e: any) => toast.error(e?.message ?? "שגיאה בפרסום"),
+    onError: (e: any) => toast.error(e?.message ?? i18n.t("dashboard.publishError")),
   });
 
   const scopeFilter = canViewBranchScheduleOverview ? null : profile.department_id ?? null;
@@ -1952,10 +1960,15 @@ function SchedulesStatsSection({ profile }: { profile: any }) {
                         : DASH_TILE_TITLE
                     }
                   >
-                    סטטוס סידורי עבודה
+                    {i18n.t("dashboard.schedulesStatus")}
                   </h3>
                   <p className="mt-0.5 text-[11px] leading-snug text-muted-foreground">
-                    {`${pendingValue} ממתינים · ${s.approved} מאושרים · ${s.noScheduleCount} ללא סידור · ${s.draftCount} שמורים · ${s.publishedCount} מפורסמים`}
+                    {i18n.t("dashboard.schedulesStatusSummary")
+                      .replace("{pending}", String(pendingValue))
+                      .replace("{approved}", String(s.approved))
+                      .replace("{noSched}", String(s.noScheduleCount))
+                      .replace("{draft}", String(s.draftCount))
+                      .replace("{published}", String(s.publishedCount))}
                   </p>
                 </div>
                 <div className={`${DASH_TILE_TRAIL} gap-1.5`}>
@@ -1977,7 +1990,7 @@ function SchedulesStatsSection({ profile }: { profile: any }) {
               className="shrink-0 self-center px-2 text-xs text-primary hover:underline"
               onClick={() => sectionAttn.markSeen()}
             >
-              לסידורים
+              {i18n.t("dashboard.toSchedulesLink")}
             </Link>
           </div>
 
@@ -1985,7 +1998,7 @@ function SchedulesStatsSection({ profile }: { profile: any }) {
             <div className={`border-t p-3 space-y-2`}>
               <div className={DASH_TILE_GRID}>
                 <StatCard
-                  label="ממתינים לאישור"
+                  label={i18n.t("dashboard.pendingApproval")}
                   value={pendingValue}
                   icon={Clock}
                   tone="warning"
@@ -1994,7 +2007,7 @@ function SchedulesStatsSection({ profile }: { profile: any }) {
                   onClick={goPending}
                 />
                 <StatCard
-                  label="מאושרים"
+                  label={i18n.t("dashboard.approvedLabel")}
                   value={s.approved}
                   icon={CheckCircle2}
                   tone="success"
@@ -2008,7 +2021,7 @@ function SchedulesStatsSection({ profile }: { profile: any }) {
               </div>
               <div className={DASH_TILE_GRID}>
                 <StatCard
-                  label="מחלקות שטרם הוכן להן סידור עבודה"
+                  label={i18n.t("dashboard.deptWithoutSchedule")}
                   value={s.noScheduleCount}
                   icon={Building2}
                   tone="warning"
@@ -2020,7 +2033,7 @@ function SchedulesStatsSection({ profile }: { profile: any }) {
                   }}
                 />
                 <StatCard
-                  label="מחלקות עם סידור עבודה שמור"
+                  label={i18n.t("dashboard.deptWithDraftSchedule")}
                   value={s.draftCount}
                   icon={CalendarDays}
                   tone="primary"
@@ -2032,7 +2045,7 @@ function SchedulesStatsSection({ profile }: { profile: any }) {
                   }}
                 />
                 <StatCard
-                  label="מחלקות עם סידור עבודה שפורסם"
+                  label={i18n.t("dashboard.deptWithPublishedSchedule")}
                   value={s.publishedCount}
                   icon={CheckCircle2}
                   tone="success"
@@ -2058,11 +2071,11 @@ function SchedulesStatsSection({ profile }: { profile: any }) {
       <Dialog open={notSubmittedOpen} onOpenChange={setNotSubmittedOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>מחלקות שטרם הוכן להן סידור עבודה</DialogTitle>
+            <DialogTitle>{i18n.t("dashboard.deptWithoutSchedule")}</DialogTitle>
           </DialogHeader>
           {s.noScheduleDepts.length === 0 ? (
             <p className="text-sm text-muted-foreground py-6 text-center">
-              לכל המחלקות הוכן סידור עבודה לשבוע הנוכחי.
+              {i18n.t("dashboard.allDeptsHaveSchedule")}
             </p>
           ) : (
             <ul className="divide-y max-h-[60vh] overflow-auto">
@@ -2092,11 +2105,11 @@ function SchedulesStatsSection({ profile }: { profile: any }) {
       <Dialog open={draftOpen} onOpenChange={setDraftOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>מחלקות עם סידור עבודה שמור</DialogTitle>
+            <DialogTitle>{i18n.t("dashboard.deptWithDraftSchedule")}</DialogTitle>
           </DialogHeader>
           {s.draftDepts.length === 0 ? (
             <p className="text-sm text-muted-foreground py-6 text-center">
-              אין סידורי עבודה שמורים לשבוע הנוכחי.
+              {i18n.t("dashboard.noDraftSchedules")}
             </p>
           ) : (
             <>
@@ -2132,7 +2145,7 @@ function SchedulesStatsSection({ profile }: { profile: any }) {
                     ) : (
                       <Send className="size-4" />
                     )}
-                    📤 פרסם את כל סידורי העבודה
+                    {i18n.t("dashboard.publishAllSchedules")}
                   </Button>
                 </div>
               )}
@@ -2144,11 +2157,11 @@ function SchedulesStatsSection({ profile }: { profile: any }) {
       <Dialog open={publishedOpen} onOpenChange={setPublishedOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>מחלקות עם סידור עבודה שפורסם</DialogTitle>
+            <DialogTitle>{i18n.t("dashboard.deptWithPublishedSchedule")}</DialogTitle>
           </DialogHeader>
           {s.publishedDepts.length === 0 ? (
             <p className="text-sm text-muted-foreground py-6 text-center">
-              אין סידורי עבודה שפורסמו לשבוע הנוכחי.
+              {i18n.t("dashboard.noPublishedSchedules")}
             </p>
           ) : (
             <ul className="divide-y max-h-[60vh] overflow-auto">
@@ -2233,7 +2246,7 @@ function ApprovedSchedulesDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-2xl">
         <DialogHeader>
-          <DialogTitle>סידורי עבודה מאושרים</DialogTitle>
+          <DialogTitle>{i18n.t("dashboard.approvedSchedules")}</DialogTitle>
         </DialogHeader>
         {q.isLoading ? (
           <div className="flex justify-center py-8">
@@ -2241,7 +2254,7 @@ function ApprovedSchedulesDialog({
           </div>
         ) : !q.data || q.data.length === 0 ? (
           <p className="text-sm text-muted-foreground py-6 text-center">
-            אין סידורי עבודה מאושרים.
+            {i18n.t("dashboard.noApprovedSchedules")}
           </p>
         ) : (
           <ul className="divide-y max-h-[60vh] overflow-auto">
@@ -2277,10 +2290,10 @@ function ApprovedSchedulesDialog({
                     </p>
                   </div>
                   <div className="mt-1 text-xs text-muted-foreground flex flex-wrap gap-x-4 gap-y-1">
-                    <span>נוצר ע״י: <span className="text-foreground">{r.creator_name}</span></span>
-                    <span>אושר ע״י: <span className="text-foreground">{r.approver_name}</span></span>
+                    <span>{i18n.t("dashboard.createdByLabel")} <span className="text-foreground">{r.creator_name}</span></span>
+                    <span>{i18n.t("dashboard.approvedByLabel")} <span className="text-foreground">{r.approver_name}</span></span>
                     <span>
-                      תאריך אישור:{" "}
+                      {i18n.t("dashboard.approvalDate")}{" "}
                       <span className="text-foreground">
                         {r.approved_at
                           ? new Intl.DateTimeFormat("he-IL", {
@@ -2350,7 +2363,7 @@ function DepartmentEmployeesDialog({
         managerId: dept.manager_id,
         employees: (emps ?? []).map((e: any) => ({
           ...e,
-          roleLabel: roleMap[e.id] ?? "עובד",
+          roleLabel: roleMap[e.id] ?? i18n.t("dashboard.employee"),
           isManager: e.id === dept.manager_id,
         })),
       };
@@ -2361,14 +2374,14 @@ function DepartmentEmployeesDialog({
     <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
       <DialogContent className="max-w-lg">
         <DialogHeader>
-          <DialogTitle>עובדי {q.data?.deptName ?? "—"}</DialogTitle>
+          <DialogTitle>{i18n.t("dashboard.deptEmployeesTitle").replace("{name}", q.data?.deptName ?? "—")}</DialogTitle>
         </DialogHeader>
         {q.isLoading ? (
           <div className="flex justify-center py-8">
             <Loader2 className="size-5 animate-spin text-primary" />
           </div>
         ) : !q.data || q.data.employees.length === 0 ? (
-          <p className="text-sm text-muted-foreground py-6 text-center">אין עובדים במחלקה זו.</p>
+          <p className="text-sm text-muted-foreground py-6 text-center">{i18n.t("dashboard.noEmployeesInDeptDialog")}</p>
         ) : (
           <ul className="divide-y max-h-[60vh] overflow-auto">
             {q.data.employees.map((emp: any) => (
@@ -2380,23 +2393,23 @@ function DepartmentEmployeesDialog({
                 >
                   <div className="flex items-center justify-between gap-2">
                     <div className="min-w-0">
-                      <p className="font-medium truncate">{emp.full_name || "ללא שם"}</p>
+                      <p className="font-medium truncate">{emp.full_name || i18n.t("dashboard.noName")}</p>
                       <p className="text-xs text-muted-foreground mt-0.5">
                         {emp.roleLabel}
                         {emp.isManager && (
-                          <span className="text-primary font-semibold mr-1">· אחראי מחלקה</span>
+                          <span className="text-primary font-semibold mr-1">· {i18n.t("dashboard.deptManager")}</span>
                         )}
                       </p>
                     </div>
                     <div className="flex gap-1 shrink-0">
                       {!emp.is_active && (
-                        <Badge variant="destructive" className="rounded-full text-xs">לא פעיל</Badge>
+                        <Badge variant="destructive" className="rounded-full text-xs">{i18n.t("dashboard.inactive")}</Badge>
                       )}
                       {isEmployeeCurrentlyOnLeave(emp) && (
-                        <Badge variant="secondary" className="rounded-full text-xs">בחופש</Badge>
+                        <Badge variant="secondary" className="rounded-full text-xs">{i18n.t("dashboard.onLeave")}</Badge>
                       )}
                       {emp.is_active && !isEmployeeCurrentlyOnLeave(emp) && (
-                        <Badge variant="outline" className="rounded-full text-xs">פעיל</Badge>
+                        <Badge variant="outline" className="rounded-full text-xs">{i18n.t("dashboard.active")}</Badge>
                       )}
                     </div>
                   </div>
@@ -2456,14 +2469,14 @@ function EmployeeProfileDialog({
     <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
       <DialogContent className="max-w-md">
         <DialogHeader>
-          <DialogTitle>פרטי עובד</DialogTitle>
+          <DialogTitle>{i18n.t("dashboard.employeeDetails")}</DialogTitle>
         </DialogHeader>
         {q.isLoading ? (
           <div className="flex justify-center py-8">
             <Loader2 className="size-5 animate-spin text-primary" />
           </div>
         ) : !q.data ? (
-          <p className="text-sm text-muted-foreground py-6 text-center">לא נמצאו פרטי עובד.</p>
+          <p className="text-sm text-muted-foreground py-6 text-center">{i18n.t("dashboard.noEmployeeDetails")}</p>
         ) : (
           <div className="space-y-4">
             <div className="flex items-center gap-4">
@@ -2475,22 +2488,22 @@ function EmployeeProfileDialog({
                 )}
               </div>
               <div>
-                <p className="font-semibold text-lg">{q.data.full_name || "ללא שם"}</p>
+                <p className="font-semibold text-lg">{q.data.full_name || i18n.t("dashboard.noName")}</p>
                 <p className="text-sm text-muted-foreground">{q.data.roleLabel}</p>
               </div>
             </div>
             <Card className="p-4 space-y-3">
-              <ProfileRow label="מספר זהות" value={q.data.id_number ?? "—"} />
-              <ProfileRow label="מחלקה" value={q.data.departmentName} />
-              <ProfileRow label="טלפון" value={q.data.phone ?? "—"} />
+              <ProfileRow label={i18n.t("dashboard.idNumber")} value={q.data.id_number ?? "—"} />
+              <ProfileRow label={i18n.t("dashboard.department")} value={q.data.departmentName} />
+              <ProfileRow label={i18n.t("dashboard.phone")} value={q.data.phone ?? "—"} />
               <ProfileRow
-                label="סטטוס"
+                label={i18n.t("dashboard.statusLabel")}
                 value={
                   isEmployeeCurrentlyOnLeave(q.data)
-                    ? `בחופש${formatLeaveDateRange(q.data.leave_start_date, q.data.leave_end_date) ? ` (${formatLeaveDateRange(q.data.leave_start_date, q.data.leave_end_date)})` : ""}`
+                    ? `${i18n.t("dashboard.onLeaveStatus")}${formatLeaveDateRange(q.data.leave_start_date, q.data.leave_end_date) ? ` (${formatLeaveDateRange(q.data.leave_start_date, q.data.leave_end_date)})` : ""}`
                     : q.data.is_active
-                    ? "פעיל"
-                    : "לא פעיל"
+                    ? i18n.t("dashboard.active")
+                    : i18n.t("dashboard.inactive")
                 }
               />
             </Card>
@@ -2571,13 +2584,13 @@ function MyActiveBreakCard({ userId }: { userId: string }) {
       if (error) throw error;
     },
     onSuccess: () => {
-      toast.success("סומן: חזרת מההפסקה");
+      toast.success(i18n.t("dashboard.markReturn"));
       setDetailOpen(false);
       qc.invalidateQueries({ queryKey: ["my-active-break", userId] });
       qc.invalidateQueries({ queryKey: ["dashboard-on-break"] });
       qc.invalidateQueries({ queryKey: ["dashboard-daily-breaks"] });
     },
-    onError: (e: any) => toast.error(e?.message ?? "שגיאה"),
+    onError: (e: any) => toast.error(e?.message ?? i18n.t("dashboard.error")),
   });
 
   const r = breakQ.data;
@@ -2601,20 +2614,20 @@ function MyActiveBreakCard({ userId }: { userId: string }) {
         card: "border-red-500 bg-red-50 dark:bg-red-950/30",
         icon: "bg-red-500/10 text-red-600",
         timer: "text-red-600",
-        label: "🔴 חריגה",
+        label: i18n.t("dashboard.toneOverrun"),
       }
     : isActive
       ? {
           card: "border-green-500 bg-green-50 dark:bg-green-950/30",
           icon: "bg-green-500/10 text-green-600",
           timer: "text-green-600",
-          label: "🟢 בהפסקה",
+          label: i18n.t("dashboard.toneOnBreak"),
         }
       : {
           card: "border-amber-500 bg-amber-50 dark:bg-amber-950/30",
           icon: "bg-amber-500/10 text-amber-600",
           timer: "text-amber-600",
-          label: "🟡 אושרה · ממתינה להתחלה",
+          label: i18n.t("dashboard.toneApprovedPending"),
         };
 
   const bigTimer = overrun
@@ -2657,7 +2670,7 @@ function MyActiveBreakCard({ userId }: { userId: string }) {
           </div>
           <div className="flex-1 min-w-0 space-y-3">
             <div className="flex flex-wrap items-center gap-2">
-              <h3 className="font-semibold">ההפסקה שלי</h3>
+              <h3 className="font-semibold">{i18n.t("dashboard.myBreak")}</h3>
               <Badge variant={overrun ? "destructive" : isActive ? "default" : "secondary"}>
                 {tone.label}
               </Badge>
@@ -2672,18 +2685,18 @@ function MyActiveBreakCard({ userId }: { userId: string }) {
               </div>
               <div className="mt-1 text-xs text-muted-foreground">
                 {overrun
-                  ? "זמן חריגה — נא לחזור לעבודה"
+                  ? i18n.t("dashboard.breakOverrun")
                     : isActive
-                      ? "זמן נותר להפסקה"
+                      ? i18n.t("dashboard.breakTimeLeft")
                       : startsAtIso
-                        ? `תתחיל ב־${fmtHM(startsAtIso)}`
-                        : "הפסקה מאושרת — תתחיל בקרוב"}
+                        ? `${fmtHM(startsAtIso)}`
+                        : i18n.t("dashboard.breakApproved")}
               </div>
             </div>
 
             {(r as any).approver && (
               <div className="rounded-md border border-border/60 bg-background/50 p-2.5 text-xs space-y-0.5">
-                <div className="font-medium text-foreground">✅ אושרה ע״י</div>
+                <div className="font-medium text-foreground">✅ {i18n.t("dashboard.breakApprovedBy")}</div>
                 <div className="text-muted-foreground">
                   👤 <span className="text-foreground font-medium">{(r as any).approver.full_name}</span>
                   {(r as any).approver.role_label && <span> · 💼 {(r as any).approver.role_label}</span>}
@@ -2701,13 +2714,13 @@ function MyActiveBreakCard({ userId }: { userId: string }) {
 
             <div className="grid sm:grid-cols-2 gap-x-4 gap-y-1 text-xs text-muted-foreground">
               {startsAtIso && (
-                <div>▶️ התחלה: <span className="text-foreground font-medium">{fmtHM(startsAtIso)}</span></div>
+                <div>{i18n.t("dashboard.breakStart")} <span className="text-foreground font-medium">{fmtHM(startsAtIso)}</span></div>
               )}
               {endsAtMs && (
-                <div>🏁 סיום מתוכנן: <span className="text-foreground font-medium">{fmtHM(new Date(endsAtMs).toISOString())}</span></div>
+                <div>{i18n.t("dashboard.breakPlannedEnd")} <span className="text-foreground font-medium">{fmtHM(new Date(endsAtMs).toISOString())}</span></div>
               )}
               {endsAtMs && (
-                <div>🕒 חזרה משוערת: <span className="text-foreground">{fmtHM(new Date(endsAtMs).toISOString())}</span></div>
+                <div>{i18n.t("dashboard.breakExpectedReturn")} <span className="text-foreground">{fmtHM(new Date(endsAtMs).toISOString())}</span></div>
               )}
             </div>
 
@@ -2722,7 +2735,7 @@ function MyActiveBreakCard({ userId }: { userId: string }) {
                   disabled={endMut.isPending}
                 >
                   {endMut.isPending ? <Loader2 className="size-4 animate-spin" /> : <CheckCircle2 className="size-4" />}
-                  ✅ חזרתי מהפסקה
+                  {i18n.t("dashboard.iReturned")}
                 </Button>
               </div>
             )}
@@ -2735,43 +2748,43 @@ function MyActiveBreakCard({ userId }: { userId: string }) {
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Coffee className="size-5 text-primary" />
-              פרטי ההפסקה שלי
+              {i18n.t("dashboard.myBreakDetails")}
             </DialogTitle>
           </DialogHeader>
           <div className="space-y-2 text-sm">
-            <DetailRow k="☕ סוג הפסקה" v={r.setting_name} />
-            <DetailRow k="⏱️ משך מאושר" v={`${r.duration_minutes} דק׳`} />
-            <DetailRow k="▶️ שעת תחילת הפסקה" v={startsAtIso ? formatHeDateTime(startsAtIso) : "—"} />
+            <DetailRow k={i18n.t("dashboard.breakTypeLabelDetail")} v={r.setting_name} />
+            <DetailRow k={i18n.t("dashboard.approvedDuration")} v={`${r.duration_minutes} דק׳`} />
+            <DetailRow k={i18n.t("dashboard.breakStartTime")} v={startsAtIso ? formatHeDateTime(startsAtIso) : "—"} />
             <DetailRow
-              k="🏁 שעת סיום מתוכננת"
+              k={i18n.t("dashboard.plannedEndTime")}
               v={endsAtMs ? formatHeDateTime(new Date(endsAtMs).toISOString()) : "—"}
             />
             <DetailRow
-              k="🕒 שעת חזרה בפועל"
-              v={r.completed_at ? formatHeDateTime(r.completed_at) : "— (בהפסקה)"}
+              k={i18n.t("dashboard.actualReturnTime")}
+              v={r.completed_at ? formatHeDateTime(r.completed_at) : i18n.t("dashboard.currentlyOnBreak")}
             />
             <DetailRow
-              k="⏳ משך הפסקה בפועל"
+              k={i18n.t("dashboard.actualDuration")}
               v={actualDurMin != null ? `${actualDurMin} דק׳` : "—"}
             />
             <DetailRow
-              k="🔴 זמן חריגה"
+              k={i18n.t("dashboard.overrunTime")}
               v={
                 overrun
                   ? fmtHMS(overrunMs)
                   : actualDurMin != null && r.duration_minutes && actualDurMin > r.duration_minutes
                     ? `${actualDurMin - r.duration_minutes} דק׳`
-                    : "אין"
+                    : i18n.t("dashboard.noOverrun")
               }
             />
             {(r as any).approver && (
               <>
-                <DetailRow k="👤 שם המאשר" v={(r as any).approver.full_name} />
+                <DetailRow k={i18n.t("dashboard.approverName")} v={(r as any).approver.full_name} />
                 {(r as any).approver.role_label && (
-                  <DetailRow k="💼 תפקיד המאשר" v={(r as any).approver.role_label} />
+                  <DetailRow k={i18n.t("dashboard.approverRole")} v={(r as any).approver.role_label} />
                 )}
                 {r.approval_decided_at && (
-                  <DetailRow k="📅 תאריך ושעת אישור" v={formatHeDateTime(r.approval_decided_at)} />
+                  <DetailRow k={i18n.t("dashboard.approvalDateTime")} v={formatHeDateTime(r.approval_decided_at)} />
                 )}
               </>
             )}
@@ -2787,7 +2800,7 @@ function MyActiveBreakCard({ userId }: { userId: string }) {
                 disabled={endMut.isPending}
               >
                 {endMut.isPending ? <Loader2 className="size-4 animate-spin" /> : <CheckCircle2 className="size-4" />}
-                ✅ חזרתי מהפסקה
+                {i18n.t("dashboard.iReturned")}
               </Button>
             </div>
           )}
@@ -2855,7 +2868,7 @@ async function fetchMyBreakDashboardRows(userId: string) {
 
   const enriched = rows.map((row) => ({
     ...row,
-    setting_name: settingNameById.get(row.break_setting_id) ?? "הפסקה",
+    setting_name: settingNameById.get(row.break_setting_id) ?? i18n.t("dashboard.break"),
     approver: row.approved_by ? approverById.get(row.approved_by) ?? null : null,
   }));
 
@@ -2894,8 +2907,8 @@ function DashboardActiveBreakCard({
   const overrun = overrunMs > 0;
   const bigTimer = overrun ? `+${fmtHMS(overrunMs)}` : endsAtMs ? fmtHMS(remainingMs) : "--:--";
   const tone = overrun
-    ? { card: "border-red-500 bg-red-50 dark:bg-red-950/30", icon: "bg-red-500/10 text-red-600", timer: "text-red-600", label: "🔴 חריגה" }
-    : { card: "border-green-500 bg-green-50 dark:bg-green-950/30", icon: "bg-green-500/10 text-green-600", timer: "text-green-600", label: "🟢 בהפסקה" };
+    ? { card: "border-red-500 bg-red-50 dark:bg-red-950/30", icon: "bg-red-500/10 text-red-600", timer: "text-red-600", label: i18n.t("dashboard.toneOverrun") }
+    : { card: "border-green-500 bg-green-50 dark:bg-green-950/30", icon: "bg-green-500/10 text-green-600", timer: "text-green-600", label: i18n.t("dashboard.toneOnBreak") };
 
   return (
     <Card className={"card-elevated p-5 border-2 " + tone.card}>
@@ -2905,7 +2918,7 @@ function DashboardActiveBreakCard({
         </div>
         <div className="flex-1 min-w-0 space-y-3">
           <div className="flex flex-wrap items-center gap-2">
-            <h3 className="font-semibold">הפסקה נוכחית</h3>
+            <h3 className="font-semibold">{i18n.t("dashboard.currentBreak")}</h3>
             <Badge variant={overrun ? "destructive" : "default"}>{tone.label}</Badge>
             <span className="text-sm text-muted-foreground">
               ☕ {row.setting_name} · {row.duration_minutes} דק׳
@@ -2916,15 +2929,15 @@ function DashboardActiveBreakCard({
               {bigTimer}
             </div>
             <div className="mt-1 text-xs text-muted-foreground">
-              {overrun ? "זמן חריגה — נא לחזור לעבודה" : "זמן נותר להפסקה"}
+              {overrun ? i18n.t("dashboard.breakOverrun") : i18n.t("dashboard.breakTimeLeft")}
             </div>
           </div>
           <div className="grid sm:grid-cols-2 gap-x-4 gap-y-1 text-xs text-muted-foreground">
             {startsAtIso && (
-              <div>▶️ התחלה: <span className="text-foreground font-medium">{fmtHM(startsAtIso)}</span></div>
+              <div>{i18n.t("dashboard.breakStart")} <span className="text-foreground font-medium">{fmtHM(startsAtIso)}</span></div>
             )}
             {endsAtMs && (
-              <div>🏁 סיום מתוכנן: <span className="text-foreground font-medium">{fmtHM(new Date(endsAtMs).toISOString())}</span></div>
+              <div>{i18n.t("dashboard.breakPlannedEnd")} <span className="text-foreground font-medium">{fmtHM(new Date(endsAtMs).toISOString())}</span></div>
             )}
           </div>
           <Button
@@ -2935,7 +2948,7 @@ function DashboardActiveBreakCard({
             disabled={ending}
           >
             {ending ? <Loader2 className="size-4 animate-spin" /> : <CheckCircle2 className="size-4" />}
-            סיום הפסקה
+            {i18n.t("dashboard.endBreak")}
           </Button>
         </div>
       </div>
@@ -2958,7 +2971,7 @@ function DashboardUpcomingBreakCard({ row }: { row: DashboardBreakRow }) {
         </div>
         <div className="flex-1 min-w-0 space-y-3">
           <div className="flex flex-wrap items-center gap-2">
-            <h3 className="font-semibold">הפסקה הבאה</h3>
+            <h3 className="font-semibold">{i18n.t("dashboard.nextBreak")}</h3>
             <Badge variant="secondary">{BREAK_STATUS_LABEL[row.status] ?? row.status}</Badge>
             <span className="text-sm text-muted-foreground">
               ☕ {row.setting_name} · {row.duration_minutes} דק׳
@@ -2968,12 +2981,12 @@ function DashboardUpcomingBreakCard({ row }: { row: DashboardBreakRow }) {
             <div className="font-mono font-bold tabular-nums text-4xl sm:text-5xl tracking-wider text-amber-600">
               {startsMs ? fmtHMS(countdownMs) : "--:--"}
             </div>
-            <div className="mt-1 text-xs text-muted-foreground">זמן עד תחילת ההפסקה</div>
+            <div className="mt-1 text-xs text-muted-foreground">{i18n.t("dashboard.timeUntilBreak")}</div>
             {startsAtIso && (
               <div className="mt-2 text-base font-semibold text-amber-900 dark:text-amber-100 tabular-nums">
-                תתחיל ב־{fmtHM(startsAtIso)}
+                {i18n.t("dashboard.breakStartsAt").replace("{time}", fmtHM(startsAtIso))}
                 {endsAtMs
-                  ? ` · עד ${fmtHM(new Date(endsAtMs).toISOString())}`
+                  ? i18n.t("dashboard.breakUntil").replace("{time}", fmtHM(new Date(endsAtMs).toISOString()))
                   : ""}
               </div>
             )}
@@ -2993,11 +3006,11 @@ function DashboardPendingBreakCard({ row }: { row: DashboardBreakRow }) {
         </div>
         <div className="flex-1 min-w-0 space-y-1">
           <div className="flex flex-wrap items-center gap-2">
-            <h3 className="font-semibold">הפסקה</h3>
-            <Badge variant="secondary">🟡 ממתינה לאישור</Badge>
+            <h3 className="font-semibold">{i18n.t("dashboard.break")}</h3>
+            <Badge variant="secondary">{i18n.t("dashboard.pendingApprovalBreakBadge")}</Badge>
           </div>
           <p className="text-sm text-muted-foreground">
-            ☕ {row.setting_name} · {row.duration_minutes} דק׳ · שעה מבוקשת{" "}
+            ☕ {row.setting_name} · {row.duration_minutes} דק׳ · {i18n.t("breaks.requestedHour")}{" "}
             {row.requested_at ? fmtHM(row.requested_at) : "—"}
           </p>
         </div>
@@ -3103,19 +3116,19 @@ function LeaveShortcutCard({ userId }: { userId: string }) {
   };
 
   const queueTitle = leaveAccess.isDeptManager && leaveAccess.pendingQueueMode === "dept"
-    ? "בקשות חופשה במחלקה"
+    ? i18n.t("dashboard.leaveRequestsDept")
     : leaveAccess.isDeptManager
-      ? "בקשות חופשה ממתינות"
-      : "בקשות חופשה ממתינות לאישור";
+      ? i18n.t("dashboard.leaveRequestsPending")
+      : i18n.t("dashboard.leaveRequestsPendingApproval");
 
   const queueSubtitle =
     leaveAccess.pendingQueueMode === "dept"
       ? queueCount > 0
-        ? `${queueCount} בקשות ממתינות במחלקה`
-        : "אין בקשות ממתינות במחלקה"
+        ? i18n.t("dashboard.pendingInDept").replace("{n}", String(queueCount))
+        : i18n.t("dashboard.noPendingInDept")
       : queueCount > 0
-        ? `${queueCount} בקשות ממתינות לאישור`
-        : "אין בקשות ממתינות לאישור";
+        ? i18n.t("dashboard.pendingToApprove").replace("{n}", String(queueCount))
+        : i18n.t("dashboard.noLeaveRequests");
 
   if (!leaveAccess.showRequestCard && !leaveAccess.showPendingQueueCard) {
     return null;
@@ -3216,16 +3229,16 @@ function LeaveShortcutCard({ userId }: { userId: string }) {
                     : DASH_TILE_TITLE
                 }
               >
-                בקשת חופשה
+                {i18n.t("dashboard.leaveRequest")}
               </h3>
               <p className={DASH_TILE_SUB}>
                 {pendingMine.length > 0
-                  ? `${pendingMine.length} בקשות ממתינות`
+                  ? i18n.t("dashboard.pendingRequests").replace("{n}", String(pendingMine.length))
                   : decisionBanner
                     ? decisionBanner.text
                     : approvedUpcoming.length > 0
                       ? `${formatLeaveDateRange(approvedUpcoming[0].start_date, approvedUpcoming[0].end_date)}`
-                      : "הגשה ומעקב סטטוס"}
+                      : i18n.t("dashboard.submitAndTrack")}
               </p>
             </div>
             <div className={`${DASH_TILE_TRAIL} w-auto min-w-[4.75rem] gap-1.5`}>
@@ -3253,7 +3266,7 @@ function LeaveShortcutCard({ userId }: { userId: string }) {
                 }}
               >
                 <Send className="size-3" />
-                בקשה
+                {i18n.t("dashboard.request")}
               </Button>
             </div>
           </div>
@@ -3344,9 +3357,9 @@ function BreakShortcutCard({ userId }: { userId: string }) {
             <Coffee className="size-4" />
           </div>
           <div className="min-w-0 flex-1 self-center">
-            <h3 className={DASH_TILE_TITLE}>הפסקה</h3>
+            <h3 className={DASH_TILE_TITLE}>{i18n.t("dashboard.break")}</h3>
             <p className={DASH_TILE_SUB}>
-              בקש/י הפסקה במהירות, ללא מעבר לתפריט.
+              {i18n.t("breaks.subtitleAuto")}
             </p>
           </div>
           <div className={DASH_TILE_TRAIL}>
@@ -3356,7 +3369,7 @@ function BreakShortcutCard({ userId }: { userId: string }) {
               onClick={(e) => { e.stopPropagation(); goRequest(); }}
             >
               <Send className="size-3" />
-              בקשה
+              {i18n.t("dashboard.request")}
             </Button>
           </div>
         </div>
@@ -3584,7 +3597,7 @@ function OnBreakSection({ profile }: { profile: any }) {
         { by: string; at: string; oldStart: string | null; newStart: string | null }
       >();
       for (const a of auditList) {
-        const actorName = (pMap.get(a.actor_id) as any)?.full_name ?? "מנהל";
+        const actorName = (pMap.get(a.actor_id) as any)?.full_name ?? i18n.t("dashboard.manage");
         if (a.action === "manual_end") {
           // keep earliest manual_end per break_request
           const prev = auditByReq.get(a.break_request_id);
@@ -3623,7 +3636,7 @@ function OnBreakSection({ profile }: { profile: any }) {
         departmentId: r.department_id as string | null,
         department: dMap.get(r.department_id) ?? "—",
         typeId: r.break_setting_id as string | null,
-        type: sMap.get(r.break_setting_id) ?? "הפסקה",
+        type: sMap.get(r.break_setting_id) ?? i18n.t("dashboard.break"),
         durationMinutes: r.duration_minutes as number,
         createdAt: r.created_at as string | null,
         requestedTime: r.requested_at as string | null,
@@ -3650,7 +3663,7 @@ function OnBreakSection({ profile }: { profile: any }) {
       return input;
     },
     onSuccess: (input) => {
-      toast.success("ההפסקה הסתיימה");
+      toast.success(i18n.t("dashboard.breakEnded"));
       qc.invalidateQueries({ queryKey: ["dashboard-on-break"] });
       qc.invalidateQueries({ queryKey: ["dashboard-dept-on-break"] });
       qc.invalidateQueries({ queryKey: ["dashboard-dept-daily-breaks"] });
@@ -3664,7 +3677,7 @@ function OnBreakSection({ profile }: { profile: any }) {
       qc.invalidateQueries({ queryKey: ["my-break-shortcut", input.userId] });
       qc.invalidateQueries({ queryKey: ["my-break-requests", input.userId] });
     },
-    onError: (e: any) => toast.error(e?.message ?? "שגיאה בסיום ההפסקה"),
+    onError: (e: any) => toast.error(e?.message ?? i18n.t("dashboard.breakEndError")),
   });
 
 
@@ -3757,16 +3770,16 @@ function OnBreakSection({ profile }: { profile: any }) {
                         : DASH_TILE_TITLE
                     }
                   >
-                    הפסקות
+                    {i18n.t("dashboard.breaksSectionTitle")}
                   </h3>
                   <p className="mt-0.5 text-[11px] leading-snug text-muted-foreground">
                     {pendingBreakCount > 0
-                      ? `${pendingBreakCount} ממתינות · ${onBreakNow.length} בהפסקה · ${lateList.length} מאחרים`
+                      ? i18n.t("dashboard.breaksSummaryWithPending").replace("{pending}", String(pendingBreakCount)).replace("{n}", String(onBreakNow.length)).replace("{m}", String(lateList.length))
                       : alertCount > 0
-                        ? `${onBreakNow.length} בהפסקה · ${lateList.length} מאחרים · יומן ${logCount}`
+                        ? i18n.t("dashboard.breaksSummary").replace("{n}", String(onBreakNow.length)).replace("{m}", String(lateList.length)).replace("{k}", String(logCount))
                         : logCount > 0
-                          ? `יומן היום: ${logCount}`
-                          : "אין פעילות הפסקות כרגע"}
+                          ? i18n.t("dashboard.breakLogToday").replace("{n}", String(logCount))
+                          : i18n.t("dashboard.noBreakActivity")}
                   </p>
                 </div>
                 <div className={`${DASH_TILE_TRAIL} gap-1.5`}>
@@ -3792,7 +3805,7 @@ function OnBreakSection({ profile }: { profile: any }) {
                   navigate({ to: "/breaks-admin" });
                 }}
               >
-                ניהול
+                {i18n.t("dashboard.manage")}
               </button>
             ) : null}
           </div>
@@ -3801,7 +3814,7 @@ function OnBreakSection({ profile }: { profile: any }) {
             <div className={`border-t p-3 ${DASH_TILE_GRID}`}>
               {canManageBreaks && requiresApproval && (
                 <StatCard
-                  label="בקשות הפסקה ממתינות לאישור"
+                  label={i18n.t("dashboard.pendingBreakRequests")}
                   value={pendingBreakCount}
                   icon={Clock}
                   tone="warning"
@@ -3814,7 +3827,7 @@ function OnBreakSection({ profile }: { profile: any }) {
                 />
               )}
               <StatCard
-                label="עובדים בהפסקה כעת"
+                label={i18n.t("dashboard.onBreakNow")}
                 value={onBreakNow.length}
                 icon={Coffee}
                 tone={onBreakNow.length > 0 ? "warning" : "primary"}
@@ -3826,7 +3839,7 @@ function OnBreakSection({ profile }: { profile: any }) {
                 attention={onBreakAttn.needsAttention}
               />
               <StatCard
-                label="עובדים מאחרים מהפסקה"
+                label={i18n.t("dashboard.lateFromBreak")}
                 value={lateList.length}
                 icon={AlertTriangle}
                 tone="muted"
@@ -3838,7 +3851,7 @@ function OnBreakSection({ profile }: { profile: any }) {
                 attention={lateAttn.needsAttention}
               />
               <StatCard
-                label="יומן הפסקות"
+                label={i18n.t("dashboard.breakLog")}
                 value={logCount}
                 icon={Coffee}
                 tone="muted"
@@ -3859,8 +3872,8 @@ function OnBreakSection({ profile }: { profile: any }) {
                       <Coffee className="size-4" />
                     </div>
                     <div className="min-w-0 flex-1 self-center text-right">
-                      <p className={DASH_TILE_TITLE}>ניהול בקשות הפסקה</p>
-                      <p className={DASH_TILE_SUB}>פתח מסך הפסקות</p>
+                      <p className={DASH_TILE_TITLE}>{i18n.t("dashboard.manageBreakRequests")}</p>
+                      <p className={DASH_TILE_SUB}>{i18n.t("dashboard.openBreaksScreen")}</p>
                     </div>
                   </div>
                 </Card>
@@ -3875,7 +3888,7 @@ function OnBreakSection({ profile }: { profile: any }) {
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Coffee className="size-5 text-primary" />
-              📋 יומן ההפסקות
+              {i18n.t("dashboard.breakLogTitle")}
               <span className="text-xs font-normal text-muted-foreground mr-2">
                 {new Intl.DateTimeFormat("he-IL", {
                   timeZone: "Asia/Jerusalem",
@@ -3959,14 +3972,14 @@ function OnBreakSection({ profile }: { profile: any }) {
                   }
                 >
                   <Input
-                    placeholder="🔎 חיפוש..."
+                    placeholder={i18n.t("dashboard.searchPlaceholder")}
                     value={logSearch}
                     onChange={(e) => setLogSearch(e.target.value)}
                   />
                   <Select value={logEmpFilter} onValueChange={setLogEmpFilter}>
-                    <SelectTrigger><SelectValue placeholder="עובד" /></SelectTrigger>
+                    <SelectTrigger><SelectValue placeholder={i18n.t("dashboard.colEmployee")} /></SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="__all">כל העובדים</SelectItem>
+                      <SelectItem value="__all">{i18n.t("dashboard.allEmployees")}</SelectItem>
                       {employees.map(([id, name]) => (
                         <SelectItem key={id} value={id}>{name}</SelectItem>
                       ))}
@@ -3974,9 +3987,9 @@ function OnBreakSection({ profile }: { profile: any }) {
                   </Select>
                   {departments.length > 1 && (
                     <Select value={logDeptFilter} onValueChange={setLogDeptFilter}>
-                      <SelectTrigger><SelectValue placeholder="מחלקה" /></SelectTrigger>
+                      <SelectTrigger><SelectValue placeholder={i18n.t("dashboard.department")} /></SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="__all">כל המחלקות</SelectItem>
+                        <SelectItem value="__all">{i18n.t("dashboard.allDepts")}</SelectItem>
                         {departments.map((d) => (
                           <SelectItem key={d} value={d}>{d}</SelectItem>
                         ))}
@@ -3984,9 +3997,9 @@ function OnBreakSection({ profile }: { profile: any }) {
                     </Select>
                   )}
                   <Select value={logTypeFilter} onValueChange={setLogTypeFilter}>
-                    <SelectTrigger><SelectValue placeholder="סוג הפסקה" /></SelectTrigger>
+                    <SelectTrigger><SelectValue placeholder={i18n.t("dashboard.breakTypePlaceholder")} /></SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="__all">כל הסוגים</SelectItem>
+                      <SelectItem value="__all">{i18n.t("dashboard.allTypes")}</SelectItem>
                       {types.map((t) => (
                         <SelectItem key={t} value={t}>{t}</SelectItem>
                       ))}

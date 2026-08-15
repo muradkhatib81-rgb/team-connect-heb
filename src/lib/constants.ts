@@ -1,3 +1,5 @@
+import i18n from "@/i18n";
+
 export type AppRole =
   | "system_admin"
   | "main_admin"
@@ -24,6 +26,20 @@ export const ROLE_LABELS: Record<AppRole, string> = {
   department_manager: "אחראי מחלקה",
   employee: "עובד",
 };
+
+const ROLE_I18N_KEY: Record<AppRole, string> = {
+  system_admin: "roles.systemAdmin",
+  main_admin: "roles.mainAdmin",
+  branch_manager: "roles.branchManager",
+  assistant_manager: "roles.assistantManager",
+  department_manager: "roles.departmentManager",
+  employee: "roles.employee",
+};
+
+export function getRoleLabel(role: AppRole | string): string {
+  const key = ROLE_I18N_KEY[role as AppRole];
+  return key ? i18n.t(key) : role;
+}
 
 // NOTE: system_admin is intentionally omitted from the standard role picker —
 // it is a singleton role, not assignable through the regular admin UI.

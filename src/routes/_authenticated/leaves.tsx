@@ -6,6 +6,7 @@ import { AlertTriangle, Loader2, Palmtree, Send } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/use-auth";
+import i18n from "@/i18n";
 import {
   LEAVE_STATUS_LABEL,
   LEAVE_STATUS_TONE,
@@ -35,6 +36,17 @@ import {
 export const Route = createFileRoute("/_authenticated/leaves")({
   component: LeavesPage,
 });
+
+function getLeaveStatusLabel(status: string): string {
+  const map: Record<string, string> = {
+    pending_dept: "leaves.statusPendingDept",
+    pending_admin: "leaves.statusPendingAdmin",
+    approved: "leaves.statusApproved",
+    rejected: "leaves.statusRejected",
+    cancelled: "leaves.statusCancelled",
+  };
+  return i18n.t(map[status] ?? status);
+}
 
 function todayIso(): string {
   return new Intl.DateTimeFormat("en-CA", {
@@ -144,9 +156,9 @@ function LeavesPage() {
 
   const submitMut = useMutation({
     mutationFn: async () => {
-      if (!leaveTypeId) throw new Error("יש לבחור סוג חופשה");
+      if (!leaveTypeId) throw new Error(i18n.t("leaves.errSelectType"));
       if (selectedType?.requires_attachment && !file) {
-        throw new Error("חופשת מחלה דורשת צירוף מסמך רפואי");
+        throw new Error(i18n.t("leaves.errMedicalRequired"));
       }
       const { id } = await submitFn({
         data: {
@@ -177,7 +189,7 @@ function LeavesPage() {
       return id;
     },
     onSuccess: () => {
-      toast.success("בקשת החופשה נשלחה");
+      toast.success(i18n.t("leaves.requestSent"));
       setNote("");
       setFile(null);
       qc.invalidateQueries({ queryKey: ["my-leave-requests"] });
@@ -201,7 +213,7 @@ function LeavesPage() {
       });
     },
     onSuccess: () => {
-      toast.success("בקשת הביטול נשלחה");
+      toast.success(i18n.t("leaves.cancelSent"));
       qc.invalidateQueries({ queryKey: ["my-leave-requests"] });
       qc.invalidateQueries({ queryKey: ["leave-admin-requests"] });
     },
@@ -210,14 +222,14 @@ function LeavesPage() {
 
   const extendMut = useMutation({
     mutationFn: async (source: LeaveRequestRow) => {
-      if (!extendTypeId) throw new Error("יש לבחור סוג חופשה להארכה");
-      if (!extendEndDate) throw new Error("יש לבחור תאריך סיום חדש");
+      if (!extendTypeId) throw new Error(i18n.t("leaves.errSelectType"));
+      if (!extendEndDate) throw new Error(i18n.t("leaves.errSelectEndDate"));
       const extStart = addDaysIso(source.end_date, 1);
       if (extendEndDate < extStart) {
-        throw new Error("תאריך הסיום חייב להיות אחרי סיום החופשה הנוכחית");
+        throw new Error(i18n.t("leaves.errEndAfterCurrent"));
       }
       if (extendType?.requires_attachment && !extendFile) {
-        throw new Error("הארכה לחופשת מחלה דורשת צירוף מסמך רפואי");
+        throw new Error(i18n.t("leaves.errMedicalExtend"));
       }
       const { id } = await submitFn({
         data: {
@@ -252,7 +264,7 @@ function LeavesPage() {
       return id;
     },
     onSuccess: () => {
-      toast.success("בקשת ההארכה נשלחה");
+      toast.success(i18n.t("leaves.extendSent"));
       setExtendForId(null);
       setExtendTypeId("");
       setExtendEndDate("");
@@ -266,30 +278,30 @@ function LeavesPage() {
   });
 
   return (
-    <div className="mx-auto max-w-3xl space-y-6 p-4 md:p-6" dir="rtl" lang="he-IL">
+    <div className="mx-auto max-w-3xl space-y-6 p-4 md:p-6">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h1 className="flex items-center gap-2 text-2xl font-semibold tracking-tight">
             <Palmtree className="h-6 w-6" />
-            חופשות
+            {i18n.t("leaves.title")}
           </h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            הגשת בקשת חופשה עד 30 יום קדימה. חופשה רגילה וחופשת מחלה נפרדות.
+            {i18n.t("leaves.subtitle")}
           </p>
         </div>
         {leaveAccess.canOpenLeaveAdmin && (
           <Button asChild variant="outline" size="sm">
-            <Link to="/leaves-admin">ניהול חופשות</Link>
+            <Link to="/leaves-admin">{i18n.t("leaves.manageLeaves")}</Link>
           </Button>
         )}
       </div>
 
       <Card className="space-y-4 p-4">
-        <h2 className="font-medium">היתרות שלי</h2>
+        <h2 className="font-medium">{i18n.t("leaves.myBalances")}</h2>
         {balancesQ.isLoading ? (
           <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
         ) : (balancesQ.data ?? []).length === 0 ? (
-          <p className="text-sm text-muted-foreground">עדיין לא הוגדרה יתרה. ניתן להגיש בקשה בכל מקרה.</p>
+          <p className="text-sm text-muted-foreground">{i18n.t("leaves.noBalance")}</p>
         ) : (
           <div className="grid gap-3 sm:grid-cols-2">
             {(balancesQ.data as any[]).map((b) => {
@@ -300,12 +312,12 @@ function LeavesPage() {
                 Number(b.reserved_days);
               return (
                 <div key={b.leave_type_id} className="rounded-lg border p-3 text-sm">
-                  <div className="font-medium">{b.leave_types?.name ?? "חופשה"}</div>
+                  <div className="font-medium">{b.leave_types?.name ?? i18n.t("leaves.defaultLeaveName")}</div>
                   <div className="mt-1 text-muted-foreground">
-                    זמין: <span className="font-semibold text-foreground">{available}</span> ימים
+                    {i18n.t("leaves.available")} <span className="font-semibold text-foreground">{available}</span> {i18n.t("leaves.days")}
                   </div>
                   <div className="text-xs text-muted-foreground">
-                    בשימוש {b.used_days} · שמור {b.reserved_days}
+                    {i18n.t("leaves.used")} {b.used_days} · {i18n.t("leaves.reserved")} {b.reserved_days}
                   </div>
                 </div>
               );
@@ -315,13 +327,13 @@ function LeavesPage() {
       </Card>
 
       <Card className="space-y-4 p-4">
-        <h2 className="font-medium">בקשה חדשה</h2>
+        <h2 className="font-medium">{i18n.t("leaves.newRequest")}</h2>
         <div className="grid gap-4 sm:grid-cols-2">
           <div className="space-y-2 sm:col-span-2">
-            <Label>סוג חופשה</Label>
+            <Label>{i18n.t("leaves.leaveType")}</Label>
             <Select value={leaveTypeId} onValueChange={setLeaveTypeId}>
               <SelectTrigger>
-                <SelectValue placeholder="בחרו סוג" />
+                <SelectValue placeholder={i18n.t("leaves.selectType")} />
               </SelectTrigger>
               <SelectContent>
                 {types.map((t) => (
@@ -333,7 +345,7 @@ function LeavesPage() {
             </Select>
           </div>
           <div className="space-y-2">
-            <Label>מתאריך</Label>
+            <Label>{i18n.t("leaves.fromDate")}</Label>
             <HebrewDateInput
               value={startDate}
               min={minDate}
@@ -345,7 +357,7 @@ function LeavesPage() {
             />
           </div>
           <div className="space-y-2">
-            <Label>עד תאריך</Label>
+            <Label>{i18n.t("leaves.toDate")}</Label>
             <HebrewDateInput
               value={endDate}
               min={startDate || minDate}
@@ -354,17 +366,17 @@ function LeavesPage() {
             />
           </div>
           <div className="space-y-2 sm:col-span-2">
-            <Label>הערה</Label>
+            <Label>{i18n.t("leaves.note")}</Label>
             <Textarea
               value={note}
               onChange={(e) => setNote(e.target.value)}
               rows={3}
-              placeholder="אופציונלי"
+              placeholder={i18n.t("leaves.optional")}
             />
           </div>
           {selectedType?.requires_attachment && (
             <div className="space-y-2 sm:col-span-2">
-              <Label>מסמך רפואי (חובה)</Label>
+              <Label>{i18n.t("leaves.medicalDoc")}</Label>
               <Input
                 type="file"
                 accept="image/*,.pdf"
@@ -375,7 +387,7 @@ function LeavesPage() {
         </div>
         <p className="flex items-start gap-2 text-xs text-muted-foreground">
           <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-          אם אין מספיק יתרה תופיע אזהרה בלבד — הבקשה עדיין תישלח.
+          {i18n.t("leaves.balanceWarning")}
         </p>
         <Button
           disabled={submitMut.isPending || !leaveTypeId}
@@ -386,15 +398,15 @@ function LeavesPage() {
           ) : (
             <Send className="h-4 w-4" />
           )}
-          שליחת בקשה
+          {i18n.t("leaves.submitRequest")}
         </Button>
       </Card>
 
       {activeLeaves.length > 0 && (
         <Card className="space-y-3 border-emerald-200 bg-emerald-50/40 p-4">
-          <h2 className="font-medium">חופשה פעילה — בקשת הארכה</h2>
+          <h2 className="font-medium">{i18n.t("leaves.activeLeaveTitle")}</h2>
           <p className="text-xs text-muted-foreground">
-            במהלך החופשה ניתן לבקש הארכה. אפשר לבחור סוג אחר להארכה (רגילה / מחלה). אותו מסלול אישורים.
+            {i18n.t("leaves.activeLeaveDesc")}
           </p>
           {activeLeaves.map((r) => {
             const extStart = addDaysIso(r.end_date, 1);
@@ -404,9 +416,9 @@ function LeavesPage() {
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <div>
                     <div className="font-medium">
-                      {r.leave_types?.name ?? "חופשה"} · {formatLeaveDateRange(r.start_date, r.end_date)}
+                      {r.leave_types?.name ?? i18n.t("leaves.defaultLeaveName")} · {formatLeaveDateRange(r.start_date, r.end_date)}
                     </div>
-                    <div className="text-muted-foreground">{r.days_count} ימים</div>
+                    <div className="text-muted-foreground">{r.days_count} {i18n.t("leaves.days")}</div>
                   </div>
                   <div className="flex flex-wrap gap-2">
                     <Button
@@ -424,7 +436,7 @@ function LeavesPage() {
                         setExtendFile(null);
                       }}
                     >
-                      {isOpen ? "סגור" : "בקשת הארכה"}
+                      {isOpen ? i18n.t("leaves.close") : i18n.t("leaves.extendRequest")}
                     </Button>
                     <Button
                       size="sm"
@@ -432,7 +444,7 @@ function LeavesPage() {
                       disabled={cancelMut.isPending}
                       onClick={() => cancelMut.mutate(r)}
                     >
-                      בקשת ביטול
+                      {i18n.t("leaves.cancelRequest")}
                     </Button>
                   </div>
                 </div>
@@ -440,10 +452,10 @@ function LeavesPage() {
                 {isOpen && (
                   <div className="grid gap-3 border-t pt-3 sm:grid-cols-2">
                     <div className="space-y-2 sm:col-span-2">
-                      <Label>סוג ההארכה</Label>
+                      <Label>{i18n.t("leaves.extendTypeLabel")}</Label>
                       <Select value={extendTypeId} onValueChange={setExtendTypeId}>
                         <SelectTrigger>
-                          <SelectValue placeholder="בחרו סוג" />
+                          <SelectValue placeholder={i18n.t("leaves.selectType")} />
                         </SelectTrigger>
                         <SelectContent>
                           {types.map((t) => (
@@ -454,15 +466,15 @@ function LeavesPage() {
                         </SelectContent>
                       </Select>
                       <p className="text-[11px] text-muted-foreground">
-                        אפשר לבחור סוג שונה מהחופשה המקורית. הימים ינוכו מיתרת הסוג שנבחר.
+                        {i18n.t("leaves.extendTypeNote")}
                       </p>
                     </div>
                     <div className="space-y-2">
-                      <Label>תחילת הארכה</Label>
+                      <Label>{i18n.t("leaves.extendStart")}</Label>
                       <HebrewDateInput value={extStart} onChange={() => {}} disabled />
                     </div>
                     <div className="space-y-2">
-                      <Label>עד תאריך</Label>
+                      <Label>{i18n.t("leaves.toDate")}</Label>
                       <HebrewDateInput
                         value={extendEndDate}
                         min={extStart}
@@ -471,17 +483,17 @@ function LeavesPage() {
                       />
                     </div>
                     <div className="space-y-2 sm:col-span-2">
-                      <Label>הערה</Label>
+                      <Label>{i18n.t("leaves.note")}</Label>
                       <Textarea
                         value={extendNote}
                         onChange={(e) => setExtendNote(e.target.value)}
                         rows={2}
-                        placeholder="אופציונלי"
+                        placeholder={i18n.t("leaves.optional")}
                       />
                     </div>
                     {extendType?.requires_attachment && (
                       <div className="space-y-2 sm:col-span-2">
-                        <Label>מסמך רפואי (חובה להארכת מחלה)</Label>
+                        <Label>{i18n.t("leaves.medicalDocExtend")}</Label>
                         <Input
                           type="file"
                           accept="image/*,.pdf"
@@ -499,7 +511,7 @@ function LeavesPage() {
                         ) : (
                           <Send className="h-4 w-4" />
                         )}
-                        שליחת בקשת הארכה
+                        {i18n.t("leaves.submitExtend")}
                       </Button>
                     </div>
                   </div>
@@ -512,7 +524,7 @@ function LeavesPage() {
 
       {upcomingApprovedLeaves.length > 0 && (
         <Card className="space-y-3 p-4">
-          <h2 className="font-medium">חופשות מאושרות עתידיות — בקשת ביטול</h2>
+          <h2 className="font-medium">{i18n.t("leaves.upcomingTitle")}</h2>
           {upcomingApprovedLeaves.map((r) => (
               <div
                 key={r.id}
@@ -520,9 +532,9 @@ function LeavesPage() {
               >
                 <div>
                   <div className="font-medium">
-                    {r.leave_types?.name ?? "חופשה"} · {formatLeaveDateRange(r.start_date, r.end_date)}
+                    {r.leave_types?.name ?? i18n.t("leaves.defaultLeaveName")} · {formatLeaveDateRange(r.start_date, r.end_date)}
                   </div>
-                  <div className="text-muted-foreground">{r.days_count} ימים</div>
+                  <div className="text-muted-foreground">{r.days_count} {i18n.t("leaves.days")}</div>
                 </div>
                 <Button
                   size="sm"
@@ -530,7 +542,7 @@ function LeavesPage() {
                   disabled={cancelMut.isPending}
                   onClick={() => cancelMut.mutate(r)}
                 >
-                  בקשת ביטול
+                  {i18n.t("leaves.cancelRequest")}
                 </Button>
               </div>
             ))}
@@ -538,11 +550,11 @@ function LeavesPage() {
       )}
 
       <Card className="space-y-3 p-4">
-        <h2 className="font-medium">הבקשות שלי</h2>
+        <h2 className="font-medium">{i18n.t("leaves.myRequests")}</h2>
         {myRequestsQ.isLoading ? (
           <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
         ) : (myRequestsQ.data ?? []).length === 0 ? (
-          <p className="text-sm text-muted-foreground">אין בקשות עדיין</p>
+          <p className="text-sm text-muted-foreground">{i18n.t("leaves.noRequests")}</p>
         ) : (
           <ul className="space-y-2">
             {(myRequestsQ.data ?? []).map((r) => {
@@ -552,14 +564,14 @@ function LeavesPage() {
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <div className="font-medium">
                     {r.kind === "cancellation"
-                      ? "ביטול · "
+                      ? i18n.t("leaves.kindCancel")
                       : r.kind === "extension"
-                        ? "הארכה · "
+                        ? i18n.t("leaves.kindExtend")
                         : ""}
-                    {r.leave_types?.name ?? "חופשה"} · {formatLeaveDateRange(r.start_date, r.end_date)}
+                    {r.leave_types?.name ?? i18n.t("leaves.defaultLeaveName")} · {formatLeaveDateRange(r.start_date, r.end_date)}
                   </div>
                   <Badge className={LEAVE_STATUS_TONE[r.status]}>
-                    {LEAVE_STATUS_LABEL[r.status]}
+                    {getLeaveStatusLabel(r.status)}
                   </Badge>
                 </div>
                 {decision && (
@@ -576,7 +588,7 @@ function LeavesPage() {
                   </p>
                 )}
                 {r.balance_warning && (
-                  <p className="mt-1 text-xs text-amber-700">נשלח עם אזהרת יתרה</p>
+                  <p className="mt-1 text-xs text-amber-700">{i18n.t("leaves.balanceWarningSent")}</p>
                 )}
                 {r.note && <p className="mt-1 text-muted-foreground">{r.note}</p>}
               </li>

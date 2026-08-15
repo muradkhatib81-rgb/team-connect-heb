@@ -13,6 +13,7 @@ import { formatHHMM, usePlatformNow } from "@/lib/platform-time";
 import { getScheduleWeek } from "@/lib/schedule-week";
 import { useActiveBranch } from "@/lib/use-active-branch";
 import { useAuth } from "@/lib/use-auth";
+import i18n from "@/i18n";
 import {
   resolveScheduleManagerCaps,
   scheduleScopeNeedsLoadedPermissions,
@@ -330,7 +331,7 @@ export function LiveShiftCardsSection() {
 
   return (
     <section className="space-y-2">
-      <h2 className="text-sm font-semibold">משמרות היום</h2>
+      <h2 className="text-sm font-semibold">{i18n.t("dashboard.todayShifts")}</h2>
       <div
         className="grid gap-2"
         style={{
@@ -341,7 +342,11 @@ export function LiveShiftCardsSection() {
           const list = byShift.get(def.code) ?? [];
           const count = list.length;
           const countLabel =
-            count === 0 ? "0 עובדים" : count === 1 ? "עובד אחד" : `${count} עובדים`;
+            count === 0
+              ? i18n.t("dashboard.zeroEmployees")
+              : count === 1
+                ? i18n.t("dashboard.oneEmployee")
+                : i18n.t("dashboard.nEmployeesCount").replace("{n}", String(count));
           const defaultRange =
             def.start_time && def.end_time
               ? `${String(def.start_time).slice(0, 5)}–${String(def.end_time).slice(0, 5)}`
@@ -349,7 +354,11 @@ export function LiveShiftCardsSection() {
           return (
             <ShiftCard
               key={def.id}
-              name={def.name}
+              name={
+                def.code === "morning" || def.code === "evening" || def.code === "off"
+                  ? i18n.t(`dashboard.${def.code}`)
+                  : def.name
+              }
               color={def.color}
               count={count}
               countLabel={countLabel}
@@ -361,10 +370,14 @@ export function LiveShiftCardsSection() {
       </div>
 
       <Dialog open={!!openShift} onOpenChange={(o) => !o && setOpenShift(null)}>
-        <DialogContent className="max-w-md" dir="rtl">
+        <DialogContent className="max-w-md">
           <DialogHeader>
             <DialogTitle>
-              {openShift ? shiftDefsQ.map.get(openShift)?.name ?? "משמרת" : "משמרת"}
+              {openShift
+                ? (openShift === "morning" || openShift === "evening" || openShift === "off"
+                    ? i18n.t(`dashboard.${openShift}`)
+                    : shiftDefsQ.map.get(openShift)?.name) ?? i18n.t("dashboard.shift")
+                : i18n.t("dashboard.shift")}
             </DialogTitle>
           </DialogHeader>
           {(() => {
@@ -374,8 +387,8 @@ export function LiveShiftCardsSection() {
               return (
                 <p className="text-sm text-muted-foreground py-4 text-center">
                   {isOffList
-                    ? "אין עובדים בחופש היום"
-                    : "אין עובדים במשמרת זו היום"}
+                    ? i18n.t("dashboard.noLeaveToday")
+                    : i18n.t("dashboard.noEmployeesThisShift")}
                 </p>
               );
             }
@@ -405,7 +418,7 @@ export function LiveShiftCardsSection() {
                           {range && <span>· {range}</span>}
                           {days != null && (
                             <span>
-                              · {days} {days === 1 ? "יום" : "ימים"}
+                              · {days} {days === 1 ? i18n.t("dashboard.day") : i18n.t("common.days")}
                             </span>
                           )}
                         </div>

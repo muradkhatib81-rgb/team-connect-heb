@@ -26,9 +26,10 @@ import {
 import {
   formatScheduleDayHe,
   getScheduleWeek,
-  SCHEDULE_DAY_NAMES,
+  getScheduleDayNames,
   type ScheduleShiftCode,
 } from "@/lib/schedule-week";
+import i18n from "@/i18n";
 import {
   buildChangeBaselineFromShiftRow,
   diffScheduleCellForViewer,
@@ -99,11 +100,14 @@ const SHIFT_ORDER: Record<ScheduleShiftCode, number> = {
   off: 2,
 };
 
-const SHIFT_LABEL: Record<ScheduleShiftCode, string> = {
-  morning: "בוקר",
-  evening: "ערב",
-  off: "חופש",
-};
+function getShiftLabel(code: ScheduleShiftCode): string {
+  const map: Record<ScheduleShiftCode, string> = {
+    morning: "dashboard.morning",
+    evening: "dashboard.evening",
+    off: "dashboard.off",
+  };
+  return i18n.t(map[code]);
+}
 
 type DeptShiftFilter = { deptId: string; shift: ScheduleShiftCode };
 
@@ -252,7 +256,7 @@ function buildDepartmentEmployeeRows(args: {
       shiftLabel:
         shift === "off"
           ? leaveOffLabel(raw.leave_type_code ?? stub.leave_type_code)
-          : SHIFT_LABEL[shift],
+          : getShiftLabel(shift),
       timeRange: resolveTimeRange(raw, shift, def),
       note: rawNote || null,
       isModified: isShiftModified,
@@ -425,7 +429,7 @@ export function DailyScheduleOverview({
 
   const selectedDayIndex = weekDays.indexOf(selectedDay);
   const selectedDayName =
-    selectedDayIndex >= 0 ? SCHEDULE_DAY_NAMES[selectedDayIndex] : "";
+    selectedDayIndex >= 0 ? getScheduleDayNames()[selectedDayIndex] : "";
 
   const toggleDeptFilter = (deptId: string, shift: ScheduleShiftCode) => {
     setActiveFilter((prev) =>
@@ -438,7 +442,7 @@ export function DailyScheduleOverview({
       return {
         badge: "bg-amber-100 text-amber-900 border-amber-300",
         row: "bg-amber-50/60 border-amber-100",
-        label: "בוקר",
+        label: i18n.t("dashboard.morning"),
         activeClass: "ring-2 ring-amber-500 border-amber-400 bg-amber-50",
         idleClass: "border-amber-200 bg-amber-50/40 hover:bg-amber-50",
         icon: Sun,
@@ -448,7 +452,7 @@ export function DailyScheduleOverview({
       return {
         badge: "bg-sky-100 text-sky-900 border-sky-300",
         row: "bg-sky-50/60 border-sky-100",
-        label: "ערב",
+        label: i18n.t("dashboard.evening"),
         activeClass: "ring-2 ring-sky-500 border-sky-400 bg-sky-50",
         idleClass: "border-sky-200 bg-sky-50/40 hover:bg-sky-50",
         icon: Moon,
@@ -457,7 +461,7 @@ export function DailyScheduleOverview({
     return {
       badge: "bg-emerald-100 text-emerald-900 border-emerald-300",
       row: "bg-emerald-50/60 border-emerald-100",
-      label: "חופש",
+      label: i18n.t("dashboard.off"),
       activeClass: "ring-2 ring-emerald-500 border-emerald-400 bg-emerald-50",
       idleClass: "border-emerald-200 bg-emerald-50/40 hover:bg-emerald-50",
       icon: Plane,
@@ -472,7 +476,7 @@ export function DailyScheduleOverview({
       <div className="px-4 pt-4 pb-2 flex flex-wrap items-center justify-between gap-2">
         <h2 className="font-semibold text-base flex items-center gap-2">
           <CalendarDays className="size-5 text-primary" />
-          סידור עבודה יומי
+          {i18n.t("dashboard.dailySchedule")}
         </h2>
         <div className="flex items-center gap-3 text-xs text-muted-foreground">
           <span>
@@ -480,7 +484,7 @@ export function DailyScheduleOverview({
           </span>
           {showFullScheduleLink && (
             <Link to="/schedules" className="text-sm text-primary hover:underline">
-              לסידור המלא ←
+              {i18n.t("dashboard.fullSchedule")}
             </Link>
           )}
         </div>
@@ -492,7 +496,7 @@ export function DailyScheduleOverview({
         </div>
       ) : q.isError ? (
         <p className="p-6 text-sm text-destructive text-center">
-          {(q.error as Error)?.message ?? "שגיאה בטעינת הסידור"}
+          {(q.error as Error)?.message ?? i18n.t("dashboard.scheduleLoadError")}
         </p>
       ) : (
         <>
@@ -517,7 +521,7 @@ export function DailyScheduleOverview({
                       isToday && !isSelected && "border-primary/30",
                     )}
                   >
-                    <span className="text-xs font-semibold">{SCHEDULE_DAY_NAMES[i]}</span>
+                    <span className="text-xs font-semibold">{getScheduleDayNames()[i]}</span>
                     <span className="text-[10px] text-muted-foreground tabular-nums">
                       {formatScheduleDayHe(day)}
                     </span>
@@ -529,10 +533,10 @@ export function DailyScheduleOverview({
 
           {selectedDayName && (
             <div className="px-4 pb-2 text-xs text-muted-foreground">
-              יום {selectedDayName} {formatScheduleDayHe(selectedDay)}
+              {i18n.t("dashboard.dayOf").replace("{name}", selectedDayName).replace("{date}", formatScheduleDayHe(selectedDay))}
               {activeFilter && (
                 <span className="ms-2">
-                  · מציג: {SHIFT_LABEL[activeFilter.shift]} —{" "}
+                  · {i18n.t("dashboard.showing")} {getShiftLabel(activeFilter.shift)} —{" "}
                   {departments.find((d) => d.id === activeFilter.deptId)?.name}
                   <Button
                     type="button"
@@ -542,7 +546,7 @@ export function DailyScheduleOverview({
                     onClick={() => setActiveFilter(null)}
                   >
                     <X className="size-3" />
-                    ביטול
+                    {i18n.t("common.cancel")}
                   </Button>
                 </span>
               )}
@@ -576,11 +580,11 @@ export function DailyScheduleOverview({
                     dept.hasSavedAwaitingPublish ? (
                       <Alert className="ms-6 border-amber-200 bg-amber-50/80">
                         <AlertDescription className="text-sm text-amber-900">
-                          יש סידור עבודה למחלקה זו שמור ובהמתנה לפרסום.
+                          {i18n.t("dashboard.scheduleAwaitingPublish")}
                         </AlertDescription>
                       </Alert>
                     ) : (
-                      <p className="text-sm text-muted-foreground ps-6">אין סידור שבועי שפורסם</p>
+                      <p className="text-sm text-muted-foreground ps-6">{i18n.t("dashboard.noWeeklyPublished")}</p>
                     )
                   ) : (
                     <>
@@ -608,7 +612,7 @@ export function DailyScheduleOverview({
                               </div>
                               {active && (
                                 <div className="text-[10px] text-primary mt-0.5 font-medium">
-                                  פעיל ✓
+                                  {i18n.t("dashboard.filterActive")}
                                 </div>
                               )}
                             </button>
@@ -619,8 +623,8 @@ export function DailyScheduleOverview({
                       {displayRows.length === 0 ? (
                         <p className="text-sm text-muted-foreground ps-6">
                           {isFilterActive != null
-                            ? `אין עובדים ב${SHIFT_LABEL[isFilterActive]} ליום זה`
-                            : "אין עובדים בסידור ליום זה"}
+                            ? i18n.t("dashboard.noEmployeesInShiftDay").replace("{shift}", getShiftLabel(isFilterActive))
+                            : i18n.t("dashboard.noEmployeesScheduleDay")}
                         </p>
                       ) : (
                         <ul
@@ -657,7 +661,7 @@ export function DailyScheduleOverview({
                                   </span>
                                   {emp.isSelf && (
                                     <Badge variant="secondary" className="text-[10px] shrink-0">
-                                      את/ה
+                                      {i18n.t("dashboard.you")}
                                     </Badge>
                                   )}
                                   {emp.isModified && (
@@ -716,7 +720,7 @@ export function DailyScheduleOverview({
 
             {!departments.length && scope === "branch" && (
               <p className="p-6 text-sm text-muted-foreground text-center">
-                אין מחלקות פעילות להצגה.
+                {i18n.t("dashboard.noActiveDepts")}
               </p>
             )}
 
@@ -725,7 +729,7 @@ export function DailyScheduleOverview({
               departments.length > 0 &&
               !departments.some((d) => d.hasSavedAwaitingPublish) && (
                 <p className="px-4 pb-4 text-sm text-muted-foreground border-t pt-4">
-                  טרם פורסם סידור עבודה מאושר לשבוע זה.
+                  {i18n.t("dashboard.noApprovedPublishedWeek")}
                 </p>
               )}
           </div>

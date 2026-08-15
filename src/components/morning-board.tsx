@@ -17,6 +17,7 @@ import {
   type MorningBoardItem,
   type MorningBoardStyle,
 } from "@/lib/morning-board-types";
+import i18n from "@/i18n";
 
 const BUCKET = "morning-board";
 
@@ -130,23 +131,23 @@ export function MorningBoard() {
   if (visible.length === 0 && !canManage) return null;
 
   return (
-    <section aria-label={`לוח ראשי ${activeBranch?.name ?? ""}`} className="space-y-3">
+    <section aria-label={`${i18n.t("dashboard.morningBoard")} ${activeBranch?.name ?? ""}`} className="space-y-3">
       {canManage && (
         <div className="flex items-center justify-between">
           <h2 className="text-lg font-semibold flex items-center gap-2">
             <Megaphone className="size-5 text-primary" />
-            לוח ראשי
+            {i18n.t("dashboard.morningBoard")}
           </h2>
           <Button size="sm" variant="outline" onClick={() => setManagerOpen(true)}>
             <Settings2 className="size-4" />
-            ניהול תוכן
+            {i18n.t("dashboard.manageContent")}
           </Button>
         </div>
       )}
 
       {visible.length === 0 ? (
         <Card className="p-6 text-center text-sm text-muted-foreground">
-          עדיין לא הוגדר תוכן ללוח הראשי של הסניף.
+          {i18n.t("dashboard.noBoardContent")}
         </Card>
       ) : (
         <div className="space-y-4">
@@ -184,7 +185,7 @@ function PinBadge() {
   return (
     <div className="absolute -top-2 -start-2 flex items-center gap-1 rounded-full bg-primary text-primary-foreground text-[11px] px-2 py-0.5 shadow">
       <Pin className="size-3" />
-      נעוץ
+      {i18n.t("dashboard.pinned")}
     </div>
   );
 }
@@ -217,7 +218,7 @@ function MorningBoardItemView({
           type="button"
           onClick={() => onImageClick(url)}
           className="block w-full cursor-zoom-in focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-          aria-label={row.title ?? "הצג תמונה"}
+          aria-label={row.title ?? i18n.t("dashboard.morningBoard")}
         >
           <img src={url} alt={row.title ?? ""} className="block w-full h-auto object-contain" draggable={false} />
         </button>

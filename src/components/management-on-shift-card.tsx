@@ -6,7 +6,8 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Loader2, ShieldCheck, LogIn, LogOut, Clock, CalendarDays } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/use-auth";
-import { ROLE_LABELS, type AppRole } from "@/lib/constants";
+import { getRoleLabel, type AppRole } from "@/lib/constants";
+import i18n from "@/i18n";
 import { toast } from "sonner";
 import { useActiveBranch } from "@/lib/use-active-branch";
 import {
@@ -98,14 +99,14 @@ export function ManagementOnShiftCard() {
   const startMut = useMutation({
     mutationFn: async () => {
       const branchId = activeBranchId ?? profile?.branch_id;
-      if (!branchId) throw new Error("לא נמצא סניף פעיל");
+      if (!branchId) throw new Error(i18n.t("dashboard.noActiveBranch"));
       const { error } = await (supabase as any)
         .from("management_on_shift")
         .insert({ user_id: profile!.id, branch_id: branchId });
       if (error) throw error;
     },
     onSuccess: () => {
-      toast.success("סומנת כנמצא במשמרת");
+      toast.success(i18n.t("dashboard.markedOnShift"));
       const branchId = activeBranchId ?? profile?.branch_id ?? null;
       if (branchId) {
         qc.invalidateQueries({ queryKey: ["management-on-shift", branchId] });
@@ -115,7 +116,7 @@ export function ManagementOnShiftCard() {
         qc.setQueryData(shiftVisibleQueryKey(profile.id, branchId), true);
       }
     },
-    onError: (e: any) => toast.error(e.message ?? "שגיאה בעדכון סטטוס משמרת"),
+    onError: (e: any) => toast.error(e.message ?? i18n.t("dashboard.shiftStatusError")),
   });
 
   const endMut = useMutation({
@@ -127,7 +128,7 @@ export function ManagementOnShiftCard() {
       if (error) throw error;
     },
     onSuccess: () => {
-      toast.success("סימנת סיום משמרת");
+      toast.success(i18n.t("dashboard.markedShiftEnd"));
       const branchId = activeBranchId ?? profile?.branch_id ?? null;
       if (branchId) {
         qc.setQueryData<Row[]>(["management-on-shift", branchId], (prev) =>
@@ -141,7 +142,7 @@ export function ManagementOnShiftCard() {
         qc.removeQueries({ queryKey: custodyQueryKey(branchId) });
       }
     },
-    onError: (e: any) => toast.error(e.message ?? "שגיאה בעדכון סטטוס משמרת"),
+    onError: (e: any) => toast.error(e.message ?? i18n.t("dashboard.shiftStatusError")),
   });
 
   const rows = q.data ?? [];
@@ -154,9 +155,9 @@ export function ManagementOnShiftCard() {
             <ShieldCheck className="size-4" />
           </div>
           <div className="min-w-0">
-            <h2 className="text-sm font-bold leading-tight">הנהלה במשמרת</h2>
+            <h2 className="text-sm font-bold leading-tight">{i18n.t("dashboard.mgmtOnShift")}</h2>
             <p className="text-[11px] leading-snug text-muted-foreground">
-              מנהלי הסניף שנמצאים כרגע במשמרת
+              {i18n.t("dashboard.mgmtOnShiftDesc")}
             </p>
           </div>
         </div>
@@ -175,7 +176,7 @@ export function ManagementOnShiftCard() {
                 ) : (
                   <LogOut className="size-3.5" />
                 )}
-                סיימתי משמרת
+                {i18n.t("dashboard.endMyShift")}
               </Button>
             ) : (
               <Button
@@ -189,7 +190,7 @@ export function ManagementOnShiftCard() {
                 ) : (
                   <LogIn className="size-3.5" />
                 )}
-                אני במשמרת
+                {i18n.t("dashboard.imOnShift")}
               </Button>
             )}
           </div>
@@ -204,7 +205,7 @@ export function ManagementOnShiftCard() {
         <div className="flex items-center justify-center gap-2 rounded-lg border border-dashed bg-muted/30 px-3 py-3">
           <ShieldCheck className="size-4 shrink-0 text-muted-foreground" />
           <p className="text-xs font-medium text-muted-foreground">
-            אין הנהלה במשמרת כרגע
+            {i18n.t("dashboard.noMgmtOnShift")}
           </p>
         </div>
       ) : (
@@ -227,7 +228,7 @@ export function ManagementOnShiftCard() {
                     </AvatarFallback>
                   </Avatar>
                   <span
-                    aria-label="במשמרת"
+                    aria-label={i18n.t("dashboard.onShiftAria")}
                     className="absolute -bottom-0.5 -right-0.5 size-2.5 rounded-full bg-emerald-500 ring-2 ring-card"
                   />
                 </div>
@@ -236,7 +237,7 @@ export function ManagementOnShiftCard() {
                     {r.full_name}
                   </p>
                   <p className="mt-0.5 truncate text-xs font-semibold text-red-600 dark:text-red-400">
-                    {r.job_title ?? (r.role ? (ROLE_LABELS[r.role] ?? r.role) : "הנהלה")}
+                    {r.job_title ?? (r.role ? getRoleLabel(r.role) : i18n.t("dashboard.management"))}
                   </p>
                   <p className="mt-0.5 flex flex-wrap items-center justify-end gap-x-2 gap-y-0.5 text-[10px] text-muted-foreground">
                     <span className="inline-flex items-center gap-0.5">

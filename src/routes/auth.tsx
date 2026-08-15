@@ -14,6 +14,8 @@ import { resolveLandingPath } from "@/lib/use-auth";
 import { useCompanySettings } from "@/lib/use-company-settings";
 import { toWhatsAppUrl } from "@/lib/whatsapp";
 import { Store, Loader2 } from "lucide-react";
+import { LanguageSwitcher } from "@/components/language-switcher";
+import { useTranslation } from "react-i18next";
 
 const searchSchema = z.object({ redirect: z.string().optional() });
 
@@ -36,6 +38,7 @@ function WhatsAppIcon({ className }: { className?: string }) {
 }
 
 function AuthPage() {
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const router = useRouter();
   const search = useSearch({ from: "/auth" });
@@ -92,11 +95,11 @@ function AuthPage() {
     const idNumber = String(form.get("id_number") || "").trim();
     const password = String(form.get("password") || "");
     if (!idNumber || !password) {
-      toast.error("יש למלא מספר זהות וסיסמה");
+      toast.error(t("auth.fillIdAndPassword"));
       return;
     }
     if (!ID_REGEX.test(idNumber)) {
-      toast.error("מספר זהות לא תקין");
+      toast.error(t("auth.invalidId"));
       return;
     }
     setLoading(true);
@@ -108,12 +111,12 @@ function AuthPage() {
       setLoading(false);
       toast.error(
         error.message === "Invalid login credentials"
-          ? "מספר זהות או סיסמה שגויים"
+          ? t("auth.wrongCredentials")
           : error.message,
       );
       return;
     }
-    toast.success("התחברת בהצלחה");
+    toast.success(t("auth.loginSuccess"));
     const { data: userData } = await supabase.auth.getUser();
     setLoading(false);
     const explicit = search.redirect as string | undefined;
@@ -130,15 +133,15 @@ function AuthPage() {
     const idNumber = String(form.get("id_number") || "").trim();
     const password = String(form.get("password") || "");
     if (!firstName || !lastName || !idNumber || !password) {
-      toast.error("יש למלא את כל השדות");
+      toast.error(t("auth.fillAll"));
       return;
     }
     if (!ID_REGEX.test(idNumber)) {
-      toast.error("מספר זהות חייב להכיל ספרות בלבד (5–15 ספרות)");
+      toast.error(t("auth.idMustBeDigits"));
       return;
     }
     if (password.length < 6) {
-      toast.error("הסיסמה חייבת להכיל לפחות 6 תווים");
+      toast.error(t("auth.passwordMinLength"));
       return;
     }
     setLoading(true);
@@ -150,7 +153,7 @@ function AuthPage() {
       });
     } catch (err) {
       setLoading(false);
-      toast.error(err instanceof Error ? err.message : "יצירת בעל המערכת נכשלה");
+      toast.error(err instanceof Error ? err.message : t("auth.bootstrapTitle"));
       return;
     }
     const { error: signInErr } = await supabase.auth.signInWithPassword({
@@ -162,7 +165,7 @@ function AuthPage() {
       toast.error(signInErr.message);
       return;
     }
-    toast.success("נוצר בעל המערכת הראשי. ברוך הבא!");
+    toast.success(t("auth.welcomeOwner"));
     // The bootstrap flow always creates the first main_admin — always a
     // Platform Owner — so it always lands on the Platform Dashboard.
     navigate({ to: "/platform", replace: true });
@@ -180,6 +183,9 @@ function AuthPage() {
 
   return (
     <div className="min-h-screen flex flex-col bg-background">
+      <div className="flex justify-end p-3">
+        <LanguageSwitcher />
+      </div>
       <div className="flex-1 flex items-center justify-center px-4 py-10">
         <div className="w-full max-w-md">
           <div className="flex flex-col items-center gap-3 mb-8">
@@ -191,7 +197,7 @@ function AuthPage() {
               )}
             </div>
             <div className="text-center">
-              <h1 className="text-2xl font-bold text-foreground">{APP_NAME}</h1>
+              <h1 className="text-2xl font-bold text-foreground">{t("auth.appName")}</h1>
               <p className="text-sm text-muted-foreground mt-1">{company?.company_name}</p>
             </div>
           </div>
@@ -200,24 +206,24 @@ function AuthPage() {
             {showBootstrap ? (
               <>
                 <div className="mb-5 text-center">
-                  <h2 className="text-lg font-semibold">הקמת בעל המערכת הראשי</h2>
+                  <h2 className="text-lg font-semibold">{t("auth.bootstrapTitle")}</h2>
                   <p className="text-xs text-muted-foreground mt-1">
-                    אין משתמשים במערכת. צור את חשבון בעל המערכת הראשי.
+                    {t("auth.bootstrapDesc")}
                   </p>
                 </div>
                 <form onSubmit={handleBootstrap} className="space-y-4">
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <div className="space-y-2">
-                      <Label htmlFor="first-name-up">שם פרטי</Label>
+                      <Label htmlFor="first-name-up">{t("auth.firstName")}</Label>
                       <Input id="first-name-up" name="first_name" required maxLength={50} />
                     </div>
                     <div className="space-y-2">
-                      <Label htmlFor="last-name-up">שם משפחה</Label>
+                      <Label htmlFor="last-name-up">{t("auth.lastName")}</Label>
                       <Input id="last-name-up" name="last_name" required maxLength={50} />
                     </div>
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="id-up">מספר זהות</Label>
+                    <Label htmlFor="id-up">{t("auth.idNumber")}</Label>
                     <Input
                       id="id-up"
                       name="id_number"
@@ -230,7 +236,7 @@ function AuthPage() {
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="pw-up">סיסמה</Label>
+                    <Label htmlFor="pw-up">{t("auth.password")}</Label>
                     <Input
                       id="pw-up"
                       name="password"
@@ -242,14 +248,14 @@ function AuthPage() {
                     />
                   </div>
                   <Button type="submit" className="w-full" disabled={loading} size="lg">
-                    {loading ? <Loader2 className="size-4 animate-spin" /> : "צור בעל המערכת הראשי"}
+                    {loading ? <Loader2 className="size-4 animate-spin" /> : t("auth.createOwner")}
                   </Button>
                 </form>
               </>
             ) : (
               <form onSubmit={handleSignIn} className="space-y-4">
                 <div className="space-y-2">
-                  <Label htmlFor="id-in">מספר זהות</Label>
+                  <Label htmlFor="id-in">{t("auth.idNumber")}</Label>
                   <Input
                     id="id-in"
                     name="id_number"
@@ -263,7 +269,7 @@ function AuthPage() {
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="pw-in">סיסמה</Label>
+                  <Label htmlFor="pw-in">{t("auth.password")}</Label>
                   <Input
                     id="pw-in"
                     name="password"
@@ -274,11 +280,11 @@ function AuthPage() {
                   />
                 </div>
                 <Button type="submit" className="w-full" disabled={loading} size="lg">
-                  {loading ? <Loader2 className="size-4 animate-spin" /> : "התחבר"}
+                  {loading ? <Loader2 className="size-4 animate-spin" /> : t("auth.signIn")}
                 </Button>
                 <div className="pt-2 space-y-2">
                   <p className="text-xs text-muted-foreground text-center">
-                    אין לך חשבון? פנה לבעל המערכת הראשי לקבלת פרטי גישה.
+                    {t("auth.noAccount")}
                   </p>
                   {whatsappUrl && (
                     <a
@@ -290,7 +296,7 @@ function AuthPage() {
                       <span className="inline-flex size-6 shrink-0 items-center justify-center rounded-full bg-[#25D366] text-white">
                         <WhatsAppIcon className="size-3.5" />
                       </span>
-                      <span>לפתיחת חשבון — לחצו כאן ליצירת קשר</span>
+                      <span>{t("auth.contactSupport")}</span>
                     </a>
                   )}
                 </div>
@@ -299,7 +305,7 @@ function AuthPage() {
           </Card>
 
           <p className="text-xs text-muted-foreground text-center mt-6">
-            מערכת פנימית — שימוש מורשה בלבד.
+            {t("auth.internalSystem")}
           </p>
         </div>
       </div>

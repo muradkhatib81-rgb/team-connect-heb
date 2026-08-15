@@ -40,15 +40,17 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/use-auth";
 import { useCompanySettings } from "@/lib/use-company-settings";
 import {
-  APP_NAME,
-  ROLE_LABELS,
+  getRoleLabel,
   isAdmin,
   highestRole,
   isPlatformOwner as isPlatformOwnerRole,
 } from "@/lib/constants";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import { useTranslation } from "react-i18next";
+import { getSavedLanguage } from "@/i18n";
 import { NotificationsBell } from "@/components/notifications-bell";
+import { LanguageSwitcher } from "@/components/language-switcher";
 import { useActiveBranch } from "@/lib/use-active-branch";
 import { useBreakSelfServiceNavVisible } from "@/lib/use-shift-self-service-visible";
 import { useCanManageBreaks, canManageBreaksQueryKey } from "@/lib/break-permissions";
@@ -70,6 +72,7 @@ interface NavItem {
 }
 
 export function AppShell({ children }: { children: ReactNode }) {
+  const { t, i18n } = useTranslation();
   const { data: profile, isLoading } = useAuth();
   const { data: company } = useCompanySettings();
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -87,7 +90,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   // Prefer the Platform company name over branch-scoped company_settings so
   // branding never shows a store/branch string as the company.
   const brandName =
-    activeCompany?.name?.trim() || company?.company_name?.trim() || APP_NAME;
+    activeCompany?.name?.trim() || company?.company_name?.trim() || t("common.appName");
   // The Platform Branch assignment is authoritative for navigation. The
   // lower-level real branch id alone is insufficient while Company Mode is
   // changing, because it can briefly represent the previous Company.
@@ -144,6 +147,17 @@ export function AppShell({ children }: { children: ReactNode }) {
     }
     // Plain employees may now access /dashboard directly (clean employee view).
   }, [profile?.is_active, profile?.must_change_password, profile, pathname, navigate]);
+
+  // Load the language saved for this specific user and apply it.
+  useEffect(() => {
+    if (!profile?.id) return;
+    const lang = getSavedLanguage(profile.id);
+    if (i18n.language !== lang) {
+      i18n.changeLanguage(lang);
+      document.documentElement.dir = lang === "en" ? "ltr" : "rtl";
+      document.documentElement.lang = lang;
+    }
+  }, [profile?.id]);
 
   const breakSelfServiceNav = useBreakSelfServiceNavVisible();
   const { canManageBreaks } = useCanManageBreaks();
@@ -220,22 +234,22 @@ export function AppShell({ children }: { children: ReactNode }) {
   const branchItems: NavEntry[] = [
     {
       to: "/dashboard",
-      label: "לוח ראשי",
+      label: t("nav.dashboard"),
       icon: LayoutDashboard,
       visible: true,
       section: branchSection,
     },
-    { to: "/tasks", label: "משימות", icon: ListTodo, visible: true, section: branchSection },
+    { to: "/tasks", label: t("nav.tasks"), icon: ListTodo, visible: true, section: branchSection },
     {
       to: "/schedules",
-      label: "סידורי עבודה",
+      label: t("nav.schedules"),
       icon: CalendarDays,
       visible: true,
       section: branchSection,
     },
     {
       to: "/communications",
-      label: "מרכז תקשורת",
+      label: t("nav.communications"),
       icon: Megaphone,
       visible: true,
       badge: commUnreadQ.data ?? 0,
@@ -243,49 +257,49 @@ export function AppShell({ children }: { children: ReactNode }) {
     },
     {
       to: "/breaks",
-      label: "הפסקה",
+      label: t("nav.breaks"),
       icon: Coffee,
       visible: canRequestBreak,
       section: branchSection,
     },
     {
       to: "/break-planning",
-      label: "תכנון הפסקות",
+      label: t("nav.breakPlanning"),
       icon: CalendarDays,
       visible: canRequestBreak,
       section: branchSection,
     },
     {
       to: "/breaks-admin",
-      label: "ניהול הפסקות",
+      label: t("nav.breaksAdmin"),
       icon: Coffee,
       visible: isBreaksManager,
       section: branchSection,
     },
     {
       to: "/leaves",
-      label: "חופשות",
+      label: t("nav.leaves"),
       icon: Palmtree,
       visible: leaveAccess.canOpenLeavesPage,
       section: branchSection,
     },
     {
       to: "/leaves-admin",
-      label: "ניהול חופשות",
+      label: t("nav.leavesAdmin"),
       icon: Palmtree,
       visible: leaveAccess.canOpenLeaveAdmin,
       section: branchSection,
     },
     {
       to: canOpenCustodySettings ? "/custody-settings" : "/custody-log",
-      label: "מערכת ניהול ציוד",
+      label: t("nav.custodySystem"),
       icon: Package,
       visible: showCustodyNav,
       section: branchSection,
       children: [
         {
           to: "/custody-log",
-          label: "יומן ניהול ציוד",
+          label: t("nav.custodyLog"),
           icon: ClipboardList,
           visible: canAccessCustodyLog,
           section: branchSection,
@@ -294,7 +308,7 @@ export function AppShell({ children }: { children: ReactNode }) {
     },
     {
       to: "/employee-of-month",
-      label: "עובד החודש",
+      label: t("nav.employeeOfMonth"),
       icon: Trophy,
       visible: canManageEom,
       section: branchSection,
@@ -302,128 +316,128 @@ export function AppShell({ children }: { children: ReactNode }) {
 
     {
       to: "/employees",
-      label: isDeptManager && !admin ? "עובדי המחלקה" : "ניהול עובדים",
+      label: isDeptManager && !admin ? t("nav.deptEmployees") : t("nav.employees"),
       icon: Users,
       visible: admin || isDeptManager,
       section: branchSection,
     },
     {
       to: "/departments",
-      label: "מחלקות",
+      label: t("nav.departments"),
       icon: Building2,
       visible: admin,
       section: branchSection,
     },
     {
       to: "/permissions",
-      label: "הרשאות",
+      label: t("nav.permissions"),
       icon: ShieldCheck,
       visible: canManagePermissions,
       section: branchSection,
     },
     {
       to: "/shift-settings",
-      label: "הגדרות משמרות",
+      label: t("nav.shiftSettings"),
       icon: CalendarDays,
       visible: admin,
       section: branchSection,
     },
     {
       to: "/job-titles",
-      label: "תפקידים",
+      label: t("nav.jobTitles"),
       icon: Briefcase,
       visible: isMainAdmin,
       section: branchSection,
     },
     {
       to: "/company-settings",
-      label: "הגדרות חברה",
+      label: t("nav.companySettings"),
       icon: Building,
       visible: canManageCompanySettings,
       section: branchSection,
     },
     // Personal profile stays reachable regardless of Branch Mode.
-    { to: "/profile", label: "הפרופיל שלי", icon: UserCircle, visible: isPlainEmployee },
+    { to: "/profile", label: t("nav.profile"), icon: UserCircle, visible: isPlainEmployee },
   ];
 
   // ===== Platform Management — hidden only while actively operating a Branch. =====
   const platformItems: NavEntry[] = [
     {
       to: "/platform/companies",
-      label: "חברות",
+      label: t("nav.companies"),
       icon: Building2,
       visible: isPlatformOwner,
-      section: "ניהול פלטפורמה",
+      section: t("nav.platformSection"),
     },
     {
       to: "/platform/branches",
-      label: "סניפי הפלטפורמה",
+      label: t("nav.platformBranches"),
       icon: GitBranch,
       visible: isPlatformOwner,
-      section: "ניהול פלטפורמה",
+      section: t("nav.platformSection"),
     },
     {
       to: "/platform/monitoring",
-      label: "ניטור וזמינות",
+      label: t("nav.monitoring"),
       icon: Activity,
       visible: isPlatformOwner,
-      section: "ניהול פלטפורמה",
+      section: t("nav.platformSection"),
     },
     {
       to: "/platform/realtime",
-      label: "ניהול Real-Time",
+      label: t("nav.realtime"),
       icon: Radio,
       visible: isPlatformOwner,
-      section: "ניהול פלטפורמה",
+      section: t("nav.platformSection"),
     },
     {
       to: "/platform/billing",
-      label: "חיוב ומנויים",
+      label: t("nav.billing"),
       icon: CreditCard,
       visible: isPlatformOwner,
-      section: "ניהול פלטפורמה",
+      section: t("nav.platformSection"),
     },
     {
       to: "/platform/feature-flags",
-      label: "דגלי פיצ'רים",
+      label: t("nav.featureFlags"),
       icon: Flag,
       visible: isPlatformOwner,
-      section: "ניהול פלטפורמה",
+      section: t("nav.platformSection"),
     },
     {
       to: "/platform/analytics",
-      label: "אנליטיקס גלובלי",
+      label: t("nav.analytics"),
       icon: BarChart3,
       visible: isPlatformOwner,
-      section: "ניהול פלטפורמה",
+      section: t("nav.platformSection"),
     },
     {
       to: "/platform/owners",
-      label: "בעלי מערכת",
+      label: t("nav.platformOwners"),
       icon: Crown,
       visible: isPlatformOwner,
-      section: "ניהול פלטפורמה",
+      section: t("nav.platformSection"),
     },
     {
       to: "/platform/audit-log",
-      label: "יומן פעילות פלטפורמה",
+      label: t("nav.activityLog"),
       icon: ShieldCheck,
       visible: isPlatformOwner,
-      section: "ניהול פלטפורמה",
+      section: t("nav.platformSection"),
     },
     {
       to: "/platform/notifications",
-      label: "התראות פלטפורמה",
+      label: t("nav.platformNotifications"),
       icon: Bell,
       visible: isPlatformOwner,
-      section: "ניהול פלטפורמה",
+      section: t("nav.platformSection"),
     },
     {
       to: "/platform/settings",
-      label: "הגדרות פלטפורמה",
+      label: t("nav.platformSettings"),
       icon: Settings,
       visible: isPlatformOwner,
-      section: "ניהול פלטפורמה",
+      section: t("nav.platformSection"),
     },
   ];
 
@@ -434,7 +448,7 @@ export function AppShell({ children }: { children: ReactNode }) {
       ? [
           {
             to: "/platform/companies/$companyId",
-            label: "דשבורד חברה",
+            label: t("nav.companyDashboard"),
             icon: LayoutDashboard,
             visible: true,
             section: activeCompany.name,
@@ -449,7 +463,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           },
           {
             to: "/platform/companies/$companyId",
-            label: "סניפים",
+            label: t("nav.branches"),
             icon: GitBranch,
             visible: true,
             section: activeCompany.name,
@@ -464,7 +478,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           },
           {
             to: "/platform/companies/$companyId",
-            label: "מנהלי החברה",
+            label: t("nav.companyManagers"),
             icon: UserCog,
             visible: true,
             section: activeCompany.name,
@@ -479,7 +493,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           },
           {
             to: "/platform/companies/$companyId",
-            label: "משתמשי החברה",
+            label: t("nav.companyUsers"),
             icon: Users,
             visible: true,
             section: activeCompany.name,
@@ -494,7 +508,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           },
           {
             to: "/platform/companies/$companyId",
-            label: "דוחות החברה",
+            label: t("nav.companyReports"),
             icon: BarChart3,
             visible: true,
             section: activeCompany.name,
@@ -509,7 +523,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           },
           {
             to: "/platform/companies/$companyId",
-            label: "הגדרות החברה",
+            label: t("nav.companySettingsTab"),
             icon: Settings,
             visible: true,
             section: activeCompany.name,
@@ -562,7 +576,7 @@ export function AppShell({ children }: { children: ReactNode }) {
     await qc.cancelQueries();
     qc.clear();
     await supabase.auth.signOut();
-    toast.success("התנתקת מהמערכת");
+    toast.success(t("auth.loggedOut"));
     navigate({ to: "/auth", replace: true });
   }
 
@@ -582,7 +596,7 @@ export function AppShell({ children }: { children: ReactNode }) {
             )}
           </div>
           <div className="min-w-0">
-            <p className="font-bold text-sm truncate">{APP_NAME}</p>
+            <p className="font-bold text-sm truncate">{t("common.appName")}</p>
             <BranchSubtitle />
           </div>
         </div>
@@ -601,7 +615,7 @@ export function AppShell({ children }: { children: ReactNode }) {
             )}
           >
             <LayoutDashboard className="size-4 shrink-0" />
-            <span className="flex-1 text-right">דשבורד ראשי</span>
+            <span className="flex-1 text-start">{t("nav.dashboard")}</span>
           </button>
         )}
         {isPlatformOwner && inBranchMode && activeCompany && (
@@ -707,7 +721,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           <div className="min-w-0 flex-1">
             <p className="text-sm font-medium truncate">{profile.full_name}</p>
             <p className="text-xs text-muted-foreground truncate">
-              {top ? ROLE_LABELS[top] : "—"}
+              {top ? getRoleLabel(top) : "—"}
               {profile.department_name ? ` · ${profile.department_name}` : ""}
             </p>
           </div>
@@ -722,12 +736,12 @@ export function AppShell({ children }: { children: ReactNode }) {
           >
             <Link to="/profile">
               <UserCircle className="size-4" />
-              פרופיל
+              {t("common.profile")}
             </Link>
           </Button>
           <Button onClick={handleSignOut} variant="outline" size="sm" className="gap-2">
             <LogOut className="size-4" />
-            התנתקות
+            {t("common.logout")}
           </Button>
         </div>
       </div>
@@ -741,7 +755,7 @@ export function AppShell({ children }: { children: ReactNode }) {
       <BranchModeGuard isPlatformOwner={isPlatformOwner} />
       <div className="flex flex-col min-h-screen bg-background">
         {/* Desktop sidebar (RTL: stick to right) */}
-        <aside className="hidden lg:block fixed inset-y-0 right-0 w-64 border-l border-sidebar-border">
+        <aside className="hidden lg:block fixed inset-y-0 start-0 w-64 border-e border-sidebar-border">
           {SidebarContent}
         </aside>
 
@@ -749,11 +763,11 @@ export function AppShell({ children }: { children: ReactNode }) {
         <header className="lg:hidden sticky top-0 z-30 flex items-center justify-between gap-2 border-b border-border bg-background/95 backdrop-blur px-3 h-14">
           <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
             <SheetTrigger asChild>
-              <Button variant="ghost" size="icon" aria-label="תפריט">
+              <Button variant="ghost" size="icon" aria-label={t("common.menu")}>
                 <Menu className="size-5" />
               </Button>
             </SheetTrigger>
-            <SheetContent side="right" className="p-0 w-72">
+            <SheetContent side={i18n.language === "en" ? "left" : "right"} className="p-0 w-72">
               {SidebarContent}
             </SheetContent>
           </Sheet>
@@ -768,23 +782,27 @@ export function AppShell({ children }: { children: ReactNode }) {
               <Store className="size-5 text-primary shrink-0" />
             )}
             <div className="min-w-0 leading-tight">
-              <span className="block font-semibold text-sm truncate">{APP_NAME}</span>
+              <span className="block font-semibold text-sm truncate">{t("common.appName")}</span>
               <BranchSubtitle />
             </div>
           </div>
           <div className="flex items-center gap-1 shrink-0">
+            <LanguageSwitcher userId={profile?.id} />
             <NotificationsBell />
           </div>
         </header>
 
         {/* Floating header — desktop only */}
-        <div className="hidden lg:flex fixed top-4 left-4 z-40 items-center gap-2">
+        <div className="hidden lg:flex fixed top-4 end-4 z-40 items-center gap-2">
+          <div className="bg-background/95 backdrop-blur border rounded-full shadow-soft">
+            <LanguageSwitcher userId={profile?.id} />
+          </div>
           <div className="bg-background/95 backdrop-blur border rounded-full shadow-soft">
             <NotificationsBell />
           </div>
         </div>
 
-        <main className="lg:mr-64 flex-1">
+        <main className="lg:ms-64 flex-1">
           <div className="mx-auto max-w-6xl px-4 sm:px-6 py-6 lg:py-10">{children}</div>
           <AppFooter />
         </main>

@@ -5,7 +5,6 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Loader2, KeyRound, User, Umbrella } from "lucide-react";
 import { ROLE_LABELS, isPlatformOwner, supportContactInstruction } from "@/lib/constants";
-
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Plane } from "lucide-react";
@@ -14,6 +13,7 @@ import {
   isEmployeeCurrentlyOnLeave,
 } from "@/lib/employee-leave";
 import { supabase } from "@/integrations/supabase/client";
+import { useTranslation } from "react-i18next";
 
 
 export const Route = createFileRoute("/_authenticated/profile")({
@@ -21,6 +21,7 @@ export const Route = createFileRoute("/_authenticated/profile")({
 });
 
 function ProfilePage() {
+  const { t } = useTranslation();
   const { data: me, isLoading } = useAuth();
 
   const balancesQ = useQuery({
@@ -63,8 +64,8 @@ function ProfilePage() {
           <User className="size-5" />
         </div>
         <div>
-          <h1 className="text-2xl font-bold">הפרופיל שלי</h1>
-          <p className="text-sm text-muted-foreground">פרטי החשבון האישי שלך</p>
+          <h1 className="text-2xl font-bold">{t("profile.title")}</h1>
+          <p className="text-sm text-muted-foreground">{t("profile.subtitle")}</p>
         </div>
       </div>
 
@@ -72,49 +73,49 @@ function ProfilePage() {
         <Alert className="border-amber-200 bg-amber-50/80">
           <Plane className="size-4 text-amber-700" />
           <AlertDescription className="text-amber-900">
-            <span className="font-semibold">את/ה בחופש כרגע.</span>
+            <span className="font-semibold">{t("profile.onLeaveNow")}</span>
             {leaveRange ? ` (${leaveRange})` : null}
-            {" "}לפרטים נוספים {supportContactInstruction(me.roles)}.
+            {" "}{t("profile.forMoreDetails")} {supportContactInstruction(me.roles)}.
           </AlertDescription>
         </Alert>
       )}
 
       <Card className="p-6 space-y-4">
-        <Row label="שם פרטי" value={me.first_name || "—"} />
-        <Row label="שם משפחה" value={me.last_name || "—"} />
-        <Row label="מספר זהות" value={me.id_number ?? "—"} />
-        <Row label="טלפון" value={me.phone ?? "—"} />
-        {!isPlatformOwner(me.roles) && <Row label="מחלקה" value={me.department_name ?? "—"} />}
-        <Row label="תפקיד" value={roleLabel} />
+        <Row label={t("profile.firstName")} value={me.first_name || "—"} />
+        <Row label={t("profile.lastName")} value={me.last_name || "—"} />
+        <Row label={t("profile.idNumber")} value={me.id_number ?? "—"} />
+        <Row label={t("profile.phone")} value={me.phone ?? "—"} />
+        {!isPlatformOwner(me.roles) && <Row label={t("profile.department")} value={me.department_name ?? "—"} />}
+        <Row label={t("profile.role")} value={roleLabel} />
         <div className="flex items-center justify-between gap-3 border-b border-border/60 pb-3 last:border-0 last:pb-0">
-          <span className="text-sm text-muted-foreground">סטטוס</span>
+          <span className="text-sm text-muted-foreground">{t("profile.status")}</span>
           <span className="text-sm font-medium flex items-center gap-2">
             {onLeaveNow ? (
               <>
-                בחופש
+                {t("profile.onLeave")}
                 <Badge variant="secondary" className="rounded-full text-xs">🏖️</Badge>
               </>
             ) : me.is_active ? (
-              "פעיל"
+              t("profile.active")
             ) : (
-              "לא פעיל"
+              t("profile.inactive")
             )}
           </span>
         </div>
         {leaveRange && (
-          <Row label="תאריכי חופשה" value={leaveRange} />
+          <Row label={t("profile.leaveDates")} value={leaveRange} />
         )}
       </Card>
 
       <Card className="p-6 flex items-center justify-between gap-3">
         <div>
-          <p className="font-medium">סיסמה</p>
-          <p className="text-sm text-muted-foreground">החלפת סיסמה אישית</p>
+          <p className="font-medium">{t("profile.passwordTitle")}</p>
+          <p className="text-sm text-muted-foreground">{t("profile.passwordDesc")}</p>
         </div>
         <Button asChild variant="outline" className="gap-2">
           <Link to="/change-password">
             <KeyRound className="size-4" />
-            החלפת סיסמה
+            {t("profile.changePassword")}
           </Link>
         </Button>
       </Card>
@@ -122,14 +123,14 @@ function ProfilePage() {
       <Card className="p-6 space-y-4">
         <div className="flex items-center gap-2 mb-1">
           <Umbrella className="size-4 text-primary" />
-          <h2 className="font-semibold text-base">יתרות חופשה</h2>
+          <h2 className="font-semibold text-base">{t("profile.leaveBalances")}</h2>
         </div>
         {balancesQ.isLoading ? (
           <div className="flex justify-center py-4">
             <Loader2 className="size-5 animate-spin text-primary" />
           </div>
         ) : !balancesQ.data?.length ? (
-          <p className="text-sm text-muted-foreground text-center py-2">אין יתרות רשומות</p>
+          <p className="text-sm text-muted-foreground text-center py-2">{t("profile.noBalances")}</p>
         ) : (
           balancesQ.data.map((b) => (
             <div
@@ -141,7 +142,7 @@ function ProfilePage() {
                 {b.available % 1 === 0
                   ? b.available.toFixed(0)
                   : b.available.toFixed(1)}{" "}
-                ימים
+                {t("profile.days")}
               </span>
             </div>
           ))

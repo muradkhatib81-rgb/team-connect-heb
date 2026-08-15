@@ -37,6 +37,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { supabase } from "@/integrations/supabase/client";
+import i18n from "@/i18n";
 import { useAuth } from "@/lib/use-auth";
 import {
   AUDIO_ACCEPT,
@@ -153,7 +154,7 @@ export function MorningBoardManager({
     <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
       <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>ניהול תוכן לוח ראשי</DialogTitle>
+          <DialogTitle>{i18n.t("dashboard.manageContent")}</DialogTitle>
         </DialogHeader>
 
         <div className="flex items-center gap-2 flex-wrap">

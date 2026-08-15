@@ -10,6 +10,7 @@ import { Card } from "@/components/ui/card";
 import { Loader2, KeyRound } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "@/lib/use-auth";
+import i18n from "@/i18n";
 
 export const Route = createFileRoute("/_authenticated/change-password")({
   component: ChangePasswordPage,
@@ -29,21 +30,21 @@ function ChangePasswordPage() {
     const pw = String(form.get("password") || "");
     const confirm = String(form.get("confirm") || "");
     if (pw.length < 6) {
-      toast.error("הסיסמה חייבת להכיל לפחות 6 תווים");
+      toast.error(i18n.t("changePassword.tooShort"));
       return;
     }
     if (pw !== confirm) {
-      toast.error("הסיסמאות אינן זהות");
+      toast.error(i18n.t("changePassword.mismatch"));
       return;
     }
     setLoading(true);
     try {
       await changeFn({ data: { password: pw } });
-      toast.success("הסיסמה הוחלפה");
+      toast.success(i18n.t("changePassword.success"));
       await qc.invalidateQueries({ queryKey: ["auth", "me"] });
       navigate({ to: "/dashboard", replace: true });
     } catch (err: any) {
-      toast.error(err?.message ?? "שגיאה בהחלפת סיסמה");
+      toast.error(err?.message ?? i18n.t("changePassword.error"));
     } finally {
       setLoading(false);
     }
@@ -56,24 +57,24 @@ function ChangePasswordPage() {
           <div className="size-12 rounded-2xl gradient-brand flex items-center justify-center">
             <KeyRound className="size-6 text-primary-foreground" />
           </div>
-          <h1 className="text-xl font-bold">החלפת סיסמה</h1>
+          <h1 className="text-xl font-bold">{i18n.t("changePassword.title")}</h1>
           <p className="text-sm text-muted-foreground">
             {required
-              ? "זוהי הכניסה הראשונה שלך. יש להחליף את הסיסמה הראשונית לפני המשך השימוש."
-              : "ניתן לעדכן את הסיסמה בכל עת."}
+              ? i18n.t("changePassword.firstLogin")
+              : i18n.t("changePassword.anytime")}
           </p>
         </div>
         <form onSubmit={onSubmit} className="space-y-4">
           <div className="space-y-2">
-            <Label htmlFor="pw">סיסמה חדשה</Label>
+            <Label htmlFor="pw">{i18n.t("changePassword.newPassword")}</Label>
             <Input id="pw" name="password" type="password" minLength={6} required dir="ltr" />
           </div>
           <div className="space-y-2">
-            <Label htmlFor="confirm">אישור סיסמה</Label>
+            <Label htmlFor="confirm">{i18n.t("changePassword.confirmPassword")}</Label>
             <Input id="confirm" name="confirm" type="password" minLength={6} required dir="ltr" />
           </div>
           <Button type="submit" className="w-full" size="lg" disabled={loading}>
-            {loading ? <Loader2 className="size-4 animate-spin" /> : "שמירה"}
+            {loading ? <Loader2 className="size-4 animate-spin" /> : i18n.t("changePassword.save")}
           </Button>
         </form>
       </Card>

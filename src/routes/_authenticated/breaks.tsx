@@ -61,6 +61,7 @@ import {
   useCanUserRequestBreak,
   useShiftSelfServiceVisible,
 } from "@/lib/use-shift-self-service-visible";
+import i18n from "@/i18n";
 
 export const Route = createFileRoute("/_authenticated/breaks")({
   component: BreaksPage,
@@ -154,7 +155,7 @@ function BreaksPage() {
           const actorName =
             (payload.new?.ended_by_manager_name as string | null)?.trim() ||
             (payload.new?.cancelled_by_name as string | null)?.trim() ||
-            "מנהל";
+            i18n.t("breaks.manager");
           const atRaw =
             (payload.new?.completed_at as string | null) ||
             (payload.new?.cancelled_at as string | null) ||
@@ -174,15 +175,15 @@ function BreaksPage() {
           const whenPart = when ? ` · ${when}` : "";
 
           if (prev !== "active" && next === "active") {
-            toast.success("ההפסקה שלך התחילה");
+            toast.success(i18n.t("breaks.breakStarted"));
           } else if (prev !== "completed" && next === "completed") {
-            toast("ההפסקה הסתיימה");
+            toast(i18n.t("breaks.breakEnded"));
           } else if (prev !== "rejected" && next === "rejected") {
-            toast.error(`בקשת ההפסקה נדחתה על ידי ${actorName}${whenPart}`);
+            toast.error(`${i18n.t("breaks.breakRejected").replace("{name}", actorName)}${whenPart}`);
           } else if (prev !== "ended_by_manager" && next === "ended_by_manager") {
-            toast(`ההפסקה הסתיימה על ידי ${actorName}${whenPart}`);
+            toast(`${i18n.t("breaks.breakEndedByMgr").replace("{name}", actorName)}${whenPart}`);
           } else if (prev !== "cancelled_by_manager" && next === "cancelled_by_manager") {
-            toast(`ההפסקה בוטלה על ידי ${actorName}${whenPart}`);
+            toast(`${i18n.t("breaks.breakCancelledByMgr").replace("{name}", actorName)}${whenPart}`);
           }
           qc.invalidateQueries({ queryKey: ["my-break-requests"] });
         },
@@ -236,10 +237,10 @@ function BreaksPage() {
 
   const submitMut = useMutation({
     mutationFn: async () => {
-      if (!settingId) throw new Error("יש לבחור סוג הפסקה");
+      if (!settingId) throw new Error(i18n.t("breaks.errSelectType"));
       const setting = settingsQ.data?.find((s) => s.id === settingId);
-      if (!setting) throw new Error("סוג הפסקה לא קיים");
-      if (!timeStr) throw new Error("יש לבחור שעה");
+      if (!setting) throw new Error(i18n.t("breaks.errTypeNotFound"));
+      if (!timeStr) throw new Error(i18n.t("breaks.errSelectTime"));
       const requestedAt = isoFromLocalTime(timeStr);
       const { data: policy } = await (supabase as any).rpc("get_break_policy");
       const effectiveRequiresApproval = policy?.requires_approval === true;
@@ -259,8 +260,8 @@ function BreaksPage() {
     onSuccess: (result) => {
       toast.success(
         result.requiresApproval
-          ? "בקשת ההפסקה נשלחה לאישור"
-          : `ההפסקה נקבעה בהצלחה.\nההפסקה תתחיל אוטומטית בשעה ${result.timeStr}.`,
+          ? i18n.t("breaks.requestSentApproval")
+          : i18n.t("breaks.breakScheduled").replace("{time}", result.timeStr),
       );
       setTimeDialogOpen(false);
       setSettingId("");
@@ -268,7 +269,7 @@ function BreaksPage() {
       setNote("");
       qc.invalidateQueries({ queryKey: ["my-break-requests"] });
     },
-    onError: (e: any) => toast.error(e?.message ?? "שגיאה בשליחה"),
+    onError: (e: any) => toast.error(e?.message ?? i18n.t("breaks.errSend")),
   });
 
   const today = todayJerusalemDate();
@@ -283,7 +284,7 @@ function BreaksPage() {
 
   function openTimeDialog() {
     if (!settingId) {
-      toast.error("יש לבחור סוג הפסקה");
+      toast.error(i18n.t("breaks.errSelectType"));
       return;
     }
     if (!timeStr) setTimeStr(toLocalTime(new Date().toISOString()));
@@ -301,26 +302,26 @@ function BreaksPage() {
           <Coffee className="size-5" />
         </div>
         <div>
-          <h1 className="text-2xl sm:text-3xl font-bold">הפסקה</h1>
+          <h1 className="text-2xl sm:text-3xl font-bold">{i18n.t("breaks.title")}</h1>
           <p className="text-sm text-muted-foreground mt-1">
             {policyLoaded && requiresApproval
-              ? "הגשת בקשת הפסקה וצפייה בסטטוס. השעה המאושרת היא הקובעת."
-              : "הגשת הפסקה ללא צורך באישור מנהל. השעה שבחרת תאושר אוטומטית."}
+              ? i18n.t("breaks.subtitleApproval")
+              : i18n.t("breaks.subtitleAuto")}
           </p>
           {canShowRequestForm ? (
             <Button variant="link" className="h-auto p-0 text-sm" asChild>
-              <Link to="/break-planning">תכנון הפסקות למשמרת ←</Link>
+              <Link to="/break-planning">{i18n.t("breaks.planLink")}</Link>
             </Button>
           ) : (
-            <p className="text-sm text-muted-foreground">תכנון הפסקות — זמין במהלך משמרת בלבד</p>
+            <p className="text-sm text-muted-foreground">{i18n.t("breaks.planUnavailable")}</p>
           )}
         </div>
       </header>
 
       <Tabs defaultValue={canShowRequestForm ? "request" : "mine"} className="space-y-4">
         <TabsList>
-          {canShowRequestForm && <TabsTrigger value="request">בקשת הפסקה</TabsTrigger>}
-          <TabsTrigger value="mine">הבקשות שלי</TabsTrigger>
+          {canShowRequestForm && <TabsTrigger value="request">{i18n.t("breaks.tabRequest")}</TabsTrigger>}
+          <TabsTrigger value="mine">{i18n.t("breaks.tabMine")}</TabsTrigger>
         </TabsList>
 
         {canShowRequestForm && (
@@ -328,10 +329,10 @@ function BreaksPage() {
             <Card className="card-elevated p-5 space-y-4">
               <div className="grid sm:grid-cols-2 gap-4">
                 <div className="space-y-1.5">
-                  <Label>סוג הפסקה</Label>
+                  <Label>{i18n.t("breaks.breakType")}</Label>
                   <Select value={settingId} onValueChange={setSettingId}>
                     <SelectTrigger>
-                      <SelectValue placeholder="בחר/י סוג הפסקה" />
+                      <SelectValue placeholder={i18n.t("breaks.selectType")} />
                     </SelectTrigger>
                     <SelectContent>
                       {availableSettings.map((s) => (
@@ -344,12 +345,12 @@ function BreaksPage() {
                 </div>
               </div>
               <div className="space-y-1.5">
-                <Label htmlFor="brk-note">הערה (אופציונלי)</Label>
+              <Label htmlFor="brk-note">{i18n.t("breaks.noteLabel")}</Label>
                 <Textarea
                   id="brk-note"
                   value={note}
                   onChange={(e) => setNote(e.target.value)}
-                  placeholder="הערה למנהל"
+                  placeholder={i18n.t("breaks.notePlaceholder")}
                   rows={3}
                 />
               </div>
@@ -363,7 +364,7 @@ function BreaksPage() {
                 ) : (
                   <Send className="size-4" />
                 )}
-                {requiresApproval ? "שלח בקשה" : "יציאה להפסקה"}
+                {requiresApproval ? i18n.t("breaks.sendRequest") : i18n.t("breaks.goToBreak")}
               </Button>
             </Card>
           </TabsContent>
@@ -372,11 +373,11 @@ function BreaksPage() {
         <Dialog open={timeDialogOpen} onOpenChange={setTimeDialogOpen}>
           <DialogContent>
             <DialogHeader>
-              <DialogTitle>בחירת שעת יציאה להפסקה</DialogTitle>
+              <DialogTitle>{i18n.t("breaks.timeDialogTitle")}</DialogTitle>
             </DialogHeader>
             <div className="space-y-3">
               <div className="space-y-1.5">
-                <Label htmlFor="brk-time-dialog">שעת יציאה להפסקה</Label>
+                <Label htmlFor="brk-time-dialog">{i18n.t("breaks.timeLabel")}</Label>
                 <Input
                   id="brk-time-dialog"
                   type="time"
@@ -385,7 +386,7 @@ function BreaksPage() {
                 />
               </div>
               <p className="text-xs text-muted-foreground">
-                השעה שנבחרה תישמר כשעת ההפסקה.
+                {i18n.t("breaks.timeSavedNote")}
               </p>
             </div>
             <DialogFooter>
@@ -399,7 +400,7 @@ function BreaksPage() {
                 ) : (
                   <Send className="size-4" />
                 )}
-                {requiresApproval ? "שלח בקשה" : "יציאה להפסקה"}
+                {requiresApproval ? i18n.t("breaks.sendRequest") : i18n.t("breaks.goToBreak")}
               </Button>
             </DialogFooter>
           </DialogContent>
@@ -412,7 +413,7 @@ function BreaksPage() {
             </div>
           ) : myReqs.length === 0 ? (
             <Card className="card-elevated p-8 text-center text-sm text-muted-foreground">
-              עוד לא הגשת בקשת הפסקה.
+              {i18n.t("breaks.noRequests")}
             </Card>
           ) : (
             <div className="grid gap-3">
@@ -423,12 +424,12 @@ function BreaksPage() {
                   <Card key={r.id} className="card-elevated p-4 flex items-center gap-3">
                     <div className="flex-1 min-w-0">
                       <p className="font-medium truncate">
-                        {setting?.name ?? "הפסקה"} · {r.duration_minutes} דק׳
+                      {setting?.name ?? i18n.t("breaks.defaultBreak")} · {r.duration_minutes} דק׳
                       </p>
                       <p className="text-xs text-muted-foreground">
-                        שעה: {fmtBreakTime(showTime)}
+                        {i18n.t("breaks.timeLabel2")} {fmtBreakTime(showTime)}
                         {r.status === "active" && r.ends_at ? (
-                          <> · מסתיים ב־{fmtBreakTime(r.ends_at)}</>
+                          <> · {i18n.t("breaks.endsAt")}{fmtBreakTime(r.ends_at)}</>
                         ) : null}
                       </p>
                       {r.status === "active" && r.ends_at && (
@@ -436,11 +437,11 @@ function BreaksPage() {
                       )}
                       {(BREAK_PRE_ACTIVE_STATUSES as readonly string[]).includes(r.status) && (
                         <p className="text-xs text-muted-foreground mt-1">
-                          ההפסקה תתחיל אוטומטית בשעה {fmtBreakTime(showTime)}. עד אז את/ה במצב "בעבודה".
+                          {i18n.t("breaks.autoStartNote").replace("{time}", fmtBreakTime(showTime))}
                         </p>
                       )}
                       {r.note && (
-                        <p className="text-xs text-muted-foreground mt-1">הערה: {r.note}</p>
+                        <p className="text-xs text-muted-foreground mt-1">{i18n.t("breaks.notePrefix")} {r.note}</p>
                       )}
                     </div>
                     <Badge variant={BREAK_STATUS_TONE[r.status] ?? "secondary"}>
@@ -510,13 +511,13 @@ export function ApproveList({
       if (error) throw error;
     },
     onSuccess: () => {
-      toast.success("הבקשה אושרה");
+      toast.success(i18n.t("breaks.approved"));
       setEditing(null);
       qc.invalidateQueries({ queryKey: ["all-break-requests"] });
       qc.invalidateQueries({ queryKey: ["my-break-requests"] });
       qc.invalidateQueries({ queryKey: ["dashboard-pending-breaks"] });
     },
-    onError: (e: any) => toast.error(e?.message ?? "שגיאה"),
+    onError: (e: any) => toast.error(e?.message ?? i18n.t("breaks.errApprove")),
   });
 
   const rejectMut = useMutation({
@@ -528,7 +529,7 @@ export function ApproveList({
       if (error) throw error;
     },
     onSuccess: () => {
-      toast.success("הבקשה נדחתה");
+      toast.success(i18n.t("breaks.rejected"));
       setRejectTarget(null);
       setRejectReason("");
       qc.invalidateQueries({ queryKey: ["all-break-requests"] });
@@ -537,7 +538,7 @@ export function ApproveList({
       qc.invalidateQueries({ queryKey: ["dashboard-pending-breaks"] });
       qc.invalidateQueries({ queryKey: ["dashboard-daily-breaks"] });
     },
-    onError: (e: any) => toast.error(e?.message ?? "שגיאה בדחייה"),
+    onError: (e: any) => toast.error(e?.message ?? i18n.t("breaks.errReject")),
   });
 
   const cancelMut = useMutation({
@@ -546,11 +547,11 @@ export function ApproveList({
       if (error) throw error;
     },
     onSuccess: () => {
-      toast.success("ההפסקה בוטלה");
+      toast.success(i18n.t("breaks.cancelled"));
       qc.invalidateQueries({ queryKey: ["all-break-requests"] });
       qc.invalidateQueries({ queryKey: ["dashboard-daily-breaks"] });
     },
-    onError: (e: any) => toast.error(e?.message ?? "שגיאה"),
+    onError: (e: any) => toast.error(e?.message ?? i18n.t("breaks.errCancel")),
   });
 
   if (loading) {
@@ -563,7 +564,7 @@ export function ApproveList({
   if (pending.length === 0) {
     return (
       <Card className="card-elevated p-8 text-center text-sm text-muted-foreground">
-        אין בקשות הפסקה ממתינות.
+        {i18n.t("breaks.noPending")}
       </Card>
     );
   }
@@ -584,11 +585,11 @@ export function ApproveList({
                     {prof?.full_name ?? "—"} · {deptName(prof?.department_id ?? null)}
                   </p>
                   <p className="text-xs text-muted-foreground">
-                    {setting?.name ?? "הפסקה"} · {r.duration_minutes} דק׳ · ביקש/ה לשעה{" "}
+                    {setting?.name ?? i18n.t("breaks.defaultBreak")} · {r.duration_minutes} דק׳ · {i18n.t("breaks.requestedHour")}{" "}
                     {fmtBreakTime(r.requested_at)}
                   </p>
                   {r.note && (
-                    <p className="text-xs text-muted-foreground mt-1">הערה: {r.note}</p>
+                    <p className="text-xs text-muted-foreground mt-1">{i18n.t("breaks.notePrefix")} {r.note}</p>
                   )}
                 </div>
                 <div className="flex gap-2 shrink-0">
@@ -598,7 +599,7 @@ export function ApproveList({
                     className="gap-1"
                     onClick={() => setEditing(r)}
                   >
-                    <Pencil className="size-4" /> שנה שעה
+                    <Pencil className="size-4" /> {i18n.t("breaks.changeTime")}
                   </Button>
                   <Button
                     size="sm"
@@ -608,7 +609,7 @@ export function ApproveList({
                     }
                     disabled={approveMut.isPending}
                   >
-                    <CheckCircle2 className="size-4" /> אשר
+                    <CheckCircle2 className="size-4" /> {i18n.t("breaks.approve")}
                   </Button>
                   <Button
                     size="sm"
@@ -619,7 +620,7 @@ export function ApproveList({
                       setRejectReason("");
                     }}
                   >
-                    <Trash2 className="size-4" /> דחה
+                    <Trash2 className="size-4" /> {i18n.t("breaks.reject")}
                   </Button>
                 </div>
               </div>
@@ -636,8 +637,8 @@ export function ApproveList({
                   <div className="flex items-center gap-1 font-medium">
                     {warn && <AlertTriangle className="size-3.5" />}
                     {warn
-                      ? "שים לב: יותר מ-4 עובדים כבר ביקשו הפסקה בשעה זו. מומלץ לבדוק אם ניתן לאשר את הבקשה או לבחור שעה אחרת."
-                      : `${overlaps.length} עובדים נוספים באותה שעה:`}
+                      ? i18n.t("breaks.overlapWarn")
+                      : `${i18n.t("breaks.overlapCount").replace("{n}", String(overlaps.length))}`}
                   </div>
                   <ul className="mt-1 list-disc pr-4 space-y-0.5">
                     {overlaps.map((o) => {
@@ -646,7 +647,7 @@ export function ApproveList({
                       return (
                         <li key={o.id}>
                           {p?.full_name ?? "—"} · {deptName(p?.department_id ?? null)}
-                          {mgr && " · אחראי מחלקה"}
+                          {mgr && ` · ${i18n.t("breaks.deptManager")}`}
                         </li>
                       );
                     })}
@@ -679,13 +680,13 @@ export function ApproveList({
       >
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>דחיית בקשת הפסקה</AlertDialogTitle>
+            <AlertDialogTitle>{i18n.t("breaks.rejectTitle")}</AlertDialogTitle>
             <AlertDialogDescription>
-              העובד/ת יקבל/תקבל הודעה על הדחייה. ניתן להוסיף סיבה (אופציונלי).
+              {i18n.t("breaks.rejectDesc")}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <div className="py-2">
-            <Label htmlFor="reject-reason">סיבת דחייה (אופציונלי)</Label>
+            <Label htmlFor="reject-reason">{i18n.t("breaks.rejectReasonLabel")}</Label>
             <Textarea
               id="reject-reason"
               value={rejectReason}
@@ -695,7 +696,7 @@ export function ApproveList({
             />
           </div>
           <AlertDialogFooter>
-            <AlertDialogCancel>ביטול</AlertDialogCancel>
+            <AlertDialogCancel>{i18n.t("breaks.cancel")}</AlertDialogCancel>
             <AlertDialogAction
               onClick={() =>
                 rejectTarget &&
@@ -703,7 +704,7 @@ export function ApproveList({
               }
               disabled={rejectMut.isPending}
             >
-              דחה
+              {i18n.t("breaks.reject")}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -726,11 +727,11 @@ function EditTimeDialog({
   return (
     <DialogContent>
       <DialogHeader>
-        <DialogTitle>שינוי שעת הפסקה ואישור</DialogTitle>
-      </DialogHeader>
+      <DialogTitle>{i18n.t("breaks.editTimeTitle")}</DialogTitle>
+            </DialogHeader>
       <div className="space-y-3">
         <div className="space-y-1.5">
-          <Label htmlFor="bk-newtime">שעה חדשה</Label>
+          <Label htmlFor="bk-newtime">{i18n.t("breaks.newTime")}</Label>
           <Input
             id="bk-newtime"
             type="time"
@@ -739,7 +740,7 @@ function EditTimeDialog({
           />
         </div>
         <p className="text-xs text-muted-foreground">
-          השעה שתאושר תוצג לעובד כשעת ההפסקה.
+          {i18n.t("breaks.approvedTimeNote")}
         </p>
       </div>
       <DialogFooter>
@@ -750,7 +751,7 @@ function EditTimeDialog({
         >
           {saving && <Loader2 className="size-4 animate-spin" />}
           <CheckCircle2 className="size-4" />
-          אישור עם שעה זו
+          {i18n.t("breaks.approveWithTime")}
         </Button>
       </DialogFooter>
     </DialogContent>
