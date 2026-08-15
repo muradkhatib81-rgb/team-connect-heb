@@ -14,6 +14,7 @@ import {
 } from "@/lib/employee-leave";
 import { supabase } from "@/integrations/supabase/client";
 import { useTranslation } from "react-i18next";
+import { resolveLeaveAccess } from "@/lib/leave-permissions";
 
 
 export const Route = createFileRoute("/_authenticated/profile")({
@@ -23,9 +24,12 @@ export const Route = createFileRoute("/_authenticated/profile")({
 function ProfilePage() {
   const { t } = useTranslation();
   const { data: me, isLoading } = useAuth();
+  const showLeaveBalances = me
+    ? resolveLeaveAccess(me.roles ?? [], null).showRequestCard
+    : false;
 
   const balancesQ = useQuery({
-    enabled: !!me?.id,
+    enabled: !!me?.id && showLeaveBalances,
     queryKey: ["my-leave-balances", me?.id],
     queryFn: async () => {
       const { data, error } = await supabase
@@ -120,34 +124,36 @@ function ProfilePage() {
         </Button>
       </Card>
 
-      <Card className="p-6 space-y-4">
-        <div className="flex items-center gap-2 mb-1">
-          <Umbrella className="size-4 text-primary" />
-          <h2 className="font-semibold text-base">{t("profile.leaveBalances")}</h2>
-        </div>
-        {balancesQ.isLoading ? (
-          <div className="flex justify-center py-4">
-            <Loader2 className="size-5 animate-spin text-primary" />
+      {showLeaveBalances && (
+        <Card className="p-6 space-y-4">
+          <div className="flex items-center gap-2 mb-1">
+            <Umbrella className="size-4 text-primary" />
+            <h2 className="font-semibold text-base">{t("profile.leaveBalances")}</h2>
           </div>
-        ) : !balancesQ.data?.length ? (
-          <p className="text-sm text-muted-foreground text-center py-2">{t("profile.noBalances")}</p>
-        ) : (
-          balancesQ.data.map((b) => (
-            <div
-              key={b.name}
-              className="flex items-center justify-between gap-3 border-b border-border/60 pb-3 last:border-0 last:pb-0"
-            >
-              <span className="text-sm text-muted-foreground">{b.name}</span>
-              <span className="text-sm font-semibold tabular-nums">
-                {b.available % 1 === 0
-                  ? b.available.toFixed(0)
-                  : b.available.toFixed(1)}{" "}
-                {t("profile.days")}
-              </span>
+          {balancesQ.isLoading ? (
+            <div className="flex justify-center py-4">
+              <Loader2 className="size-5 animate-spin text-primary" />
             </div>
-          ))
-        )}
-      </Card>
+          ) : !balancesQ.data?.length ? (
+            <p className="text-sm text-muted-foreground text-center py-2">{t("profile.noBalances")}</p>
+          ) : (
+            balancesQ.data.map((b) => (
+              <div
+                key={b.name}
+                className="flex items-center justify-between gap-3 border-b border-border/60 pb-3 last:border-0 last:pb-0"
+              >
+                <span className="text-sm text-muted-foreground">{b.name}</span>
+                <span className="text-sm font-semibold tabular-nums">
+                  {b.available % 1 === 0
+                    ? b.available.toFixed(0)
+                    : b.available.toFixed(1)}{" "}
+                  {t("profile.days")}
+                </span>
+              </div>
+            ))
+          )}
+        </Card>
+      )}
 
     </div>
   );
