@@ -408,6 +408,13 @@ export function AppShell({ children }: { children: ReactNode }) {
       section: t("nav.platformSection"),
     },
     {
+      to: "/ai-assistant",
+      label: t("nav.aiAssistant"),
+      icon: Sparkles,
+      visible: isPlatformOwner && !!aiAccessQ.data?.allowed,
+      section: t("nav.platformSection"),
+    },
+    {
       to: "/platform/ai",
       label: t("nav.platformAi"),
       icon: Sparkles,
@@ -1048,7 +1055,13 @@ function RealtimeBridge({ uid }: { uid: string }) {
 // Messages, Settings, etc.) require an explicitly-selected active Branch.
 // Everything under /platform, /system, /profile and /change-password is
 // Platform/neutral territory and stays reachable without one.
-const BRANCH_MODE_EXEMPT_PREFIXES = ["/platform", "/system", "/profile", "/change-password"];
+const BRANCH_MODE_EXEMPT_PREFIXES = [
+  "/platform",
+  "/system",
+  "/profile",
+  "/change-password",
+  "/ai-assistant",
+];
 
 function isBranchModuleRoute(pathname: string): boolean {
   return !BRANCH_MODE_EXEMPT_PREFIXES.some(

@@ -787,6 +787,7 @@
       "selectScope": "יש לבחור היקף",
       "billingPlanCompanyOnly": "מנוי billing_plan רק ברמת חברה",
       "geminiNotConfigured": "מפתח Gemini לא מוגדר בשרת (GEMINI_API_KEY).",
+      "emptyResponse": "לא התקבלה תשובה מהעוזר. נסה שוב.",
       "providerNotRegistered": "ספק AI לא רשום: {{code}}"
     }
   },

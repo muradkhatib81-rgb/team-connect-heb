@@ -1,15 +1,12 @@
-import { useState } from "react";
-import { useMutation } from "@tanstack/react-query";
-import { useServerFn } from "@tanstack/react-start";
+import { useRef, useState } from "react";
 import { Loader2, Send, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Card } from "@/components/ui/card";
-import { sendAiMessage } from "@/lib/ai.functions";
 import type { AiAssistantKind } from "@/modules/ai";
 import { useTranslation } from "react-i18next";
 import { cn } from "@/lib/utils";
-import { translateAiError } from "@/lib/ai-errors";
+import { streamAiChatMessage, translateStreamError } from "@/lib/ai-stream-client";
 
 type ChatMessage = { role: "user" | "assistant"; content: string };
 
@@ -24,33 +21,42 @@ export function AiChatPanel({
   const locale = (i18n.language?.slice(0, 2) ?? "he") as "he" | "ar" | "en";
   const title = t(`ai.assistantTitle.${assistantKind}`);
 
-  const sendFn = useServerFn(sendAiMessage);
   const [input, setInput] = useState("");
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [remaining, setRemaining] = useState<number | null>(remainingMinutes);
+  const [streamingText, setStreamingText] = useState<string | null>(null);
+  const [isStreaming, setIsStreaming] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
 
-  const chatMut = useMutation({
-    mutationFn: async (text: string) => {
-      const history = messages.slice(-10);
-      return sendFn({
-        data: { message: text, history, locale },
-      });
-    },
-    onSuccess: (res, text) => {
-      setMessages((prev) => [
-        ...prev,
-        { role: "user", content: text },
-        { role: "assistant", content: res.text },
-      ]);
-      setRemaining(res.remainingMinutes);
-      setInput("");
-    },
-  });
-
-  function handleSend() {
+  async function handleSend() {
     const text = input.trim();
-    if (!text || chatMut.isPending) return;
-    chatMut.mutate(text);
+    if (!text || isStreaming) return;
+
+    const history = messages.slice(-6);
+    setMessages((prev) => [...prev, { role: "user", content: text }]);
+    setInput("");
+    setError(null);
+    setStreamingText(null);
+    setIsStreaming(true);
+
+    try {
+      const result = await streamAiChatMessage(
+        { message: text, history, locale },
+        (partial) => {
+          setStreamingText(partial);
+          scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
+        },
+      );
+
+      setMessages((prev) => [...prev, { role: "assistant", content: result.text }]);
+      setRemaining(result.remainingMinutes);
+    } catch (err) {
+      setError(translateStreamError(err, t));
+    } finally {
+      setStreamingText(null);
+      setIsStreaming(false);
+    }
   }
 
   return (
@@ -67,8 +73,8 @@ export function AiChatPanel({
         )}
       </div>
 
-      <div className="flex-1 overflow-y-auto p-4 space-y-3">
-        {messages.length === 0 && (
+      <div ref={scrollRef} className="flex-1 overflow-y-auto p-4 space-y-3">
+        {messages.length === 0 && !streamingText && (
           <p className="text-sm text-muted-foreground text-center py-8">{t("ai.emptyChat")}</p>
         )}
         {messages.map((m, i) => (
@@ -84,17 +90,21 @@ export function AiChatPanel({
             {m.content}
           </div>
         ))}
-        {chatMut.isPending && (
+        {streamingText != null && streamingText.length > 0 && (
+          <div className="me-auto max-w-[90%] rounded-xl bg-muted px-3 py-2 text-sm whitespace-pre-wrap">
+            {streamingText}
+            {isStreaming && (
+              <span className="inline-block ms-1 animate-pulse text-muted-foreground">▍</span>
+            )}
+          </div>
+        )}
+        {isStreaming && !streamingText && (
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
             <Loader2 className="size-4 animate-spin" />
             {t("ai.thinking")}
           </div>
         )}
-        {chatMut.isError && (
-          <p className="text-sm text-destructive">
-            {translateAiError((chatMut.error as Error).message, t)}
-          </p>
-        )}
+        {error && <p className="text-sm text-destructive">{error}</p>}
       </div>
 
       <div className="border-t p-3 flex gap-2 items-end">
@@ -104,10 +114,11 @@ export function AiChatPanel({
           placeholder={t("ai.inputPlaceholder")}
           rows={2}
           className="min-h-[44px] resize-none"
+          disabled={isStreaming}
           onKeyDown={(e) => {
             if (e.key === "Enter" && !e.shiftKey) {
               e.preventDefault();
-              handleSend();
+              void handleSend();
             }
           }}
         />
@@ -115,8 +126,8 @@ export function AiChatPanel({
           type="button"
           size="icon"
           className="shrink-0"
-          disabled={!input.trim() || chatMut.isPending}
-          onClick={handleSend}
+          disabled={!input.trim() || isStreaming}
+          onClick={() => void handleSend()}
         >
           <Send className="size-4" />
         </Button>

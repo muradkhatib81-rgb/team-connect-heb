@@ -38,6 +38,7 @@ import { Route as AuthenticatedBreakPlanningRouteImport } from './routes/_authen
 import { Route as AuthenticatedAiAssistantRouteImport } from './routes/_authenticated/ai-assistant'
 import { Route as AuthenticatedPlatformRouteRouteImport } from './routes/_authenticated/platform/route'
 import { Route as AuthenticatedPlatformIndexRouteImport } from './routes/_authenticated/platform/index'
+import { Route as ApiAiChatStreamRouteImport } from './routes/api/ai/chat-stream'
 import { Route as AuthenticatedSystemSettingsRouteImport } from './routes/_authenticated/system.settings'
 import { Route as AuthenticatedSystemPermissionsRouteImport } from './routes/_authenticated/system.permissions'
 import { Route as AuthenticatedSystemBranchesRouteImport } from './routes/_authenticated/system.branches'
@@ -219,6 +220,11 @@ const AuthenticatedPlatformIndexRoute =
     path: '/',
     getParentRoute: () => AuthenticatedPlatformRouteRoute,
   } as any)
+const ApiAiChatStreamRoute = ApiAiChatStreamRouteImport.update({
+  id: '/api/ai/chat-stream',
+  path: '/api/ai/chat-stream',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AuthenticatedSystemSettingsRoute =
   AuthenticatedSystemSettingsRouteImport.update({
     id: '/settings',
@@ -389,6 +395,7 @@ export interface FileRoutesByFullPath {
   '/system/branches': typeof AuthenticatedSystemBranchesRoute
   '/system/permissions': typeof AuthenticatedSystemPermissionsRoute
   '/system/settings': typeof AuthenticatedSystemSettingsRoute
+  '/api/ai/chat-stream': typeof ApiAiChatStreamRoute
   '/platform/': typeof AuthenticatedPlatformIndexRoute
   '/platform/branches/$branchId': typeof AuthenticatedPlatformBranchesBranchIdRoute
   '/platform/companies/$companyId': typeof AuthenticatedPlatformCompaniesCompanyIdRoute
@@ -438,6 +445,7 @@ export interface FileRoutesByTo {
   '/system/branches': typeof AuthenticatedSystemBranchesRoute
   '/system/permissions': typeof AuthenticatedSystemPermissionsRoute
   '/system/settings': typeof AuthenticatedSystemSettingsRoute
+  '/api/ai/chat-stream': typeof ApiAiChatStreamRoute
   '/platform': typeof AuthenticatedPlatformIndexRoute
   '/platform/branches/$branchId': typeof AuthenticatedPlatformBranchesBranchIdRoute
   '/platform/companies/$companyId': typeof AuthenticatedPlatformCompaniesCompanyIdRoute
@@ -491,6 +499,7 @@ export interface FileRoutesById {
   '/_authenticated/system/branches': typeof AuthenticatedSystemBranchesRoute
   '/_authenticated/system/permissions': typeof AuthenticatedSystemPermissionsRoute
   '/_authenticated/system/settings': typeof AuthenticatedSystemSettingsRoute
+  '/api/ai/chat-stream': typeof ApiAiChatStreamRoute
   '/_authenticated/platform/': typeof AuthenticatedPlatformIndexRoute
   '/_authenticated/platform/branches/$branchId': typeof AuthenticatedPlatformBranchesBranchIdRoute
   '/_authenticated/platform/companies/$companyId': typeof AuthenticatedPlatformCompaniesCompanyIdRoute
@@ -544,6 +553,7 @@ export interface FileRouteTypes {
     | '/system/branches'
     | '/system/permissions'
     | '/system/settings'
+    | '/api/ai/chat-stream'
     | '/platform/'
     | '/platform/branches/$branchId'
     | '/platform/companies/$companyId'
@@ -593,6 +603,7 @@ export interface FileRouteTypes {
     | '/system/branches'
     | '/system/permissions'
     | '/system/settings'
+    | '/api/ai/chat-stream'
     | '/platform'
     | '/platform/branches/$branchId'
     | '/platform/companies/$companyId'
@@ -645,6 +656,7 @@ export interface FileRouteTypes {
     | '/_authenticated/system/branches'
     | '/_authenticated/system/permissions'
     | '/_authenticated/system/settings'
+    | '/api/ai/chat-stream'
     | '/_authenticated/platform/'
     | '/_authenticated/platform/branches/$branchId'
     | '/_authenticated/platform/companies/$companyId'
@@ -657,6 +669,7 @@ export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AuthenticatedRouteRoute: typeof AuthenticatedRouteRouteWithChildren
   AuthRoute: typeof AuthRoute
+  ApiAiChatStreamRoute: typeof ApiAiChatStreamRoute
   ApiPublicHooksGenerateRecurringTasksRoute: typeof ApiPublicHooksGenerateRecurringTasksRoute
 }
 
@@ -864,6 +877,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/platform/'
       preLoaderRoute: typeof AuthenticatedPlatformIndexRouteImport
       parentRoute: typeof AuthenticatedPlatformRouteRoute
+    }
+    '/api/ai/chat-stream': {
+      id: '/api/ai/chat-stream'
+      path: '/api/ai/chat-stream'
+      fullPath: '/api/ai/chat-stream'
+      preLoaderRoute: typeof ApiAiChatStreamRouteImport
+      parentRoute: typeof rootRouteImport
     }
     '/_authenticated/system/settings': {
       id: '/_authenticated/system/settings'
@@ -1187,6 +1207,7 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AuthenticatedRouteRoute: AuthenticatedRouteRouteWithChildren,
   AuthRoute: AuthRoute,
+  ApiAiChatStreamRoute: ApiAiChatStreamRoute,
   ApiPublicHooksGenerateRecurringTasksRoute:
     ApiPublicHooksGenerateRecurringTasksRoute,
 }

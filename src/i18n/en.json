@@ -787,6 +787,7 @@
       "selectScope": "Please select a scope",
       "billingPlanCompanyOnly": "Billing plan grants apply to companies only",
       "geminiNotConfigured": "Gemini API key is not configured on the server (GEMINI_API_KEY).",
+      "emptyResponse": "No response from the assistant. Please try again.",
       "providerNotRegistered": "AI provider not registered: {{code}}"
     }
   },

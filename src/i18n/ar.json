@@ -787,6 +787,7 @@
       "selectScope": "يرجى اختيار النطاق",
       "billingPlanCompanyOnly": "منح الاشتراك متاحة على مستوى الشركة فقط",
       "geminiNotConfigured": "مفتاح Gemini غير مُعدّ على الخادم (GEMINI_API_KEY).",
+      "emptyResponse": "لم يصل رد من المساعد. جرّب مرة أخرى.",
       "providerNotRegistered": "مزود AI غير مسجّل: {{code}}"
     }
   },

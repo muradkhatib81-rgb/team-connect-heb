@@ -1,13 +1,15 @@
 /** Server-only AI provider API keys — never exposed to the client. */
 
+import { readServerEnv } from "./server-dotenv.server";
+
 export function getGeminiApiKey(): string | undefined {
-  return process.env.GEMINI_API_KEY ?? process.env.GOOGLE_AI_API_KEY;
+  return readServerEnv("GEMINI_API_KEY") ?? readServerEnv("GOOGLE_AI_API_KEY");
 }
 
 export function getOpenAiApiKey(): string | undefined {
-  return process.env.OPENAI_API_KEY;
+  return readServerEnv("OPENAI_API_KEY");
 }
 
 export function getAnthropicApiKey(): string | undefined {
-  return process.env.ANTHROPIC_API_KEY;
+  return readServerEnv("ANTHROPIC_API_KEY");
 }

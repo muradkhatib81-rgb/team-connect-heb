@@ -6,6 +6,12 @@ import type { AiAssistantKind, AiGrantSource, AiProviderCode, ResolvedAiAccess }
 import { registerAiProvider, routeAiChat } from "@/modules/ai";
 import { GeminiProvider } from "@/modules/ai/providers/gemini.provider";
 import { aiErrorCode } from "@/lib/ai-errors";
+import {
+  buildAiChatMessages,
+  estimateAiMinutes,
+  mapAiAccess,
+  type RawAiAccess,
+} from "@/lib/ai-chat-core.server";
 
 let providersRegistered = false;
 
@@ -15,27 +21,10 @@ function ensureProvidersRegistered() {
   providersRegistered = true;
 }
 
-type RawAccess = {
-  allowed?: boolean;
-  reason?: string;
-  assistant_kind?: AiAssistantKind;
-  provider_code?: AiProviderCode;
-  grant_id?: string | null;
-  remaining_minutes?: number | null;
-  quota_minutes?: number | null;
-  grant_source?: AiGrantSource | "platform" | null;
-};
+type RawAccess = RawAiAccess;
 
-function mapAccess(raw: RawAccess): ResolvedAiAccess {
-  return {
-    allowed: !!raw.allowed,
-    grantId: raw.grant_id ?? null,
-    providerCode: raw.provider_code ?? "gemini",
-    assistantKind: raw.assistant_kind ?? "employee",
-    remainingMinutes: raw.remaining_minutes ?? null,
-    quotaMinutes: raw.quota_minutes ?? null,
-    grantSource: (raw.grant_source as AiGrantSource | null) ?? null,
-  };
+function mapAccess(raw: RawAccess) {
+  return mapAiAccess(raw);
 }
 
 async function assertCanManageAiGrants(supabase: any, userId: string) {
@@ -44,22 +33,8 @@ async function assertCanManageAiGrants(supabase: any, userId: string) {
   if (!data) throw new Error(aiErrorCode("noManagePermission"));
 }
 
-function buildSystemPrompt(kind: AiAssistantKind, locale: string): string {
-  const lang =
-    locale === "ar" ? "Arabic" : locale === "en" ? "English" : "Hebrew";
-  if (kind === "platform_owner") {
-    return `You are a platform operations assistant for a workforce management SaaS. Answer in ${lang}. Help with platform overview, companies, branches, and usage — never invent data. If you lack data, say so. Do not change permissions or approve actions — advise only.`;
-  }
-  if (kind === "manager") {
-    return `You are a branch/department manager assistant for a workforce app. Answer in ${lang}. Help summarize operational questions (schedules, leaves, breaks, team status). Never approve or reject requests — explain and guide only.`;
-  }
-  return `You are an employee self-service assistant for a workforce app. Answer in ${lang}. Help with leave balance, schedule, breaks, and profile questions. Never approve actions — guide the user to the right screen.`;
-}
-
 function estimateMinutes(durationMs: number, inputTokens: number, outputTokens: number): number {
-  const fromDuration = durationMs / 60_000;
-  const fromTokens = (inputTokens + outputTokens) / 1000;
-  return Math.max(0.01, Math.round(Math.max(fromDuration, fromTokens * 0.02) * 100) / 100);
+  return estimateAiMinutes(durationMs, inputTokens, outputTokens);
 }
 
 export const getMyAiAccess = createServerFn({ method: "GET" })
@@ -97,12 +72,12 @@ export const sendAiMessage = createServerFn({ method: "POST" })
       throw new Error(aiErrorCode("noAccess"));
     }
 
-    const locale = data.locale ?? "he";
-    const messages = [
-      { role: "system" as const, content: buildSystemPrompt(access.assistantKind, locale) },
-      ...(data.history ?? []).map((m) => ({ role: m.role, content: m.content })),
-      { role: "user" as const, content: data.message },
-    ];
+    const messages = buildAiChatMessages({
+      assistantKind: access.assistantKind,
+      message: data.message,
+      history: data.history,
+      locale: data.locale,
+    });
 
     const response = await routeAiChat({
       providerCode: access.providerCode,

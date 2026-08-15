@@ -102,6 +102,29 @@ export interface ResolvedAiAccess {
 
 export const DEFAULT_AI_PROVIDER: AiProviderCode = "gemini";
 
+/** Fast default for in-app chat (new API keys, minimal thinking by default). */
+export const DEFAULT_GEMINI_MODEL = "gemini-3.5-flash-lite";
+
+/** Higher-quality model when explicitly configured in admin. */
+export const DEFAULT_GEMINI_QUALITY_MODEL = "gemini-3.5-flash";
+
+/** Retired / blocked-for-new-users models still stored in DB/UI are mapped at call time. */
+export const DEPRECATED_GEMINI_MODEL_ALIASES: Record<string, string> = {
+  "gemini-2.0-flash": DEFAULT_GEMINI_MODEL,
+  "gemini-2.0-flash-001": DEFAULT_GEMINI_MODEL,
+  "gemini-2.0-flash-lite": DEFAULT_GEMINI_MODEL,
+  "gemini-2.0-flash-lite-001": DEFAULT_GEMINI_MODEL,
+  "gemini-2.5-flash": DEFAULT_GEMINI_QUALITY_MODEL,
+  "gemini-2.5-flash-lite": DEFAULT_GEMINI_MODEL,
+  "gemini-2.5-pro": DEFAULT_GEMINI_QUALITY_MODEL,
+  "gemini-3.5-flash": DEFAULT_GEMINI_QUALITY_MODEL,
+};
+
+export function resolveGeminiModel(model?: string | null): string {
+  const requested = model?.trim() || DEFAULT_GEMINI_MODEL;
+  return DEPRECATED_GEMINI_MODEL_ALIASES[requested] ?? requested;
+}
+
 export const DEFAULT_PLAN_ENTITLEMENTS: AiPlanEntitlement[] = [
   {
     billingPlan: "free",
