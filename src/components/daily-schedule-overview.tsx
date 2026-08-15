@@ -19,6 +19,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { supabase } from "@/integrations/supabase/client";
 import {
   effectiveScheduleShift,
+  isEmployeeOnLeaveOnDate,
   leaveOffLabel,
   type EmployeeLeaveFields,
 } from "@/lib/employee-leave";
@@ -153,6 +154,8 @@ function computeDeptDayCounts(
   if (!dept.scheduleId) return counts;
 
   const empMap = new Map((employeesByDept[dept.id] ?? []).map((e) => [e.id, e]));
+  const processedIds = new Set<string>();
+
   for (const row of shifts) {
     if (row.schedule_id !== dept.scheduleId || row.day_date !== selectedDay) continue;
     const emp = empMap.get(row.employee_id);
@@ -167,7 +170,17 @@ function computeDeptDayCounts(
     };
     const shift = normalizeShift(stub, selectedDay, row.shift);
     counts[shift] += 1;
+    processedIds.add(row.employee_id);
   }
+
+  // Count employees on leave from profile who have no schedule row.
+  for (const emp of employeesByDept[dept.id] ?? []) {
+    if (emp.excluded_from_schedule) continue;
+    if (!isCountedInDailySummary(emp)) continue;
+    if (processedIds.has(emp.id)) continue;
+    if (isEmployeeOnLeaveOnDate(emp, selectedDay)) counts.off += 1;
+  }
+
   return counts;
 }
 
@@ -246,6 +259,32 @@ function buildDepartmentEmployeeRows(args: {
       isNoteModified,
       isTimeModified,
       isSelf: !!selfId && stub.id === selfId,
+    });
+  }
+
+  // Employees who are on leave in their profile but have no shift row in the
+  // schedule still need to appear in the חופש bucket. Add them now.
+  const processedIds = new Set(rows.map((r) => r.id));
+  for (const emp of employeesByDept[dept.id] ?? []) {
+    if (emp.excluded_from_schedule) continue;
+    if (!isCountedInDailySummary(emp)) continue;
+    if (processedIds.has(emp.id)) continue;
+    if (!isEmployeeOnLeaveOnDate(emp, selectedDay)) continue;
+
+    const leaveLabel = leaveOffLabel(emp.leave_type_code);
+    if (shiftFilter != null && shiftFilter !== "off") continue;
+
+    rows.push({
+      id: emp.id,
+      full_name: emp.full_name,
+      shift: "off",
+      shiftLabel: leaveLabel,
+      timeRange: null,
+      note: null,
+      isModified: false,
+      isNoteModified: false,
+      isTimeModified: false,
+      isSelf: !!selfId && emp.id === selfId,
     });
   }
 
