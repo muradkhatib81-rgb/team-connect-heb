@@ -1,16 +1,17 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useLayoutEffect, useRef } from "react";
 
 /**
  * Signs the user out after a fixed period of inactivity.
  *
- * "Inactivity" is any absence of user interaction (pointer, keyboard, touch,
- * scroll) or the tab regaining focus. Each interaction resets the countdown.
- * The timer also survives across tabs of the same origin via a shared
- * localStorage timestamp, so activity in one tab keeps the others alive.
- *
- * This is a pure client-side session convenience; it does not touch roles or
- * permissions.
+ * Only real user interaction (pointer, keyboard, touch, scroll) resets the
+ * countdown. Opening or focusing the app does NOT extend the session.
+ * The timer survives across tabs via a shared localStorage timestamp.
  */
+export const IDLE_LOGOUT_TIMEOUT_MS = 8 * 60 * 60 * 1000; // 8 hours
+
+const LAST_ACTIVITY_STORAGE_KEY = "tc:last-activity-at";
+const IDLE_SESSION_USER_KEY = "tc:idle-session-user-id";
+
 const WINDOW_ACTIVITY_EVENTS: Array<keyof WindowEventMap> = [
   "mousemove",
   "mousedown",
@@ -20,44 +21,91 @@ const WINDOW_ACTIVITY_EVENTS: Array<keyof WindowEventMap> = [
   "wheel",
 ];
 
-const LAST_ACTIVITY_STORAGE_KEY = "tc:last-activity-at";
+function readStorage(key: string): string | null {
+  try {
+    return window.localStorage.getItem(key);
+  } catch {
+    return null;
+  }
+}
+
+function writeStorage(key: string, value: string) {
+  try {
+    window.localStorage.setItem(key, value);
+  } catch {
+    // Ignore storage failures (private mode, quota, etc.)
+  }
+}
+
+function removeStorage(key: string) {
+  try {
+    window.localStorage.removeItem(key);
+  } catch {
+    // Ignore storage failures
+  }
+}
+
+/** Clears idle tracking — call on explicit sign-out. */
+export function clearIdleSessionState() {
+  if (typeof window === "undefined") return;
+  removeStorage(LAST_ACTIVITY_STORAGE_KEY);
+  removeStorage(IDLE_SESSION_USER_KEY);
+}
+
+/** Starts or resets the idle window for a fresh login. */
+export function seedIdleSessionOnLogin(userId: string) {
+  if (typeof window === "undefined") return;
+  writeStorage(IDLE_SESSION_USER_KEY, userId);
+  writeStorage(LAST_ACTIVITY_STORAGE_KEY, String(Date.now()));
+}
+
+function readLastActivityForUser(userId: string): number | null {
+  if (readStorage(IDLE_SESSION_USER_KEY) !== userId) return null;
+  const raw = readStorage(LAST_ACTIVITY_STORAGE_KEY);
+  const parsed = raw ? Number(raw) : NaN;
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function writeLastActivity(userId: string, ts: number) {
+  writeStorage(IDLE_SESSION_USER_KEY, userId);
+  writeStorage(LAST_ACTIVITY_STORAGE_KEY, String(ts));
+}
 
 export function useIdleLogout(
   onIdle: () => void,
   {
     enabled = true,
-    timeoutMs = 12 * 60 * 60 * 1000, // 12 hours
-  }: { enabled?: boolean; timeoutMs?: number } = {},
+    userId,
+    timeoutMs = IDLE_LOGOUT_TIMEOUT_MS,
+  }: { enabled?: boolean; userId: string; timeoutMs?: number },
 ) {
   const onIdleRef = useRef(onIdle);
   onIdleRef.current = onIdle;
 
   const firedRef = useRef(false);
 
+  useLayoutEffect(() => {
+    if (!enabled || typeof window === "undefined") return;
+
+    firedRef.current = false;
+    const lastActivity = readLastActivityForUser(userId);
+    if (lastActivity === null) {
+      seedIdleSessionOnLogin(userId);
+      return;
+    }
+
+    if (Date.now() - lastActivity >= timeoutMs) {
+      firedRef.current = true;
+      onIdleRef.current();
+    }
+  }, [enabled, timeoutMs, userId]);
+
   useEffect(() => {
     if (!enabled) return;
     if (typeof window === "undefined") return;
+    if (firedRef.current) return;
 
-    firedRef.current = false;
     let timerId: ReturnType<typeof setTimeout> | undefined;
-
-    const readLastActivity = (): number => {
-      try {
-        const raw = window.localStorage.getItem(LAST_ACTIVITY_STORAGE_KEY);
-        const parsed = raw ? Number(raw) : NaN;
-        return Number.isFinite(parsed) ? parsed : Date.now();
-      } catch {
-        return Date.now();
-      }
-    };
-
-    const writeLastActivity = (ts: number) => {
-      try {
-        window.localStorage.setItem(LAST_ACTIVITY_STORAGE_KEY, String(ts));
-      } catch {
-        // Ignore storage failures (private mode, quota, etc.)
-      }
-    };
 
     const fire = () => {
       if (firedRef.current) return;
@@ -67,7 +115,13 @@ export function useIdleLogout(
 
     const schedule = () => {
       if (timerId) clearTimeout(timerId);
-      const elapsed = Date.now() - readLastActivity();
+      const lastActivity = readLastActivityForUser(userId);
+      if (lastActivity === null) {
+        seedIdleSessionOnLogin(userId);
+        timerId = setTimeout(fire, timeoutMs);
+        return;
+      }
+      const elapsed = Date.now() - lastActivity;
       const remaining = timeoutMs - elapsed;
       if (remaining <= 0) {
         fire();
@@ -78,22 +132,22 @@ export function useIdleLogout(
 
     const registerActivity = () => {
       if (firedRef.current) return;
-      // Ignore hidden->hidden churn; only meaningful visibility changes matter.
-      writeLastActivity(Date.now());
+      writeLastActivity(userId, Date.now());
       schedule();
     };
 
     const onStorage = (e: StorageEvent) => {
-      if (e.key === LAST_ACTIVITY_STORAGE_KEY) schedule();
+      if (e.key === LAST_ACTIVITY_STORAGE_KEY || e.key === IDLE_SESSION_USER_KEY) {
+        schedule();
+      }
     };
 
-    // Seed activity and start the countdown.
-    registerActivity();
+    // Start countdown from the stored timestamp — do NOT reset on mount.
+    schedule();
 
     for (const evt of WINDOW_ACTIVITY_EVENTS) {
       window.addEventListener(evt, registerActivity, { passive: true });
     }
-    document.addEventListener("visibilitychange", registerActivity);
     window.addEventListener("storage", onStorage);
 
     return () => {
@@ -101,8 +155,7 @@ export function useIdleLogout(
       for (const evt of WINDOW_ACTIVITY_EVENTS) {
         window.removeEventListener(evt, registerActivity);
       }
-      document.removeEventListener("visibilitychange", registerActivity);
       window.removeEventListener("storage", onStorage);
     };
-  }, [enabled, timeoutMs]);
+  }, [enabled, timeoutMs, userId]);
 }

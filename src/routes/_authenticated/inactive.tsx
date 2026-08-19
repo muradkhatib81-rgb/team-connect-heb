@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { APP_NAME, supportContactInstruction } from "@/lib/constants";
 import { useAuth } from "@/lib/use-auth";
 import { supabase } from "@/integrations/supabase/client";
+import { clearIdleSessionState } from "@/lib/use-idle-logout";
 
 export const Route = createFileRoute("/_authenticated/inactive")({
   head: () => ({ meta: [{ title: `חשבון לא פעיל | ${APP_NAME}` }] }),
@@ -43,6 +44,7 @@ function InactiveAccountPage() {
   }, [profile?.is_active, navigate]);
 
   async function signOut() {
+    clearIdleSessionState();
     await supabase.auth.signOut();
     navigate({ to: "/auth", replace: true });
   }

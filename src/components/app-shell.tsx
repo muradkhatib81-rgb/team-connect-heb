@@ -58,7 +58,7 @@ import { useCanManageBreaks, canManageBreaksQueryKey } from "@/lib/break-permiss
 import { useLeaveAccess } from "@/lib/leave-permissions";
 import { AppFooter } from "@/components/app-footer";
 import { useBranchContext, useCompanyContext } from "@/platform";
-import { useIdleLogout } from "@/lib/use-idle-logout";
+import { clearIdleSessionState, useIdleLogout } from "@/lib/use-idle-logout";
 import {
   hasBranchActionPermission,
   useCurrentPermissions,
@@ -597,6 +597,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   };
 
   async function handleSignOut() {
+    clearIdleSessionState();
     await qc.cancelQueries();
     qc.clear();
     await supabase.auth.signOut();
@@ -775,7 +776,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   return (
     <>
       <RealtimeBridge uid={profile.id} />
-      <IdleLogoutGuard onIdle={handleSignOut} />
+      <IdleLogoutGuard userId={profile.id} onIdle={handleSignOut} />
       <BranchModeGuard isPlatformOwner={isPlatformOwner} />
       <div className="flex flex-col min-h-screen bg-background">
         {/* Desktop sidebar (RTL: stick to right) */}
@@ -843,10 +844,16 @@ export function AppShell({ children }: { children: ReactNode }) {
  * the sysadmin switches branches, so realtime stops emitting events
  * scoped to the previous branch through the open WebSocket.
  */
-// Signs the user out after a fixed window of inactivity (12h, no warning).
+// Signs the user out after a fixed window of inactivity (8h, no warning).
 // Mounted only once profile exists, so its hook order stays stable.
-function IdleLogoutGuard({ onIdle }: { onIdle: () => void }) {
-  useIdleLogout(onIdle);
+function IdleLogoutGuard({
+  userId,
+  onIdle,
+}: {
+  userId: string;
+  onIdle: () => void;
+}) {
+  useIdleLogout(onIdle, { userId });
   return null;
 }
 

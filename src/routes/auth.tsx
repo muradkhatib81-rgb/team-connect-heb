@@ -11,6 +11,7 @@ import { toast } from "sonner";
 import { APP_NAME } from "@/lib/constants";
 import { bootstrapPlatformOwner } from "@/lib/auth-bootstrap.functions";
 import { resolveLandingPath } from "@/lib/use-auth";
+import { seedIdleSessionOnLogin } from "@/lib/use-idle-logout";
 import { useCompanySettings } from "@/lib/use-company-settings";
 import { toWhatsAppUrl } from "@/lib/whatsapp";
 import { Store, Loader2 } from "lucide-react";
@@ -118,6 +119,7 @@ function AuthPage() {
     }
     toast.success(t("auth.loginSuccess"));
     const { data: userData } = await supabase.auth.getUser();
+    if (userData.user) seedIdleSessionOnLogin(userData.user.id);
     setLoading(false);
     const explicit = search.redirect as string | undefined;
     const target =
@@ -165,6 +167,8 @@ function AuthPage() {
       toast.error(signInErr.message);
       return;
     }
+    const { data: bootUserData } = await supabase.auth.getUser();
+    if (bootUserData.user) seedIdleSessionOnLogin(bootUserData.user.id);
     toast.success(t("auth.welcomeOwner"));
     // The bootstrap flow always creates the first main_admin — always a
     // Platform Owner — so it always lands on the Platform Dashboard.
