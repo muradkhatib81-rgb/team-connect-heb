@@ -62,7 +62,7 @@ async function userHasRole(supabase: Db, userId: string, role: string): Promise<
   return (data ?? []).some((r) => r.role === role);
 }
 
-async function buildEmployeeSnapshot(supabase: Db, userId: string) {
+export async function buildEmployeeSnapshot(supabase: Db, userId: string) {
   const today = jerusalemTodayIso();
   const { weekStart, weekDays } = getScheduleWeek(new Date(`${today}T12:00:00Z`));
 
@@ -499,9 +499,18 @@ export async function buildAiUserContext(
     }
 
     if (assistantKind === "manager") {
+      const isBranchOp =
+        (await userHasRole(supabase, userId, "branch_manager")) ||
+        (await userHasRole(supabase, userId, "assistant_manager"));
+      if (isBranchOp) {
+        const { buildBranchOperatorSnapshot } = await import("@/lib/ai-context-branch.server");
+        return JSON.stringify(await buildBranchOperatorSnapshot(supabase, userId), null, 2);
+      }
       const isDeptHead = await userHasRole(supabase, userId, "department_manager");
-      if (!isDeptHead) return null;
-      return JSON.stringify(await buildDeptHeadSnapshot(supabase, userId), null, 2);
+      if (isDeptHead) {
+        return JSON.stringify(await buildDeptHeadSnapshot(supabase, userId), null, 2);
+      }
+      return null;
     }
 
     return null;
