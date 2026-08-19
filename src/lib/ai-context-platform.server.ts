@@ -721,10 +721,6 @@ async function loadHealthSummary(supabase: Db) {
     healthyCount,
     totalChecks: checks.length,
     checks,
-    note: "Realtime and in-memory managers (billing plans, feature flags) are not probed server-side.",
-  };
-}
-
     note: "Server-side probes only (configuration, database, api, storage). Realtime/queue not probed here.",
   };
 }
