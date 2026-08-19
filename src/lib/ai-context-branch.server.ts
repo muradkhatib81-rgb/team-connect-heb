@@ -223,12 +223,19 @@ async function loadBranchDepartmentsDirectory(
     .map((p) => p.id)
     .filter((id) => !(depts ?? []).some((d) => d.manager_id === id));
 
+  const leaveUserIds = opts.includeLeaveBalances
+    ? [...new Set([...memberIds, ...managerIds])]
+    : memberIds;
+
   const [leaveByUser, contactByUser] = await Promise.all([
-    opts.includeLeaveBalances ? loadLeaveBalancesByUser(supabase, memberIds) : Promise.resolve(new Map()),
+    opts.includeLeaveBalances ? loadLeaveBalancesByUser(supabase, leaveUserIds) : Promise.resolve(new Map()),
     opts.includeContactDetails ? loadContactsByUser(supabase) : Promise.resolve(new Map()),
   ]);
 
   return (depts ?? []).map((dept) => {
+    const headContact = dept.manager_id ? contactByUser.get(dept.manager_id) : undefined;
+    const headLeave = dept.manager_id ? leaveByUser.get(dept.manager_id) : undefined;
+
     const members = (staffByDept.get(dept.id) ?? [])
       .filter((p) => p.id !== dept.manager_id)
       .sort((a, b) => formatEmployeeName(a).localeCompare(formatEmployeeName(b), "he"))
@@ -257,6 +264,16 @@ async function loadBranchDepartmentsDirectory(
       name: dept.name,
       code: dept.code,
       headName: dept.manager_id ? (managerNameById.get(dept.manager_id) ?? null) : null,
+      ...(headContact?.phone ? { headPhone: headContact.phone } : {}),
+      ...(headLeave
+        ? {
+            headLeaveBalance: {
+              regularDays: headLeave.regularDays,
+              sickDays: headLeave.sickDays,
+              other: headLeave.other.length ? headLeave.other : undefined,
+            },
+          }
+        : {}),
       employeeCount: members.length,
       employees: members,
     };
