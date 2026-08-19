@@ -70,6 +70,7 @@ export function canAccessRoute(input: RouteAccessInput): boolean {
   if (pathname === "/employee-of-month") {
     return (
       isPlatformRole(roles) ||
+      roles.includes("branch_manager") ||
       grant(input, "can_manage_employee_of_month")
     );
   }

@@ -1,9 +1,16 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/use-auth";
 import { useCanManageEom } from "@/lib/use-eom-perm";
+import { useActiveBranch } from "@/lib/use-active-branch";
+import {
+  buildRolling12MonthSlots,
+  eomMonthKey,
+  formatEomMonthLabel,
+  HEBREW_MONTHS,
+} from "@/lib/eom-month";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -22,11 +29,6 @@ import { isNonEmployeeIdentity } from "@/lib/employee-identity";
 export const Route = createFileRoute("/_authenticated/employee-of-month")({
   component: EomManagePage,
 });
-
-const HEBREW_MONTHS = [
-  "ינואר", "פברואר", "מרץ", "אפריל", "מאי", "יוני",
-  "יולי", "אוגוסט", "ספטמבר", "אוקטובר", "נובמבר", "דצמבר",
-];
 
 type Row = {
   id: string;
@@ -54,6 +56,7 @@ async function signUrl(bucket: string, path: string | null): Promise<string | nu
 function EomManagePage() {
   const { data: me } = useAuth();
   const canManage = useCanManageEom();
+  const { activeBranchId } = useActiveBranch();
   const qc = useQueryClient();
 
   const now = new Date();
@@ -62,6 +65,10 @@ function EomManagePage() {
   const [addOpen, setAddOpen] = useState(false);
   const [editing, setEditing] = useState<Row | null>(null);
   const [deleting, setDeleting] = useState<Row | null>(null);
+
+  const rolling12Months = useMemo(() => buildRolling12MonthSlots(now), []);
+  const historyCutoff = rolling12Months[rolling12Months.length - 1];
+  const historyCutoffKey = eomMonthKey(historyCutoff.year, historyCutoff.month);
 
   const yearOptions = useMemo(() => {
     const arr: number[] = [];
@@ -100,26 +107,47 @@ function EomManagePage() {
   });
 
   const historyQ = useQuery({
-    queryKey: ["eom-history"],
+    enabled: canManage,
+    queryKey: ["eom-history", activeBranchId, historyCutoffKey],
     queryFn: async () => {
       const { data, error } = await supabase
         .from("employee_of_month")
         .select("id, year, month, employee_id, reason")
+        .gte("year", historyCutoff.year)
         .order("year", { ascending: false })
         .order("month", { ascending: false })
         .limit(120);
       if (error) throw error;
-      const list = (data ?? []) as Row[];
+      const list = ((data ?? []) as Row[]).filter(
+        (row) => eomMonthKey(row.year, row.month) >= historyCutoffKey,
+      );
       const ids = Array.from(new Set(list.map((r) => r.employee_id)));
       const profiles: Record<string, Profile> = {};
       if (ids.length) {
         const { data: ps } = await supabase
-          .from("profiles").select("id, full_name, departments(name)").in("id", ids);
+          .from("profiles")
+          .select("id, full_name, job_title, departments(name)")
+          .in("id", ids);
         (ps ?? []).forEach((p: any) => (profiles[p.id] = p));
       }
       return { list, profiles };
     },
   });
+
+  const yearLog = useMemo(() => {
+    const grouped = new Map<string, Row[]>();
+    for (const row of historyQ.data?.list ?? []) {
+      const key = `${row.year}-${row.month}`;
+      const bucket = grouped.get(key) ?? [];
+      bucket.push(row);
+      grouped.set(key, bucket);
+    }
+    return rolling12Months.map((slot) => {
+      const key = `${slot.year}-${slot.month}`;
+      const winners = grouped.get(key) ?? [];
+      return { ...slot, winners };
+    });
+  }, [historyQ.data?.list, rolling12Months]);
 
   const employeesQ = useQuery({
     enabled: canManage,
@@ -261,32 +289,84 @@ function EomManagePage() {
         )}
       </section>
 
-      <section>
-        <h2 className="text-lg font-semibold mb-3 flex items-center gap-2">
-          <History className="size-5 text-primary" />
-          היסטוריה
-        </h2>
-        <Card className="card-elevated divide-y">
-          {(historyQ.data?.list ?? []).length === 0 ? (
-            <div className="p-6 text-sm text-muted-foreground text-center">אין היסטוריה.</div>
-          ) : (
-            (historyQ.data?.list ?? []).map((r) => {
-              const p = historyQ.data!.profiles[r.employee_id];
-              return (
-                <div key={r.id} className="flex items-center gap-3 p-3 text-sm">
-                  <span className="text-muted-foreground tabular-nums w-28 shrink-0">
-                    {HEBREW_MONTHS[r.month - 1]} {r.year}
-                  </span>
-                  <span className="font-medium truncate flex-1">{p?.full_name ?? "—"}</span>
-                  <span className="text-xs text-muted-foreground truncate hidden sm:inline">
-                    {p?.departments?.name ?? ""}
-                  </span>
-                </div>
-              );
-            })
-          )}
-        </Card>
-      </section>
+      {canManage && (
+        <section>
+          <h2 className="text-lg font-semibold mb-1 flex items-center gap-2">
+            <History className="size-5 text-primary" />
+            היסטוריית עובדי החודש
+          </h2>
+          <p className="text-sm text-muted-foreground mb-3">
+            12 חודשים אחרונים ·{" "}
+            {formatEomMonthLabel(rolling12Months[0].year, rolling12Months[0].month)}
+            {" – "}
+            {formatEomMonthLabel(
+              rolling12Months[rolling12Months.length - 1].year,
+              rolling12Months[rolling12Months.length - 1].month,
+            )}
+          </p>
+          <Card className="card-elevated divide-y overflow-hidden">
+            {historyQ.isLoading ? (
+              <div className="flex justify-center py-10">
+                <Loader2 className="size-5 animate-spin text-primary" />
+              </div>
+            ) : (
+              yearLog.map((slot) => {
+                const isSelected = slot.year === year && slot.month === month;
+                return (
+                  <div
+                    key={`${slot.year}-${slot.month}`}
+                    className={`p-3 sm:p-4 ${isSelected ? "bg-primary/5" : ""}`}
+                  >
+                    <div className="flex flex-wrap items-start justify-between gap-2 mb-2">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setYear(slot.year);
+                          setMonth(slot.month);
+                        }}
+                        className={`text-sm font-semibold tabular-nums hover:underline ${
+                          isSelected ? "text-primary" : ""
+                        }`}
+                      >
+                        {formatEomMonthLabel(slot.year, slot.month)}
+                      </button>
+                      {isSelected && (
+                        <span className="text-xs text-primary font-medium">חודש נבחר</span>
+                      )}
+                    </div>
+                    {slot.winners.length === 0 ? (
+                      <p className="text-sm text-muted-foreground">לא נבחר עובד לחודש זה.</p>
+                    ) : (
+                      <div className="space-y-2">
+                        {slot.winners.map((row) => {
+                          const p = historyQ.data?.profiles[row.employee_id];
+                          return (
+                            <div
+                              key={row.id}
+                              className="flex flex-col gap-0.5 sm:flex-row sm:items-center sm:gap-3 text-sm"
+                            >
+                              <span className="font-medium truncate">{p?.full_name ?? "—"}</span>
+                              <span className="text-xs text-muted-foreground truncate">
+                                {[p?.departments?.name, p?.job_title].filter(Boolean).join(" · ") ||
+                                  "—"}
+                              </span>
+                              {row.reason && (
+                                <span className="text-xs text-foreground/80 sm:mr-auto truncate">
+                                  {row.reason}
+                                </span>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                );
+              })
+            )}
+          </Card>
+        </section>
+      )}
 
       {canManage && addOpen && (
         <EomEditDialog

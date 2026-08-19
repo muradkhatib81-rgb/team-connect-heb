@@ -197,7 +197,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   // Managers of breaks: main admin, branch manager, or any user with the explicit permission.
   const isBreaksManager = canManageBreaks;
   const canRequestBreak = breakSelfServiceNav.isVisible;
-  const canManageEom = isMainAdmin || isBranchManager || !!breakPermQ.data?.eom;
+  const canManageEom = isPlatformOwner || isBranchManager || !!breakPermQ.data?.eom;
   const canManagePermissions = hasBranchActionPermission(
     profile.roles,
     permissionsQ.data,

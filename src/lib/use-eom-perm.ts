@@ -1,14 +1,15 @@
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/use-auth";
+import { isPlatformOwner } from "@/lib/constants";
 
 /** Returns whether the current user can manage Employee of the Month. */
 export function useCanManageEom() {
   const { data: profile } = useAuth();
   const uid = profile?.id;
-  const isMainAdmin = !!profile?.roles.includes("main_admin");
-  const isBranchManager = !!profile?.roles.includes("branch_manager");
-  const hasRoleAccess = isMainAdmin || isBranchManager;
+  const roles = profile?.roles ?? [];
+  const hasRoleAccess =
+    isPlatformOwner(roles) || roles.includes("branch_manager");
 
   const q = useQuery({
     enabled: !!uid && !hasRoleAccess,
