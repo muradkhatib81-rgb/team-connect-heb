@@ -551,6 +551,42 @@ export type Database = {
           },
         ]
       }
+      content_translations: {
+        Row: {
+          created_at: string
+          entity_id: string
+          entity_type: string
+          field_name: string
+          id: string
+          source_hash: string
+          source_lang: string
+          target_lang: string
+          translated_text: string
+        }
+        Insert: {
+          created_at?: string
+          entity_id: string
+          entity_type: string
+          field_name: string
+          id?: string
+          source_hash: string
+          source_lang: string
+          target_lang: string
+          translated_text: string
+        }
+        Update: {
+          created_at?: string
+          entity_id?: string
+          entity_type?: string
+          field_name?: string
+          id?: string
+          source_hash?: string
+          source_lang?: string
+          target_lang?: string
+          translated_text?: string
+        }
+        Relationships: []
+      }
       communications_audit_log: {
         Row: {
           action: Database["public"]["Enums"]["comm_audit_action"]
@@ -1297,6 +1333,7 @@ export type Database = {
           must_change_password: boolean
           on_leave: boolean
           phone: string | null
+          preferred_language: string
           updated_at: string
         }
         Insert: {
@@ -1319,6 +1356,7 @@ export type Database = {
           must_change_password?: boolean
           on_leave?: boolean
           phone?: string | null
+          preferred_language?: string
           updated_at?: string
         }
         Update: {
@@ -1341,6 +1379,7 @@ export type Database = {
           must_change_password?: boolean
           on_leave?: boolean
           phone?: string | null
+          preferred_language?: string
           updated_at?: string
         }
         Relationships: [

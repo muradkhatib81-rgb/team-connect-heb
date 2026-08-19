@@ -47,6 +47,8 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { formatHeDateTime } from "@/lib/date-format";
+import { BilingualContent } from "@/components/bilingual-content";
+import { pickBilingualResult, useBilingualContentMap } from "@/lib/use-bilingual-content";
 import {
   sendMessage,
   markMessageRead,
@@ -726,6 +728,33 @@ function MessageDetailDialog({
 
   const d = q.data;
 
+  const bilingualItems = useMemo(() => {
+    if (!d?.msg || d.missing) return [];
+    return [
+      {
+        key: `${d.msg.id}-title`,
+        entityType: "message" as const,
+        entityId: d.msg.id,
+        field: "title" as const,
+        text: d.msg.title,
+        authorId: d.msg.sender_id,
+      },
+      {
+        key: `${d.msg.id}-body`,
+        entityType: "message" as const,
+        entityId: d.msg.id,
+        field: "body" as const,
+        text: d.msg.body,
+        authorId: d.msg.sender_id,
+      },
+    ];
+  }, [d?.msg, d?.missing]);
+
+  const { map: bilingualMap, isLoading: bilingualLoading } = useBilingualContentMap(
+    bilingualItems,
+    !!d?.msg && !d.missing,
+  );
+
   return (
     <Dialog open onOpenChange={(o) => !o && onClose()}>
       <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto" dir="rtl">
@@ -747,7 +776,12 @@ function MessageDetailDialog({
           <>
             <DialogHeader>
               <DialogTitle className="flex items-center gap-2 flex-wrap">
-                {d.msg.title}
+                <BilingualContent
+                  inline
+                  text={d.msg.title}
+                  result={pickBilingualResult(bilingualMap, `${d.msg.id}-title`, d.msg.title)}
+                  loading={bilingualLoading}
+                />
                 <PriorityBadge p={d.msg.priority} />
                 {d.msg.requires_acknowledgment && (
                   <Badge variant="outline" className="gap-1">
@@ -775,7 +809,12 @@ function MessageDetailDialog({
               <CommSenderHeader senderId={d.msg.sender_id} sentAt={d.msg.created_at} />
             )}
 
-            <div className="whitespace-pre-wrap text-sm leading-relaxed">{d.msg.body}</div>
+            <BilingualContent
+              className="text-sm leading-relaxed"
+              text={d.msg.body}
+              result={pickBilingualResult(bilingualMap, `${d.msg.id}-body`, d.msg.body)}
+              loading={bilingualLoading}
+            />
 
             {d.atts.length > 0 && (
               <div className="space-y-1.5">

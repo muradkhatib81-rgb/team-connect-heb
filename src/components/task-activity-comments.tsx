@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { listTaskActivity, listTaskComments, addTaskComment } from "@/lib/tasks.functions";
@@ -8,6 +8,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { formatHeDateTime } from "@/lib/date-format";
 import { Loader2, History, MessageSquare } from "lucide-react";
 import { toast } from "sonner";
+import { BilingualContent } from "@/components/bilingual-content";
+import { pickBilingualResult, useBilingualContentMap } from "@/lib/use-bilingual-content";
 
 const EVENT_LABELS: Record<string, string> = {
   created: "המשימה נוצרה",
@@ -48,6 +50,26 @@ export function TaskActivityComments({ taskId }: { taskId: string }) {
     queryKey: commentsKey,
     queryFn: async () => (await commentsFn({ data: { task_id: taskId } })) as any[],
   });
+
+  const commentBilingualItems = useMemo(
+    () =>
+      (comments.data ?? [])
+        .filter((c: any) => c.body?.trim() && c.author_id)
+        .map((c: any) => ({
+          key: `${c.id}-body`,
+          entityType: "task_comment" as const,
+          entityId: c.id,
+          field: "body" as const,
+          text: c.body as string,
+          authorId: c.author_id as string,
+        })),
+    [comments.data],
+  );
+
+  const { map: commentBilingualMap, isLoading: commentBilingualLoading } = useBilingualContentMap(
+    commentBilingualItems,
+    (comments.data?.length ?? 0) > 0,
+  );
 
   useEffect(() => {
     const ch = supabase
@@ -128,7 +150,13 @@ export function TaskActivityComments({ taskId }: { taskId: string }) {
                   <b className="text-foreground">{c.author_name}</b>
                   <span>{formatHeDateTime(c.created_at)}</span>
                 </div>
-                <p className="whitespace-pre-wrap mt-1">{c.body}</p>
+                <p className="whitespace-pre-wrap mt-1">
+                  <BilingualContent
+                    text={c.body}
+                    result={pickBilingualResult(commentBilingualMap, `${c.id}-body`, c.body)}
+                    loading={commentBilingualLoading}
+                  />
+                </p>
               </div>
             ))
           )}

@@ -2,6 +2,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { syncFoundationSession } from "@/core/bootstrap";
+import { getSavedLanguage, saveLanguage, type AppLanguage } from "@/i18n";
 import { isPlatformOwner, type AppRole } from "./constants";
 import { formatEmployeeName } from "./employee-name";
 
@@ -23,6 +24,7 @@ export interface AuthProfile {
   must_change_password: boolean;
   roles: AppRole[];
   branch_id: string | null;
+  preferred_language: AppLanguage;
 }
 
 async function fetchSessionAndProfile(): Promise<AuthProfile | null> {
@@ -42,7 +44,7 @@ async function fetchSessionAndProfile(): Promise<AuthProfile | null> {
   const profilesFrom = unscopedFrom("profiles") as ReturnType<typeof supabase.from>;
   const [{ data: profile }, { data: roles }, { data: contactRows }] = await Promise.all([
     profilesFrom
-      .select("id, first_name, last_name, full_name, department_id, job_title, is_active, on_leave, leave_start_date, leave_end_date, branch_id, departments(name)")
+      .select("id, first_name, last_name, full_name, department_id, job_title, is_active, on_leave, leave_start_date, leave_end_date, branch_id, preferred_language, departments(name)")
       .eq("id", user.id)
       .maybeSingle(),
     supabase.from("user_roles").select("role").eq("user_id", user.id),
@@ -69,6 +71,10 @@ async function fetchSessionAndProfile(): Promise<AuthProfile | null> {
     must_change_password: contact.must_change_password ?? false,
     roles: (roles ?? []).map((r) => r.role as AppRole),
     branch_id: p.branch_id ?? null,
+    preferred_language:
+      p.preferred_language === "he" || p.preferred_language === "ar" || p.preferred_language === "en"
+        ? p.preferred_language
+        : "he",
   };
 }
 

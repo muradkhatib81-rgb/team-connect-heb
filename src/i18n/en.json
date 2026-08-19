@@ -791,6 +791,15 @@
       "providerNotRegistered": "AI provider not registered: {{code}}"
     }
   },
+  "contentTranslation": {
+    "originalIn": "Original ({{lang}})",
+    "translatedTo": "Translation ({{lang}})",
+    "lang": {
+      "he": "Hebrew",
+      "ar": "Arabic",
+      "en": "English"
+    }
+  },
   "common": {
     "profile": "Profile",
     "logout": "Logout",

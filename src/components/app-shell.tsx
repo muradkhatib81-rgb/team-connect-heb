@@ -49,7 +49,7 @@ import {
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { useTranslation } from "react-i18next";
-import { getSavedLanguage } from "@/i18n";
+import { getSavedLanguage, saveLanguage } from "@/i18n";
 import { NotificationsBell } from "@/components/notifications-bell";
 import { LanguageSwitcher } from "@/components/language-switcher";
 import { useActiveBranch } from "@/lib/use-active-branch";
@@ -150,16 +150,17 @@ export function AppShell({ children }: { children: ReactNode }) {
     // Plain employees may now access /dashboard directly (clean employee view).
   }, [profile?.is_active, profile?.must_change_password, profile, pathname, navigate]);
 
-  // Load the language saved for this specific user and apply it.
+  // Load language from profile (server) with localStorage fallback, then apply.
   useEffect(() => {
     if (!profile?.id) return;
-    const lang = getSavedLanguage(profile.id);
+    const lang = profile.preferred_language ?? getSavedLanguage(profile.id);
+    saveLanguage(lang, profile.id);
     if (i18n.language !== lang) {
       i18n.changeLanguage(lang);
       document.documentElement.dir = lang === "en" ? "ltr" : "rtl";
       document.documentElement.lang = lang;
     }
-  }, [profile?.id]);
+  }, [profile?.id, profile?.preferred_language]);
 
   const breakSelfServiceNav = useBreakSelfServiceNavVisible();
   const { canManageBreaks } = useCanManageBreaks();

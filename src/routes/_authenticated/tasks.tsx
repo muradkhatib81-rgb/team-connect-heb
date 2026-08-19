@@ -7,6 +7,8 @@ import { useAuth } from "@/lib/use-auth";
 import { isAdmin, isPlatformOwner, type AppRole } from "@/lib/constants";
 import { isNonEmployeeIdentity } from "@/lib/employee-identity";
 import i18n from "@/i18n";
+import { BilingualContent } from "@/components/bilingual-content";
+import { pickBilingualResult, useBilingualContentMap } from "@/lib/use-bilingual-content";
 import {
   createTask,
   updateTask,
@@ -659,12 +661,47 @@ function TaskDetailDialog({
   const approvedBy = deps?.employees.find((e) => e.id === task.approved_by);
   const closedBy = deps?.employees.find((e) => e.id === (task as any).closed_by);
 
+  const bilingualItems = useMemo(() => {
+    if (!task.created_by) return [];
+    const items = [
+      {
+        key: `${task.id}-title`,
+        entityType: "task" as const,
+        entityId: task.id,
+        field: "title" as const,
+        text: task.title,
+        authorId: task.created_by,
+      },
+    ];
+    if (task.description?.trim()) {
+      items.push({
+        key: `${task.id}-description`,
+        entityType: "task" as const,
+        entityId: task.id,
+        field: "description" as const,
+        text: task.description,
+        authorId: task.created_by,
+      });
+    }
+    return items;
+  }, [task.id, task.title, task.description, task.created_by]);
+
+  const { map: bilingualMap, isLoading: bilingualLoading } = useBilingualContentMap(
+    bilingualItems,
+    !!task.created_by,
+  );
+
   return (
     <Dialog open onOpenChange={(v) => !v && onClose()}>
       <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 flex-wrap">
-            {task.title}
+            <BilingualContent
+              inline
+              text={task.title}
+              result={pickBilingualResult(bilingualMap, `${task.id}-title`, task.title)}
+              loading={bilingualLoading}
+            />
             <Badge variant={statusVariant(task.status)} className="rounded-full text-xs">
               {getStatusLabel(task.status)}
             </Badge>
@@ -674,7 +711,12 @@ function TaskDetailDialog({
           {task.description && (
             <div>
               <Label className="text-xs text-muted-foreground">{i18n.t("tasks.description")}</Label>
-              <p className="text-sm whitespace-pre-wrap mt-1">{task.description}</p>
+              <BilingualContent
+                className="text-sm mt-1"
+                text={task.description}
+                result={pickBilingualResult(bilingualMap, `${task.id}-description`, task.description)}
+                loading={bilingualLoading}
+              />
             </div>
           )}
           <div className="grid grid-cols-2 gap-3 text-sm">

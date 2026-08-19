@@ -125,6 +125,12 @@ export function resolveGeminiModel(model?: string | null): string {
   return DEPRECATED_GEMINI_MODEL_ALIASES[requested] ?? requested;
 }
 
+export const DEFAULT_OPENAI_MODEL = "gpt-4o-mini";
+
+export function resolveOpenAiModel(model?: string | null): string {
+  return model?.trim() || DEFAULT_OPENAI_MODEL;
+}
+
 export const DEFAULT_PLAN_ENTITLEMENTS: AiPlanEntitlement[] = [
   {
     billingPlan: "free",

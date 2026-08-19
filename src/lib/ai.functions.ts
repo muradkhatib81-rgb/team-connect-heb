@@ -3,8 +3,8 @@ import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { isPlatformOwner, type AppRole } from "@/lib/constants";
 import type { AiAssistantKind, AiGrantSource, AiProviderCode, ResolvedAiAccess } from "@/modules/ai";
-import { registerAiProvider, routeAiChat } from "@/modules/ai";
-import { GeminiProvider } from "@/modules/ai/providers/gemini.provider";
+import { routeAiChat } from "@/modules/ai";
+import { ensureAiProvidersRegistered } from "@/lib/ai-providers.server";
 import { aiErrorCode } from "@/lib/ai-errors";
 import { buildAiUserContext } from "@/lib/ai-context.server";
 import {
@@ -13,14 +13,6 @@ import {
   mapAiAccess,
   type RawAiAccess,
 } from "@/lib/ai-chat-core.server";
-
-let providersRegistered = false;
-
-function ensureProvidersRegistered() {
-  if (providersRegistered) return;
-  registerAiProvider(new GeminiProvider());
-  providersRegistered = true;
-}
 
 type RawAccess = RawAiAccess;
 
@@ -64,7 +56,7 @@ export const sendAiMessage = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((raw: unknown) => chatInput.parse(raw))
   .handler(async ({ context, data }) => {
-    ensureProvidersRegistered();
+    ensureAiProvidersRegistered();
 
     const { data: accessRaw, error: accessErr } = await context.supabase.rpc("get_my_ai_access");
     if (accessErr) throw new Error(accessErr.message);

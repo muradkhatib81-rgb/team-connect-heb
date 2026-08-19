@@ -791,6 +791,15 @@
       "providerNotRegistered": "مزود AI غير مسجّل: {{code}}"
     }
   },
+  "contentTranslation": {
+    "originalIn": "الأصل ({{lang}})",
+    "translatedTo": "ترجمة ({{lang}})",
+    "lang": {
+      "he": "עברית",
+      "ar": "العربية",
+      "en": "English"
+    }
+  },
   "common": {
     "profile": "الملف الشخصي",
     "logout": "تسجيل الخروج",

@@ -39,6 +39,10 @@ export function registerAiProvider(adapter: AiProviderAdapter): void {
   adapters.set(adapter.code, adapter);
 }
 
+export function isAiProviderRegistered(code: AiProviderCode): boolean {
+  return adapters.has(code);
+}
+
 export async function routeAiChat(request: AiChatRequest): Promise<AiChatResponse> {
   const adapter = adapters.get(request.providerCode);
   if (!adapter) {

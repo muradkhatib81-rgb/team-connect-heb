@@ -18,6 +18,9 @@ import {
   type MorningBoardStyle,
 } from "@/lib/morning-board-types";
 import i18n from "@/i18n";
+import { BilingualContent } from "@/components/bilingual-content";
+import { pickBilingualResult, useBilingualContentMap } from "@/lib/use-bilingual-content";
+import type { TranslateContentResult } from "@/lib/translate-content.functions";
 
 const BUCKET = "morning-board";
 
@@ -126,6 +129,41 @@ export function MorningBoard() {
     [q.data, nowTick],
   );
 
+  const bilingualItems = useMemo(
+    () =>
+      visible.flatMap((row) => {
+        if (!row.created_by) return [];
+        const items = [];
+        if (row.title?.trim()) {
+          items.push({
+            key: `${row.id}-title`,
+            entityType: "morning_board_item" as const,
+            entityId: row.id,
+            field: "title" as const,
+            text: row.title,
+            authorId: row.created_by,
+          });
+        }
+        if (row.description?.trim()) {
+          items.push({
+            key: `${row.id}-description`,
+            entityType: "morning_board_item" as const,
+            entityId: row.id,
+            field: "description" as const,
+            text: row.description,
+            authorId: row.created_by,
+          });
+        }
+        return items;
+      }),
+    [visible],
+  );
+
+  const { map: bilingualMap, isLoading: bilingualLoading } = useBilingualContentMap(
+    bilingualItems,
+    visible.length > 0,
+  );
+
   if (!activeBranchId) return null;
   if (q.isLoading) return null;
   if (visible.length === 0 && !canManage) return null;
@@ -157,6 +195,8 @@ export function MorningBoard() {
               row={row}
               url={q.data?.urls[row.id] ?? null}
               onImageClick={(u) => setLightboxUrl(u)}
+              bilingualMap={bilingualMap}
+              bilingualLoading={bilingualLoading}
             />
           ))}
         </div>
@@ -199,14 +239,47 @@ function PriorityBadge({ priority }: { priority: MorningBoardItem["priority"] })
   );
 }
 
+function BoardText({
+  rowId,
+  field,
+  text,
+  className,
+  inline,
+  bilingualMap,
+  bilingualLoading,
+}: {
+  rowId: string;
+  field: "title" | "description";
+  text: string;
+  className?: string;
+  inline?: boolean;
+  bilingualMap: Record<string, TranslateContentResult | undefined>;
+  bilingualLoading: boolean;
+}) {
+  const key = `${rowId}-${field}`;
+  return (
+    <BilingualContent
+      text={text}
+      result={pickBilingualResult(bilingualMap, key, text)}
+      loading={bilingualLoading}
+      className={className}
+      inline={inline}
+    />
+  );
+}
+
 function MorningBoardItemView({
   row,
   url,
   onImageClick,
+  bilingualMap,
+  bilingualLoading,
 }: {
   row: MorningBoardItem;
   url: string | null;
   onImageClick: (url: string) => void;
+  bilingualMap: Record<string, TranslateContentResult | undefined>;
+  bilingualLoading: boolean;
 }) {
   const wrapCls = row.is_pinned ? "relative" : "";
 
@@ -225,9 +298,26 @@ function MorningBoardItemView({
         {(row.title || row.description) && (
           <div className="p-3 text-sm flex items-center gap-2 flex-wrap">
             <PriorityBadge priority={row.priority} />
-            {row.title && <div className="font-semibold">{row.title}</div>}
+            {row.title && (
+              <BoardText
+                rowId={row.id}
+                field="title"
+                text={row.title}
+                className="font-semibold"
+                inline
+                bilingualMap={bilingualMap}
+                bilingualLoading={bilingualLoading}
+              />
+            )}
             {row.description && (
-              <div className="text-muted-foreground whitespace-pre-wrap w-full">{row.description}</div>
+              <BoardText
+                rowId={row.id}
+                field="description"
+                text={row.description}
+                className="text-muted-foreground whitespace-pre-wrap w-full"
+                bilingualMap={bilingualMap}
+                bilingualLoading={bilingualLoading}
+              />
             )}
           </div>
         )}
@@ -243,9 +333,26 @@ function MorningBoardItemView({
         {(row.title || row.description) && (
           <div className="p-3 text-sm bg-background flex items-center gap-2 flex-wrap">
             <PriorityBadge priority={row.priority} />
-            {row.title && <div className="font-semibold">{row.title}</div>}
+            {row.title && (
+              <BoardText
+                rowId={row.id}
+                field="title"
+                text={row.title}
+                className="font-semibold"
+                inline
+                bilingualMap={bilingualMap}
+                bilingualLoading={bilingualLoading}
+              />
+            )}
             {row.description && (
-              <div className="text-muted-foreground whitespace-pre-wrap w-full">{row.description}</div>
+              <BoardText
+                rowId={row.id}
+                field="description"
+                text={row.description}
+                className="text-muted-foreground whitespace-pre-wrap w-full"
+                bilingualMap={bilingualMap}
+                bilingualLoading={bilingualLoading}
+              />
             )}
           </div>
         )}
@@ -260,10 +367,27 @@ function MorningBoardItemView({
         <div className="flex items-center gap-2 flex-wrap mb-2">
           <span className="text-lg">🔊</span>
           <PriorityBadge priority={row.priority} />
-          {row.title && <div className="font-semibold">{row.title}</div>}
+          {row.title && (
+            <BoardText
+              rowId={row.id}
+              field="title"
+              text={row.title}
+              className="font-semibold"
+              inline
+              bilingualMap={bilingualMap}
+              bilingualLoading={bilingualLoading}
+            />
+          )}
         </div>
         {row.description && (
-          <p className="text-sm text-muted-foreground whitespace-pre-wrap mb-2">{row.description}</p>
+          <BoardText
+            rowId={row.id}
+            field="description"
+            text={row.description}
+            className="text-sm text-muted-foreground whitespace-pre-wrap mb-2"
+            bilingualMap={bilingualMap}
+            bilingualLoading={bilingualLoading}
+          />
         )}
         <audio src={url} controls preload="metadata" className="w-full" />
       </Card>
@@ -279,10 +403,27 @@ function MorningBoardItemView({
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-2 flex-wrap">
               <PriorityBadge priority={row.priority} />
-              {row.title && <div className="font-semibold">{row.title}</div>}
+              {row.title && (
+                <BoardText
+                  rowId={row.id}
+                  field="title"
+                  text={row.title}
+                  className="font-semibold"
+                  inline
+                  bilingualMap={bilingualMap}
+                  bilingualLoading={bilingualLoading}
+                />
+              )}
             </div>
             {row.description && (
-              <div className="text-sm text-muted-foreground whitespace-pre-wrap mt-1">{row.description}</div>
+              <BoardText
+                rowId={row.id}
+                field="description"
+                text={row.description}
+                className="text-sm text-muted-foreground whitespace-pre-wrap mt-1"
+                bilingualMap={bilingualMap}
+                bilingualLoading={bilingualLoading}
+              />
             )}
           </div>
         </div>
@@ -291,13 +432,27 @@ function MorningBoardItemView({
   }
 
   if (row.item_type === "highlight") {
-    return <HighlightView row={row} />;
+    return (
+      <HighlightView
+        row={row}
+        bilingualMap={bilingualMap}
+        bilingualLoading={bilingualLoading}
+      />
+    );
   }
 
   return null;
 }
 
-function HighlightView({ row }: { row: MorningBoardItem }) {
+function HighlightView({
+  row,
+  bilingualMap,
+  bilingualLoading,
+}: {
+  row: MorningBoardItem;
+  bilingualMap: Record<string, TranslateContentResult | undefined>;
+  bilingualLoading: boolean;
+}) {
   const s: MorningBoardStyle = { ...DEFAULT_HIGHLIGHT_STYLE, ...(row.style ?? {}) };
   const radius = RADIUS_CLASS[s.radius ?? "lg"];
   const fontSize = FONT_SIZE_CLASS[s.fontSize ?? "lg"];
@@ -334,14 +489,26 @@ function HighlightView({ row }: { row: MorningBoardItem }) {
                 className={`${fontSize} ${weight} ${pulseTitle ? "animate-pulse" : ""}`}
                 style={{ color: s.titleColor }}
               >
-                {row.title}
+                <BoardText
+                  rowId={row.id}
+                  field="title"
+                  text={row.title}
+                  inline
+                  bilingualMap={bilingualMap}
+                  bilingualLoading={bilingualLoading}
+                />
               </div>
             )}
           </div>
           {row.description && (
-            <div className={`${fontSize} ${weight === "font-bold" ? "font-medium" : ""} whitespace-pre-wrap mt-2 opacity-95`}>
-              {row.description}
-            </div>
+            <BoardText
+              rowId={row.id}
+              field="description"
+              text={row.description}
+              className={`${fontSize} ${weight === "font-bold" ? "font-medium" : ""} whitespace-pre-wrap mt-2 opacity-95`}
+              bilingualMap={bilingualMap}
+              bilingualLoading={bilingualLoading}
+            />
           )}
         </div>
       </div>

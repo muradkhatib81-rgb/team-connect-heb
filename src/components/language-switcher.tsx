@@ -1,5 +1,7 @@
 import { useTranslation } from "react-i18next";
+import { useServerFn } from "@tanstack/react-start";
 import { saveLanguage, type AppLanguage } from "@/i18n";
+import { syncPreferredLanguage } from "@/lib/translate-content.functions";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -21,6 +23,7 @@ interface LanguageSwitcherProps {
 
 export function LanguageSwitcher({ userId }: LanguageSwitcherProps = {}) {
   const { i18n } = useTranslation();
+  const syncLangFn = useServerFn(syncPreferredLanguage);
   const current = LANGUAGES.find((l) => l.code === i18n.language) ?? LANGUAGES[0]!;
 
   function handleChange(code: AppLanguage) {
@@ -28,6 +31,9 @@ export function LanguageSwitcher({ userId }: LanguageSwitcherProps = {}) {
     saveLanguage(code, userId);
     document.documentElement.dir = code === "en" ? "ltr" : "rtl";
     document.documentElement.lang = code;
+    if (userId) {
+      void syncLangFn({ data: { lang: code } }).catch(() => {});
+    }
   }
 
   return (

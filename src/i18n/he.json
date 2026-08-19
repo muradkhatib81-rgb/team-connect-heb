@@ -791,6 +791,15 @@
       "providerNotRegistered": "ספק AI לא רשום: {{code}}"
     }
   },
+  "contentTranslation": {
+    "originalIn": "מקור ({{lang}})",
+    "translatedTo": "תרגום ({{lang}})",
+    "lang": {
+      "he": "עברית",
+      "ar": "العربية",
+      "en": "English"
+    }
+  },
   "common": {
     "profile": "פרופיל",
     "logout": "התנתקות",
