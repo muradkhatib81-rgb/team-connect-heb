@@ -8,6 +8,11 @@ import { isAdmin, isPlatformOwner, type AppRole } from "@/lib/constants";
 import { isNonEmployeeIdentity } from "@/lib/employee-identity";
 import i18n from "@/i18n";
 import { BilingualContent } from "@/components/bilingual-content";
+import {
+  SearchableMultiSelect,
+  SearchableSingleSelect,
+  type SearchablePickerOption,
+} from "@/components/searchable-picker";
 import { pickBilingualResult, useBilingualContentMap } from "@/lib/use-bilingual-content";
 import {
   createTask,
@@ -1344,6 +1349,26 @@ function TaskFormDialog({
     return deps.employees.filter((e) => e.department_id === departmentId);
   }, [targetScope, departmentId, departmentIds, deps.employees]);
 
+  const deptNameById = useMemo(
+    () => Object.fromEntries(deps.departments.map((d) => [d.id, d.name])),
+    [deps.departments],
+  );
+
+  const deptPickerOptions = useMemo<SearchablePickerOption[]>(
+    () => allowedDepartments.map((d) => ({ id: d.id, label: d.name })),
+    [allowedDepartments],
+  );
+
+  const employeePickerOptions = useMemo<SearchablePickerOption[]>(
+    () =>
+      eligibleEmployees.map((e) => ({
+        id: e.id,
+        label: e.full_name,
+        sublabel: e.department_id ? deptNameById[e.department_id] : undefined,
+      })),
+    [eligibleEmployees, deptNameById],
+  );
+
   const submit = useMutation({
     mutationFn: async () => {
       if (!title.trim()) throw new Error(i18n.t("tasks.titleRequired"));
@@ -1431,14 +1456,12 @@ function TaskFormDialog({
             <div>
               <Label>{i18n.t("tasks.formDept")}</Label>
               {canPickAnyDept ? (
-                <Select value={departmentId} onValueChange={(v) => setDepartmentId(v)}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    {allowedDepartments.map((d) => (
-                      <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <SearchableSingleSelect
+                  options={deptPickerOptions}
+                  value={departmentId}
+                  onChange={setDepartmentId}
+                  placeholder={i18n.t("tasks.formDept")}
+                />
               ) : (
                 <div className="px-3 py-2 rounded-md border bg-muted text-sm">
                   {allowedDepartments.find((d) => d.id === departmentId)?.name ?? "—"}
@@ -1449,29 +1472,12 @@ function TaskFormDialog({
           {targetScope === "departments" && (
             <div>
               <Label>{i18n.t("tasks.formMultiDept")}</Label>
-              <div className="flex flex-wrap gap-2 p-2 border rounded-md max-h-40 overflow-y-auto">
-                {allowedDepartments.map((d) => {
-                  const on = departmentIds.includes(d.id);
-                  return (
-                    <button
-                      type="button"
-                      key={d.id}
-                      onClick={() =>
-                        setDepartmentIds((prev) =>
-                          on ? prev.filter((x) => x !== d.id) : [...prev, d.id],
-                        )
-                      }
-                      className={`px-3 py-1 rounded-full text-xs border transition ${
-                        on
-                          ? "bg-primary text-primary-foreground border-primary"
-                          : "bg-background hover:bg-muted"
-                      }`}
-                    >
-                      {d.name}
-                    </button>
-                  );
-                })}
-              </div>
+              <SearchableMultiSelect
+                options={deptPickerOptions}
+                value={departmentIds}
+                onChange={setDepartmentIds}
+                placeholder={i18n.t("tasks.formMultiDept")}
+              />
             </div>
           )}
           <div>
@@ -1488,45 +1494,28 @@ function TaskFormDialog({
           {executorMode === "single" && (
             <div>
               <Label>{i18n.t("tasks.formSingleAssignee")}</Label>
-              <Select value={singleAssignee} onValueChange={setSingleAssignee}>
-                <SelectTrigger><SelectValue placeholder={i18n.t("tasks.selectEmployee")} /></SelectTrigger>
-                <SelectContent>
-                  {eligibleEmployees.map((e) => (
-                    <SelectItem key={e.id} value={e.id}>{e.full_name}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <SearchableSingleSelect
+                options={employeePickerOptions}
+                value={singleAssignee}
+                onChange={setSingleAssignee}
+                placeholder={i18n.t("tasks.selectEmployee")}
+                disabled={employeePickerOptions.length === 0}
+              />
             </div>
           )}
           {executorMode === "multi" && (
             <div>
               <Label>{i18n.t("tasks.formMultiAssignee")}</Label>
-              <div className="flex flex-wrap gap-2 p-2 border rounded-md max-h-40 overflow-y-auto">
-                {eligibleEmployees.length === 0 && (
-                  <span className="text-xs text-muted-foreground">{i18n.t("tasks.selectDeptFirst")}</span>
-                )}
-                {eligibleEmployees.map((e) => {
-                  const on = assigneeIds.includes(e.id);
-                  return (
-                    <button
-                      type="button"
-                      key={e.id}
-                      onClick={() =>
-                        setAssigneeIds((prev) =>
-                          on ? prev.filter((x) => x !== e.id) : [...prev, e.id],
-                        )
-                      }
-                      className={`px-3 py-1 rounded-full text-xs border transition ${
-                        on
-                          ? "bg-primary text-primary-foreground border-primary"
-                          : "bg-background hover:bg-muted"
-                      }`}
-                    >
-                      {e.full_name}
-                    </button>
-                  );
-                })}
-              </div>
+              {eligibleEmployees.length === 0 ? (
+                <p className="text-xs text-muted-foreground mt-1">{i18n.t("tasks.selectDeptFirst")}</p>
+              ) : (
+                <SearchableMultiSelect
+                  options={employeePickerOptions}
+                  value={assigneeIds}
+                  onChange={setAssigneeIds}
+                  placeholder={i18n.t("tasks.formMultiAssignee")}
+                />
+              )}
             </div>
           )}
           <label className="flex items-center gap-2 text-sm cursor-pointer select-none">

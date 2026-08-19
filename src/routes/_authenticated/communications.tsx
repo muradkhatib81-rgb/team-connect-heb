@@ -48,6 +48,7 @@ import {
 import { toast } from "sonner";
 import { formatHeDateTime } from "@/lib/date-format";
 import { BilingualContent } from "@/components/bilingual-content";
+import { SearchableMultiSelect, type SearchablePickerOption } from "@/components/searchable-picker";
 import { pickBilingualResult, useBilingualContentMap } from "@/lib/use-bilingual-content";
 import {
   sendMessage,
@@ -1154,6 +1155,21 @@ function ComposeMessageDialog({
     return list;
   }, [empsQ.data, admin, isDeptManager, myDeptId]);
 
+  const deptPickerOptions = useMemo<SearchablePickerOption[]>(
+    () => visibleDepts.map((d) => ({ id: d.id, label: d.name })),
+    [visibleDepts],
+  );
+
+  const empPickerOptions = useMemo<SearchablePickerOption[]>(
+    () =>
+      visibleEmps.map((e) => ({
+        id: e.id,
+        label: e.full_name,
+        sublabel: e.department_name !== "—" ? e.department_name : undefined,
+      })),
+    [visibleEmps],
+  );
+
   const sendMut = useMutation({
     mutationFn: () =>
       sendMessage({
@@ -1175,10 +1191,6 @@ function ComposeMessageDialog({
     },
     onError: (e: any) => toast.error(e?.message ?? i18n.t("comm.sendError")),
   });
-
-  function toggle(list: string[], setList: (v: string[]) => void, id: string) {
-    setList(list.includes(id) ? list.filter((x) => x !== id) : [...list, id]);
-  }
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -1242,34 +1254,21 @@ function ComposeMessageDialog({
           </div>
 
           {scope === "departments" && (
-            <div className="border rounded-md p-2 max-h-40 overflow-y-auto space-y-1">
-              {visibleDepts.map((d) => (
-                <label key={d.id} className="flex items-center gap-2 text-sm cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={selectedDepts.includes(d.id)}
-                    onChange={() => toggle(selectedDepts, setSelectedDepts, d.id)}
-                  />
-                  {d.name}
-                </label>
-              ))}
-            </div>
+            <SearchableMultiSelect
+              options={deptPickerOptions}
+              value={selectedDepts}
+              onChange={setSelectedDepts}
+              placeholder={i18n.t("comm.departments")}
+            />
           )}
 
           {scope === "users" && (
-            <div className="border rounded-md p-2 max-h-48 overflow-y-auto space-y-1">
-              {visibleEmps.map((e) => (
-                <label key={e.id} className="flex items-center gap-2 text-sm cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={selectedUsers.includes(e.id)}
-                    onChange={() => toggle(selectedUsers, setSelectedUsers, e.id)}
-                  />
-                  {e.full_name}
-                  <span className="text-xs text-muted-foreground">({e.department_name})</span>
-                </label>
-              ))}
-            </div>
+            <SearchableMultiSelect
+              options={empPickerOptions}
+              value={selectedUsers}
+              onChange={setSelectedUsers}
+              placeholder={i18n.t("comm.individualEmployees")}
+            />
           )}
 
           <div>
