@@ -557,6 +557,122 @@ function canAccessCustody(roles: AppRole[], perms: UserTaskPermissions | null): 
   );
 }
 
+async function canManageEomServer(
+  supabase: Db,
+  userId: string,
+  roles: AppRole[],
+): Promise<boolean> {
+  if (roles.includes("main_admin") || roles.includes("system_admin")) return true;
+  if (roles.includes("branch_manager")) return true;
+  if (!roles.includes("assistant_manager")) return false;
+  const { data } = await supabase
+    .from("user_task_permissions")
+    .select("can_manage_employee_of_month")
+    .eq("user_id", userId)
+    .maybeSingle();
+  return !!data?.can_manage_employee_of_month;
+}
+
+function eomMonthKey(year: number, month: number): number {
+  return year * 12 + month;
+}
+
+function eomMonthsAgo(year: number, month: number, monthsBack: number): { year: number; month: number } {
+  let m = month - monthsBack;
+  let y = year;
+  while (m <= 0) {
+    m += 12;
+    y -= 1;
+  }
+  return { year: y, month: m };
+}
+
+async function loadEmployeeOfMonthHistory(
+  supabase: Db,
+  branchId: string,
+  today: string,
+  canViewFullHistory: boolean,
+) {
+  const [yearStr, monthStr] = today.split("-");
+  const currentYear = Number(yearStr);
+  const currentMonth = Number(monthStr);
+
+  const { data: rows, error } = await supabase
+    .from("employee_of_month")
+    .select("id, year, month, employee_id, reason")
+    .eq("branch_id", branchId)
+    .order("year", { ascending: false })
+    .order("month", { ascending: false })
+    .limit(120);
+  if (error) throw error;
+
+  const list = rows ?? [];
+  if (!list.length) {
+    return {
+      currentMonth: { year: currentYear, month: currentMonth, winners: [] as unknown[] },
+      last12Months: [] as unknown[],
+      historyScope: canViewFullHistory ? "full_12_months" : "current_month_only",
+    };
+  }
+
+  const cutoff = eomMonthsAgo(currentYear, currentMonth, 11);
+  const cutoffKey = eomMonthKey(cutoff.year, cutoff.month);
+
+  const inWindow = list.filter((row) => eomMonthKey(row.year, row.month) >= cutoffKey);
+
+  const employeeIds = [...new Set(inWindow.map((r) => r.employee_id))];
+  const profileById = new Map<
+    string,
+    { name: string; department: string | null; jobTitle: string | null }
+  >();
+
+  if (employeeIds.length) {
+    const { data: profiles } = await supabase
+      .from("profiles")
+      .select("id, full_name, first_name, last_name, job_title, departments(name)")
+      .in("id", employeeIds);
+
+    for (const p of profiles ?? []) {
+      profileById.set(p.id, {
+        name: formatEmployeeName(p),
+        department: (p as { departments?: { name?: string | null } | null }).departments?.name ?? null,
+        jobTitle: p.job_title,
+      });
+    }
+  }
+
+  const grouped = new Map<string, Array<{ name: string; department: string | null; jobTitle: string | null; reason: string | null }>>();
+  for (const row of inWindow) {
+    const key = `${row.year}-${row.month}`;
+    const profile = profileById.get(row.employee_id);
+    const entry = {
+      name: profile?.name ?? row.employee_id,
+      department: profile?.department ?? null,
+      jobTitle: profile?.jobTitle ?? null,
+      reason: row.reason,
+    };
+    const bucket = grouped.get(key) ?? [];
+    bucket.push(entry);
+    grouped.set(key, bucket);
+  }
+
+  const last12Months = [...grouped.entries()]
+    .map(([key, winners]) => {
+      const [y, m] = key.split("-").map(Number);
+      return { year: y, month: m, winners };
+    })
+    .sort((a, b) => eomMonthKey(b.year, b.month) - eomMonthKey(a.year, a.month));
+
+  const currentKey = `${currentYear}-${currentMonth}`;
+  const currentWinners = grouped.get(currentKey) ?? [];
+
+  return {
+    currentMonth: { year: currentYear, month: currentMonth, winners: currentWinners },
+    last12Months,
+    historyScope: canViewFullHistory ? "full_12_months" : "current_month_only",
+  };
+}
+
 /** Read-only branch operator snapshot (BM / assistant manager), gated by grants. */
 export async function buildBranchOperatorSnapshot(supabase: Db, userId: string) {
   const today = jerusalemTodayIso();
@@ -591,6 +707,7 @@ export async function buildBranchOperatorSnapshot(supabase: Db, userId: string) 
     perms,
     "can_view_employee_details",
   );
+  const canManageEmployeeOfMonth = await canManageEomServer(supabase, userId, roles);
 
   const snapshot: Record<string, unknown> = {
     role: operatorRole,
@@ -603,6 +720,7 @@ export async function buildBranchOperatorSnapshot(supabase: Db, userId: string) 
       canViewLeave: leaveAccess.canView,
       canViewCustody,
       canViewEmployeeDetails,
+      canManageEmployeeOfMonth,
     },
     operationalErrors: {
       available: false,
@@ -661,6 +779,13 @@ export async function buildBranchOperatorSnapshot(supabase: Db, userId: string) 
       includeLeaveBalances: leaveAccess.canView,
       includeContactDetails: canViewEmployeeDetails,
     },
+  );
+
+  snapshot.employeeOfMonth = await loadEmployeeOfMonthHistory(
+    supabase,
+    branchId,
+    today,
+    canManageEmployeeOfMonth,
   );
 
   if (canViewSchedule) {

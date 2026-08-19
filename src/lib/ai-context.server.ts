@@ -513,6 +513,11 @@ export async function buildAiUserContext(
       return null;
     }
 
+    if (assistantKind === "platform_owner") {
+      const { buildPlatformOwnerSnapshot } = await import("@/lib/ai-context-platform.server");
+      return JSON.stringify(await buildPlatformOwnerSnapshot(supabase, userId), null, 2);
+    }
+
     return null;
   } catch {
     return null;
