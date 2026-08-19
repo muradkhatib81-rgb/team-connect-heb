@@ -36,6 +36,7 @@ import {
   PlatformOwnerEditDialog,
   PlatformOwnerDeleteDialog,
 } from "@/components/platform/platform-owner-dialogs";
+import { ProfilePhoneField } from "@/components/contact-actions";
 
 export const Route = createFileRoute("/_authenticated/platform/owners/$userId")({
   component: PlatformOwnerDetailsPage,
@@ -281,7 +282,7 @@ function IdentityCard({ owner }: { owner: PlatformOwnerRow }) {
         <Info className="size-3" />
         שינוי דוא"ל הוא יכולת עתידית — יתווסף בגרסה הבאה של ניהול הפלטפורמה.
       </p>
-      <Row label="טלפון" value={owner.phone ?? "—"} ltr />
+      <ProfilePhoneField label="טלפון" phone={owner.phone} />
       <Row label="ת.ז" value={owner.id_number ?? "—"} ltr />
       <Row
         label="נוצר"

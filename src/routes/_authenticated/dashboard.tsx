@@ -81,6 +81,7 @@ import { formatScheduleDayHe } from "@/lib/schedule-week";
 import { resolveScheduleManagerCaps, resolveDashboardScheduleScope, scheduleScopeNeedsLoadedPermissions } from "@/lib/schedule-manager-caps";
 import { CreateEmployeeDialog } from "./employees";
 import { ManagementOnShiftCard } from "@/components/management-on-shift-card";
+import { ProfilePhoneField } from "@/components/contact-actions";
 import { CustodyDashboardSection } from "@/components/custody-dashboard-section";
 import { MorningBoard } from "@/components/morning-board";
 import { LiveShiftCardsSection } from "@/components/live-shift-cards";
@@ -2495,7 +2496,7 @@ function EmployeeProfileDialog({
             <Card className="p-4 space-y-3">
               <ProfileRow label={i18n.t("dashboard.idNumber")} value={q.data.id_number ?? "—"} />
               <ProfileRow label={i18n.t("dashboard.department")} value={q.data.departmentName} />
-              <ProfileRow label={i18n.t("dashboard.phone")} value={q.data.phone ?? "—"} />
+              <ProfilePhoneField label={i18n.t("dashboard.phone")} phone={q.data.phone} />
               <ProfileRow
                 label={i18n.t("dashboard.statusLabel")}
                 value={

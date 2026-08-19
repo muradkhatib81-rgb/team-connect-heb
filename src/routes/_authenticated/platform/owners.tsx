@@ -22,6 +22,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { ContactActions } from "@/components/contact-actions";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -316,7 +317,10 @@ function OwnerRow({
         {owner.email ?? "—"}
       </td>
       <td className="p-3 hidden lg:table-cell text-muted-foreground" dir="ltr">
-        {owner.phone ?? "—"}
+        <div className="flex flex-col items-start gap-1">
+          <span>{owner.phone ?? "—"}</span>
+          <ContactActions phone={owner.phone} size="icon" />
+        </div>
       </td>
       <td className="p-3">
         {isTargetPrimary ? (

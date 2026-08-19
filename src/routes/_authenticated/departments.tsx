@@ -51,6 +51,7 @@ import { Loader2, Building2, Plus, Pencil, Trash2, User, UserPlus, Crown } from 
 import { toast } from "sonner";
 import { formatEmployeeName } from "@/lib/employee-name";
 import { CreateEmployeeDialog } from "@/routes/_authenticated/employees";
+import { ProfilePhoneField } from "@/components/contact-actions";
 
 export const Route = createFileRoute("/_authenticated/departments")({
   component: DepartmentsPage,
@@ -695,7 +696,7 @@ function EmpProfileDialog({
             <Card className="p-4 space-y-3">
               <ProfileRow label="מספר זהות" value={q.data.id_number ?? "—"} />
               <ProfileRow label="מחלקה" value={q.data.departmentName} />
-              <ProfileRow label="טלפון" value={q.data.phone ?? "—"} />
+              <ProfilePhoneField label="טלפון" phone={q.data.phone} />
               <ProfileRow
                 label="סטטוס"
                 value={

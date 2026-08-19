@@ -27,6 +27,7 @@ import type { UUID } from "@/core";
 import { branchService, type BranchDashboardSnapshot } from "@/modules/branches";
 import { useBranchContext, useCompanyContext } from "@/platform";
 import { BranchEditDialog, BranchDeleteDialog } from "@/components/platform/branch-dialogs";
+import { ContactActions } from "@/components/contact-actions";
 
 export const Route = createFileRoute("/_authenticated/platform/branches/$branchId")({
   component: BranchDetailsPage,
@@ -311,6 +312,7 @@ function BranchSettingsTab({ branchId }: { branchId: UUID }) {
           maxLength={30}
           placeholder="03-1234567"
         />
+        <ContactActions phone={phone} className="pt-1" />
       </div>
       <div className="flex justify-end">
         <Button onClick={handleSave} disabled={saving} size="sm" className="gap-2">

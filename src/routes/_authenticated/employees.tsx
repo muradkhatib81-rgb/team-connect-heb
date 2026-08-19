@@ -46,14 +46,15 @@ import {
   DialogTitle,
   DialogFooter,
 } from "@/components/ui/dialog";
-import { Search, Loader2, Pencil, UserPlus, Filter, ImagePlus, X, KeyRound, Trash2, Users, UserCheck, UserX, Plane, Shield, Power, Download } from "lucide-react";
-import { toast } from "sonner";
-import { formatEmployeeName, employeeMatchesSearch, employeeNameInitial, splitFullName } from "@/lib/employee-name";
-import { isNonEmployeeIdentity } from "@/lib/employee-identity";
 import {
   hasBranchActionPermission,
   useCurrentPermissions,
 } from "@/lib/use-current-permissions";
+import { Search, Loader2, Pencil, UserPlus, Filter, ImagePlus, X, KeyRound, Trash2, Users, UserCheck, UserX, Plane, Shield, Power, Download } from "lucide-react";
+import { toast } from "sonner";
+import { formatEmployeeName, employeeMatchesSearch, employeeNameInitial, splitFullName } from "@/lib/employee-name";
+import { isNonEmployeeIdentity } from "@/lib/employee-identity";
+import { ContactActions } from "@/components/contact-actions";
 
 type FilterMode = "all" | "active" | "inactive" | "on_leave" | "on_break" | "managers" | "workers";
 
@@ -1354,7 +1355,10 @@ function EmployeeRow({
             </p>
           )}
           {emp.phone && (
-            <p className="text-xs text-muted-foreground mt-0.5 truncate">{emp.phone}</p>
+            <div className="flex items-center gap-2 mt-0.5 min-w-0">
+              <p className="text-xs text-muted-foreground truncate" dir="ltr">{emp.phone}</p>
+              <ContactActions phone={emp.phone} size="icon" />
+            </div>
           )}
           {roles.length > 0 && (
             <div className="flex flex-wrap gap-1 mt-2">
@@ -1686,6 +1690,7 @@ function EditEmployeeDialog({
             </Field>
             <Field label="טלפון">
               <Input value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} dir="ltr" autoComplete="off" />
+              <ContactActions phone={form.phone} className="mt-2" />
             </Field>
             <Field label="מחלקה">
               <Select value={form.department_id} onValueChange={(v) => setForm({ ...form, department_id: v })}>

@@ -28,3 +28,11 @@ export function toWhatsAppUrl(raw: string | null | undefined): string | null {
   const phone = normalizeWhatsAppPhone(raw);
   return phone ? `https://wa.me/${phone}` : null;
 }
+
+/** Opens the device dialer with the stored number. */
+export function toTelUrl(raw: string | null | undefined): string | null {
+  if (!raw?.trim()) return null;
+  const digits = raw.replace(/[^\d+]/g, "");
+  if (digits.length < 9) return null;
+  return `tel:${digits.startsWith("+") ? digits : digits}`;
+}
