@@ -8,6 +8,7 @@ import {
   mapAiAccess,
   type RawAiAccess,
 } from "@/lib/ai-chat-core.server";
+import { buildAiUserContext } from "@/lib/ai-context.server";
 import { streamGeminiChat } from "@/modules/ai/providers/gemini.provider";
 
 const streamInput = z.object({
@@ -51,11 +52,13 @@ export async function createAiChatSseResponse(
   }
 
   const started = Date.now();
+  const contextBlock = await buildAiUserContext(supabase, access.assistantKind);
   const messages = buildAiChatMessages({
     assistantKind: access.assistantKind,
     message: data.message,
     history: data.history,
     locale: data.locale,
+    contextBlock,
   });
 
   let fullText = "";

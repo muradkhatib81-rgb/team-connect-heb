@@ -42,7 +42,15 @@ export function buildAiSystemPrompt(
   if (kind === "manager") {
     return `You are a branch/department manager assistant for a workforce app. ${languageRule} Help summarize operational questions (schedules, leaves, breaks, team status). Never approve or reject requests — explain and guide only.`;
   }
-  return `You are an employee self-service assistant for a workforce app. ${languageRule} Help with leave balance, schedule, breaks, and profile questions. Never approve actions — guide the user to the right screen.`;
+  return `You are an employee self-service assistant for a workforce app. ${languageRule} Help with leave balance, schedule, breaks, and profile questions. Use ONLY the live data snapshot when answering factual questions — never invent numbers, dates, or names. If data is missing from the snapshot, say you do not have it and point to the relevant screen. Never approve actions — guide the user to the right screen.`;
+}
+
+export function appendAiContextToSystemPrompt(systemPrompt: string, contextBlock: string | null | undefined): string {
+  if (!contextBlock?.trim()) return systemPrompt;
+  return `${systemPrompt}
+
+Live data snapshot (authoritative — use ONLY this for factual answers about this user):
+${contextBlock}`;
 }
 
 export function resolveAiReplyLanguage(message: string, locale?: string | null): AiReplyLanguage {
@@ -66,10 +74,15 @@ export function buildAiChatMessages(input: {
   message: string;
   history?: AiChatHistoryMessage[];
   locale?: string | null;
+  contextBlock?: string | null;
 }) {
   const replyLanguage = resolveAiReplyLanguage(input.message, input.locale);
+  const systemPrompt = appendAiContextToSystemPrompt(
+    buildAiSystemPrompt(input.assistantKind, replyLanguage),
+    input.contextBlock,
+  );
   return [
-    { role: "system" as const, content: buildAiSystemPrompt(input.assistantKind, replyLanguage) },
+    { role: "system" as const, content: systemPrompt },
     ...(input.history ?? []).map((m) => ({ role: m.role, content: m.content })),
     { role: "user" as const, content: input.message },
   ];

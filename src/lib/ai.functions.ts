@@ -6,6 +6,7 @@ import type { AiAssistantKind, AiGrantSource, AiProviderCode, ResolvedAiAccess }
 import { registerAiProvider, routeAiChat } from "@/modules/ai";
 import { GeminiProvider } from "@/modules/ai/providers/gemini.provider";
 import { aiErrorCode } from "@/lib/ai-errors";
+import { buildAiUserContext } from "@/lib/ai-context.server";
 import {
   buildAiChatMessages,
   estimateAiMinutes,
@@ -72,11 +73,13 @@ export const sendAiMessage = createServerFn({ method: "POST" })
       throw new Error(aiErrorCode("noAccess"));
     }
 
+    const contextBlock = await buildAiUserContext(context.supabase, access.assistantKind);
     const messages = buildAiChatMessages({
       assistantKind: access.assistantKind,
       message: data.message,
       history: data.history,
       locale: data.locale,
+      contextBlock,
     });
 
     const response = await routeAiChat({
