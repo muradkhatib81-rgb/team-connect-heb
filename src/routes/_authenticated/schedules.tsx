@@ -454,18 +454,32 @@ function SchedulesPage() {
   useEffect(() => {
     if (!isDeptHeadOnly) return;
     const { current, next } = deptHeadWeekWindow;
-    if (weekStart < current || weekStart > next) {
+    const periodStart = getPeriodStart(weekStart, periodConfig);
+    if (periodStart < current || periodStart > next) {
       setWeekStart(current);
     }
-  }, [isDeptHeadOnly, weekStart, deptHeadWeekWindow]);
+  }, [isDeptHeadOnly, weekStart, deptHeadWeekWindow, periodConfig]);
+
+  const periodWeekStart = useMemo(
+    () => getPeriodStart(weekStart, periodConfig),
+    [weekStart, periodConfig.schedule_type, periodConfig.week_start_dow, periodConfig.week_end_dow],
+  );
+  const periodWeekEnd = useMemo(
+    () => getPeriodEnd(periodWeekStart, periodConfig),
+    [periodWeekStart, periodConfig],
+  );
+
+  useEffect(() => {
+    if (periodWeekStart !== weekStart) setWeekStart(periodWeekStart);
+  }, [periodWeekStart, weekStart]);
 
   const getSchedulesFn = useServerFn(getSchedulesForViewer);
   const deptWeekFlagsFn = useServerFn(getDepartmentWeekScheduleFlags);
   const weekSchedulesQ = useQuery({
     enabled: !!me?.id && view === "editor",
-    queryKey: ["week-schedules", weekStart, me?.id],
+    queryKey: ["week-schedules", periodWeekStart, me?.id],
     queryFn: async () => {
-      const rows = await getSchedulesFn({ data: { week_start: weekStart } });
+      const rows = await getSchedulesFn({ data: { week_start: periodWeekStart } });
       return (rows ?? []).map((row: any) => ({
         id: row.id,
         department_id: row.department_id,
@@ -502,12 +516,12 @@ function SchedulesPage() {
   //  - The "סידורי עבודה שמורים" card listing saved departments.
   const weekSavedQ = useQuery({
     enabled: (view === "editor" || view === "saved") && !!scheduleViewerCaps,
-    queryKey: ["schedules-week-saved", weekStart, me?.id],
+    queryKey: ["schedules-week-saved", periodWeekStart, me?.id],
     queryFn: async () => {
       const { data: scheds, error } = await supabase
         .from("schedules")
         .select("id, department_id, status, published_at, updated_at, submitted_at, created_by")
-        .eq("week_start", weekStart);
+        .eq("week_start", periodWeekStart);
       if (error) throw error;
       if (!scheds?.length)
         return {
@@ -714,7 +728,7 @@ function SchedulesPage() {
   // Schedule for selected dept+week
   const schedQ = useQuery({
     enabled: !!selectedDept && !!me?.id && view === "editor",
-    queryKey: ["schedule", selectedDept, weekStart, focusedScheduleId, me?.id],
+    queryKey: ["schedule", selectedDept, periodWeekStart, focusedScheduleId, me?.id],
     queryFn: async () => {
       if (focusedScheduleId) {
         const { data, error } = await supabase
@@ -734,43 +748,49 @@ function SchedulesPage() {
       }
 
       const rows = await getSchedulesFn({
-        data: { week_start: weekStart, department_id: selectedDept! },
+        data: { week_start: periodWeekStart, department_id: selectedDept! },
       });
       const exact = (rows ?? [])[0] ?? null;
       if (exact) return exact;
 
-      // Some legacy/edge schedules can overlap the week without matching the
-      // exact week_start key. Keep employee read view from appearing empty when
-      // dashboard already shows a valid published schedule.
-      if (isEmployee) {
-        const { data: overlapRows, error } = await supabase
-          .from("schedules")
-          .select("*")
-          .eq("department_id", selectedDept!)
-          .eq("status", "approved")
-          .not("published_at", "is", null)
-          .lte("week_start", weekEnd)
-          .gte("week_end", weekStart)
-          .order("published_at", { ascending: false })
-          .limit(1);
-        if (error) throw error;
-        return (overlapRows ?? [])[0] ?? null;
+      // Legacy rows or mismatched week_start keys — match by period overlap.
+      const { data: overlapRows, error } = await supabase
+        .from("schedules")
+        .select("*")
+        .eq("department_id", selectedDept!)
+        .lte("week_start", periodWeekEnd)
+        .gte("week_end", periodWeekStart)
+        .order("updated_at", { ascending: false })
+        .limit(5);
+      if (error) throw error;
+      for (const row of overlapRows ?? []) {
+        if (
+          scheduleViewerCaps &&
+          canViewScheduleContent(row, scheduleViewerCaps, managedDeptIds)
+        ) {
+          return row;
+        }
       }
 
       return null;
     },
   });
 
+  useEffect(() => {
+    if (!schedQ.data?.week_start) return;
+    const normalized = getPeriodStart(schedQ.data.week_start as string, periodConfig);
+    if (normalized !== periodWeekStart) setWeekStart(normalized);
+  }, [schedQ.data?.week_start, periodConfig, periodWeekStart]);
+
   const weekEnd = useMemo(() => {
-    const periodStart = getPeriodStart(weekStart, periodConfig);
     if (
       schedQ.data?.week_end &&
-      schedQ.data?.week_start === periodStart
+      schedQ.data?.week_start === periodWeekStart
     ) {
       return schedQ.data.week_end as string;
     }
-    return getPeriodEnd(periodStart, periodConfig);
-  }, [schedQ.data?.week_end, schedQ.data?.week_start, weekStart, periodConfig]);
+    return periodWeekEnd;
+  }, [schedQ.data?.week_end, schedQ.data?.week_start, periodWeekStart, periodWeekEnd]);
 
   const days = useMemo(() => {
     if (schedQ.data?.week_start && schedQ.data?.week_end) {
@@ -779,15 +799,15 @@ function SchedulesPage() {
         periodConfig,
       );
     }
-    return buildPeriodDays(getPeriodStart(weekStart, periodConfig), periodConfig);
-  }, [schedQ.data?.week_start, schedQ.data?.week_end, weekStart, periodConfig]);
+    return buildPeriodDays(periodWeekStart, periodConfig);
+  }, [schedQ.data?.week_start, schedQ.data?.week_end, periodWeekStart, periodConfig]);
 
   const deptWeekFlagsQ = useQuery({
-    enabled: !!selectedDept && !!me?.id && (view === "editor" || isDeptHeadOnly),
-    queryKey: ["dept-schedule-flags", selectedDept, weekStart, me?.id],
+    enabled: !!selectedDept && !!me?.id && view === "editor",
+    queryKey: ["dept-schedule-flags", selectedDept, periodWeekStart, me?.id],
     queryFn: () =>
       deptWeekFlagsFn({
-        data: { department_id: selectedDept!, week_start: weekStart },
+        data: { department_id: selectedDept!, week_start: periodWeekStart },
       }),
   });
 
@@ -806,16 +826,16 @@ function SchedulesPage() {
   useEffect(() => {
     if (!selectedDept || view !== "editor") return;
     const ch = supabase
-      .channel(`schedules-dept-flags-${selectedDept}-${weekStart}`)
+      .channel(`schedules-dept-flags-${selectedDept}-${periodWeekStart}`)
       .on("postgres_changes", { event: "*", schema: "public", table: "schedules" }, () => {
-        qc.invalidateQueries({ queryKey: ["dept-schedule-flags", selectedDept, weekStart] });
-        qc.invalidateQueries({ queryKey: ["schedule", selectedDept, weekStart] });
+        qc.invalidateQueries({ queryKey: ["dept-schedule-flags", selectedDept, periodWeekStart] });
+        qc.invalidateQueries({ queryKey: ["schedule", selectedDept, periodWeekStart] });
       })
       .subscribe();
     return () => {
       supabase.removeChannel(ch);
     };
-  }, [selectedDept, weekStart, view, qc]);
+  }, [selectedDept, periodWeekStart, view, qc]);
 
   useEffect(() => {
     if (!me?.id || isEmployee) return;
@@ -1263,7 +1283,7 @@ function SchedulesPage() {
   const setExclusionFn = useServerFn(setEmployeeScheduleExclusion);
 
   const createMut = useMutation({
-    mutationFn: () => createFn({ data: { department_id: selectedDept!, week_start: weekStart } }),
+    mutationFn: () => createFn({ data: { department_id: selectedDept!, week_start: periodWeekStart } }),
     onSuccess: () => {
       toast.success(i18n.t("schedules.savedDraft"));
       qc.invalidateQueries({ queryKey: ["schedule", selectedDept, weekStart] });
@@ -1666,6 +1686,22 @@ function SchedulesPage() {
     !visible &&
     !!deptWeekFlagsQ.data?.hasSavedAwaitingPublish &&
     isDeptHeadOnly;
+
+  const publishedScheduleBlocksCreate =
+    !visible &&
+    !!deptWeekFlagsQ.data?.hasPublished &&
+    !isEmployee;
+
+  const savedScheduleBlocksManager =
+    !visible &&
+    !!deptWeekFlagsQ.data?.hasSavedAwaitingPublish &&
+    !isEmployee &&
+    !isDeptHeadOnly;
+
+  const displayWeekStart =
+    (visible?.week_start as string | undefined) ?? periodWeekStart;
+  const displayWeekEnd =
+    (visible?.week_end as string | undefined) ?? periodWeekEnd;
   const blockedAwaitingStatus =
     deptWeekFlagsQ.data?.awaitingPublish?.status ??
     (visible?.status as string | undefined);
@@ -1797,7 +1833,7 @@ function SchedulesPage() {
               ? i18n.t("schedules.subtitleApproved")
               : view === "saved"
               ? i18n.t("schedules.subtitleSaved")
-              : `${formatHeDate(weekStart)} – ${formatHeDate(weekEnd)}`}
+              : `${formatHeDate(displayWeekStart)} – ${formatHeDate(displayWeekEnd)}`}
 
           </p>
         </div>
@@ -2201,14 +2237,14 @@ function SchedulesPage() {
             {isDeptHeadOnly ? (
               <>
                 <Button
-                  variant={weekStart === deptHeadWeekWindow.current ? "default" : "outline"}
+                  variant={periodWeekStart === deptHeadWeekWindow.current ? "default" : "outline"}
                   size="sm"
                   onClick={() => navigateWeek(deptHeadWeekWindow.current)}
                 >
                   השבוע הזה
                 </Button>
                 <Button
-                  variant={weekStart === deptHeadWeekWindow.next ? "default" : "outline"}
+                  variant={periodWeekStart === deptHeadWeekWindow.next ? "default" : "outline"}
                   size="sm"
                   onClick={() => navigateWeek(deptHeadWeekWindow.next)}
                 >
@@ -2333,10 +2369,32 @@ function SchedulesPage() {
       </Card>
 
       {/* No schedule yet */}
-      {schedQ.isLoading || (isDeptHeadOnly && deptWeekFlagsQ.isLoading) ? (
+      {schedQ.isLoading || deptWeekFlagsQ.isLoading ? (
         <div className="flex justify-center py-12">
           <Loader2 className="size-6 animate-spin text-primary" />
         </div>
+      ) : publishedScheduleBlocksCreate ? (
+        <Card className="card-elevated p-6 border-amber-500/40 bg-amber-500/5">
+          <div className="flex gap-3 items-start">
+            <AlertTriangle className="size-5 text-amber-600 mt-0.5 shrink-0" />
+            <div className="space-y-1.5 text-sm">
+              <p className="font-semibold text-base">
+                {i18n.t("schedules.publishedScheduleExists")}
+              </p>
+              <p className="text-muted-foreground">
+                {i18n.t("schedules.publishedScheduleExistsHint")}
+              </p>
+              <Button
+                size="sm"
+                variant="outline"
+                className="mt-2"
+                onClick={() => setView("approved")}
+              >
+                {i18n.t("schedules.tabApproved")}
+              </Button>
+            </div>
+          </div>
+        </Card>
       ) : managerSavedDraftBlocksMe ? (
         <Card className="card-elevated p-6 border-destructive/40 bg-destructive/5">
           <div className="flex gap-3 items-start">
@@ -2374,6 +2432,34 @@ function SchedulesPage() {
             </div>
           </div>
         </Card>
+      ) : savedScheduleBlocksManager ? (
+        <Card className="card-elevated p-6 border-destructive/40 bg-destructive/5">
+          <div className="flex gap-3 items-start">
+            <AlertTriangle className="size-5 text-destructive mt-0.5 shrink-0" />
+            <div className="space-y-1.5 text-sm text-destructive">
+              <p className="font-semibold text-base">
+                {i18n.t("schedules.savedScheduleExists")}
+              </p>
+              <p>{i18n.t("schedules.savedScheduleExistsHint")}</p>
+              <p>
+                נשמר על־ידי:{" "}
+                <span className="font-medium">
+                  {blockedCreatorQ.isLoading
+                    ? "נטען..."
+                    : (blockedCreatorQ.data ?? "לא ידוע")}
+                </span>
+              </p>
+              <Button
+                size="sm"
+                variant="outline"
+                className="mt-2"
+                onClick={() => setView("saved")}
+              >
+                {i18n.t("schedules.tabSaved")}
+              </Button>
+            </div>
+          </div>
+        </Card>
       ) : !visible ? (
         <Card className="card-elevated p-8 text-center space-y-3">
           <p className="text-sm text-muted-foreground">
@@ -2381,7 +2467,10 @@ function SchedulesPage() {
               ? i18n.t("schedules.noApprovedSchedule")
               : i18n.t("schedules.noSchedule")}
           </p>
-          {canCreate && !isEmployee && !deptWeekFlagsQ.data?.hasSavedAwaitingPublish && (
+          {canCreate &&
+            !isEmployee &&
+            !deptWeekFlagsQ.data?.hasSavedAwaitingPublish &&
+            !deptWeekFlagsQ.data?.hasPublished && (
             <Button onClick={() => createMut.mutate()} disabled={createMut.isPending}>
               {createMut.isPending && <Loader2 className="size-4 animate-spin" />}
               צור טיוטה

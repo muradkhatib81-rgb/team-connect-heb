@@ -460,6 +460,9 @@ export const createOrGetSchedule = createServerFn({ method: "POST" })
     if (hiddenRow && isSavedScheduleAwaitingPublish(hiddenRow)) {
       throw new Error("כבר קיים סידור עבודה שמור למחלקה זו — ממתין לפרסום");
     }
+    if (hiddenRow?.status === "approved" && hiddenRow?.published_at) {
+      throw new Error("כבר קיים סידור מפורסם למחלקה זו בתקופה זו");
+    }
     if (hiddenRow) {
       throw new Error("כבר קיים סידור עבודה לשבוע זה במחלקה זו");
     }
