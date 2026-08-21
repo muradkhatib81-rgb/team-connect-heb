@@ -188,8 +188,8 @@ function PlatformSettingsPage() {
         <div>
           <p className="text-sm font-medium">אייקון התקנת האפליקציה (PWA)</p>
           <p className="text-xs text-muted-foreground mt-1">
-            רק בעל הפלטפורמה יכול לשנות. שם האפליקציה נקבע לפי שפת הממשק (עברית / ערבית /
-            אנגלית) ואינו ניתן לשינוי על ידי משתמשים.
+            רק בעל הפלטפורמה יכול לשנות. שם ההתקנה נקבע לפי שפת מערכת המכשיר (עברית /
+            ערבית / אנגלית) לפני ההתקנה, ואינו ניתן לשינוי על ידי משתמשים.
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-4">

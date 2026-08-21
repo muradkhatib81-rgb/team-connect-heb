@@ -3,6 +3,7 @@ import { initReactI18next } from "react-i18next";
 import he from "./he.json";
 import ar from "./ar.json";
 import en from "./en.json";
+import { resolveAppLanguageFromTags } from "@/lib/pwa-manifest";
 
 export type AppLanguage = "he" | "ar" | "en";
 
@@ -10,6 +11,13 @@ const STORAGE_KEY = "app_language";
 
 function userKey(userId?: string) {
   return userId ? `${STORAGE_KEY}_${userId}` : STORAGE_KEY;
+}
+
+/** Device/OS language → he | ar | en (defaults to Hebrew). */
+export function detectSystemLanguage(): AppLanguage {
+  if (typeof navigator === "undefined") return "he";
+  const tags = [...(navigator.languages ?? []), navigator.language].filter(Boolean) as string[];
+  return resolveAppLanguageFromTags(tags);
 }
 
 export function getSavedLanguage(userId?: string): AppLanguage {
@@ -21,7 +29,7 @@ export function getSavedLanguage(userId?: string): AppLanguage {
   } catch {
     // SSR or localStorage not available
   }
-  return "he";
+  return detectSystemLanguage();
 }
 
 export function saveLanguage(lang: AppLanguage, userId?: string) {

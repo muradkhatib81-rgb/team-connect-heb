@@ -1,16 +1,22 @@
-import i18n from "@/i18n";
+import { detectSystemLanguage } from "@/i18n";
 import { supabase } from "@/integrations/supabase/client";
+import {
+  DEFAULT_PWA_ICON_192,
+  PWA_BRANDING_BUCKET,
+  PWA_COPY,
+  PWA_ICON_PATH,
+  PWA_ICON_QUERY_KEY,
+  buildPwaManifest,
+} from "@/lib/pwa-manifest";
 
-export const PWA_BRANDING_BUCKET = "platform-branding";
-export const PWA_ICON_PATH = "pwa-icon.png";
-export const DEFAULT_PWA_ICON_192 = "/icons/icon-192.png";
-export const DEFAULT_PWA_ICON_512 = "/icons/icon-512.png";
-
-const MANIFEST_QUERY_KEY = ["platform-pwa-icon"] as const;
+export {
+  PWA_BRANDING_BUCKET,
+  PWA_ICON_PATH,
+  DEFAULT_PWA_ICON_192,
+  PWA_ICON_QUERY_KEY,
+};
 
 let lastManifestObjectUrl: string | null = null;
-
-export { MANIFEST_QUERY_KEY as PWA_ICON_QUERY_KEY };
 
 function setOrCreateMeta(name: string, content: string) {
   let el = document.querySelector(`meta[name="${name}"]`) as HTMLMetaElement | null;
@@ -57,39 +63,16 @@ export function getPlatformBrandingPublicUrl(): string {
   return data.publicUrl;
 }
 
-/** Apply install name (from current i18n language) + icon to manifest / apple tags. */
+/**
+ * Apply install branding from the device system language (not UI language).
+ * Document title stays under the UI i18n layer.
+ */
 export function applyPwaBranding(iconUrl?: string | null) {
   if (typeof document === "undefined") return;
 
-  const langRaw = i18n.language;
-  const lang = langRaw === "en" || langRaw === "ar" ? langRaw : "he";
-  const dir = lang === "en" ? "ltr" : "rtl";
-  const name = i18n.t("common.appName");
-  const shortName = i18n.t("common.appShortName");
-  const description = i18n.t("common.appDescription");
-
-  const icon192 = iconUrl || DEFAULT_PWA_ICON_192;
-  const icon512 = iconUrl || DEFAULT_PWA_ICON_512;
-
-  const manifest = {
-    id: "/",
-    name,
-    short_name: shortName,
-    description,
-    start_url: "/",
-    scope: "/",
-    display: "standalone",
-    orientation: "any",
-    background_color: "#ffffff",
-    theme_color: "#0d8c8c",
-    lang,
-    dir,
-    icons: [
-      { src: icon192, sizes: "192x192", type: "image/png", purpose: "any" },
-      { src: icon512, sizes: "512x512", type: "image/png", purpose: "any" },
-      { src: icon512, sizes: "512x512", type: "image/png", purpose: "maskable" },
-    ],
-  };
+  const lang = detectSystemLanguage();
+  const copy = PWA_COPY[lang];
+  const manifest = buildPwaManifest({ lang, iconUrl });
 
   const blob = new Blob([JSON.stringify(manifest)], { type: "application/manifest+json" });
   const objectUrl = URL.createObjectURL(blob);
@@ -106,9 +89,9 @@ export function applyPwaBranding(iconUrl?: string | null) {
   lastManifestObjectUrl = objectUrl;
   link.href = objectUrl;
 
-  setOrCreateMeta("apple-mobile-web-app-title", name);
-  document.title = name;
+  setOrCreateMeta("apple-mobile-web-app-title", copy.name);
 
+  const icon192 = iconUrl || DEFAULT_PWA_ICON_192;
   setOrCreateLink("apple-touch-icon", icon192);
   setOrCreateLink("icon", icon192, { sizes: "192x192", type: "image/png" });
 }

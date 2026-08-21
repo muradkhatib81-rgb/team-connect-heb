@@ -114,7 +114,7 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
     ],
     links: [
       { rel: "stylesheet", href: appCss },
-      { rel: "manifest", href: "/manifest.webmanifest" },
+      { rel: "manifest", href: "/api/pwa-manifest" },
       { rel: "apple-touch-icon", href: "/icons/icon-192.png" },
       { rel: "icon", href: "/icons/icon-192.png", sizes: "192x192", type: "image/png" },
       { rel: "preconnect", href: "https://fonts.googleapis.com" },
@@ -204,13 +204,17 @@ function RootShell({ children }: { children: ReactNode }) {
       setLang(next);
       document.documentElement.dir = next === "en" ? "ltr" : "rtl";
       document.documentElement.lang = next;
-      applyPwaBranding(pwaIconUrl);
+      document.title = i18n.t("common.appName");
     };
     i18n.on("languageChanged", onChange);
     onChange(i18n.language);
     return () => {
       i18n.off("languageChanged", onChange);
     };
+  }, []);
+
+  useEffect(() => {
+    applyPwaBranding(pwaIconUrl);
   }, [pwaIconUrl]);
   const dir = lang === "en" ? "ltr" : "rtl";
   return (
