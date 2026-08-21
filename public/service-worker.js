@@ -1,28 +1,26 @@
-// Kill-switch service worker (alternate path).
-// Mirrors /sw.js so any previously-registered worker on either path is
-// unregistered when the browser next checks for an update.
-function isOwnWorkboxCache(name) {
-  const isWorkboxBucket =
-    /(^|-)precache-v\d+-|(^|-)runtime-|(^|-)googleAnalytics-/.test(name);
-  return isWorkboxBucket && name.endsWith(self.registration.scope);
-}
+/**
+ * Alternate path kept in sync with /sw.js so old registrations update cleanly.
+ * Network-only installability worker — no app-shell cache.
+ */
+const SW_VERSION = "pwa-install-v1";
 
-self.addEventListener("install", () => self.skipWaiting());
+self.addEventListener("install", (event) => {
+  self.skipWaiting();
+});
 
-self.addEventListener("activate", (event) =>
+self.addEventListener("activate", (event) => {
   event.waitUntil(
     (async () => {
       try {
         const names = await caches.keys();
-        await Promise.allSettled(
-          names.filter(isOwnWorkboxCache).map((n) => caches.delete(n)),
-        );
-        await self.clients.claim();
-        const wins = await self.clients.matchAll({ type: "window" });
-        await Promise.allSettled(wins.map((c) => c.navigate(c.url)));
+        await Promise.allSettled(names.map((name) => caches.delete(name)));
       } finally {
-        await self.registration.unregister();
+        await self.clients.claim();
       }
     })(),
-  ),
-);
+  );
+});
+
+self.addEventListener("fetch", (event) => {
+  event.respondWith(fetch(event.request));
+});

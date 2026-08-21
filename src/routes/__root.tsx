@@ -16,6 +16,7 @@ import { reportLovableError } from "../lib/lovable-error-reporting";
 import { Toaster } from "@/components/ui/sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { PlatformProvider } from "@/platform";
+import { registerPwaServiceWorker } from "@/lib/register-pwa";
 
 function NotFoundComponent() {
   return (
@@ -81,6 +82,10 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1, maximum-scale=1" },
       { name: "theme-color", content: "#0d8c8c" },
+      { name: "mobile-web-app-capable", content: "yes" },
+      { name: "apple-mobile-web-app-capable", content: "yes" },
+      { name: "apple-mobile-web-app-status-bar-style", content: "default" },
+      { name: "apple-mobile-web-app-title", content: i18n.t("common.appName") },
       { title: i18n.t("common.appName") },
       { name: "description", content: i18n.t("common.appName") },
       { property: "og:title", content: i18n.t("common.appName") },
@@ -108,6 +113,9 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
     ],
     links: [
       { rel: "stylesheet", href: appCss },
+      { rel: "manifest", href: "/manifest.webmanifest" },
+      { rel: "apple-touch-icon", href: "/icons/icon-192.png" },
+      { rel: "icon", href: "/icons/icon-192.png", sizes: "192x192", type: "image/png" },
       { rel: "preconnect", href: "https://fonts.googleapis.com" },
       { rel: "preconnect", href: "https://fonts.gstatic.com", crossOrigin: "anonymous" },
       {
@@ -117,26 +125,15 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
     ],
     scripts: [
       {
-        // Stale-cache guard. Unregisters any leftover service worker,
-        // clears Cache Storage, and — if a dynamic chunk fails to load
-        // because the cached HTML points at a stale asset hash — reloads
-        // once with a cache-busting query so the browser must refetch
-        // index.html from the network instead of disk cache.
+        // Stale-chunk guard only. Does NOT unregister the installability SW (/sw.js).
+        // Legacy/workbox workers are pruned in registerPwaServiceWorker().
         children: `(function(){try{
-  if ('serviceWorker' in navigator) {
-    navigator.serviceWorker.getRegistrations().then(function(rs){
-      rs.forEach(function(r){ try { r.unregister(); } catch(e){} });
-    }).catch(function(){});
-    if (window.caches && caches.keys) {
-      caches.keys().then(function(ks){ ks.forEach(function(k){ try { caches.delete(k); } catch(e){} }); }).catch(function(){});
-    }
-  }
   function bustReload(){
     try {
       var key='__lov_chunk_reload';
       var now = Date.now();
       var last = parseInt(sessionStorage.getItem(key)||'0',10);
-      if (last && now-last < 30000) return; // already tried recently
+      if (last && now-last < 30000) return;
       sessionStorage.setItem(key, String(now));
     } catch(e){}
     try {
@@ -150,7 +147,6 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
   }
   window.addEventListener('error', function(e){
     var m = (e && (e.message||'')) + ' ' + ((e && e.error && e.error.message) || '');
-    // Also catch <script>/<link> 404s for stale hashed assets.
     var tgt = e && e.target;
     if (tgt && (tgt.tagName === 'SCRIPT' || tgt.tagName === 'LINK')) {
       var src = tgt.src || tgt.href || '';
@@ -167,7 +163,6 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
     var t = parseInt(sessionStorage.getItem(key)||'0',10);
     if (t && Date.now()-t > 30000) sessionStorage.removeItem(key);
   } catch(e){}
-  // Safety net: if nothing rendered after 8s on first load, force a bust reload.
   try {
     setTimeout(function(){
       var root = document.getElementById('root') || document.body;
@@ -221,6 +216,10 @@ function RootShell({ children }: { children: ReactNode }) {
 function RootComponent() {
   const { queryClient } = Route.useRouteContext();
   const router = useRouter();
+
+  useEffect(() => {
+    void registerPwaServiceWorker();
+  }, []);
 
   useEffect(() => {
     const { data: sub } = supabase.auth.onAuthStateChange((event) => {
