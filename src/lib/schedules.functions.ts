@@ -417,6 +417,34 @@ async function findAllDepartmentSchedulesForPeriod(
   if (recentErr) throw recentErr;
   for (const row of recentRows ?? []) add(row as Record<string, unknown>);
 
+  const { data: shiftRows, error: shiftErr } = await supabase
+    .from("schedule_shifts")
+    .select("schedule_id")
+    .gte("day_date", periodStart)
+    .lte("day_date", periodEnd);
+  if (shiftErr) throw shiftErr;
+  const shiftScheduleIds = [
+    ...new Set(
+      (shiftRows ?? [])
+        .map((row) => (row as { schedule_id?: string }).schedule_id)
+        .filter(Boolean) as string[],
+    ),
+  ];
+  if (shiftScheduleIds.length > 0) {
+    const { data: shiftScheds, error: shiftSchedErr } = await supabase
+      .from("schedules")
+      .select("*")
+      .eq("department_id", departmentId)
+      .in("id", shiftScheduleIds);
+    if (shiftSchedErr) throw shiftSchedErr;
+    for (const row of shiftScheds ?? []) {
+      const id = (row as { id?: string }).id;
+      if (!id || seen.has(id)) continue;
+      seen.add(id);
+      matches.push(row as Record<string, unknown>);
+    }
+  }
+
   return matches;
 }
 
@@ -515,15 +543,62 @@ export const getSchedulesForViewer = createServerFn({ method: "POST" })
       return [];
     }
 
-    let query = context.supabase
+    const seen = new Set<string>();
+    const matched: Record<string, unknown>[] = [];
+    const consider = (schedule: Record<string, unknown>) => {
+      const id = schedule.id as string | undefined;
+      if (!id || seen.has(id)) return;
+      if (!scheduleMatchesPeriod(schedule as { week_start: string }, weekStartKey, weekEndKey, periodConfig)) {
+        return;
+      }
+      seen.add(id);
+      matched.push(schedule);
+    };
+
+    const { data: overlapRows, error: overlapErr } = await context.supabase
+      .from("schedules")
+      .select("*")
+      .lte("week_start", weekEndKey)
+      .gte("week_end", weekStartKey);
+    if (overlapErr) throw new Error(overlapErr.message);
+    for (const row of overlapRows ?? []) consider(row as Record<string, unknown>);
+
+    const { data: exactRows, error: exactErr } = await context.supabase
       .from("schedules")
       .select("*")
       .eq("week_start", weekStartKey);
+    if (exactErr) throw new Error(exactErr.message);
+    for (const row of exactRows ?? []) consider(row as Record<string, unknown>);
 
-    const { data: rows, error } = await query;
-    if (error) throw new Error(error.message);
+    const { data: shiftRows, error: shiftErr } = await context.supabase
+      .from("schedule_shifts")
+      .select("schedule_id")
+      .gte("day_date", weekStartKey)
+      .lte("day_date", weekEndKey);
+    if (shiftErr) throw new Error(shiftErr.message);
+    const shiftScheduleIds = [
+      ...new Set(
+        (shiftRows ?? [])
+          .map((row) => (row as { schedule_id?: string }).schedule_id)
+          .filter(Boolean) as string[],
+      ),
+    ];
+    if (shiftScheduleIds.length > 0) {
+      const { data: shiftScheds, error: shiftSchedErr } = await context.supabase
+        .from("schedules")
+        .select("*")
+        .in("id", shiftScheduleIds);
+      if (shiftSchedErr) throw new Error(shiftSchedErr.message);
+      for (const row of shiftScheds ?? []) {
+        const id = (row as { id?: string }).id;
+        if (!id || seen.has(id)) continue;
+        seen.add(id);
+        matched.push(row as Record<string, unknown>);
+      }
+    }
+
     const visible: any[] = [];
-    for (const schedule of rows ?? []) {
+    for (const schedule of matched) {
       if (await isScheduleVisibleToCaps(schedule, caps, context.userId, context.supabase)) {
         visible.push(schedule);
       }

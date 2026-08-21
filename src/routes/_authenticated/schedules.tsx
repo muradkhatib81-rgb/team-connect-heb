@@ -517,28 +517,34 @@ function SchedulesPage() {
     queryFn: async () => {
       const { data: scheds, error } = await supabase
         .from("schedules")
-        .select("id, department_id, status, published_at, updated_at, submitted_at, created_by")
-        .eq("week_start", periodWeekStart);
+        .select("id, department_id, status, published_at, updated_at, submitted_at, created_by, week_start, week_end")
+        .lte("week_start", periodWeekEnd)
+        .gte("week_end", periodWeekStart);
       if (error) throw error;
-      if (!scheds?.length)
+      const periodScheds = (scheds ?? []).filter(
+        (s: { week_start: string; week_end?: string | null }) =>
+          getPeriodStart(s.week_start as string, periodConfig) === periodWeekStart ||
+          ((s.week_start as string) >= periodWeekStart && (s.week_start as string) <= periodWeekEnd),
+      );
+      if (!periodScheds.length)
         return {
           shifts: [] as { schedule_id: string; department_id: string; employee_id: string; day_date: string; shift: string }[],
           deptIdsWithSaved: [] as string[],
           savedList: [] as { schedule_id: string; department_id: string; status: string; published_at: string | null; updated_at: string | null }[],
         };
-      const ids = scheds.map((s: any) => s.id);
+      const ids = periodScheds.map((s: any) => s.id);
       const { data: shiftRows, error: e2 } = await supabase
         .from("schedule_shifts")
         .select("schedule_id, employee_id, day_date, shift, leave_type_code")
         .in("schedule_id", ids);
       if (e2) throw e2;
-      const schedById = new Map<string, any>((scheds as any[]).map((s) => [s.id, s]));
+      const schedById = new Map<string, any>(periodScheds.map((s) => [s.id, s]));
       const shifts = (shiftRows ?? []).map((r: any) => ({
         ...r,
         department_id: schedById.get(r.schedule_id)?.department_id as string,
       }));
       const withShiftsIds = new Set(shifts.map((r) => r.schedule_id));
-      const savedScheds = (scheds as any[]).filter((s) => withShiftsIds.has(s.id));
+      const savedScheds = periodScheds.filter((s: any) => withShiftsIds.has(s.id));
       const visibleSavedScheds =
         scheduleViewerCaps == null
           ? savedScheds
@@ -805,6 +811,7 @@ function SchedulesPage() {
       deptWeekFlagsFn({
         data: { department_id: selectedDept!, week_start: periodWeekStart },
       }),
+    staleTime: 30_000,
   });
 
   const blockedCreatorId = deptWeekFlagsQ.data?.awaitingPublish?.created_by ?? null;
@@ -1281,7 +1288,15 @@ function SchedulesPage() {
   const setExclusionFn = useServerFn(setEmployeeScheduleExclusion);
 
   const createMut = useMutation({
-    mutationFn: () => createFn({ data: { department_id: selectedDept!, week_start: periodWeekStart } }),
+    mutationFn: async () => {
+      if (deptWeekFlagsQ.data?.hasPublished) {
+        throw new Error(i18n.t("schedules.publishedScheduleExists"));
+      }
+      if (deptWeekFlagsQ.data?.hasSavedAwaitingPublish) {
+        throw new Error(i18n.t("schedules.savedScheduleExists"));
+      }
+      return createFn({ data: { department_id: selectedDept!, week_start: periodWeekStart } });
+    },
     onSuccess: () => {
       toast.success(i18n.t("schedules.savedDraft"));
       qc.invalidateQueries({ queryKey: ["schedule", selectedDept, weekStart] });
@@ -1680,34 +1695,32 @@ function SchedulesPage() {
     !canEdit &&
     visible.created_by !== me?.id;
 
-  const viewingPeriodSchedule =
-    !!visible &&
-    getPeriodStart(visible.week_start as string, periodConfig) === periodWeekStart;
-
-  const viewingPublishedSchedule =
-    viewingPeriodSchedule &&
-    visible!.status === "approved" &&
-    !!(visible as { published_at?: string | null }).published_at;
-
-  const viewingSavedSchedule =
-    viewingPeriodSchedule &&
-    isSavedScheduleAwaitingPublish(visible as { status: string; published_at: string | null });
+  const hasPublishedForPeriod = !!deptWeekFlagsQ.data?.hasPublished;
+  const hasSavedForPeriod = !!deptWeekFlagsQ.data?.hasSavedAwaitingPublish;
 
   const managerSavedDraftBlocksMe =
-    !!deptWeekFlagsQ.data?.hasSavedAwaitingPublish &&
-    isDeptHeadOnly &&
-    !viewingSavedSchedule;
+    hasSavedForPeriod &&
+    isDeptHeadOnly;
 
+  /** Editor tab is for new drafts only — keep the block even after the published row loads. */
   const publishedScheduleBlocksCreate =
-    !!deptWeekFlagsQ.data?.hasPublished &&
-    !isEmployee &&
-    !viewingPublishedSchedule;
+    hasPublishedForPeriod &&
+    !isEmployee;
 
   const savedScheduleBlocksManager =
-    !!deptWeekFlagsQ.data?.hasSavedAwaitingPublish &&
+    hasSavedForPeriod &&
     !isEmployee &&
-    !isDeptHeadOnly &&
-    !viewingSavedSchedule;
+    !isDeptHeadOnly;
+
+  const periodScheduleBlocked =
+    publishedScheduleBlocksCreate ||
+    managerSavedDraftBlocksMe ||
+    savedScheduleBlocksManager;
+
+  const schedulePanelLoading =
+    !selectedDept ||
+    deptWeekFlagsQ.isLoading ||
+    (schedQ.isLoading && !hasPublishedForPeriod && !hasSavedForPeriod);
 
   const displayWeekStart =
     (visible?.week_start as string | undefined) ?? periodWeekStart;
@@ -1724,11 +1737,10 @@ function SchedulesPage() {
 
   const editable =
     !!visible &&
+    !periodScheduleBlocked &&
     !isSupersededPublished &&
     !isEmployee &&
     !isDraftLockedForMe &&
-    !(deptWeekFlagsQ.data?.hasPublished && !viewingPublishedSchedule) &&
-    !(deptWeekFlagsQ.data?.hasSavedAwaitingPublish && !viewingSavedSchedule) &&
     (((visible.status === "draft" || visible.status === "rejected") &&
       (isMainAdmin || isBranchManager || canEdit || visible.created_by === me?.id))
       || (visible.status === "approved" && (isMainAdmin || canPublishDirect))
@@ -2383,7 +2395,7 @@ function SchedulesPage() {
       </Card>
 
       {/* No schedule yet */}
-      {schedQ.isLoading || deptWeekFlagsQ.isLoading ? (
+      {schedulePanelLoading ? (
         <div className="flex justify-center py-12">
           <Loader2 className="size-6 animate-spin text-primary" />
         </div>
