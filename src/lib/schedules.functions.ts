@@ -356,16 +356,30 @@ function weekStartOf(dateStr: string, config: BranchPeriodConfig): { start: stri
 
 /** Match a department schedule row to the normalized period (handles legacy week_start keys). */
 function scheduleMatchesPeriod(
-  row: { week_start: string },
+  row: { week_start: string; week_end?: string | null },
   periodStart: string,
   periodEnd: string,
   config: BranchPeriodConfig,
 ): boolean {
-  // Primary: normalized period start must match the requested period.
-  if (weekStartOf(row.week_start, config).start === periodStart) return true;
+  const norm = weekStartOf(row.week_start, config).start;
+  if (norm === periodStart) return true;
   // Legacy: week_start stored as any day inside the same period window.
-  if (row.week_start >= periodStart && row.week_start <= periodEnd) {
-    return weekStartOf(row.week_start, config).start === periodStart;
+  if (row.week_start >= periodStart && row.week_start <= periodEnd) return true;
+  // Sat-keyed rows for Sun–Fri periods (week_start = day before periodStart).
+  if (
+    row.week_start === addDaysISO(periodStart, -1) &&
+    (row.week_end == null || row.week_end >= periodStart)
+  ) {
+    return true;
+  }
+  // Calendar overlap with the requested period window.
+  if (
+    row.week_end &&
+    row.week_start <= periodEnd &&
+    row.week_end >= periodStart &&
+    (norm === periodStart || row.week_start === addDaysISO(periodStart, -1))
+  ) {
+    return true;
   }
   return false;
 }
@@ -444,7 +458,14 @@ async function findAllDepartmentSchedulesForPeriod(
       .eq("department_id", departmentId)
       .in("id", shiftScheduleIds);
     if (shiftSchedErr) throw shiftSchedErr;
-    for (const row of shiftScheds ?? []) add(row as Record<string, unknown>);
+    // Schedules with shifts on days in this period belong here even when week_start
+    // was stored with a legacy/off-by-one key (e.g. Saturday before a Sunday period).
+    for (const row of shiftScheds ?? []) {
+      const id = (row as { id?: string }).id;
+      if (!id || seen.has(id)) continue;
+      seen.add(id);
+      matches.push(row as Record<string, unknown>);
+    }
   }
 
   return matches;

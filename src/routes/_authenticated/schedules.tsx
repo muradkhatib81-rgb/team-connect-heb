@@ -740,25 +740,27 @@ function SchedulesPage() {
     staleTime: 30_000,
   });
 
-  /** Published id only when flags confirm it belongs to the navigated period. */
+  /** Published id for the navigated period — all roles use this so managers/admin load it too. */
   const publishedIdForPeriod = useMemo(() => {
-    if (!(isDeptHeadOnly || isEmployee)) return null;
     if (!deptWeekFlagsQ.data?.hasPublished) return null;
     const id = deptWeekFlagsQ.data.publishedScheduleId as string | null | undefined;
     if (!id) return null;
     const publishedWeekStart =
       (deptWeekFlagsQ.data.published_week_start as string | null | undefined) ??
       (deptWeekFlagsQ.data.schedule_week_start as string | null | undefined);
-    if (
-      publishedWeekStart &&
-      getPeriodStart(publishedWeekStart, periodConfig) !== periodWeekStart
-    ) {
-      return null;
+    if (publishedWeekStart) {
+      const norm = getPeriodStart(publishedWeekStart, periodConfig);
+      const dayBefore = (() => {
+        const d = new Date(periodWeekStart + "T00:00:00Z");
+        d.setUTCDate(d.getUTCDate() - 1);
+        return d.toISOString().slice(0, 10);
+      })();
+      if (norm !== periodWeekStart && publishedWeekStart !== dayBefore && publishedWeekStart !== periodWeekStart) {
+        return null;
+      }
     }
     return id;
   }, [
-    isDeptHeadOnly,
-    isEmployee,
     deptWeekFlagsQ.data?.hasPublished,
     deptWeekFlagsQ.data?.publishedScheduleId,
     deptWeekFlagsQ.data?.published_week_start,
@@ -769,11 +771,7 @@ function SchedulesPage() {
 
   // Schedule for selected dept+week
   const schedQ = useQuery({
-    enabled:
-      !!selectedDept &&
-      !!me?.id &&
-      view === "editor" &&
-      (!(isDeptHeadOnly || isEmployee) || !deptWeekFlagsQ.isLoading),
+    enabled: !!selectedDept && !!me?.id && view === "editor" && !deptWeekFlagsQ.isLoading,
     queryKey: [
       "schedule",
       selectedDept,
@@ -1747,6 +1745,7 @@ function SchedulesPage() {
 
   const savedScheduleBlocksManager =
     hasSavedForPeriod &&
+    !hasPublishedForPeriod &&
     !isEmployee &&
     !isDeptHeadOnly &&
     !viewingSavedSchedule &&
@@ -1884,11 +1883,26 @@ function SchedulesPage() {
   function openScheduleFromPending(p: {
     department_id: string;
     week_start: string;
+    week_end?: string | null;
     schedule_id?: string;
   }) {
     setSelectedDept(p.department_id);
     initialWeekSetRef.current = true;
-    setWeekStart(getPeriodStart(p.week_start, periodConfig));
+    // Prefer the configured period that actually contains this schedule.
+    // Legacy Sat-keyed rows (week_start = day before Sunday period) must open the Sunday period.
+    let openPeriod = getPeriodStart(p.week_start, periodConfig);
+    const dayAfter = (() => {
+      const d = new Date(p.week_start + "T00:00:00Z");
+      d.setUTCDate(d.getUTCDate() + 1);
+      return d.toISOString().slice(0, 10);
+    })();
+    if (
+      getPeriodStart(dayAfter, periodConfig) === dayAfter &&
+      (!p.week_end || p.week_end >= dayAfter)
+    ) {
+      openPeriod = dayAfter;
+    }
+    setWeekStart(openPeriod);
     setFocusedScheduleId(p.schedule_id ?? null);
     setView("editor");
   }
@@ -2216,6 +2230,7 @@ function SchedulesPage() {
                             openScheduleFromPending({
                               department_id: a.department_id,
                               week_start: a.week_start,
+                              week_end: a.week_end,
                               schedule_id: a.id,
                             })
                           }
@@ -2228,6 +2243,7 @@ function SchedulesPage() {
                                 openScheduleFromPending({
                                   department_id: a.department_id,
                                   week_start: a.week_start,
+                                  week_end: a.week_end,
                                   schedule_id: a.id,
                                 });
                               }}
@@ -2268,6 +2284,7 @@ function SchedulesPage() {
                                 openScheduleFromPending({
                                   department_id: a.department_id,
                                   week_start: a.week_start,
+                                  week_end: a.week_end,
                                   schedule_id: a.id,
                                 })
                               }
