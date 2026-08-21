@@ -61,7 +61,7 @@ export function buildWeeklyPeriodDays(
   endDow: ScheduleDow,
 ): string[] {
   const days: string[] = [];
-  let iso = periodStartIso;
+  let iso = getWeeklyPeriodStart(periodStartIso, startDow);
   let dow = startDow;
   for (let guard = 0; guard < 8; guard++) {
     days.push(iso);
@@ -190,6 +190,8 @@ export function shiftPeriodStart(
     d.setUTCMonth(d.getUTCMonth() + direction, 1);
     return d.toISOString().slice(0, 10);
   }
-  const len = periodDayCount(config.week_start_dow, config.week_end_dow);
-  return addDaysISO(periodStartIso, direction * len);
+  // Always step full calendar weeks so the next period lands on week_start_dow
+  // (e.g. Sun–Fri spans 6 working days but the next period starts 7 days later).
+  const normalized = getPeriodStart(periodStartIso, config);
+  return addDaysISO(normalized, direction * 7);
 }

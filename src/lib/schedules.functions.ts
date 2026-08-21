@@ -391,10 +391,12 @@ export const getSchedulesForViewer = createServerFn({ method: "POST" })
   )
   .handler(async ({ data, context }) => {
     const caps = await getCaps(context.supabase, context.userId);
+    const periodConfig = await fetchBranchPeriodConfig(context.supabase);
+    const { start: weekStartKey } = weekStartOf(data.week_start, periodConfig);
     let query = context.supabase
       .from("schedules")
       .select("*")
-      .eq("week_start", data.week_start);
+      .eq("week_start", weekStartKey);
     if (data.department_id) query = query.eq("department_id", data.department_id);
 
     const { data: rows, error } = await query;

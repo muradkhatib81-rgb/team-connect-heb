@@ -377,13 +377,6 @@ function SchedulesPage() {
     search.view ?? (search.dept || search.week ? "editor" : canApprove ? "pending" : canPublishDirect ? "approved" : "editor"),
   );
 
-  // Employees always see the current week only
-  useEffect(() => {
-    if (!meLoading && isEmployee) {
-      setWeekStart(getPeriodStartFromDate(new Date(), periodConfig));
-    }
-  }, [meLoading, isEmployee, periodConfig]);
-
 
   // Department selection
   const deptsQ = useQuery({
@@ -413,7 +406,7 @@ function SchedulesPage() {
 
   function navigateWeek(next: string) {
     setFocusedScheduleId(null);
-    setWeekStart(next);
+    setWeekStart(getPeriodStart(next, periodConfig));
   }
 
   function selectDepartment(deptId: string) {
@@ -423,22 +416,33 @@ function SchedulesPage() {
 
   const [weekStart, setWeekStart] = useState(() =>
     search.week
-      ? getPeriodStartFromDate(new Date(search.week + "T00:00:00Z"), {
-          schedule_type: "weekly",
-          week_start_dow: 0,
-          week_end_dow: 6,
-        })
-      : getPeriodStartFromDate(new Date(), {
-          schedule_type: "weekly",
-          week_start_dow: 0,
-          week_end_dow: 6,
-        }),
+      ? getPeriodStartFromDate(new Date(search.week + "T00:00:00Z"), DEFAULT_PERIOD_CONFIG)
+      : getPeriodStartFromDate(new Date(), DEFAULT_PERIOD_CONFIG),
   );
 
+  const initialWeekSetRef = useRef(!!search.week);
+
+  // On page entry default to the current schedule period (unless URL specifies ?week=).
+  // Re-normalizing a Sat-based placeholder with Sun–Fri config was jumping to an old week.
   useEffect(() => {
-    if (!companyQ.data) return;
-    setWeekStart((prev) => getPeriodStart(prev, periodConfig));
-  }, [periodConfig.schedule_type, periodConfig.week_start_dow, periodConfig.week_end_dow]);
+    if (meLoading || !periodConfigQ.isSuccess) return;
+
+    if (search.week) {
+      setWeekStart(getPeriodStart(search.week, periodConfig));
+      return;
+    }
+
+    if (initialWeekSetRef.current) return;
+    setWeekStart(getPeriodStartFromDate(new Date(), periodConfig));
+    initialWeekSetRef.current = true;
+  }, [
+    meLoading,
+    periodConfigQ.isSuccess,
+    search.week,
+    periodConfig.schedule_type,
+    periodConfig.week_start_dow,
+    periodConfig.week_end_dow,
+  ]);
 
   /** Dept head may only browse/create for current week + next week. */
   const deptHeadWeekWindow = useMemo(() => {
@@ -758,9 +762,15 @@ function SchedulesPage() {
   });
 
   const weekEnd = useMemo(() => {
-    if (schedQ.data?.week_end) return schedQ.data.week_end as string;
-    return getPeriodEnd(weekStart, periodConfig);
-  }, [schedQ.data?.week_end, weekStart, periodConfig]);
+    const periodStart = getPeriodStart(weekStart, periodConfig);
+    if (
+      schedQ.data?.week_end &&
+      schedQ.data?.week_start === periodStart
+    ) {
+      return schedQ.data.week_end as string;
+    }
+    return getPeriodEnd(periodStart, periodConfig);
+  }, [schedQ.data?.week_end, schedQ.data?.week_start, weekStart, periodConfig]);
 
   const days = useMemo(() => {
     if (schedQ.data?.week_start && schedQ.data?.week_end) {
@@ -1767,7 +1777,7 @@ function SchedulesPage() {
     schedule_id?: string;
   }) {
     setSelectedDept(p.department_id);
-    setWeekStart(p.week_start);
+    setWeekStart(getPeriodStart(p.week_start, periodConfig));
     setFocusedScheduleId(p.schedule_id ?? null);
     setView("editor");
   }
