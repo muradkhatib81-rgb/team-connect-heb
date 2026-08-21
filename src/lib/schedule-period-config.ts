@@ -180,6 +180,18 @@ export function getSchedulePeriod(reference = new Date(), config: BranchPeriodCo
   };
 }
 
+export function getCurrentPeriodStart(
+  config: BranchPeriodConfig,
+  reference = new Date(),
+): string {
+  const refIso = new Date(
+    Date.UTC(reference.getFullYear(), reference.getMonth(), reference.getDate()),
+  )
+    .toISOString()
+    .slice(0, 10);
+  return getPeriodStart(refIso, config);
+}
+
 export function shiftPeriodStart(
   periodStartIso: string,
   config: BranchPeriodConfig,

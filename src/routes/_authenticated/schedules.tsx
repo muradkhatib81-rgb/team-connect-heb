@@ -101,6 +101,7 @@ import {
   getPeriodStart,
   DEFAULT_PERIOD_CONFIG,
   shiftPeriodStart,
+  getCurrentPeriodStart,
   utcDowFromSaturday,
   type BranchPeriodConfig,
   type ScheduleDow,
@@ -444,22 +445,6 @@ function SchedulesPage() {
     periodConfig.week_end_dow,
   ]);
 
-  /** Dept head may only browse/create for current week + next week. */
-  const deptHeadWeekWindow = useMemo(() => {
-    const current = getPeriodStartFromDate(new Date(), periodConfig);
-    const next = shiftPeriodStart(current, periodConfig, 1);
-    return { current, next };
-  }, [weekStart, periodConfig]);
-
-  useEffect(() => {
-    if (!isDeptHeadOnly) return;
-    const { current, next } = deptHeadWeekWindow;
-    const periodStart = getPeriodStart(weekStart, periodConfig);
-    if (periodStart < current || periodStart > next) {
-      setWeekStart(current);
-    }
-  }, [isDeptHeadOnly, weekStart, deptHeadWeekWindow, periodConfig]);
-
   const periodWeekStart = useMemo(
     () => getPeriodStart(weekStart, periodConfig),
     [weekStart, periodConfig.schedule_type, periodConfig.week_start_dow, periodConfig.week_end_dow],
@@ -469,9 +454,20 @@ function SchedulesPage() {
     [periodWeekStart, periodConfig],
   );
 
+  /** Dept head may only browse/create for current week + next week. */
+  const deptHeadWeekWindow = useMemo(() => {
+    const current = getCurrentPeriodStart(periodConfig);
+    const next = shiftPeriodStart(current, periodConfig, 1);
+    return { current, next };
+  }, [periodConfig.schedule_type, periodConfig.week_start_dow, periodConfig.week_end_dow]);
+
   useEffect(() => {
-    if (periodWeekStart !== weekStart) setWeekStart(periodWeekStart);
-  }, [periodWeekStart, weekStart]);
+    if (!isDeptHeadOnly) return;
+    const { current, next } = deptHeadWeekWindow;
+    if (periodWeekStart < current || periodWeekStart > next) {
+      setWeekStart(current);
+    }
+  }, [isDeptHeadOnly, periodWeekStart, deptHeadWeekWindow]);
 
   const getSchedulesFn = useServerFn(getSchedulesForViewer);
   const deptWeekFlagsFn = useServerFn(getDepartmentWeekScheduleFlags);
@@ -2264,7 +2260,7 @@ function SchedulesPage() {
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={() => navigateWeek(getPeriodStartFromDate(new Date(), periodConfig))}
+                  onClick={() => navigateWeek(getCurrentPeriodStart(periodConfig))}
                 >
                   השבוע
                 </Button>
