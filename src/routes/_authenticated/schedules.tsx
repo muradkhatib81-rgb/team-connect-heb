@@ -407,6 +407,7 @@ function SchedulesPage() {
 
   function navigateWeek(next: string) {
     setFocusedScheduleId(null);
+    initialWeekSetRef.current = true;
     setWeekStart(getPeriodStart(next, periodConfig));
   }
 
@@ -760,6 +761,9 @@ function SchedulesPage() {
         .limit(5);
       if (error) throw error;
       for (const row of overlapRows ?? []) {
+        if (getPeriodStart(row.week_start as string, periodConfig) !== periodWeekStart) {
+          continue;
+        }
         if (
           scheduleViewerCaps &&
           canViewScheduleContent(row, scheduleViewerCaps, managedDeptIds)
@@ -771,12 +775,6 @@ function SchedulesPage() {
       return null;
     },
   });
-
-  useEffect(() => {
-    if (!schedQ.data?.week_start) return;
-    const normalized = getPeriodStart(schedQ.data.week_start as string, periodConfig);
-    if (normalized !== periodWeekStart) setWeekStart(normalized);
-  }, [schedQ.data?.week_start, periodConfig, periodWeekStart]);
 
   const weekEnd = useMemo(() => {
     if (
@@ -973,9 +971,11 @@ function SchedulesPage() {
   const visible = useMemo(() => {
     const s = schedQ.data as any;
     if (!s || !scheduleViewerCaps) return null;
+    const schedulePeriodStart = getPeriodStart(s.week_start as string, periodConfig);
+    if (schedulePeriodStart !== periodWeekStart) return null;
     if (!canViewScheduleContent(s, scheduleViewerCaps, managedDeptIds)) return null;
     return s;
-  }, [schedQ.data, scheduleViewerCaps, managedDeptIds]);
+  }, [schedQ.data, scheduleViewerCaps, managedDeptIds, periodWeekStart, periodConfig]);
 
   const latestPublishedScheduleIdQ = useQuery({
     enabled:
@@ -1809,6 +1809,7 @@ function SchedulesPage() {
     schedule_id?: string;
   }) {
     setSelectedDept(p.department_id);
+    initialWeekSetRef.current = true;
     setWeekStart(getPeriodStart(p.week_start, periodConfig));
     setFocusedScheduleId(p.schedule_id ?? null);
     setView("editor");
