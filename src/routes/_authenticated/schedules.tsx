@@ -1770,7 +1770,7 @@ function SchedulesPage() {
       || (visible.status === "approved" &&
         (isMainAdmin || isBranchManager || canEdit || canCreate || canPublishDirect))
       || (visible.status === "pending_approval" &&
-        (isMainAdmin || canApprove || canPublishDirect || canEdit || canCreate));
+        (isMainAdmin || canApprove || canPublishDirect || canEdit || canCreate)));
 
   const canToggleScheduleExclusion =
     canManageScheduleExclusion && !isEmployee && !!visible && editable;
