@@ -1678,21 +1678,34 @@ function SchedulesPage() {
     !canEdit &&
     visible.created_by !== me?.id;
 
+  const viewingPeriodSchedule =
+    !!visible &&
+    getPeriodStart(visible.week_start as string, periodConfig) === periodWeekStart;
+
+  const viewingPublishedSchedule =
+    viewingPeriodSchedule &&
+    visible!.status === "approved" &&
+    !!(visible as { published_at?: string | null }).published_at;
+
+  const viewingSavedSchedule =
+    viewingPeriodSchedule &&
+    isSavedScheduleAwaitingPublish(visible as { status: string; published_at: string | null });
+
   const managerSavedDraftBlocksMe =
-    !visible &&
     !!deptWeekFlagsQ.data?.hasSavedAwaitingPublish &&
-    isDeptHeadOnly;
+    isDeptHeadOnly &&
+    !viewingSavedSchedule;
 
   const publishedScheduleBlocksCreate =
-    !visible &&
     !!deptWeekFlagsQ.data?.hasPublished &&
-    !isEmployee;
+    !isEmployee &&
+    !viewingPublishedSchedule;
 
   const savedScheduleBlocksManager =
-    !visible &&
     !!deptWeekFlagsQ.data?.hasSavedAwaitingPublish &&
     !isEmployee &&
-    !isDeptHeadOnly;
+    !isDeptHeadOnly &&
+    !viewingSavedSchedule;
 
   const displayWeekStart =
     (visible?.week_start as string | undefined) ?? periodWeekStart;
@@ -2466,6 +2479,7 @@ function SchedulesPage() {
           </p>
           {canCreate &&
             !isEmployee &&
+            !deptWeekFlagsQ.isLoading &&
             !deptWeekFlagsQ.data?.hasSavedAwaitingPublish &&
             !deptWeekFlagsQ.data?.hasPublished && (
             <Button onClick={() => createMut.mutate()} disabled={createMut.isPending}>

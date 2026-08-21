@@ -352,6 +352,38 @@ function weekStartOf(dateStr: string, config: BranchPeriodConfig): { start: stri
   return periodBoundsOf(dateStr, config);
 }
 
+/** Match a department schedule row to the normalized period (handles legacy week_start keys). */
+async function findDepartmentScheduleForPeriod(
+  supabase: any,
+  departmentId: string,
+  periodStart: string,
+  periodEnd: string,
+  config: BranchPeriodConfig,
+): Promise<Record<string, unknown> | null> {
+  const { data: exact, error: exactErr } = await supabase
+    .from("schedules")
+    .select("*")
+    .eq("department_id", departmentId)
+    .eq("week_start", periodStart)
+    .maybeSingle();
+  if (exactErr) throw exactErr;
+  if (exact) return exact as Record<string, unknown>;
+
+  const { data: overlapRows, error } = await supabase
+    .from("schedules")
+    .select("*")
+    .eq("department_id", departmentId)
+    .lte("week_start", periodEnd)
+    .gte("week_end", periodStart)
+    .order("updated_at", { ascending: false });
+  if (error) throw error;
+  for (const row of overlapRows ?? []) {
+    const rowPeriodStart = weekStartOf((row as { week_start: string }).week_start, config).start;
+    if (rowPeriodStart === periodStart) return row as Record<string, unknown>;
+  }
+  return null;
+}
+
 async function getManagedDepartmentIds(
   supabase: any,
   caps: Omit<ScheduleViewerCaps, "userId">,
@@ -392,12 +424,26 @@ export const getSchedulesForViewer = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     const caps = await getCaps(context.supabase, context.userId);
     const periodConfig = await fetchBranchPeriodConfig(context.supabase);
-    const { start: weekStartKey } = weekStartOf(data.week_start, periodConfig);
+    const { start: weekStartKey, end: weekEndKey } = weekStartOf(data.week_start, periodConfig);
+
+    if (data.department_id) {
+      const sched = await findDepartmentScheduleForPeriod(
+        context.supabase,
+        data.department_id,
+        weekStartKey,
+        weekEndKey,
+        periodConfig,
+      );
+      if (sched && (await isScheduleVisibleToCaps(sched, caps, context.userId, context.supabase))) {
+        return [sched];
+      }
+      return [];
+    }
+
     let query = context.supabase
       .from("schedules")
       .select("*")
       .eq("week_start", weekStartKey);
-    if (data.department_id) query = query.eq("department_id", data.department_id);
 
     const { data: rows, error } = await query;
     if (error) throw new Error(error.message);
@@ -442,25 +488,31 @@ export const createOrGetSchedule = createServerFn({ method: "POST" })
         throw new Error("ניתן ליצור סידור רק לתקופה הנוכחית או לתקופה הבאה");
       }
     }
-    const existing = await context.supabase
-      .from("schedules")
-      .select("*")
-      .eq("department_id", data.department_id)
-      .eq("week_start", start)
-      .maybeSingle();
-    if (existing.data) return existing.data;
+    const existingRow = await findDepartmentScheduleForPeriod(
+      context.supabase,
+      data.department_id,
+      start,
+      end,
+      periodConfig,
+    );
+    if (existingRow) return existingRow;
 
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    const { data: hiddenRow } = await supabaseAdmin
-      .from("schedules")
-      .select("id, status, published_at")
-      .eq("department_id", data.department_id)
-      .eq("week_start", start)
-      .maybeSingle();
-    if (hiddenRow && isSavedScheduleAwaitingPublish(hiddenRow)) {
+    const hiddenRow = await findDepartmentScheduleForPeriod(
+      supabaseAdmin,
+      data.department_id,
+      start,
+      end,
+      periodConfig,
+    );
+    if (hiddenRow && isSavedScheduleAwaitingPublish(hiddenRow as { status: string; published_at: string | null })) {
       throw new Error("כבר קיים סידור עבודה שמור למחלקה זו — ממתין לפרסום");
     }
-    if (hiddenRow?.status === "approved" && hiddenRow?.published_at) {
+    if (
+      hiddenRow &&
+      (hiddenRow as { status?: string }).status === "approved" &&
+      (hiddenRow as { published_at?: string | null }).published_at
+    ) {
       throw new Error("כבר קיים סידור מפורסם למחלקה זו בתקופה זו");
     }
     if (hiddenRow) {
@@ -1645,7 +1697,7 @@ export const getDepartmentWeekScheduleFlags = createServerFn({ method: "POST" })
     const caps = await getCaps(context.supabase, context.userId);
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const periodConfig = await fetchBranchPeriodConfig(context.supabase);
-    const { start } = weekStartOf(data.week_start, periodConfig);
+    const { start, end } = weekStartOf(data.week_start, periodConfig);
 
     let canView =
       caps.isMainAdmin ||
@@ -1668,28 +1720,34 @@ export const getDepartmentWeekScheduleFlags = createServerFn({ method: "POST" })
 
     if (!canView) throw new Error("אין הרשאה");
 
-    const { data: sched, error } = await supabaseAdmin
-      .from("schedules")
-      .select("status, published_at, submitted_at, created_by, department_id, created_at, updated_at")
-      .eq("department_id", data.department_id)
-      .eq("week_start", start)
-      .maybeSingle();
-    if (error) throw new Error(error.message);
+    const sched = await findDepartmentScheduleForPeriod(
+      supabaseAdmin,
+      data.department_id,
+      start,
+      end,
+      periodConfig,
+    );
 
-    const hasPublished = sched?.status === "approved" && !!sched?.published_at;
-    const hasSavedAwaitingPublish = isSavedScheduleAwaitingPublish(sched);
+    const hasPublished =
+      (sched as { status?: string } | null)?.status === "approved" &&
+      !!(sched as { published_at?: string | null } | null)?.published_at;
+    const hasSavedAwaitingPublish = isSavedScheduleAwaitingPublish(
+      sched as { status: string; published_at: string | null } | null,
+    );
 
     return {
       hasPublished,
       hasSavedAwaitingPublish,
+      schedule_id: (sched as { id?: string } | null)?.id ?? null,
+      schedule_week_start: (sched as { week_start?: string } | null)?.week_start ?? null,
       awaitingPublish: hasSavedAwaitingPublish
         ? {
-            status: sched!.status as string,
-            created_by: (sched!.created_by as string | null) ?? null,
+            status: (sched as { status: string }).status,
+            created_by: ((sched as { created_by?: string | null }).created_by) ?? null,
             /** Last save time (falls back to creation if never updated). */
             saved_at:
-              ((sched as { updated_at?: string | null }).updated_at as string | null) ??
-              ((sched as { created_at?: string | null }).created_at as string | null) ??
+              ((sched as { updated_at?: string | null }).updated_at) ??
+              ((sched as { created_at?: string | null }).created_at) ??
               null,
           }
         : null,
