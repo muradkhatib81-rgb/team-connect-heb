@@ -82,13 +82,29 @@ import {
   canEditScheduleTimes as resolveCanEditScheduleTimes,
   resolveScheduleManagerCaps,
 } from "@/lib/schedule-manager-caps";
+import { groupSchedulesByPeriod, groupSchedulesByPeriodLimitedPerDept } from "@/lib/schedule-period-groups";
+import {
+  getLatestPublishedScheduleIdForDepartment,
+  isDeptWideLatestPublished,
+  isSupersededPublishedSchedule,
+  latestPublishedIdByDepartment,
+} from "@/lib/schedule-superseded";
 import { useShiftDefinitions } from "@/lib/use-shift-definitions";
 import { Time24Input } from "@/components/ui/time24-input";
 
-const SCHEDULE_NOTE_MAX = 10;
+import { SCHEDULE_NOTE_MAX, trimScheduleNote } from "@/lib/schedule-note";
 
 type SchedulesView = "pending" | "editor" | "approved" | "saved";
 type SchedulesSearch = { dept?: string; week?: string; view?: SchedulesView };
+type SavedScheduleListItem = {
+  schedule_id: string;
+  department_id: string;
+  week_start: string;
+  week_end: string;
+  status: string;
+  published_at: string | null;
+  updated_at: string | null;
+};
 type SummaryShiftPick = {
   day: string;
   dayLabel: string;
@@ -342,6 +358,17 @@ function SchedulesPage() {
 
 
   const [selectedDept, setSelectedDept] = useState<string | null>(search.dept ?? null);
+  const [focusedScheduleId, setFocusedScheduleId] = useState<string | null>(null);
+
+  function navigateWeek(next: string) {
+    setFocusedScheduleId(null);
+    setWeekStart(next);
+  }
+
+  function selectDepartment(deptId: string) {
+    setFocusedScheduleId(null);
+    setSelectedDept(deptId);
+  }
 
   const [weekStart, setWeekStart] = useState(() =>
     search.week ? getWeekStart(new Date(search.week + "T00:00:00Z")) : getWeekStart(new Date()),
@@ -441,8 +468,13 @@ function SchedulesPage() {
           : savedScheds.filter((s) =>
               canViewScheduleContent(s, scheduleViewerCaps, managedDeptIds),
             );
-      const deptIdsWithSaved = Array.from(new Set(visibleSavedScheds.map((s) => s.department_id)));
-      const savedList = visibleSavedScheds.map((s) => ({
+      const awaitingPublishScheds = visibleSavedScheds.filter((s) =>
+        isSavedScheduleAwaitingPublish(s),
+      );
+      const deptIdsWithSaved = Array.from(
+        new Set(awaitingPublishScheds.map((s) => s.department_id)),
+      );
+      const savedList = awaitingPublishScheds.map((s) => ({
         schedule_id: s.id,
         department_id: s.department_id,
         status: s.status,
@@ -452,6 +484,57 @@ function SchedulesPage() {
       return { shifts, deptIdsWithSaved, savedList };
     },
   });
+
+  const branchSavedSchedulesQ = useQuery({
+    enabled:
+      !!scheduleViewerCaps &&
+      !isEmployee &&
+      (canSeeScheduleQueues || canCreate),
+    queryKey: ["schedules-branch-saved", me?.id],
+    queryFn: async () => {
+      const { data: scheds, error } = await supabase
+        .from("schedules")
+        .select(
+          "id, department_id, week_start, week_end, status, published_at, updated_at, created_by",
+        )
+        .order("week_start", { ascending: false });
+      if (error) throw error;
+      if (!scheds?.length) return { savedList: [] as SavedScheduleListItem[] };
+      const ids = scheds.map((s: { id: string }) => s.id);
+      const { data: shiftRows, error: e2 } = await supabase
+        .from("schedule_shifts")
+        .select("schedule_id")
+        .in("schedule_id", ids);
+      if (e2) throw e2;
+      const withShiftsIds = new Set((shiftRows ?? []).map((r: { schedule_id: string }) => r.schedule_id));
+      const savedScheds = (scheds as any[]).filter((s) => withShiftsIds.has(s.id));
+      const visibleSavedScheds =
+        scheduleViewerCaps == null
+          ? savedScheds
+          : savedScheds.filter((s) =>
+              canViewScheduleContent(s, scheduleViewerCaps, managedDeptIds),
+            );
+      const savedList: SavedScheduleListItem[] = visibleSavedScheds
+        .map((s) => ({
+          schedule_id: s.id,
+          department_id: s.department_id,
+          week_start: s.week_start,
+          week_end: s.week_end,
+          status: s.status,
+          published_at: s.published_at ?? null,
+          updated_at: s.updated_at ?? null,
+        }))
+        .filter((s) => isSavedScheduleAwaitingPublish(s));
+      return { savedList };
+    },
+  });
+
+  const branchSavedList = branchSavedSchedulesQ.data?.savedList ?? [];
+  const branchSavedPeriodGroups = useMemo(
+    () => groupSchedulesByPeriod(branchSavedList),
+    [branchSavedList],
+  );
+
   const savedDeptSet = useMemo(
     () => new Set(weekSavedQ.data?.deptIdsWithSaved ?? []),
     [weekSavedQ.data],
@@ -468,14 +551,6 @@ function SchedulesPage() {
     [deptsPendingSchedule, selectedDept],
   );
 
-  const savedUnpublishedCount = useMemo(
-    () =>
-      (weekSavedQ.data?.savedList ?? []).filter(
-        (s) => !(s.status === "approved" && s.published_at),
-      ).length,
-    [weekSavedQ.data],
-  );
-
   const canSwitchDepartments = !isEmployee && canViewBranchSchedules;
 
 
@@ -486,7 +561,7 @@ function SchedulesPage() {
   }, [canSeeScheduleQueues, canApprove]);
 
   const pendingQ = useQuery({
-    enabled: canSeeScheduleQueues && view === "pending",
+    enabled: canSeeScheduleQueues,
     queryKey: ["schedules-pending"],
     queryFn: async () => {
       const { data, error } = await supabase
@@ -502,7 +577,7 @@ function SchedulesPage() {
   });
 
   const approvedQ = useQuery({
-    enabled: canSeeScheduleQueues && view === "approved",
+    enabled: canSeeScheduleQueues,
     queryKey: ["schedules-approved"],
     queryFn: async () => {
       const { data, error } = await supabase
@@ -511,11 +586,32 @@ function SchedulesPage() {
           "id, department_id, week_start, week_end, status, created_by, approved_at, approved_by, published_at",
         )
         .eq("status", "approved")
-        .order("week_start", { ascending: false });
+        .not("published_at", "is", null)
+        .order("published_at", { ascending: false });
       if (error) throw error;
       return data ?? [];
     },
   });
+
+  const publishedPeriodGroups = useMemo(
+    () =>
+      groupSchedulesByPeriodLimitedPerDept(
+        approvedQ.data ?? [],
+        2,
+        (r) => r.published_at ?? r.approved_at,
+      ),
+    [approvedQ.data],
+  );
+
+  const publishedDisplayCount = useMemo(
+    () => publishedPeriodGroups.reduce((n, g) => n + g.items.length, 0),
+    [publishedPeriodGroups],
+  );
+
+  const latestPublishedByDept = useMemo(
+    () => latestPublishedIdByDepartment(approvedQ.data ?? []),
+    [approvedQ.data],
+  );
 
   const pendingCreatorIds = useMemo(() => {
     const s = new Set<string>();
@@ -547,8 +643,25 @@ function SchedulesPage() {
   // Schedule for selected dept+week
   const schedQ = useQuery({
     enabled: !!selectedDept && !!me?.id && view === "editor",
-    queryKey: ["schedule", selectedDept, weekStart, me?.id],
+    queryKey: ["schedule", selectedDept, weekStart, focusedScheduleId, me?.id],
     queryFn: async () => {
+      if (focusedScheduleId) {
+        const { data, error } = await supabase
+          .from("schedules")
+          .select("*")
+          .eq("id", focusedScheduleId)
+          .maybeSingle();
+        if (error) throw error;
+        if (
+          data &&
+          scheduleViewerCaps &&
+          canViewScheduleContent(data, scheduleViewerCaps, managedDeptIds)
+        ) {
+          return data;
+        }
+        return null;
+      }
+
       const rows = await getSchedulesFn({
         data: { week_start: weekStart, department_id: selectedDept! },
       });
@@ -611,6 +724,27 @@ function SchedulesPage() {
       supabase.removeChannel(ch);
     };
   }, [selectedDept, weekStart, view, qc]);
+
+  useEffect(() => {
+    if (!me?.id || isEmployee) return;
+    const ch = supabase
+      .channel(`schedules-branch-${me.id}`)
+      .on("postgres_changes", { event: "*", schema: "public", table: "schedules" }, () => {
+        qc.invalidateQueries({ queryKey: ["schedules-branch-saved"] });
+        qc.invalidateQueries({ queryKey: ["schedules-week-saved"] });
+        qc.invalidateQueries({ queryKey: ["schedules-pending"] });
+        qc.invalidateQueries({ queryKey: ["schedules-approved"] });
+        qc.invalidateQueries({ queryKey: ["week-schedules"] });
+      })
+      .on("postgres_changes", { event: "*", schema: "public", table: "schedule_shifts" }, () => {
+        qc.invalidateQueries({ queryKey: ["schedules-branch-saved"] });
+        qc.invalidateQueries({ queryKey: ["schedules-week-saved"] });
+      })
+      .subscribe();
+    return () => {
+      supabase.removeChannel(ch);
+    };
+  }, [me?.id, isEmployee, qc]);
 
   // Creator / Editor / Approver details for the visible schedule.
   const decisionPersonQ = useQuery({
@@ -734,6 +868,30 @@ function SchedulesPage() {
     if (!canViewScheduleContent(s, scheduleViewerCaps, managedDeptIds)) return null;
     return s;
   }, [schedQ.data, scheduleViewerCaps, managedDeptIds]);
+
+  const latestPublishedScheduleIdQ = useQuery({
+    enabled:
+      !!visible?.department_id &&
+      visible.status === "approved" &&
+      !!(visible as { published_at?: string | null }).published_at,
+    queryKey: ["schedule-latest-published-dept", visible?.department_id],
+    queryFn: () =>
+      getLatestPublishedScheduleIdForDepartment(supabase, visible!.department_id),
+  });
+
+  const isSupersededPublished = useMemo(
+    () =>
+      !!visible &&
+      isSupersededPublishedSchedule(
+        {
+          id: visible.id,
+          status: visible.status,
+          published_at: (visible as { published_at?: string | null }).published_at ?? null,
+        },
+        latestPublishedScheduleIdQ.data ?? null,
+      ),
+    [visible, latestPublishedScheduleIdQ.data],
+  );
 
   /**
    * Dept head: hide "סידורי עבודה שמורים" / "עריכת סידור שבועי" for the week
@@ -916,7 +1074,7 @@ function SchedulesPage() {
       const en = (s as any).end_time ? String((s as any).end_time).slice(0, 5) : null;
       t[s.employee_id][s.day_date] = { start: st, end: en };
       n[s.employee_id] ??= {};
-      const rawNote = (s as any).note ? String((s as any).note).trim().slice(0, SCHEDULE_NOTE_MAX) : "";
+      const rawNote = (s as any).note ? trimScheduleNote(String((s as any).note)) : "";
       n[s.employee_id][s.day_date] = rawNote || null;
       const ltc = (s as any).leave_type_code ? String((s as any).leave_type_code) : null;
       if (ltc) leaveMap[`${s.employee_id}|${s.day_date}`] = ltc;
@@ -1072,6 +1230,7 @@ function SchedulesPage() {
       qc.invalidateQueries({ queryKey: ["week-schedules"] });
       qc.invalidateQueries({ queryKey: ["dashboard-approved-list"] });
       qc.invalidateQueries({ queryKey: ["schedules-week-saved", weekStart] });
+      qc.invalidateQueries({ queryKey: ["schedules-branch-saved"] });
       qc.invalidateQueries({ queryKey: ["emp-dash-schedule"] });
       qc.invalidateQueries({ queryKey: ["daily-schedule-overview"] });
       qc.invalidateQueries({ queryKey: ["dept-schedule-flags"] });
@@ -1095,6 +1254,7 @@ function SchedulesPage() {
       qc.invalidateQueries({ queryKey: ["week-schedules"] });
       qc.invalidateQueries({ queryKey: ["dashboard-approved-list"] });
       qc.invalidateQueries({ queryKey: ["schedules-week-saved", weekStart] });
+      qc.invalidateQueries({ queryKey: ["schedules-branch-saved"] });
       qc.invalidateQueries({ queryKey: ["emp-dash-schedule"] });
       qc.invalidateQueries({ queryKey: ["daily-schedule-overview"] });
       qc.invalidateQueries({ queryKey: ["dept-schedule-flags"] });
@@ -1103,8 +1263,20 @@ function SchedulesPage() {
   });
 
   const [publishAllOpen, setPublishAllOpen] = useState(false);
+  const [publishPeriodWeekStart, setPublishPeriodWeekStart] = useState(weekStart);
+  const publishPeriodUnpublishedCount = useMemo(
+    () =>
+      branchSavedList.filter(
+        (s) => s.week_start === publishPeriodWeekStart && isSavedScheduleAwaitingPublish(s),
+      ).length,
+    [branchSavedList, publishPeriodWeekStart],
+  );
+  const openPublishAllForPeriod = (periodWeekStart: string) => {
+    setPublishPeriodWeekStart(periodWeekStart);
+    setPublishAllOpen(true);
+  };
   const publishAllMut = useMutation({
-    mutationFn: () => publishAllFn({ data: { week_start: weekStart } }),
+    mutationFn: () => publishAllFn({ data: { week_start: publishPeriodWeekStart } }),
     onSuccess: (res: any) => {
       setPublishAllOpen(false);
       if (res?.published > 0) {
@@ -1123,6 +1295,7 @@ function SchedulesPage() {
       qc.invalidateQueries({ queryKey: ["week-schedules"] });
       qc.invalidateQueries({ queryKey: ["dashboard-approved-list"] });
       qc.invalidateQueries({ queryKey: ["schedules-week-saved", weekStart] });
+      qc.invalidateQueries({ queryKey: ["schedules-branch-saved"] });
       qc.invalidateQueries({ queryKey: ["emp-dash-schedule"] });
       qc.invalidateQueries({ queryKey: ["daily-schedule-overview"] });
       qc.invalidateQueries({ queryKey: ["dept-schedule-flags"] });
@@ -1218,7 +1391,11 @@ function SchedulesPage() {
   const canDeleteAsDeptHeadDraft =
     isDeptHeadOnly &&
     (visible?.status === "draft" || visible?.status === "rejected");
-  const canDelete = !!visible && (canDeleteAsManagement || canDeleteAsDeptHeadDraft);
+  const canDelete =
+    !!visible &&
+    (isSupersededPublished
+      ? isMainAdmin
+      : canDeleteAsManagement || canDeleteAsDeptHeadDraft);
 
   function setShift(empId: string, day: string, value: string) {
     editsDirtyRef.current = true;
@@ -1372,6 +1549,7 @@ function SchedulesPage() {
 
   const editable =
     !!visible &&
+    !isSupersededPublished &&
     !isEmployee &&
     !isDraftLockedForMe &&
     (((visible.status === "draft" || visible.status === "rejected") &&
@@ -1384,12 +1562,14 @@ function SchedulesPage() {
 
   const canShowApprove =
     !!visible &&
+    !isSupersededPublished &&
     visible.status === "pending_approval" &&
     canApprove &&
     visible.created_by !== me?.id;
 
   const canShowPublish =
     !!visible &&
+    !isSupersededPublished &&
     visible.status === "approved" &&
     !visible.published_at &&
     canPublishDirect;
@@ -1466,9 +1646,11 @@ function SchedulesPage() {
   function openScheduleFromPending(p: {
     department_id: string;
     week_start: string;
+    schedule_id?: string;
   }) {
     setSelectedDept(p.department_id);
     setWeekStart(p.week_start);
+    setFocusedScheduleId(p.schedule_id ?? null);
     setView("editor");
   }
 
@@ -1479,14 +1661,14 @@ function SchedulesPage() {
           <CalendarDays className="size-5" />
         </div>
         <div className="flex-1 min-w-0">
-          <h1 className="text-2xl sm:text-3xl font-bold">סידורי עבודה</h1>
+          <h1 className="text-2xl sm:text-3xl font-bold">{i18n.t("schedules.pageTitle")}</h1>
           <p className="text-sm text-muted-foreground mt-1">
             {view === "pending" && canSeeScheduleQueues
-              ? "ממתינים לאישור — כל המחלקות"
+              ? i18n.t("schedules.subtitlePending")
               : view === "approved" && canSeeScheduleQueues
-              ? "סידורים מאושרים — כל המחלקות"
+              ? i18n.t("schedules.subtitleApproved")
               : view === "saved"
-              ? "סידורי עבודה שמורים — כל המחלקות"
+              ? i18n.t("schedules.subtitleSaved")
               : `${formatHeDate(weekStart)} – ${formatHeDate(weekEnd)}`}
 
           </p>
@@ -1503,7 +1685,7 @@ function SchedulesPage() {
               variant={view === "pending" ? "default" : "outline"}
               onClick={() => setView("pending")}
             >
-              ממתינים לאישור
+              {i18n.t("schedules.tabPending")}
               {pendingQ.data && pendingQ.data.length > 0 && (
                 <Badge variant="secondary" className="mr-2">
                   {pendingQ.data.length}
@@ -1517,10 +1699,10 @@ function SchedulesPage() {
               variant={view === "saved" ? "default" : "outline"}
               onClick={() => setView("saved")}
             >
-              סידורי עבודה שמורים
-              {weekSavedQ.data && weekSavedQ.data.savedList.length > 0 && (
+              {i18n.t("schedules.tabSaved")}
+              {branchSavedList.length > 0 && (
                 <Badge variant="secondary" className="mr-2">
-                  {weekSavedQ.data.savedList.length}
+                  {branchSavedList.length}
                 </Badge>
               )}
             </Button>
@@ -1531,10 +1713,10 @@ function SchedulesPage() {
               variant={view === "approved" ? "default" : "outline"}
               onClick={() => setView("approved")}
             >
-              סידורים מאושרים
-              {approvedQ.data && approvedQ.data.length > 0 && (
+              {i18n.t("schedules.tabApproved")}
+              {publishedDisplayCount > 0 && (
                 <Badge variant="secondary" className="mr-2">
-                  {approvedQ.data.length}
+                  {publishedDisplayCount}
                 </Badge>
               )}
             </Button>
@@ -1543,9 +1725,12 @@ function SchedulesPage() {
             <Button
               size="sm"
               variant={view === "editor" ? "default" : "outline"}
-              onClick={() => setView("editor")}
+              onClick={() => {
+                setFocusedScheduleId(null);
+                setView("editor");
+              }}
             >
-              עריכת סידור שבועי
+              {i18n.t("schedules.tabEditor")}
             </Button>
           )}
         </div>
@@ -1553,106 +1738,122 @@ function SchedulesPage() {
 
 
       {view === "saved" && !isEmployee ? (
-        <div className="space-y-4">
-          {canPublishDirect && savedUnpublishedCount > 0 && (
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <p className="text-sm text-muted-foreground">
-                שבוע {formatHeDate(weekStart)} – {formatHeDate(weekEnd)} · {savedUnpublishedCount}{" "}
-                סידורים לפרסום
-              </p>
-              <Button
-                size="sm"
-                className="gap-2"
-                onClick={() => setPublishAllOpen(true)}
-                disabled={publishAllMut.isPending}
-              >
-                {publishAllMut.isPending ? (
-                  <Loader2 className="size-4 animate-spin" />
-                ) : (
-                  <Send className="size-4" />
-                )}
-                פרסם את כל סידורי העבודה
-              </Button>
-            </div>
-          )}
-        <Card className="card-elevated p-0 overflow-hidden">
-          {weekSavedQ.isLoading ? (
+        <div className="space-y-6">
+          {branchSavedSchedulesQ.isLoading ? (
             <div className="flex justify-center py-12">
               <Loader2 className="size-6 animate-spin text-primary" />
             </div>
-          ) : !weekSavedQ.data || weekSavedQ.data.savedList.length === 0 ? (
-            <div className="p-8 text-center text-sm text-muted-foreground">
-              אין סידורי עבודה שמורים לשבוע זה.
-            </div>
+          ) : branchSavedList.length === 0 ? (
+            <Card className="card-elevated p-8 text-center text-sm text-muted-foreground">
+              {i18n.t("schedules.emptySaved")}
+            </Card>
           ) : (
-            <table className="w-full text-sm">
-              <thead className="bg-muted/50">
-                <tr>
-                  <th className="text-right p-3">מחלקה</th>
-                  <th className="text-right p-3">טווח תאריכים</th>
-                  <th className="text-right p-3">סטטוס</th>
-                  <th className="text-right p-3">עודכן</th>
-                  <th className="text-right p-3" />
-                </tr>
-              </thead>
-              <tbody>
-                {weekSavedQ.data.savedList.map((s) => (
-                  <tr
-                    key={s.schedule_id}
-                    className="border-t hover:bg-muted/30 cursor-pointer"
-                    onClick={() =>
-                      openScheduleFromPending({
-                        department_id: s.department_id,
-                        week_start: weekStart,
-                      })
-                    }
-                  >
-                    <td className="p-3 font-medium">
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          openScheduleFromPending({
-                            department_id: s.department_id,
-                            week_start: weekStart,
-                          });
-                        }}
-                        className="text-primary hover:underline font-semibold"
-                      >
-                        {deptNameById[s.department_id] ?? "—"}
-                      </button>
-                    </td>
-                    <td className="p-3">
-                      {formatHeDate(weekStart)} – {formatHeDate(weekEnd)}
-                    </td>
-                    <td className="p-3">
-                      <Badge variant={STATUS_VARIANT[s.status]}>
-                        {getStatusLabel(s.status)}
-                      </Badge>
-                    </td>
-                    <td className="p-3 text-xs text-muted-foreground">
-                      {s.updated_at ? formatHeDateTime(s.updated_at) : "—"}
-                    </td>
-                    <td className="p-3 text-left">
+            branchSavedPeriodGroups.map((group) => {
+              const periodUnpublishedCount = group.items.filter((s) =>
+                isSavedScheduleAwaitingPublish(s),
+              ).length;
+              return (
+                <div key={group.periodKey} className="space-y-3">
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <div>
+                      <h2 className="font-semibold">
+                        {i18n.t("schedules.periodGroupTitle", {
+                          start: formatHeDate(group.week_start),
+                          end: formatHeDate(group.week_end),
+                        })}
+                      </h2>
+                      <p className="text-sm text-muted-foreground">
+                        {i18n.t("schedules.periodSchedulesCount", { count: group.items.length })}
+                      </p>
+                    </div>
+                    {canPublishDirect && periodUnpublishedCount > 0 && (
                       <Button
                         size="sm"
-                        variant="outline"
-                        onClick={() =>
-                          openScheduleFromPending({
-                            department_id: s.department_id,
-                            week_start: weekStart,
-                          })
-                        }
+                        className="gap-2"
+                        onClick={() => openPublishAllForPeriod(group.week_start)}
+                        disabled={publishAllMut.isPending}
                       >
-                        פתח לעריכה
+                        {publishAllMut.isPending ? (
+                          <Loader2 className="size-4 animate-spin" />
+                        ) : (
+                          <Send className="size-4" />
+                        )}
+                        {i18n.t("schedules.publishAll")}
                       </Button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+                    )}
+                  </div>
+                  <Card className="card-elevated p-0 overflow-hidden">
+                    <table className="w-full text-sm">
+                      <thead className="bg-muted/50">
+                        <tr>
+                          <th className="text-right p-3">{i18n.t("schedules.colDepartment")}</th>
+                          <th className="text-right p-3">{i18n.t("schedules.colDateRange")}</th>
+                          <th className="text-right p-3">{i18n.t("schedules.colStatus")}</th>
+                          <th className="text-right p-3">{i18n.t("schedules.colUpdated")}</th>
+                          <th className="text-right p-3" />
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {group.items.map((s) => (
+                          <tr
+                            key={s.schedule_id}
+                            className="border-t hover:bg-muted/30 cursor-pointer"
+                            onClick={() =>
+                              openScheduleFromPending({
+                                department_id: s.department_id,
+                                week_start: s.week_start,
+                              })
+                            }
+                          >
+                            <td className="p-3 font-medium">
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  openScheduleFromPending({
+                                    department_id: s.department_id,
+                                    week_start: s.week_start,
+                                  });
+                                }}
+                                className="text-primary hover:underline font-semibold"
+                              >
+                                {deptNameById[s.department_id] ?? "—"}
+                              </button>
+                            </td>
+                            <td className="p-3">
+                              {formatHeDate(s.week_start)} – {formatHeDate(s.week_end)}
+                            </td>
+                            <td className="p-3">
+                              <Badge variant={STATUS_VARIANT[s.status]}>
+                                {getStatusLabel(s.status)}
+                              </Badge>
+                            </td>
+                            <td className="p-3 text-xs text-muted-foreground">
+                              {s.updated_at ? formatHeDateTime(s.updated_at) : "—"}
+                            </td>
+                            <td className="p-3 text-left">
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() =>
+                                  openScheduleFromPending({
+                                    department_id: s.department_id,
+                                    week_start: s.week_start,
+                                  })
+                                }
+                              >
+                                {i18n.t("schedules.openEdit")}
+                              </Button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </Card>
+                </div>
+              );
+            })
           )}
-        </Card>
         </div>
       ) : canSeeScheduleQueues && view === "pending" ? (
 
@@ -1663,7 +1864,7 @@ function SchedulesPage() {
             </div>
           ) : !pendingQ.data || pendingQ.data.length === 0 ? (
             <div className="p-8 text-center text-sm text-muted-foreground">
-              אין סידורי עבודה הממתינים לאישור.
+              {i18n.t("schedules.emptyPending")}
             </div>
           ) : (
             <table className="w-full text-sm">
@@ -1726,96 +1927,145 @@ function SchedulesPage() {
           )}
         </Card>
       ) : canSeeScheduleQueues && view === "approved" ? (
-        <Card className="card-elevated p-0 overflow-hidden">
+        <div className="space-y-6">
           {approvedQ.isLoading ? (
             <div className="flex justify-center py-12">
               <Loader2 className="size-6 animate-spin text-primary" />
             </div>
-          ) : !approvedQ.data || approvedQ.data.length === 0 ? (
-            <div className="p-8 text-center text-sm text-muted-foreground">
-              אין סידורי עבודה מאושרים להצגה.
-            </div>
+          ) : publishedDisplayCount === 0 ? (
+            <Card className="card-elevated p-8 text-center text-sm text-muted-foreground">
+              {i18n.t("schedules.emptyPublished")}
+            </Card>
           ) : (
-            <table className="w-full text-sm">
-              <thead className="bg-muted/50">
-                <tr>
-                  <th className="text-right p-3">מחלקה</th>
-                  <th className="text-right p-3">טווח תאריכים</th>
-                  <th className="text-right p-3">נוצר ע״י</th>
-                  <th className="text-right p-3">אושר ע״י</th>
-                  <th className="text-right p-3">תאריך אישור</th>
-                  <th className="text-right p-3">סטטוס</th>
-                  <th className="text-right p-3" />
-                </tr>
-              </thead>
-              <tbody>
-                {approvedQ.data.map((a) => (
-                  <tr
-                    key={a.id}
-                    className="border-t hover:bg-muted/30 cursor-pointer"
-                    onClick={() =>
-                      openScheduleFromPending({
-                        department_id: a.department_id,
-                        week_start: a.week_start,
-                      })
-                    }
-                  >
-                    <td className="p-3 font-medium">
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          openScheduleFromPending({
-                            department_id: a.department_id,
-                            week_start: a.week_start,
-                          });
-                        }}
-                        className="text-primary hover:underline font-semibold"
-                      >
-                        {deptNameById[a.department_id] ?? "—"}
-                      </button>
-                    </td>
-                    <td className="p-3">
-                      {formatHeDate(a.week_start)} – {formatHeDate(a.week_end)}
-                    </td>
-                    <td className="p-3">
-                      {pendingPeopleQ.data?.[a.created_by ?? ""] ?? "—"}
-                    </td>
-                    <td className="p-3">
-                      {pendingPeopleQ.data?.[a.approved_by ?? ""] ?? "—"}
-                    </td>
-                    <td className="p-3 text-xs text-muted-foreground">
-                      {a.approved_at ? formatHeDateTime(a.approved_at) : "—"}
-                    </td>
-                    <td className="p-3">
-                      <Badge variant={STATUS_VARIANT[a.status]}>
-                        {getStatusLabel(a.status)}
-                      </Badge>
-                    </td>
-                    <td className="p-3 text-left">
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() =>
-                          openScheduleFromPending({
-                            department_id: a.department_id,
-                            week_start: a.week_start,
-                          })
-                        }
-                      >
-                        פתח סידור
-                      </Button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+            publishedPeriodGroups.map((group) => (
+              <div key={group.periodKey} className="space-y-3">
+                <div>
+                  <h2 className="font-semibold">
+                    {i18n.t("schedules.periodGroupTitle", {
+                      start: formatHeDate(group.week_start),
+                      end: formatHeDate(group.week_end),
+                    })}
+                  </h2>
+                  <p className="text-sm text-muted-foreground">
+                    {i18n.t("schedules.periodSchedulesCount", { count: group.items.length })}
+                  </p>
+                </div>
+                <Card className="card-elevated p-0 overflow-hidden">
+                  <table className="w-full text-sm">
+                    <thead className="bg-muted/50">
+                      <tr>
+                        <th className="text-right p-3">{i18n.t("schedules.colDepartment")}</th>
+                        <th className="text-right p-3">{i18n.t("schedules.colDateRange")}</th>
+                        <th className="text-right p-3">{i18n.t("schedules.colCreatedBy")}</th>
+                        <th className="text-right p-3">{i18n.t("schedules.colApprovedBy")}</th>
+                        <th className="text-right p-3">{i18n.t("schedules.colApprovedAt")}</th>
+                        <th className="text-right p-3">{i18n.t("schedules.colStatus")}</th>
+                        <th className="text-right p-3" />
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {group.items.map((a) => {
+                        const isCurrentPublished = isDeptWideLatestPublished(
+                          a,
+                          latestPublishedByDept,
+                        );
+                        return (
+                        <tr
+                          key={a.id}
+                          className="border-t hover:bg-muted/30 cursor-pointer"
+                          onClick={() =>
+                            openScheduleFromPending({
+                              department_id: a.department_id,
+                              week_start: a.week_start,
+                              schedule_id: a.id,
+                            })
+                          }
+                        >
+                          <td className="p-3 font-medium">
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                openScheduleFromPending({
+                                  department_id: a.department_id,
+                                  week_start: a.week_start,
+                                  schedule_id: a.id,
+                                });
+                              }}
+                              className="text-primary hover:underline font-semibold"
+                            >
+                              {deptNameById[a.department_id] ?? "—"}
+                            </button>
+                          </td>
+                          <td className="p-3">
+                            {formatHeDate(a.week_start)} – {formatHeDate(a.week_end)}
+                          </td>
+                          <td className="p-3">
+                            {pendingPeopleQ.data?.[a.created_by ?? ""] ?? "—"}
+                          </td>
+                          <td className="p-3">
+                            {pendingPeopleQ.data?.[a.approved_by ?? ""] ?? "—"}
+                          </td>
+                          <td className="p-3 text-xs text-muted-foreground">
+                            {a.approved_at ? formatHeDateTime(a.approved_at) : "—"}
+                          </td>
+                          <td className="p-3">
+                            <div className="flex flex-wrap gap-1">
+                              <Badge variant={STATUS_VARIANT[a.status]}>
+                                {getStatusLabel(a.status)}
+                              </Badge>
+                              {!isCurrentPublished && (
+                                <Badge variant="secondary">
+                                  {i18n.t("schedules.supersededBadge")}
+                                </Badge>
+                              )}
+                            </div>
+                          </td>
+                          <td className="p-3 text-left">
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() =>
+                                openScheduleFromPending({
+                                  department_id: a.department_id,
+                                  week_start: a.week_start,
+                                  schedule_id: a.id,
+                                })
+                              }
+                            >
+                              {isCurrentPublished
+                                ? i18n.t("schedules.openSchedule")
+                                : i18n.t("schedules.openViewOnly")}
+                            </Button>
+                          </td>
+                        </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </Card>
+              </div>
+            ))
           )}
-        </Card>
+        </div>
       ) : (
         <>
 
 
+
+      {!isEmployee && branchSavedList.length > 0 && !deptHeadScheduleNavBlocked && (
+        <Card className="card-elevated p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <p className="text-sm text-muted-foreground">
+            {i18n.t("schedules.savedSummary", {
+              count: branchSavedList.length,
+              periods: branchSavedPeriodGroups.length,
+            })}
+          </p>
+          <Button size="sm" variant="outline" onClick={() => setView("saved")}>
+            {i18n.t("schedules.viewSavedSchedules")}
+          </Button>
+        </Card>
+      )}
 
       <Card className="card-elevated p-4 flex flex-col sm:flex-row gap-3 items-stretch sm:items-center">
         {!isEmployee && (
@@ -1825,14 +2075,14 @@ function SchedulesPage() {
                 <Button
                   variant={weekStart === deptHeadWeekWindow.current ? "default" : "outline"}
                   size="sm"
-                  onClick={() => setWeekStart(deptHeadWeekWindow.current)}
+                  onClick={() => navigateWeek(deptHeadWeekWindow.current)}
                 >
                   השבוע הזה
                 </Button>
                 <Button
                   variant={weekStart === deptHeadWeekWindow.next ? "default" : "outline"}
                   size="sm"
-                  onClick={() => setWeekStart(deptHeadWeekWindow.next)}
+                  onClick={() => navigateWeek(deptHeadWeekWindow.next)}
                 >
                   השבוע הבא
                 </Button>
@@ -1842,7 +2092,7 @@ function SchedulesPage() {
                 <Button
                   variant="outline"
                   size="icon"
-                  onClick={() => setWeekStart(addDaysISO(weekStart, -7))}
+                  onClick={() => navigateWeek(addDaysISO(weekStart, -7))}
                   aria-label="שבוע קודם"
                 >
                   <ChevronRight className="size-4" />
@@ -1850,14 +2100,14 @@ function SchedulesPage() {
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={() => setWeekStart(getWeekStart(new Date()))}
+                  onClick={() => navigateWeek(getWeekStart(new Date()))}
                 >
                   השבוע
                 </Button>
                 <Button
                   variant="outline"
                   size="icon"
-                  onClick={() => setWeekStart(addDaysISO(weekStart, 7))}
+                  onClick={() => navigateWeek(addDaysISO(weekStart, 7))}
                   aria-label="שבוע הבא"
                 >
                   <ChevronLeft className="size-4" />
@@ -1905,7 +2155,7 @@ function SchedulesPage() {
                           <button
                             type="button"
                             className="w-full text-right px-3 py-2.5 rounded-md hover:bg-accent transition-colors flex items-center justify-between gap-2"
-                            onClick={() => setSelectedDept(d.id)}
+                            onClick={() => selectDepartment(d.id)}
                           >
                             <span className="font-medium">{d.name}</span>
                             <Badge variant="outline" className="text-xs shrink-0">
@@ -1926,7 +2176,7 @@ function SchedulesPage() {
           ) : (
             <Select
               value={selectedDept ?? undefined}
-              onValueChange={(v) => setSelectedDept(v)}
+              onValueChange={(v) => selectDepartment(v)}
             >
               <SelectTrigger>
                 <SelectValue placeholder={i18n.t("schedules.selectDept")} />
@@ -2012,6 +2262,15 @@ function SchedulesPage() {
         </Card>
       ) : (
         <>
+          {isSupersededPublished && (
+            <Card className="card-elevated p-4 border-amber-500/40 bg-amber-500/5">
+              <div className="flex gap-3 items-start text-sm">
+                <AlertTriangle className="size-5 text-amber-600 mt-0.5 shrink-0" />
+                <p>{i18n.t("schedules.supersededViewOnly")}</p>
+              </div>
+            </Card>
+          )}
+
           {/* Actor info: creator + editor + approver */}
           <Card className="card-elevated p-4 space-y-2">
             <SchedulePersonMetaRow
@@ -2578,8 +2837,14 @@ function SchedulesPage() {
           <AlertDialogHeader>
             <AlertDialogTitle>פרסום כל סידורי העבודה</AlertDialogTitle>
             <AlertDialogDescription>
-              לפרסם {savedUnpublishedCount} סידורי עבודה שמורים לשבוע {formatHeDate(weekStart)} –{" "}
-              {formatHeDate(weekEnd)}? עובדים ואחראי מחלקות יוכלו לראות את הסידורים לאחר הפרסום.
+              {i18n.t("schedules.publishPeriodBanner", {
+                start: formatHeDate(publishPeriodWeekStart),
+                end: formatHeDate(
+                  branchSavedPeriodGroups.find((g) => g.week_start === publishPeriodWeekStart)
+                    ?.week_end ?? addDaysISO(publishPeriodWeekStart, 6),
+                ),
+                count: publishPeriodUnpublishedCount,
+              })}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -2705,7 +2970,7 @@ function ScheduleShiftNote({
             maxLength={SCHEDULE_NOTE_MAX}
             value=""
             onChange={(e) => onChange?.(e.target.value.slice(0, SCHEDULE_NOTE_MAX))}
-            placeholder="הערה (עד 10)"
+            placeholder={`הערה (עד ${SCHEDULE_NOTE_MAX})`}
             className="h-8 text-xs"
           />
         </PopoverContent>
@@ -2728,7 +2993,7 @@ function ScheduleShiftNote({
           maxLength={SCHEDULE_NOTE_MAX}
           value={trimmed}
           onChange={(e) => onChange?.(e.target.value.slice(0, SCHEDULE_NOTE_MAX))}
-          placeholder="הערה (עד 10)"
+          placeholder={`הערה (עד ${SCHEDULE_NOTE_MAX})`}
           className="h-8 text-xs"
         />
       </PopoverContent>

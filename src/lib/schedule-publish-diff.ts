@@ -1,5 +1,7 @@
 /** Helpers for comparing live schedule cells against submitted / published baselines. */
 
+import { trimScheduleNote } from "@/lib/schedule-note";
+
 export function normScheduleTimeHm(value: string | null | undefined): string | null {
   if (!value) return null;
   const s = String(value).trim();
@@ -159,7 +161,7 @@ export function isScheduleTimeModified(args: {
 }
 
 export function normScheduleNote(value: string | null | undefined): string | null {
-  const s = value?.trim().slice(0, 10) ?? "";
+  const s = trimScheduleNote(value);
   return s.length > 0 ? s : null;
 }
 

@@ -35,6 +35,7 @@ import {
   diffScheduleCellForViewer,
   type ScheduleChangeBaselineKind,
 } from "@/lib/schedule-publish-diff";
+import { trimScheduleNote } from "@/lib/schedule-note";
 import { resolveScheduleManagerCaps } from "@/lib/schedule-manager-caps";
 import { useAuth } from "@/lib/use-auth";
 import { useShiftDefinitions, type ShiftDef } from "@/lib/use-shift-definitions";
@@ -232,7 +233,7 @@ function buildDepartmentEmployeeRows(args: {
     if (shiftFilter != null && shift !== shiftFilter) continue;
 
     const def = shiftDefs.get(shift);
-    const rawNote = raw.note ? String(raw.note).trim().slice(0, 10) : "";
+    const rawNote = raw.note ? trimScheduleNote(String(raw.note)) : "";
     const submittedBaseline = buildChangeBaselineFromShiftRow(raw, "submitted", shiftDefs);
     const publishedBaseline = buildChangeBaselineFromShiftRow(raw, "published", shiftDefs);
     const start = normHm(raw.start_time) ?? normHm(def?.start_time);

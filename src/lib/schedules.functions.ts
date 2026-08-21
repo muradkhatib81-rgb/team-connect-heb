@@ -13,6 +13,10 @@ import {
   type ScheduleViewerCaps,
 } from "@/lib/schedule-visibility";
 import { resolveScheduleChangeBaselineKind } from "@/lib/schedule-publish-diff";
+import { SCHEDULE_NOTE_MAX, trimScheduleNote } from "@/lib/schedule-note";
+import {
+  enforceSupersededPublishedSchedulePolicy,
+} from "@/lib/schedule-superseded";
 
 // Shift codes are dynamic — validated against public.shift_definitions at runtime.
 const shiftCode = z.string().min(1).max(64);
@@ -197,7 +201,7 @@ function scheduleCellSaveSignature(s: {
     if (!v) return "";
     return String(v).trim().slice(0, 5);
   };
-  const note = s.note?.trim().slice(0, 10) ?? "";
+  const note = trimScheduleNote(s.note);
   return `${s.employee_id}|${s.day_date}|${s.shift}|${hm(s.start_time)}|${hm(s.end_time)}|${note}`;
 }
 
@@ -445,7 +449,7 @@ const timeStr = z
 const scheduleNoteSchema = z
   .string()
   .trim()
-  .max(10)
+  .max(SCHEDULE_NOTE_MAX)
   .nullable()
   .optional()
   .transform((v) => (v && v.length > 0 ? v : null));
@@ -476,6 +480,18 @@ export const saveScheduleShifts = createServerFn({ method: "POST" })
       .single();
     if (se || !sched) throw new Error("סידור לא נמצא");
     const caps = await getCaps(context.supabase, context.userId);
+    await enforceSupersededPublishedSchedulePolicy(
+      context.supabase,
+      {
+        id: sched.id,
+        department_id: sched.department_id,
+        week_start: sched.week_start,
+        status: sched.status,
+        published_at: sched.published_at ?? null,
+      },
+      caps,
+      "edit",
+    );
     const isApproved = sched.status === "approved";
     const isPendingApproval = sched.status === "pending_approval";
     if (isApproved) {
@@ -1322,10 +1338,23 @@ export const deleteSchedule = createServerFn({ method: "POST" })
     const caps = await getCaps(context.supabase, context.userId);
     const { data: sched } = await context.supabase
       .from("schedules")
-      .select("id, department_id, status")
+      .select("id, department_id, week_start, status, published_at")
       .eq("id", data.schedule_id)
       .maybeSingle();
     if (!sched) throw new Error("סידור לא נמצא");
+
+    await enforceSupersededPublishedSchedulePolicy(
+      context.supabase,
+      {
+        id: sched.id,
+        department_id: sched.department_id,
+        week_start: sched.week_start,
+        status: sched.status,
+        published_at: sched.published_at ?? null,
+      },
+      caps,
+      "delete",
+    );
 
     const isOwnDeptMgrDraft =
       caps.isDeptHeadOnly &&
