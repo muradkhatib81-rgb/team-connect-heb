@@ -1,20 +1,15 @@
 import i18n from "@/i18n";
+import {
+  DEFAULT_PERIOD_CONFIG,
+  getSchedulePeriod,
+  utcDowFromSaturday,
+  type BranchPeriodConfig,
+} from "@/lib/schedule-period-config";
 
-/** Saturday-start ISO week helpers (matches schedules.tsx). */
-
+/** @deprecated Prefer getSchedulePeriod with branch config. Saturday–Friday week. */
 export function getScheduleWeek(reference = new Date()) {
-  const d = new Date(
-    Date.UTC(reference.getFullYear(), reference.getMonth(), reference.getDate()),
-  );
-  const dowFromSat = (d.getUTCDay() + 1) % 7;
-  d.setUTCDate(d.getUTCDate() - dowFromSat);
-  const weekStart = d.toISOString().slice(0, 10);
-  const weekDays = Array.from({ length: 7 }, (_, i) => {
-    const x = new Date(d);
-    x.setUTCDate(d.getUTCDate() + i);
-    return x.toISOString().slice(0, 10);
-  });
-  return { weekStart, weekEnd: weekDays[6]!, weekDays };
+  const { periodStart, periodEnd, periodDays } = getSchedulePeriod(reference, DEFAULT_PERIOD_CONFIG);
+  return { weekStart: periodStart, weekEnd: periodEnd, weekDays: periodDays };
 }
 
 export const SCHEDULE_DAY_NAMES = [
@@ -50,3 +45,12 @@ export function formatScheduleDayHe(iso: string) {
     calendar: "gregory",
   }).format(new Date(iso + "T00:00:00Z"));
 }
+
+/** Day name for a calendar date (0=Sat … 6=Fri), not column index. */
+export function scheduleDayLabelForDate(iso: string, variant: "short" | "full" = "short"): string {
+  const dow = utcDowFromSaturday(iso);
+  const key = variant === "short" ? "schedules.dayShort" : "schedules.dayFull";
+  return i18n.t(`${key}.${dow}`);
+}
+
+export { getSchedulePeriod, type BranchPeriodConfig };

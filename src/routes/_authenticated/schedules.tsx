@@ -90,6 +90,48 @@ import {
   latestPublishedIdByDepartment,
 } from "@/lib/schedule-superseded";
 import { useShiftDefinitions } from "@/lib/use-shift-definitions";
+import { useCompanySettings } from "@/lib/use-company-settings";
+import { useSchedulePeriodConfig } from "@/lib/use-schedule-period-config";
+import {
+  addDaysISO,
+  buildPeriodDays,
+  filterPeriodCalendarDays,
+  getConfiguredWeekDows,
+  getPeriodEnd,
+  getPeriodStart,
+  DEFAULT_PERIOD_CONFIG,
+  shiftPeriodStart,
+  utcDowFromSaturday,
+  type BranchPeriodConfig,
+  type ScheduleDow,
+} from "@/lib/schedule-period-config";
+import { scheduleDayLabelForDate } from "@/lib/schedule-week";
+import { formatShiftTimeRange } from "@/lib/shift-hours";
+
+function filterDaysByPeriodConfig(calendarDays: string[], config: BranchPeriodConfig): string[] {
+  if (config.schedule_type === "monthly") {
+    return filterPeriodCalendarDays(calendarDays, config);
+  }
+  const allowed = new Set(getConfiguredWeekDows(config.week_start_dow, config.week_end_dow));
+  return calendarDays.filter((iso) => allowed.has(utcDowFromSaturday(iso) as ScheduleDow));
+}
+
+type CellTimeOverride = { start?: string | null; end?: string | null };
+
+function hmFromValue(value: string | null | undefined): string | null {
+  return value ? String(value).slice(0, 5) : null;
+}
+
+function resolveEffectiveCellTimes(
+  cellTimes: CellTimeOverride | undefined,
+  defStart: string | null,
+  defEnd: string | null,
+): { start: string | null; end: string | null } {
+  return {
+    start: cellTimes?.start !== undefined ? cellTimes.start : defStart,
+    end: cellTimes?.end !== undefined ? cellTimes.end : defEnd,
+  };
+}
 import { Time24Input } from "@/components/ui/time24-input";
 
 import { SCHEDULE_NOTE_MAX, trimScheduleNote } from "@/lib/schedule-note";
@@ -203,23 +245,32 @@ function SchedulePersonMetaRow({
   );
 }
 
-function getWeekStart(date: Date): string {
-  const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
-  // Week starts on Saturday. getUTCDay(): 0=Sun..6=Sat → offset = (dow + 1) % 7
-  const dowFromSat = (d.getUTCDay() + 1) % 7;
-  d.setUTCDate(d.getUTCDate() - dowFromSat);
-  return d.toISOString().slice(0, 10);
+function getPeriodStartFromDate(date: Date, config: BranchPeriodConfig): string {
+  const refIso = new Date(
+    Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()),
+  )
+    .toISOString()
+    .slice(0, 10);
+  return getPeriodStart(refIso, config);
 }
-function addDaysISO(iso: string, days: number): string {
-  const d = new Date(iso + "T00:00:00Z");
-  d.setUTCDate(d.getUTCDate() + days);
-  return d.toISOString().slice(0, 10);
+
+function buildDaysBetween(startIso: string, endIso: string): string[] {
+  const days: string[] = [];
+  let iso = startIso;
+  while (iso <= endIso) {
+    days.push(iso);
+    iso = addDaysISO(iso, 1);
+  }
+  return days;
 }
 
 function SchedulesPage() {
   const { data: me, isLoading: meLoading } = useAuth();
   const qc = useQueryClient();
   const search = Route.useSearch();
+  const companyQ = useCompanySettings();
+  const periodConfigQ = useSchedulePeriodConfig();
+  const periodConfig = periodConfigQ.data ?? DEFAULT_PERIOD_CONFIG;
   const shiftDefsQ = useShiftDefinitions();
   const activeShifts = shiftDefsQ.list.filter((s) => s.is_active);
   const shiftLabel = (code: string | null | undefined, fallback = "—") =>
@@ -329,9 +380,9 @@ function SchedulesPage() {
   // Employees always see the current week only
   useEffect(() => {
     if (!meLoading && isEmployee) {
-      setWeekStart(getWeekStart(new Date()));
+      setWeekStart(getPeriodStartFromDate(new Date(), periodConfig));
     }
-  }, [meLoading, isEmployee]);
+  }, [meLoading, isEmployee, periodConfig]);
 
 
   // Department selection
@@ -371,14 +422,30 @@ function SchedulesPage() {
   }
 
   const [weekStart, setWeekStart] = useState(() =>
-    search.week ? getWeekStart(new Date(search.week + "T00:00:00Z")) : getWeekStart(new Date()),
+    search.week
+      ? getPeriodStartFromDate(new Date(search.week + "T00:00:00Z"), {
+          schedule_type: "weekly",
+          week_start_dow: 0,
+          week_end_dow: 6,
+        })
+      : getPeriodStartFromDate(new Date(), {
+          schedule_type: "weekly",
+          week_start_dow: 0,
+          week_end_dow: 6,
+        }),
   );
+
+  useEffect(() => {
+    if (!companyQ.data) return;
+    setWeekStart((prev) => getPeriodStart(prev, periodConfig));
+  }, [periodConfig.schedule_type, periodConfig.week_start_dow, periodConfig.week_end_dow]);
 
   /** Dept head may only browse/create for current week + next week. */
   const deptHeadWeekWindow = useMemo(() => {
-    const current = getWeekStart(new Date());
-    return { current, next: addDaysISO(current, 7) };
-  }, [weekStart]);
+    const current = getPeriodStartFromDate(new Date(), periodConfig);
+    const next = shiftPeriodStart(current, periodConfig, 1);
+    return { current, next };
+  }, [weekStart, periodConfig]);
 
   useEffect(() => {
     if (!isDeptHeadOnly) return;
@@ -422,11 +489,6 @@ function SchedulesPage() {
     else if (deptsWithoutSchedule.length) setSelectedDept(deptsWithoutSchedule[0].id);
     else if (deptsQ.data?.length) setSelectedDept(deptsQ.data[0].id);
   }, [deptsQ.data, deptsWithoutSchedule, myDeptId, selectedDept, isDeptHeadOnly, isEmployee, search.dept]);
-  const weekEnd = addDaysISO(weekStart, 6);
-  const days = useMemo(
-    () => Array.from({ length: 7 }, (_, i) => addDaysISO(weekStart, i)),
-    [weekStart],
-  );
 
   // All schedules + shifts for the selected week. Powers:
   //  - `savedDeptSet`: departments with at least one saved shift (hidden from
@@ -689,6 +751,21 @@ function SchedulesPage() {
       return null;
     },
   });
+
+  const weekEnd = useMemo(() => {
+    if (schedQ.data?.week_end) return schedQ.data.week_end as string;
+    return getPeriodEnd(weekStart, periodConfig);
+  }, [schedQ.data?.week_end, weekStart, periodConfig]);
+
+  const days = useMemo(() => {
+    if (schedQ.data?.week_start && schedQ.data?.week_end) {
+      return filterDaysByPeriodConfig(
+        buildDaysBetween(schedQ.data.week_start as string, schedQ.data.week_end as string),
+        periodConfig,
+      );
+    }
+    return buildPeriodDays(getPeriodStart(weekStart, periodConfig), periodConfig);
+  }, [schedQ.data?.week_start, schedQ.data?.week_end, weekStart, periodConfig]);
 
   const deptWeekFlagsQ = useQuery({
     enabled: !!selectedDept && !!me?.id && (view === "editor" || isDeptHeadOnly),
@@ -1043,7 +1120,7 @@ function SchedulesPage() {
   const [edits, setEdits] = useState<Record<string, Record<string, Shift>>>({});
   // Per-cell time overrides. `null` = use shift definition default.
   const [timeEdits, setTimeEdits] = useState<
-    Record<string, Record<string, { start: string | null; end: string | null }>>
+    Record<string, Record<string, CellTimeOverride>>
   >({});
   const [noteEdits, setNoteEdits] = useState<Record<string, Record<string, string | null>>>({});
   /** leave_type_code per emp|day from DB / profile — drives חופש רגיל / חופש מחלה labels */
@@ -1063,7 +1140,7 @@ function SchedulesPage() {
     emps: NonNullable<typeof empsQ.data>,
   ) => {
     const next: Record<string, Record<string, Shift>> = {};
-    const t: Record<string, Record<string, { start: string | null; end: string | null }>> = {};
+    const t: Record<string, Record<string, CellTimeOverride>> = {};
     const n: Record<string, Record<string, string | null>> = {};
     const leaveMap: Record<string, string | null> = {};
     for (const s of rows) {
@@ -1072,7 +1149,23 @@ function SchedulesPage() {
       t[s.employee_id] ??= {};
       const st = (s as any).start_time ? String((s as any).start_time).slice(0, 5) : null;
       const en = (s as any).end_time ? String((s as any).end_time).slice(0, 5) : null;
-      t[s.employee_id][s.day_date] = { start: st, end: en };
+      const shiftCode = s.shift as string;
+      if (shiftCode && shiftCode !== "off") {
+        const defTimes = shiftDefsQ.getTimesForDay(shiftCode, s.day_date);
+        const defStart = hmFromValue(defTimes.start_time);
+        const defEnd = hmFromValue(defTimes.end_time);
+        const override: CellTimeOverride = {};
+        if (st !== null && st !== defStart) override.start = st;
+        if (en !== null && en !== defEnd) override.end = en;
+        if (Object.keys(override).length > 0) {
+          t[s.employee_id][s.day_date] = override;
+        }
+      } else if (st || en) {
+        t[s.employee_id][s.day_date] = {
+          ...(st ? { start: st } : {}),
+          ...(en ? { end: en } : {}),
+        };
+      }
       n[s.employee_id] ??= {};
       const rawNote = (s as any).note ? trimScheduleNote(String((s as any).note)) : "";
       n[s.employee_id][s.day_date] = rawNote || null;
@@ -1099,7 +1192,7 @@ function SchedulesPage() {
   };
 
   useEffect(() => {
-    if (!visible?.id || !shiftsQ.data || !empsQ.data) return;
+    if (!visible?.id || !shiftsQ.data || !empsQ.data || !shiftDefsQ.isSuccess) return;
     if (editsScheduleIdRef.current !== visible.id) {
       editsScheduleIdRef.current = visible.id;
       editsDirtyRef.current = false;
@@ -1110,7 +1203,7 @@ function SchedulesPage() {
     if (!editsDirtyRef.current) {
       reseedEditsFromShifts(shiftsQ.data, empsQ.data);
     }
-  }, [visible?.id, shiftsQ.data, empsQ.data, days]);
+  }, [visible?.id, shiftsQ.data, empsQ.data, days, shiftDefsQ.isSuccess]);
 
   const changeBaselineSubmitted = useMemo(() => {
     if (!visible?.submitted_at || !shiftsQ.data?.length || !shiftDefsQ.isSuccess) return {};
@@ -1415,17 +1508,18 @@ function SchedulesPage() {
     }));
     // Always reset custom times when shift type changes so the new shift's
     // default hours take effect instead of carrying over old manual values.
-    setTimeEdits((prev) => ({
-      ...prev,
-      [empId]: { ...(prev[empId] ?? {}), [day]: { start: null, end: null } },
-    }));
+    setTimeEdits((prev) => {
+      const nextEmp = { ...(prev[empId] ?? {}) };
+      delete nextEmp[day];
+      return { ...prev, [empId]: nextEmp };
+    });
   }
 
   function setCellTime(empId: string, day: string, which: "start" | "end", value: string) {
     if (!canEditScheduleTimes) return;
     editsDirtyRef.current = true;
     setTimeEdits((prev) => {
-      const cur = prev[empId]?.[day] ?? { start: null, end: null };
+      const cur = prev[empId]?.[day] ?? {};
       const next = { ...cur, [which]: value ? value.slice(0, 5) : null };
       return { ...prev, [empId]: { ...(prev[empId] ?? {}), [day]: next } };
     });
@@ -1487,8 +1581,23 @@ function SchedulesPage() {
           ? (effectiveScheduleShift(empRow, day, shift) as Shift)
           : shift;
         const t = timeEdits[emp]?.[day];
+        const defTimes =
+          resolved !== "off" ? shiftDefsQ.getTimesForDay(resolved, day) : { start_time: null, end_time: null };
+        const defStart = hmFromValue(defTimes.start_time);
+        const defEnd = hmFromValue(defTimes.end_time);
+        const { start: effStart, end: effEnd } = resolveEffectiveCellTimes(t, defStart, defEnd);
         const norm = (v: string | null | undefined) =>
           v && /^\d{2}:\d{2}$/.test(v) ? `${v}:00` : v && /^\d{2}:\d{2}:\d{2}$/.test(v) ? v : null;
+        const persistTime = (
+          field: "start" | "end",
+          effective: string | null,
+          def: string | null,
+        ): string | null => {
+          const touched = !!(t && field in t);
+          if (!touched && effective === def) return null;
+          if (effective == null || effective === "") return null;
+          return norm(effective);
+        };
         const onLeave = empRow ? isEmployeeOnLeaveOnDate(empRow, day) : false;
         const leaveCode =
           resolved === "off"
@@ -1501,9 +1610,13 @@ function SchedulesPage() {
           day_date: day,
           shift: resolved,
           start_time:
-            resolved === "off" || !canEditScheduleTimes ? null : norm(t?.start ?? null),
+            resolved === "off" || !canEditScheduleTimes
+              ? null
+              : persistTime("start", effStart, defStart),
           end_time:
-            resolved === "off" || !canEditScheduleTimes ? null : norm(t?.end ?? null),
+            resolved === "off" || !canEditScheduleTimes
+              ? null
+              : persistTime("end", effEnd, defEnd),
           note:
             resolved === "off" || !canEditScheduleTimes
               ? null
@@ -1582,9 +1695,9 @@ function SchedulesPage() {
 
   const dailyShiftSummary = useMemo(
     () =>
-      days.map((day, idx) => ({
+      days.map((day) => ({
         day,
-        label: getFullDayNames()[idx],
+        label: scheduleDayLabelForDate(day, "full"),
         counts: activeShifts.map((s) => {
           const members: { employeeId: string; departmentId: string }[] = [];
           const seen = new Set<string>();
@@ -2092,7 +2205,7 @@ function SchedulesPage() {
                 <Button
                   variant="outline"
                   size="icon"
-                  onClick={() => navigateWeek(addDaysISO(weekStart, -7))}
+                  onClick={() => navigateWeek(shiftPeriodStart(weekStart, periodConfig, -1))}
                   aria-label="שבוע קודם"
                 >
                   <ChevronRight className="size-4" />
@@ -2100,14 +2213,14 @@ function SchedulesPage() {
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={() => navigateWeek(getWeekStart(new Date()))}
+                  onClick={() => navigateWeek(getPeriodStartFromDate(new Date(), periodConfig))}
                 >
                   השבוע
                 </Button>
                 <Button
                   variant="outline"
                   size="icon"
-                  onClick={() => navigateWeek(addDaysISO(weekStart, 7))}
+                  onClick={() => navigateWeek(shiftPeriodStart(weekStart, periodConfig, 1))}
                   aria-label="שבוע הבא"
                 >
                   <ChevronLeft className="size-4" />
@@ -2523,11 +2636,11 @@ function SchedulesPage() {
                   <th className="text-right p-3 sticky right-0 bg-muted/50 z-10 min-w-[160px]">
                     עובד
                   </th>
-                  {days.map((d, i) => {
-                    const dayCounts = dailyShiftSummary[i]?.counts ?? [];
+                  {days.map((d, dayIdx) => {
+                    const dayCounts = dailyShiftSummary[dayIdx]?.counts ?? [];
                     return (
                       <th key={d} className="p-2 text-center min-w-[110px] align-top">
-                        <div className="font-semibold">{getDayNames()[i]}</div>
+                        <div className="font-semibold">{scheduleDayLabelForDate(d, "short")}</div>
                         <div className="text-xs text-muted-foreground">{formatHeDate(d)}</div>
                         {dayCounts.length > 0 && (
                           <div className="mt-1 flex flex-wrap gap-1 justify-center">
@@ -2538,7 +2651,7 @@ function SchedulesPage() {
                                 onClick={() =>
                                   setSummaryShiftPick({
                                     day: d,
-                                    dayLabel: getFullDayNames()[i],
+                                    dayLabel: scheduleDayLabelForDate(d, "full"),
                                     shiftName: s.name,
                                     members: s.members,
                                   })
@@ -2630,13 +2743,21 @@ function SchedulesPage() {
                             ? shiftLabel(cur)
                             : "";
                       const def = cur ? shiftDefsQ.map.get(cur) : undefined;
+                      const defTimes = cur ? shiftDefsQ.getTimesForDay(cur, day) : { start_time: null, end_time: null };
+                      const defStart = hmFromValue(defTimes.start_time);
+                      const defEnd = hmFromValue(defTimes.end_time);
                       const cellTimes = timeEdits[emp.id]?.[day];
-                      const effStart =
-                        cellTimes?.start ??
-                        (def?.start_time ? String(def.start_time).slice(0, 5) : null);
-                      const effEnd =
-                        cellTimes?.end ??
-                        (def?.end_time ? String(def.end_time).slice(0, 5) : null);
+                      const { start: effStart, end: effEnd } = resolveEffectiveCellTimes(
+                        cellTimes,
+                        defStart,
+                        defEnd,
+                      );
+                      const timeDisplay = formatShiftTimeRange(effStart, effEnd);
+                      const showEndField = effEnd !== null || defEnd !== null;
+                      const showTimeRow =
+                        !!cur &&
+                        cur !== "off" &&
+                        !!(timeDisplay || defTimes.start_time || defTimes.end_time);
                       const effNote = noteEdits[emp.id]?.[day] ?? null;
                       const {
                         isShiftModified,
@@ -2667,14 +2788,14 @@ function SchedulesPage() {
                                   >
                                     {cellShiftLabel}
                                   </span>
-                                  {effStart && effEnd && cur !== "off" && (
+                                  {timeDisplay && (
                                     <div
                                       className={`inline-flex items-center justify-center gap-1 mt-1 text-[10px] text-muted-foreground tabular-nums rounded px-1 ${
                                         isTimeModified ? "ring-2 ring-orange-500" : ""
                                       }`}
                                       dir="ltr"
                                     >
-                                      <span>{effStart}–{effEnd}</span>
+                                      <span>{timeDisplay}</span>
                                       {isTimeModified && (
                                         <RefreshCw
                                           className="size-3 shrink-0 text-orange-600"
@@ -2748,7 +2869,7 @@ function SchedulesPage() {
                                 })}
                               </SelectContent>
                             </Select>
-                            {cur && def?.start_time && def?.end_time && (
+                            {showTimeRow && (
                               canEditScheduleTimes ? (
                                 <div className="flex items-center gap-1" dir="ltr">
                                   <div
@@ -2762,13 +2883,17 @@ function SchedulesPage() {
                                       onChange={(v) => setCellTime(emp.id, day, "start", v)}
                                       className="h-7 w-full min-w-0 rounded-md border border-input bg-background px-1 text-[11px] focus:outline-none focus:ring-1 focus:ring-ring"
                                     />
-                                    <span className="text-[10px] text-muted-foreground">–</span>
-                                    <Time24Input
-                                      aria-label="שעת סיום"
-                                      value={effEnd ?? ""}
-                                      onChange={(v) => setCellTime(emp.id, day, "end", v)}
-                                      className="h-7 w-full min-w-0 rounded-md border border-input bg-background px-1 text-[11px] focus:outline-none focus:ring-1 focus:ring-ring"
-                                    />
+                                    {showEndField && (
+                                      <>
+                                        <span className="text-[10px] text-muted-foreground">–</span>
+                                        <Time24Input
+                                          aria-label="שעת סיום"
+                                          value={effEnd ?? ""}
+                                          onChange={(v) => setCellTime(emp.id, day, "end", v)}
+                                          className="h-7 w-full min-w-0 rounded-md border border-input bg-background px-1 text-[11px] focus:outline-none focus:ring-1 focus:ring-ring"
+                                        />
+                                      </>
+                                    )}
                                   </div>
                                   {isTimeModified && (
                                     <RefreshCw
@@ -2782,8 +2907,7 @@ function SchedulesPage() {
                                   className="text-[10px] text-muted-foreground text-center tabular-nums mt-0.5"
                                   dir="ltr"
                                 >
-                                  {(effStart ?? String(def.start_time).slice(0, 5))}–
-                                  {(effEnd ?? String(def.end_time).slice(0, 5))}
+                                  {timeDisplay}
                                 </div>
                               )
                             )}

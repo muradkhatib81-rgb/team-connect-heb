@@ -39,6 +39,7 @@ const BRANCH_SCOPED_TABLES = new Set<string>([
   "schedule_shifts",
   "schedules",
   "shift_definitions",
+  "shift_definition_day_hours",
   "task_activity_log",
   "task_recurrences",
   "tasks",

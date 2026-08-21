@@ -59,10 +59,13 @@ export function effectiveCellTimes(args: {
   start_time?: string | null;
   end_time?: string | null;
   shiftDef?: { start_time?: string | null; end_time?: string | null } | null;
+  /** When set, uses per-day definition hours (unless legacy period). */
+  dayDate?: string;
+  resolvedDefTimes?: { start_time?: string | null; end_time?: string | null } | null;
 }): PublishedCellTimes {
   const shift = args.shift ?? null;
   if (!shift || shift === "off") return { start: null, end: null };
-  const def = args.shiftDef;
+  const def = args.resolvedDefTimes ?? args.shiftDef;
   return {
     start: normScheduleTimeHm(args.start_time) ?? normScheduleTimeHm(def?.start_time),
     end: normScheduleTimeHm(args.end_time) ?? normScheduleTimeHm(def?.end_time),

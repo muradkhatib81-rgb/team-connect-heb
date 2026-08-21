@@ -11,6 +11,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useShiftDefinitions } from "@/lib/use-shift-definitions";
 import { formatHHMM, usePlatformNow } from "@/lib/platform-time";
 import { getScheduleWeek } from "@/lib/schedule-week";
+import { formatShiftTimeRange } from "@/lib/shift-hours";
 import { useActiveBranch } from "@/lib/use-active-branch";
 import { useAuth } from "@/lib/use-auth";
 import i18n from "@/i18n";
@@ -294,14 +295,15 @@ export function LiveShiftCardsSection() {
       // Profile leave wins over a published בוקר/ערב cell (same as schedule UI).
       const shiftCode = onLeaveToday.has(r.employee_id) ? OFF_SHIFT_CODE : r.shift;
       const def = shiftDefsQ.map.get(shiftCode);
+      const resolved = shiftCode === OFF_SHIFT_CODE ? null : shiftDefsQ.getTimesForDay(shiftCode, dateISO);
       const start =
         shiftCode === OFF_SHIFT_CODE
           ? null
-          : r.start_time ?? def?.start_time ?? null;
+          : r.start_time ?? resolved?.start_time ?? null;
       const end =
         shiftCode === OFF_SHIFT_CODE
           ? null
-          : r.end_time ?? def?.end_time ?? null;
+          : r.end_time ?? resolved?.end_time ?? null;
       pushEmp(shiftCode, r.employee_id, start, end);
     }
 
@@ -347,10 +349,11 @@ export function LiveShiftCardsSection() {
               : count === 1
                 ? i18n.t("dashboard.oneEmployee")
                 : i18n.t("dashboard.nEmployeesCount").replace("{n}", String(count));
+          const resolved = shiftDefsQ.getTimesForDay(def.code, dateISO);
           const defaultRange =
-            def.start_time && def.end_time
-              ? `${String(def.start_time).slice(0, 5)}–${String(def.end_time).slice(0, 5)}`
-              : "";
+            formatShiftTimeRange(resolved.start_time, resolved.end_time) ??
+            formatShiftTimeRange(def.start_time, def.end_time) ??
+            "";
           return (
             <ShiftCard
               key={def.id}

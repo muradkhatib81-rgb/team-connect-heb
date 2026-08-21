@@ -17,6 +17,62 @@ import { SCHEDULE_NOTE_MAX, trimScheduleNote } from "@/lib/schedule-note";
 import {
   enforceSupersededPublishedSchedulePolicy,
 } from "@/lib/schedule-superseded";
+import {
+  branchPeriodConfigFromSettings,
+  buildPeriodDays,
+  filterPeriodCalendarDays,
+  getConfiguredWeekDows,
+  getPeriodEnd,
+  getPeriodStart,
+  shiftPeriodStart,
+  utcDowFromSaturday,
+  type BranchPeriodConfig,
+  type ScheduleDow,
+} from "@/lib/schedule-period-config";
+import { mergeCompanyRowWithPeriodExtra } from "@/lib/schedule-period-settings";
+
+function addDaysISO(iso: string, days: number): string {
+  const d = new Date(iso + "T00:00:00Z");
+  d.setUTCDate(d.getUTCDate() + days);
+  return d.toISOString().slice(0, 10);
+}
+
+function buildDaysBetween(startIso: string, endIso: string): string[] {
+  const days: string[] = [];
+  let iso = startIso;
+  while (iso <= endIso) {
+    days.push(iso);
+    iso = addDaysISO(iso, 1);
+  }
+  return days;
+}
+
+async function fetchBranchPeriodConfig(supabase: any): Promise<BranchPeriodConfig> {
+  const { data, error } = await supabase
+    .from("company_settings")
+    .select("schedule_type, week_start_dow, week_end_dow, monthly_working_dows, extra")
+    .eq("is_active", true)
+    .order("created_at", { ascending: true })
+    .limit(1)
+    .maybeSingle();
+  if (error) {
+    const { data: fallback } = await supabase
+      .from("company_settings")
+      .select("schedule_type, extra")
+      .eq("is_active", true)
+      .order("created_at", { ascending: true })
+      .limit(1)
+      .maybeSingle();
+    return mergeCompanyRowWithPeriodExtra((fallback ?? {}) as Record<string, unknown>);
+  }
+  return mergeCompanyRowWithPeriodExtra((data ?? {}) as Record<string, unknown>);
+}
+
+function periodBoundsOf(dateStr: string, config: BranchPeriodConfig): { start: string; end: string } {
+  const start = getPeriodStart(dateStr, config);
+  const end = getPeriodEnd(start, config);
+  return { start, end };
+}
 
 // Shift codes are dynamic — validated against public.shift_definitions at runtime.
 const shiftCode = z.string().min(1).max(64);
@@ -91,17 +147,24 @@ function schedulableDepartmentEmployees(employees: any[]) {
   return (employees ?? []).filter((e: any) => !e.excluded_from_schedule);
 }
 
-function weekDaysOfSchedule(sched: { week_start: string }): string[] {
-  return Array.from({ length: 7 }, (_, i) => {
-    const d = new Date(sched.week_start + "T00:00:00Z");
-    d.setUTCDate(d.getUTCDate() + i);
-    return d.toISOString().slice(0, 10);
-  });
+function weekDaysOfSchedule(
+  sched: { week_start: string; week_end?: string | null; schedule_type?: string | null },
+  config: BranchPeriodConfig,
+): string[] {
+  if (sched.week_end) {
+    const calendarDays = buildDaysBetween(sched.week_start, sched.week_end);
+    const isMonthly = (sched.schedule_type ?? config.schedule_type) === "monthly";
+    if (isMonthly) return filterPeriodCalendarDays(calendarDays, config);
+    const allowed = new Set(getConfiguredWeekDows(config.week_start_dow, config.week_end_dow));
+    return calendarDays.filter((iso) => allowed.has(utcDowFromSaturday(iso) as ScheduleDow));
+  }
+  return buildPeriodDays(getPeriodStart(sched.week_start, config), config);
 }
 
 /** Force חופש (off) on leave days before save/submit validation. */
 function applyLeaveOffToShifts(
-  sched: { week_start: string },
+  sched: { week_start: string; week_end?: string | null; schedule_type?: string | null },
+  config: BranchPeriodConfig,
   deptEmployees: any[],
   shifts: {
     employee_id: string;
@@ -113,7 +176,7 @@ function applyLeaveOffToShifts(
   }[],
 ) {
   const schedulable = schedulableDepartmentEmployees(deptEmployees);
-  const days = weekDaysOfSchedule(sched);
+  const days = weekDaysOfSchedule(sched, config);
   const byCell = new Map<string, (typeof shifts)[number]>();
   for (const s of shifts) byCell.set(`${s.employee_id}|${s.day_date}`, s);
   for (const emp of schedulable) {
@@ -137,7 +200,8 @@ function applyLeaveOffToShifts(
 
 /** Unset cells → חופש (off). Chosen morning/evening/off are kept. */
 function applyEmptyOffToShifts(
-  sched: { week_start: string },
+  sched: { week_start: string; week_end?: string | null; schedule_type?: string | null },
+  config: BranchPeriodConfig,
   deptEmployees: any[],
   shifts: {
     employee_id: string;
@@ -149,7 +213,7 @@ function applyEmptyOffToShifts(
   }[],
 ) {
   const schedulable = schedulableDepartmentEmployees(deptEmployees);
-  const days = weekDaysOfSchedule(sched);
+  const days = weekDaysOfSchedule(sched, config);
   const byCell = new Map<string, (typeof shifts)[number]>();
   for (const s of shifts) byCell.set(`${s.employee_id}|${s.day_date}`, s);
   for (const emp of schedulable) {
@@ -170,12 +234,13 @@ function applyEmptyOffToShifts(
 }
 
 function applyLeaveOffToShiftMap(
-  sched: { week_start: string },
+  sched: { week_start: string; week_end?: string | null; schedule_type?: string | null },
+  config: BranchPeriodConfig,
   deptEmployees: any[],
   map: Map<string, Map<string, string[]>>,
 ) {
   const schedulable = schedulableDepartmentEmployees(deptEmployees);
-  const days = weekDaysOfSchedule(sched);
+  const days = weekDaysOfSchedule(sched, config);
   for (const emp of schedulable) {
     let m = map.get(emp.id);
     if (!m) {
@@ -282,17 +347,9 @@ async function snapshotPublishedShifts(supabase: any, scheduleId: string) {
   }
 }
 
-// Normalize a date string (YYYY-MM-DD) to the start of its ISO-week-like week (Sunday).
-function weekStartOf(dateStr: string): { start: string; end: string } {
-  const d = new Date(dateStr + "T00:00:00Z");
-  // Week starts on Saturday. getUTCDay(): 0=Sun..6=Sat → days since Saturday = (dow + 1) % 7
-  const dowFromSat = (d.getUTCDay() + 1) % 7;
-  const start = new Date(d);
-  start.setUTCDate(d.getUTCDate() - dowFromSat);
-  const end = new Date(start);
-  end.setUTCDate(start.getUTCDate() + 6);
-  const iso = (x: Date) => x.toISOString().slice(0, 10);
-  return { start: iso(start), end: iso(end) };
+// Normalize a date to the start/end of the branch schedule period.
+function weekStartOf(dateStr: string, config: BranchPeriodConfig): { start: string; end: string } {
+  return periodBoundsOf(dateStr, config);
 }
 
 async function getManagedDepartmentIds(
@@ -368,7 +425,8 @@ export const createOrGetSchedule = createServerFn({ method: "POST" })
         throw new Error("ניתן ליצור סידור רק עבור המחלקה שלך");
       }
     }
-    const { start, end } = weekStartOf(data.week_start);
+    const periodConfig = await fetchBranchPeriodConfig(context.supabase);
+    const { start, end } = weekStartOf(data.week_start, periodConfig);
     if (caps.isDeptHeadOnly) {
       const todayHe = new Intl.DateTimeFormat("en-CA", {
         timeZone: "Asia/Jerusalem",
@@ -376,12 +434,10 @@ export const createOrGetSchedule = createServerFn({ method: "POST" })
         month: "2-digit",
         day: "2-digit",
       }).format(new Date());
-      const currentWeek = weekStartOf(todayHe).start;
-      const nextWeekDate = new Date(currentWeek + "T00:00:00Z");
-      nextWeekDate.setUTCDate(nextWeekDate.getUTCDate() + 7);
-      const nextWeek = nextWeekDate.toISOString().slice(0, 10);
-      if (start !== currentWeek && start !== nextWeek) {
-        throw new Error("ניתן ליצור סידור רק לשבוע הנוכחי או לשבוע הבא");
+      const currentPeriod = weekStartOf(todayHe, periodConfig).start;
+      const nextPeriod = shiftPeriodStart(currentPeriod, periodConfig, 1);
+      if (start !== currentPeriod && start !== nextPeriod) {
+        throw new Error("ניתן ליצור סידור רק לתקופה הנוכחית או לתקופה הבאה");
       }
     }
     const existing = await context.supabase
@@ -521,6 +577,8 @@ export const saveScheduleShifts = createServerFn({ method: "POST" })
       }
     }
 
+    const periodConfig = await fetchBranchPeriodConfig(context.supabase);
+
     // Drop shifts for employees marked as not schedulable.
     const deptEmployees = await getDepartmentScheduleEmployees(context.supabase, sched.department_id);
     const schedulableIds = new Set(
@@ -530,9 +588,11 @@ export const saveScheduleShifts = createServerFn({ method: "POST" })
       deptEmployees,
       applyEmptyOffToShifts(
         sched,
+        periodConfig,
         deptEmployees,
         applyLeaveOffToShifts(
           sched,
+          periodConfig,
           deptEmployees,
           data.shifts.filter((s) => schedulableIds.has(s.employee_id)),
         ),
@@ -730,12 +790,9 @@ export const submitSchedule = createServerFn({ method: "POST" })
         .eq("schedule_id", data.schedule_id),
       getDepartmentScheduleEmployees(context.supabase, sched.department_id),
     ]);
+    const periodConfig = await fetchBranchPeriodConfig(context.supabase);
     const errors: string[] = [];
-    const days: string[] = Array.from({ length: 7 }, (_, i) => {
-      const d = new Date(sched.week_start + "T00:00:00Z");
-      d.setUTCDate(d.getUTCDate() + i);
-      return d.toISOString().slice(0, 10);
-    });
+    const days = weekDaysOfSchedule(sched, periodConfig);
 
     // Build map employee -> day -> shifts[]
     const map = new Map<string, Map<string, string[]>>();
@@ -749,7 +806,7 @@ export const submitSchedule = createServerFn({ method: "POST" })
     const schedulable = schedulableDepartmentEmployees(deptEmployees ?? []);
     const schedulableIds = new Set(schedulable.map((e: any) => e.id as string));
 
-    applyLeaveOffToShiftMap(sched, deptEmployees ?? [], map);
+    applyLeaveOffToShiftMap(sched, periodConfig, deptEmployees ?? [], map);
 
     // Auto-fill missing (employee, day) cells as "off" so an unset cell defaults
     // to a day off rather than blocking submission.
@@ -1039,12 +1096,9 @@ async function publishOneUnpublishedSchedule(
       .eq("schedule_id", sched.id),
     getDepartmentScheduleEmployees(supabase, sched.department_id),
   ]);
+  const periodConfig = await fetchBranchPeriodConfig(supabase);
   const errors: string[] = [];
-  const days: string[] = Array.from({ length: 7 }, (_, i) => {
-    const d = new Date(sched.week_start + "T00:00:00Z");
-    d.setUTCDate(d.getUTCDate() + i);
-    return d.toISOString().slice(0, 10);
-  });
+  const days = weekDaysOfSchedule(sched, periodConfig);
   const map = new Map<string, Map<string, string[]>>();
   for (const s of shifts ?? []) {
     if (!map.has(s.employee_id)) map.set(s.employee_id, new Map());
@@ -1055,7 +1109,7 @@ async function publishOneUnpublishedSchedule(
   const schedulable = schedulableDepartmentEmployees(deptEmployees ?? []);
   const schedulableIds = new Set(schedulable.map((e: any) => e.id as string));
 
-  applyLeaveOffToShiftMap(sched, deptEmployees ?? [], map);
+  applyLeaveOffToShiftMap(sched, periodConfig, deptEmployees ?? [], map);
 
   const autoFill: { schedule_id: string; employee_id: string; day_date: string; shift: "off" }[] = [];
   for (const emp of schedulable) {
@@ -1119,7 +1173,8 @@ export const publishAllWeekSchedules = createServerFn({ method: "POST" })
     const caps = await getCaps(context.supabase, context.userId);
     if (!caps.canPublishDirect) throw new Error("אין הרשאה לפרסם סידורי עבודה");
 
-    const { start } = weekStartOf(data.week_start);
+    const periodConfig = await fetchBranchPeriodConfig(context.supabase);
+    const { start } = weekStartOf(data.week_start, periodConfig);
     const { data: scheds, error } = await context.supabase
       .from("schedules")
       .select("*")
@@ -1408,7 +1463,8 @@ export const getUnpublishedWeekSummary = createServerFn({ method: "POST" })
       caps.canPublishDirect;
     if (!allowed) throw new Error("אין הרשאה לצפות בסיכום הסידורים");
 
-    const { start } = weekStartOf(data.week_start);
+    const periodConfig = await fetchBranchPeriodConfig(context.supabase);
+    const { start } = weekStartOf(data.week_start, periodConfig);
 
     // All unpublished schedules for the week
     const { data: scheds, error: sErr } = await context.supabase
@@ -1512,7 +1568,8 @@ export const getWeekDepartmentStates = createServerFn({ method: "POST" })
     ) {
       throw new Error("אין הרשאה");
     }
-    const { start } = weekStartOf(data.week_start);
+    const periodConfig = await fetchBranchPeriodConfig(context.supabase);
+    const { start } = weekStartOf(data.week_start, periodConfig);
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
 
     let deptQ = supabaseAdmin
@@ -1582,7 +1639,8 @@ export const getDepartmentWeekScheduleFlags = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     const caps = await getCaps(context.supabase, context.userId);
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    const { start } = weekStartOf(data.week_start);
+    const periodConfig = await fetchBranchPeriodConfig(context.supabase);
+    const { start } = weekStartOf(data.week_start, periodConfig);
 
     let canView =
       caps.isMainAdmin ||
@@ -1716,7 +1774,8 @@ export const getDailyScheduleOverview = createServerFn({ method: "POST" })
       context.userId,
     );
     const useCoworkersView = !!data.use_coworkers_view;
-    const { start, end } = weekStartOf(data.week_start);
+    const periodConfig = await fetchBranchPeriodConfig(context.supabase);
+    const { start, end } = weekStartOf(data.week_start, periodConfig);
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
 
     let departments: { id: string; name: string }[] = [];

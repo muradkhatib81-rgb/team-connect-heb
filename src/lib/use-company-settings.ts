@@ -4,6 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { getActiveBranchScope } from "@/integrations/supabase/branch-scope";
 import { useActiveBranch } from "@/lib/use-active-branch";
 import { BRANCH_NAME } from "@/lib/constants";
+import { mergeCompanyRowWithPeriodExtra } from "@/lib/schedule-period-settings";
 
 export type ScheduleType = "weekly" | "monthly" | "custom";
 
@@ -16,6 +17,9 @@ export interface CompanySettings {
   email: string | null;
   primary_color: string | null;
   schedule_type: ScheduleType;
+  week_start_dow: number;
+  week_end_dow: number;
+  monthly_working_dows: number[];
 }
 
 const DEFAULTS: CompanySettings = {
@@ -27,6 +31,9 @@ const DEFAULTS: CompanySettings = {
   email: null,
   primary_color: null,
   schedule_type: "weekly",
+  week_start_dow: 0,
+  week_end_dow: 6,
+  monthly_working_dows: [0, 1, 2, 3, 4, 5, 6],
 };
 
 async function fetchCompanySettings(opts: {
@@ -41,19 +48,44 @@ async function fetchCompanySettings(opts: {
     return DEFAULTS;
   }
 
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from("company_settings" as any)
-    .select("id, company_name, logo_url, address, phone, email, primary_color, schedule_type")
+    .select(
+      "id, company_name, logo_url, address, phone, email, primary_color, schedule_type, week_start_dow, week_end_dow, monthly_working_dows, extra",
+    )
     .eq("is_active", true)
     .order("created_at", { ascending: true })
     .limit(1)
     .maybeSingle();
+  if (error) {
+    const { data: fallback } = await supabase
+      .from("company_settings" as any)
+      .select("id, company_name, logo_url, address, phone, email, primary_color, schedule_type, extra")
+      .eq("is_active", true)
+      .order("created_at", { ascending: true })
+      .limit(1)
+      .maybeSingle();
+    if (!fallback) return DEFAULTS;
+    const merged = mergeCompanyRowWithPeriodExtra(fallback as Record<string, unknown>);
+    return {
+      ...DEFAULTS,
+      ...(fallback as object),
+      schedule_type: merged.schedule_type,
+      week_start_dow: merged.week_start_dow,
+      week_end_dow: merged.week_end_dow,
+      monthly_working_dows: merged.monthly_working_dows,
+    };
+  }
   if (!data) return DEFAULTS;
-  const row = data as any;
+  const row = data as Record<string, unknown>;
+  const merged = mergeCompanyRowWithPeriodExtra(row);
   return {
     ...DEFAULTS,
     ...row,
-    schedule_type: (row.schedule_type as ScheduleType) ?? "weekly",
+    schedule_type: merged.schedule_type,
+    week_start_dow: merged.week_start_dow,
+    week_end_dow: merged.week_end_dow,
+    monthly_working_dows: merged.monthly_working_dows,
   };
 }
 

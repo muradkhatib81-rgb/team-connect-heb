@@ -36,6 +36,7 @@ import {
   type ScheduleChangeBaselineKind,
 } from "@/lib/schedule-publish-diff";
 import { trimScheduleNote } from "@/lib/schedule-note";
+import { formatShiftTimeRange } from "@/lib/shift-hours";
 import { resolveScheduleManagerCaps } from "@/lib/schedule-manager-caps";
 import { useAuth } from "@/lib/use-auth";
 import { useShiftDefinitions, type ShiftDef } from "@/lib/use-shift-definitions";
@@ -122,13 +123,12 @@ function normHm(value: string | null | undefined): string | null {
 function resolveTimeRange(
   row: ShiftRow | undefined,
   shift: ScheduleShiftCode,
-  def?: ShiftDef,
+  resolved?: { start_time?: string | null; end_time?: string | null },
 ): string | null {
   if (shift === "off") return null;
-  const start = normHm(row?.start_time) ?? normHm(def?.start_time);
-  const end = normHm(row?.end_time) ?? normHm(def?.end_time);
-  if (!start || !end) return null;
-  return `${start}–${end}`;
+  const start = normHm(row?.start_time) ?? normHm(resolved?.start_time);
+  const end = normHm(row?.end_time) ?? normHm(resolved?.end_time);
+  return formatShiftTimeRange(start, end);
 }
 
 function normalizeShift(
@@ -196,6 +196,10 @@ function buildDepartmentEmployeeRows(args: {
   selectedDay: string;
   shiftFilter?: ScheduleShiftCode | null;
   shiftDefs: Map<string, ShiftDef>;
+  getTimesForDay: (code: string | null | undefined, dayDate: string) => {
+    start_time: string | null;
+    end_time: string | null;
+  };
   selfId?: string;
   includeSubmittedDiffWhenPublished: boolean;
 }): DailyScheduleEmployeeRow[] {
@@ -206,6 +210,7 @@ function buildDepartmentEmployeeRows(args: {
     selectedDay,
     shiftFilter = null,
     shiftDefs,
+    getTimesForDay,
     selfId,
     includeSubmittedDiffWhenPublished,
   } = args;
@@ -233,11 +238,12 @@ function buildDepartmentEmployeeRows(args: {
     if (shiftFilter != null && shift !== shiftFilter) continue;
 
     const def = shiftDefs.get(shift);
+    const resolvedTimes = getTimesForDay(shift, selectedDay);
     const rawNote = raw.note ? trimScheduleNote(String(raw.note)) : "";
     const submittedBaseline = buildChangeBaselineFromShiftRow(raw, "submitted", shiftDefs);
     const publishedBaseline = buildChangeBaselineFromShiftRow(raw, "published", shiftDefs);
-    const start = normHm(raw.start_time) ?? normHm(def?.start_time);
-    const end = normHm(raw.end_time) ?? normHm(def?.end_time);
+    const start = normHm(raw.start_time) ?? normHm(resolvedTimes.start_time);
+    const end = normHm(raw.end_time) ?? normHm(resolvedTimes.end_time);
     const { isShiftModified, isNoteModified, isTimeModified } = diffScheduleCellForViewer({
       currentShift: shift,
       currentStart: start,
@@ -258,7 +264,7 @@ function buildDepartmentEmployeeRows(args: {
         shift === "off"
           ? leaveOffLabel(raw.leave_type_code ?? stub.leave_type_code)
           : getShiftLabel(shift),
-      timeRange: resolveTimeRange(raw, shift, def),
+      timeRange: resolveTimeRange(raw, shift, resolvedTimes),
       note: rawNote || null,
       isModified: isShiftModified,
       isNoteModified,
@@ -566,6 +572,7 @@ export function DailyScheduleOverview({
                 selectedDay,
                 shiftFilter: isFilterActive,
                 shiftDefs: shiftDefsQ.map,
+                getTimesForDay: shiftDefsQ.getTimesForDay,
                 selfId: selfUserId,
                 includeSubmittedDiffWhenPublished,
               });
