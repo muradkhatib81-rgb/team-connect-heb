@@ -208,6 +208,11 @@ export function AppShell({ children }: { children: ReactNode }) {
     isPlatformOwner ||
     (profile.roles.includes("assistant_manager") &&
       permissionsQ.data?.can_manage_company_settings === true);
+  const canManageShiftSettings = hasBranchActionPermission(
+    profile.roles,
+    permissionsQ.data,
+    "can_manage_schedule",
+  );
 
   type NavEntry = {
     to: string;
@@ -350,7 +355,7 @@ export function AppShell({ children }: { children: ReactNode }) {
       to: "/shift-settings",
       label: t("nav.shiftSettings"),
       icon: CalendarDays,
-      visible: admin,
+      visible: canManageShiftSettings,
       section: branchSection,
     },
     {

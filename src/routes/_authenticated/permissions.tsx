@@ -126,6 +126,12 @@ const CATEGORIES: Category[] = [
       { key: "can_edit_schedule", label: "עריכת סידור עבודה", description: "מאפשר לשנות סידור עבודה קיים לפני אישורו." },
       { key: "can_approve_schedule", label: "אישור סידור עבודה", description: "מאפשר לאשר סידור עבודה ששלח אחראי מחלקה." },
       { key: "can_publish_schedule", label: "פרסום סידור עבודה", description: "מאפשר לאשר ולפרסם סידור עבודה ישירות לעובדים." },
+      {
+        key: "can_manage_schedule",
+        label: "הגדרות משמרות",
+        description:
+          "מאפשר לנהל סוגי משמרות, שעות לפי יום ותקופת הסידור. ברירת מחדל: רק בעל המערכת — ניתן להעניק לסגן מנהל או מנהל סניף.",
+      },
     ],
   },
   {

@@ -3,6 +3,10 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/use-auth";
+import {
+  hasBranchActionPermission,
+  useCurrentPermissions,
+} from "@/lib/use-current-permissions";
 import { useShiftDefinitions, type ShiftDef } from "@/lib/use-shift-definitions";
 import { useSchedulePeriodConfig } from "@/lib/use-schedule-period-config";
 import { useActiveBranch } from "@/lib/use-active-branch";
@@ -139,20 +143,7 @@ function ShiftSettingsPage() {
   const { data: me } = useAuth();
   const periodConfigQ = useSchedulePeriodConfig();
   const { activeBranchId } = useActiveBranch();
-  const isMainAdmin = !!me?.roles.includes("main_admin") || !!me?.roles.includes("system_admin");
-
-  const permQ = useQuery({
-    enabled: !!me?.id && !isMainAdmin,
-    queryKey: ["my-shift-manage-perm", me?.id],
-    queryFn: async () => {
-      const { data } = await supabase
-        .from("user_task_permissions")
-        .select("can_manage_schedule, can_create_schedule, can_edit_schedule")
-        .eq("user_id", me!.id)
-        .maybeSingle();
-      return !!(data as any)?.can_manage_schedule || !!(data as any)?.can_create_schedule || !!(data as any)?.can_edit_schedule;
-    },
-  });
+  const permissionsQ = useCurrentPermissions(me?.id);
 
   const listQ = useShiftDefinitions();
   const rows = listQ.all;
@@ -420,7 +411,11 @@ function ShiftSettingsPage() {
   }
 
   if (!me) return null;
-  const canManage = isMainAdmin || !!permQ.data;
+  const canManage = hasBranchActionPermission(
+    me.roles,
+    permissionsQ.data,
+    "can_manage_schedule",
+  );
 
   if (!canManage) {
     return (

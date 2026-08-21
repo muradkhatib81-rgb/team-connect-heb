@@ -101,6 +101,10 @@ export function canAccessRoute(input: RouteAccessInput): boolean {
     );
   }
 
+  if (pathname === "/shift-settings") {
+    return isPlatformRole(roles) || grant(input, "can_manage_schedule");
+  }
+
   if (pathname === "/departments") {
     return (
       isPlatformRole(roles) ||

@@ -1131,6 +1131,7 @@ export const PERMISSION_KEYS = [
   "can_edit_schedule",
   "can_approve_schedule",
   "can_publish_schedule",
+  "can_manage_schedule",
   // Leave
   "can_view_leave",
   "can_approve_leave",
