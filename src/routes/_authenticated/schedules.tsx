@@ -740,6 +740,33 @@ function SchedulesPage() {
     staleTime: 30_000,
   });
 
+  /** Published id only when flags confirm it belongs to the navigated period. */
+  const publishedIdForPeriod = useMemo(() => {
+    if (!(isDeptHeadOnly || isEmployee)) return null;
+    if (!deptWeekFlagsQ.data?.hasPublished) return null;
+    const id = deptWeekFlagsQ.data.publishedScheduleId as string | null | undefined;
+    if (!id) return null;
+    const publishedWeekStart =
+      (deptWeekFlagsQ.data.published_week_start as string | null | undefined) ??
+      (deptWeekFlagsQ.data.schedule_week_start as string | null | undefined);
+    if (
+      publishedWeekStart &&
+      getPeriodStart(publishedWeekStart, periodConfig) !== periodWeekStart
+    ) {
+      return null;
+    }
+    return id;
+  }, [
+    isDeptHeadOnly,
+    isEmployee,
+    deptWeekFlagsQ.data?.hasPublished,
+    deptWeekFlagsQ.data?.publishedScheduleId,
+    deptWeekFlagsQ.data?.published_week_start,
+    deptWeekFlagsQ.data?.schedule_week_start,
+    periodWeekStart,
+    periodConfig,
+  ]);
+
   // Schedule for selected dept+week
   const schedQ = useQuery({
     enabled:
@@ -753,15 +780,10 @@ function SchedulesPage() {
       periodWeekStart,
       focusedScheduleId,
       me?.id,
-      deptWeekFlagsQ.data?.hasPublished,
-      deptWeekFlagsQ.data?.publishedScheduleId,
+      publishedIdForPeriod,
     ],
     queryFn: async () => {
-      const publishedScheduleId =
-        (isDeptHeadOnly || isEmployee) && deptWeekFlagsQ.data?.hasPublished
-          ? (deptWeekFlagsQ.data.publishedScheduleId as string | null | undefined)
-          : null;
-      const scheduleId = focusedScheduleId ?? publishedScheduleId ?? undefined;
+      const scheduleId = focusedScheduleId ?? publishedIdForPeriod ?? undefined;
       const rows = await getSchedulesFn({
         data: {
           week_start: periodWeekStart,
@@ -783,22 +805,11 @@ function SchedulesPage() {
     return periodWeekEnd;
   }, [schedQ.data?.week_end, schedQ.data?.week_start, periodWeekStart, periodWeekEnd]);
 
-  const days = useMemo(() => {
-    const sched = schedQ.data as { id?: string; week_start?: string } | null | undefined;
-    if (sched?.week_start) {
-      const schedPeriodStart = getPeriodStart(sched.week_start as string, periodConfig);
-      const matchesViewedPeriod =
-        schedPeriodStart === periodWeekStart ||
-        (!!focusedScheduleId && sched.id === focusedScheduleId) ||
-        (!!(isDeptHeadOnly || isEmployee) &&
-          !!deptWeekFlagsQ.data?.publishedScheduleId &&
-          sched.id === deptWeekFlagsQ.data.publishedScheduleId);
-      if (matchesViewedPeriod) {
-        return buildPeriodDays(schedPeriodStart, periodConfig);
-      }
-    }
-    return buildPeriodDays(periodWeekStart, periodConfig);
-  }, [schedQ.data, periodWeekStart, periodConfig, focusedScheduleId, isDeptHeadOnly, isEmployee, deptWeekFlagsQ.data?.publishedScheduleId]);
+  /** Always follow the navigated week — never the loaded schedule's week_start. */
+  const days = useMemo(
+    () => buildPeriodDays(periodWeekStart, periodConfig),
+    [periodWeekStart, periodConfig],
+  );
 
   const blockedCreatorId = deptWeekFlagsQ.data?.awaitingPublish?.created_by ?? null;
   const blockedCreatorQ = useQuery({
@@ -969,11 +980,9 @@ function SchedulesPage() {
     const schedulePeriodStart = getPeriodStart(s.week_start as string, periodConfig);
     const periodMatches = schedulePeriodStart === periodWeekStart;
     const openedById = !!focusedScheduleId && s.id === focusedScheduleId;
-    const openedPublishedForViewer =
-      (isEmployee || isDeptHeadOnly) &&
-      !!deptWeekFlagsQ.data?.publishedScheduleId &&
-      s.id === deptWeekFlagsQ.data.publishedScheduleId;
-    if (!periodMatches && !openedById && !openedPublishedForViewer) return null;
+    const openedPublishedForPeriod =
+      !!publishedIdForPeriod && s.id === publishedIdForPeriod;
+    if (!periodMatches && !openedById && !openedPublishedForPeriod) return null;
     if (!canViewScheduleContent(s, scheduleViewerCaps, managedDeptIds)) return null;
     return s;
   }, [
@@ -983,9 +992,7 @@ function SchedulesPage() {
     periodWeekStart,
     periodConfig,
     focusedScheduleId,
-    isEmployee,
-    isDeptHeadOnly,
-    deptWeekFlagsQ.data?.publishedScheduleId,
+    publishedIdForPeriod,
   ]);
 
   const latestPublishedScheduleIdQ = useQuery({
@@ -1696,16 +1703,21 @@ function SchedulesPage() {
   const viewingPeriodSchedule =
     !!visible &&
     (getPeriodStart(visible.week_start as string, periodConfig) === periodWeekStart ||
-      (!!focusedScheduleId && visible.id === focusedScheduleId));
+      (!!focusedScheduleId && visible.id === focusedScheduleId) ||
+      (!!publishedIdForPeriod && visible.id === publishedIdForPeriod));
 
   const viewingPublishedSchedule =
-    viewingPeriodSchedule &&
-    visible!.status === "approved" &&
-    !!(visible as { published_at?: string | null }).published_at;
+    !!visible &&
+    visible.status === "approved" &&
+    !!(visible as { published_at?: string | null }).published_at &&
+    viewingPeriodSchedule;
 
-  /** Dept heads and employees: view-only once a schedule is published. */
+  /** Dept heads and employees: never edit a published schedule. */
   const publishedScheduleViewOnly =
-    viewingPublishedSchedule && (isEmployee || isDeptHeadOnly);
+    (isEmployee || isDeptHeadOnly) &&
+    !!visible &&
+    visible.status === "approved" &&
+    !!(visible as { published_at?: string | null }).published_at;
 
   const viewingSavedSchedule =
     viewingPeriodSchedule &&
@@ -1752,8 +1764,8 @@ function SchedulesPage() {
     schedQ.isLoading ||
     (openingExistingSchedule && !visible);
 
-  const displayWeekStart = days[0] ?? periodWeekStart;
-  const displayWeekEnd = days[days.length - 1] ?? periodWeekEnd;
+  const displayWeekStart = periodWeekStart;
+  const displayWeekEnd = periodWeekEnd;
   const blockedAwaitingStatus =
     deptWeekFlagsQ.data?.awaitingPublish?.status ??
     (visible?.status as string | undefined);
@@ -1773,9 +1785,15 @@ function SchedulesPage() {
     (((visible.status === "draft" || visible.status === "rejected") &&
       (isMainAdmin || isBranchManager || canEdit || visible.created_by === me?.id))
       || (visible.status === "approved" &&
+        !visible.published_at &&
+        (isMainAdmin || isBranchManager || canEdit || canCreate || canPublishDirect))
+      || (visible.status === "approved" &&
+        !!visible.published_at &&
+        !isDeptHeadOnly &&
         (isMainAdmin || isBranchManager || canEdit || canCreate || canPublishDirect))
       || (visible.status === "pending_approval" &&
-        (isMainAdmin || canApprove || canPublishDirect || canEdit || canCreate)));
+        (isMainAdmin || canApprove || canPublishDirect || canEdit || canCreate) &&
+        !isDeptHeadOnly));
 
   const canToggleScheduleExclusion =
     canManageScheduleExclusion && !isEmployee && !!visible && editable;

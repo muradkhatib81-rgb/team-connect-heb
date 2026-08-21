@@ -361,8 +361,13 @@ function scheduleMatchesPeriod(
   periodEnd: string,
   config: BranchPeriodConfig,
 ): boolean {
+  // Primary: normalized period start must match the requested period.
   if (weekStartOf(row.week_start, config).start === periodStart) return true;
-  return row.week_start >= periodStart && row.week_start <= periodEnd;
+  // Legacy: week_start stored as any day inside the same period window.
+  if (row.week_start >= periodStart && row.week_start <= periodEnd) {
+    return weekStartOf(row.week_start, config).start === periodStart;
+  }
+  return false;
 }
 
 /** All schedules for one department + normalized period (handles legacy week_start keys). */
@@ -439,12 +444,7 @@ async function findAllDepartmentSchedulesForPeriod(
       .eq("department_id", departmentId)
       .in("id", shiftScheduleIds);
     if (shiftSchedErr) throw shiftSchedErr;
-    for (const row of shiftScheds ?? []) {
-      const id = (row as { id?: string }).id;
-      if (!id || seen.has(id)) continue;
-      seen.add(id);
-      matches.push(row as Record<string, unknown>);
-    }
+    for (const row of shiftScheds ?? []) add(row as Record<string, unknown>);
   }
 
   return matches;
@@ -2006,6 +2006,8 @@ export const getDepartmentWeekScheduleFlags = createServerFn({ method: "POST" })
       hasManagerSavedAwaitingPublish,
       hasDeptHeadPendingApproval,
       publishedScheduleId: (publishedSched as { id?: string } | null)?.id ?? null,
+      published_week_start:
+        (publishedSched as { week_start?: string } | null)?.week_start ?? null,
       schedule_id: (sched as { id?: string } | null)?.id ?? null,
       schedule_week_start: (sched as { week_start?: string } | null)?.week_start ?? null,
       awaitingPublish: hasManagerSavedAwaitingPublish && blockingMeta
