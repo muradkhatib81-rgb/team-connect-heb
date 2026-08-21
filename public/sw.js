@@ -1,11 +1,10 @@
 /**
  * Installability service worker (PWA).
- * Network-only: never caches HTML/JS/API — avoids stale shells after deploy.
- * Does not change auth, roles, RLS, or app business logic.
+ * Does NOT intercept network traffic — calling respondWith(fetch()) on every
+ * request adds latency with no caching benefit. An empty fetch listener keeps
+ * installability without slowing navigations or API calls.
  */
-const SW_VERSION = "pwa-install-v1";
-
-self.addEventListener("install", (event) => {
+self.addEventListener("install", () => {
   self.skipWaiting();
 });
 
@@ -22,7 +21,6 @@ self.addEventListener("activate", (event) => {
   );
 });
 
-self.addEventListener("fetch", (event) => {
-  // Always go to the network. Offline shell is intentionally not supported yet.
-  event.respondWith(fetch(event.request));
-});
+// Presence of a fetch listener satisfies installability checks.
+// Do not call event.respondWith — let the browser handle requests directly.
+self.addEventListener("fetch", () => {});

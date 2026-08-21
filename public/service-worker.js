@@ -1,10 +1,8 @@
 /**
  * Alternate path kept in sync with /sw.js so old registrations update cleanly.
- * Network-only installability worker — no app-shell cache.
+ * Installability only — does not intercept network traffic.
  */
-const SW_VERSION = "pwa-install-v1";
-
-self.addEventListener("install", (event) => {
+self.addEventListener("install", () => {
   self.skipWaiting();
 });
 
@@ -21,6 +19,6 @@ self.addEventListener("activate", (event) => {
   );
 });
 
-self.addEventListener("fetch", (event) => {
-  event.respondWith(fetch(event.request));
-});
+// Presence of a fetch listener satisfies installability checks.
+// Do not call event.respondWith — let the browser handle requests directly.
+self.addEventListener("fetch", () => {});

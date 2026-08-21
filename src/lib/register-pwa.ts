@@ -1,4 +1,4 @@
-/** Register the network-only installability service worker (no offline cache). */
+/** Register the installability service worker without blocking the UI. */
 
 const PWA_SW_PATH = "/sw.js";
 
@@ -32,8 +32,9 @@ export async function registerPwaServiceWorker(): Promise<void> {
   if (!("serviceWorker" in navigator)) return;
 
   try {
-    await pruneForeignServiceWorkers();
+    // Register first so installability is available quickly; prune legacy SWs after.
     await navigator.serviceWorker.register(PWA_SW_PATH, { scope: "/" });
+    void pruneForeignServiceWorkers();
   } catch (err) {
     console.warn("[pwa] service worker registration failed", err);
   }

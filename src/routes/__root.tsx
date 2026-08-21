@@ -190,11 +190,16 @@ function RootShell({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     let cancelled = false;
-    void fetchPlatformPwaIconUrl().then((url) => {
-      if (!cancelled) setPwaIconUrl(url);
-    });
+    const load = () => {
+      void fetchPlatformPwaIconUrl().then((url) => {
+        if (!cancelled) setPwaIconUrl(url);
+      });
+    };
+    // Don't compete with first paint / auth for a branding icon.
+    const t = window.setTimeout(load, 800);
     return () => {
       cancelled = true;
+      window.clearTimeout(t);
     };
   }, []);
 
@@ -235,7 +240,13 @@ function RootComponent() {
   const router = useRouter();
 
   useEffect(() => {
-    void registerPwaServiceWorker();
+    const run = () => void registerPwaServiceWorker();
+    if (typeof window !== "undefined" && "requestIdleCallback" in window) {
+      const id = window.requestIdleCallback(run, { timeout: 2500 });
+      return () => window.cancelIdleCallback(id);
+    }
+    const t = window.setTimeout(run, 1200);
+    return () => window.clearTimeout(t);
   }, []);
 
   useEffect(() => {
