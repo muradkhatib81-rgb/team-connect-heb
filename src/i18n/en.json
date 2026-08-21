@@ -857,6 +857,8 @@
     "next": "Next",
     "days": "days",
     "appName": "Employee Management System",
+    "appShortName": "Team Connect",
+    "appDescription": "Employee management for teams, departments, schedules, and branch roles.",
     "menu": "Menu",
     "notifications": "Notifications"
   }

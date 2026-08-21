@@ -17,6 +17,7 @@ import { Toaster } from "@/components/ui/sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { PlatformProvider } from "@/platform";
 import { registerPwaServiceWorker } from "@/lib/register-pwa";
+import { applyPwaBranding, fetchPlatformPwaIconUrl } from "@/lib/pwa-branding";
 
 function NotFoundComponent() {
   return (
@@ -87,16 +88,16 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       { name: "apple-mobile-web-app-status-bar-style", content: "default" },
       { name: "apple-mobile-web-app-title", content: i18n.t("common.appName") },
       { title: i18n.t("common.appName") },
-      { name: "description", content: i18n.t("common.appName") },
+      { name: "description", content: i18n.t("common.appDescription") },
       { property: "og:title", content: i18n.t("common.appName") },
       { name: "twitter:title", content: i18n.t("common.appName") },
       {
         property: "og:description",
-        content: "מערכת ניהול עובדים לניהול צוות, מחלקות ותפקידים בסניף.",
+        content: i18n.t("common.appDescription"),
       },
       {
         name: "twitter:description",
-        content: "מערכת ניהול עובדים לניהול צוות, מחלקות ותפקידים בסניף.",
+        content: i18n.t("common.appDescription"),
       },
       {
         property: "og:image",
@@ -185,20 +186,32 @@ function RootShell({ children }: { children: ReactNode }) {
     const current = i18n.language;
     return current === "en" || current === "ar" ? current : "he";
   });
+  const [pwaIconUrl, setPwaIconUrl] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    void fetchPlatformPwaIconUrl().then((url) => {
+      if (!cancelled) setPwaIconUrl(url);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   useEffect(() => {
     const onChange = (lng: string) => {
       const next = lng === "en" || lng === "ar" ? lng : "he";
       setLang(next);
       document.documentElement.dir = next === "en" ? "ltr" : "rtl";
       document.documentElement.lang = next;
-      document.title = i18n.t("common.appName");
+      applyPwaBranding(pwaIconUrl);
     };
     i18n.on("languageChanged", onChange);
     onChange(i18n.language);
     return () => {
       i18n.off("languageChanged", onChange);
     };
-  }, []);
+  }, [pwaIconUrl]);
   const dir = lang === "en" ? "ltr" : "rtl";
   return (
     <html lang={lang} dir={dir}>
