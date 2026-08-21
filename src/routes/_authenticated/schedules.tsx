@@ -60,6 +60,7 @@ import {
   approveSchedule,
   publishSchedule,
   getSchedulesForViewer,
+  getScheduleShiftsForViewer,
   getDepartmentWeekScheduleFlags,
   copyPreviousWeek,
   deleteSchedule,
@@ -471,6 +472,7 @@ function SchedulesPage() {
   }, [isDeptHeadOnly, periodWeekStart, deptHeadWeekWindow]);
 
   const getSchedulesFn = useServerFn(getSchedulesForViewer);
+  const getShiftsFn = useServerFn(getScheduleShiftsForViewer);
   const deptWeekFlagsFn = useServerFn(getDepartmentWeekScheduleFlags);
   const weekSchedulesQ = useQuery({
     enabled: !!me?.id && view === "editor",
@@ -733,54 +735,14 @@ function SchedulesPage() {
     enabled: !!selectedDept && !!me?.id && view === "editor",
     queryKey: ["schedule", selectedDept, periodWeekStart, focusedScheduleId, me?.id],
     queryFn: async () => {
-      if (focusedScheduleId) {
-        const { data, error } = await supabase
-          .from("schedules")
-          .select("*")
-          .eq("id", focusedScheduleId)
-          .maybeSingle();
-        if (error) throw error;
-        if (
-          data &&
-          scheduleViewerCaps &&
-          canViewScheduleContent(data, scheduleViewerCaps, managedDeptIds)
-        ) {
-          return data;
-        }
-        return null;
-      }
-
       const rows = await getSchedulesFn({
-        data: { week_start: periodWeekStart, department_id: selectedDept! },
+        data: {
+          week_start: periodWeekStart,
+          department_id: selectedDept!,
+          ...(focusedScheduleId ? { schedule_id: focusedScheduleId } : {}),
+        },
       });
-      const exact = (rows ?? [])[0] ?? null;
-      if (exact) return exact;
-
-      // Legacy rows or mismatched week_start keys — match by period overlap.
-      const { data: overlapRows, error } = await supabase
-        .from("schedules")
-        .select("*")
-        .eq("department_id", selectedDept!)
-        .lte("week_start", periodWeekEnd)
-        .gte("week_end", periodWeekStart)
-        .order("updated_at", { ascending: false })
-        .limit(10);
-      if (error) throw error;
-      const periodMatches = (overlapRows ?? []).filter(
-        (row) =>
-          getPeriodStart(row.week_start as string, periodConfig) === periodWeekStart &&
-          scheduleViewerCaps &&
-          canViewScheduleContent(row, scheduleViewerCaps, managedDeptIds),
-      );
-      const published = periodMatches.find(
-        (row) => row.status === "approved" && !!(row as { published_at?: string | null }).published_at,
-      );
-      if (published) return published;
-      const saved = periodMatches.find((row) =>
-        isSavedScheduleAwaitingPublish(row as { status: string; published_at: string | null }),
-      );
-      if (saved) return saved;
-      return periodMatches[0] ?? null;
+      return (rows ?? [])[0] ?? null;
     },
   });
 
@@ -1142,16 +1104,7 @@ function SchedulesPage() {
   const shiftsQ = useQuery({
     enabled: !!visible?.id && view === "editor",
     queryKey: ["schedule-shifts", visible?.id],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("schedule_shifts")
-        .select(
-          "employee_id, day_date, shift, leave_type_code, published_shift, published_note, published_start_time, published_end_time, submitted_shift, submitted_note, submitted_start_time, submitted_end_time, start_time, end_time, note",
-        )
-        .eq("schedule_id", visible!.id);
-      if (error) throw error;
-      return data ?? [];
-    },
+    queryFn: () => getShiftsFn({ data: { schedule_id: visible!.id } }),
   });
 
   // Local edits map: emp -> day -> shift
@@ -1736,10 +1689,11 @@ function SchedulesPage() {
     !viewingPublishedSchedule &&
     !openingExistingSchedule;
 
-  /** Block new drafts in editor; allow opening an existing published schedule by id. */
+  /** Block new drafts for management; dept heads/employees see published schedule read-only. */
   const publishedScheduleBlocksCreate =
     hasPublishedForPeriod &&
     !isEmployee &&
+    !isDeptHeadOnly &&
     !viewingPublishedSchedule &&
     !openingExistingSchedule;
 

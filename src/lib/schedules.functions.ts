@@ -522,6 +522,7 @@ export const getSchedulesForViewer = createServerFn({ method: "POST" })
       .object({
         week_start: z.string(),
         department_id: z.string().uuid().optional(),
+        schedule_id: z.string().uuid().optional(),
       })
       .parse(d),
   )
@@ -529,20 +530,37 @@ export const getSchedulesForViewer = createServerFn({ method: "POST" })
     const caps = await getCaps(context.supabase, context.userId);
     const periodConfig = await fetchBranchPeriodConfig(context.supabase);
     const { start: weekStartKey, end: weekEndKey } = weekStartOf(data.week_start, periodConfig);
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+
+    if (data.schedule_id) {
+      const { data: row, error } = await supabaseAdmin
+        .from("schedules")
+        .select("*")
+        .eq("id", data.schedule_id)
+        .maybeSingle();
+      if (error) throw new Error(error.message);
+      if (row && (await isScheduleVisibleToCaps(row, caps, context.userId, context.supabase))) {
+        return [row];
+      }
+      return [];
+    }
 
     if (data.department_id) {
       const allRows = await findAllDepartmentSchedulesForPeriod(
-        context.supabase,
+        supabaseAdmin,
         data.department_id,
         weekStartKey,
         weekEndKey,
         periodConfig,
       );
-      const sched = pickPrimaryDepartmentSchedule(allRows);
-      if (sched && (await isScheduleVisibleToCaps(sched, caps, context.userId, context.supabase))) {
-        return [sched];
+      const visibleRows: Record<string, unknown>[] = [];
+      for (const row of allRows) {
+        if (await isScheduleVisibleToCaps(row, caps, context.userId, context.supabase)) {
+          visibleRows.push(row);
+        }
       }
-      return [];
+      const sched = pickPrimaryDepartmentSchedule(visibleRows);
+      return sched ? [sched] : [];
     }
 
     const seen = new Set<string>();
@@ -606,6 +624,33 @@ export const getSchedulesForViewer = createServerFn({ method: "POST" })
       }
     }
     return visible;
+  });
+
+const scheduleShiftsViewerSelect =
+  "employee_id, day_date, shift, leave_type_code, published_shift, published_note, published_start_time, published_end_time, submitted_shift, submitted_note, submitted_start_time, submitted_end_time, start_time, end_time, note";
+
+/** Load shift rows for a schedule the viewer may see (admin fetch + visibility gate). */
+export const getScheduleShiftsForViewer = createServerFn({ method: "POST" })
+  .middleware([requireBranchContext])
+  .inputValidator((d: unknown) => z.object({ schedule_id: z.string().uuid() }).parse(d))
+  .handler(async ({ data, context }) => {
+    const caps = await getCaps(context.supabase, context.userId);
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { data: sched, error: schedErr } = await supabaseAdmin
+      .from("schedules")
+      .select("*")
+      .eq("id", data.schedule_id)
+      .maybeSingle();
+    if (schedErr) throw new Error(schedErr.message);
+    if (!sched || !(await isScheduleVisibleToCaps(sched, caps, context.userId, context.supabase))) {
+      throw new Error("אין הרשאה לצפות בסידור");
+    }
+    const { data: shifts, error } = await supabaseAdmin
+      .from("schedule_shifts")
+      .select(scheduleShiftsViewerSelect)
+      .eq("schedule_id", data.schedule_id);
+    if (error) throw new Error(error.message);
+    return shifts ?? [];
   });
 
 // ---------- CREATE / GET-OR-CREATE schedule ----------
