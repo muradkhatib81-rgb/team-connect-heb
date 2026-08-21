@@ -75,6 +75,7 @@ export function canEditScheduleTimes(
     | "isMainAdmin"
     | "isBranchManager"
     | "isDeptHeadOnly"
+    | "canCreate"
     | "canEdit"
     | "canApprove"
     | "canPublishDirect"
@@ -85,6 +86,7 @@ export function canEditScheduleTimes(
     caps.isMainAdmin ||
     caps.isBranchManager ||
     caps.canEdit ||
+    caps.canCreate ||
     caps.canApprove ||
     caps.canPublishDirect
   );

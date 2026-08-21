@@ -763,11 +763,17 @@ export const saveScheduleShifts = createServerFn({ method: "POST" })
     const isApproved = sched.status === "approved";
     const isPendingApproval = sched.status === "pending_approval";
     if (isApproved) {
-      if (!caps.isMainAdmin && !caps.canPublishDirect) {
+      if (!caps.isMainAdmin && !caps.canPublishDirect && !caps.canEdit && !caps.canCreate) {
         throw new Error("אין הרשאה לערוך סידור מאושר");
       }
     } else if (isPendingApproval) {
-      if (!caps.isMainAdmin && !caps.canApprove && !caps.canPublishDirect) {
+      if (
+        !caps.isMainAdmin &&
+        !caps.canApprove &&
+        !caps.canPublishDirect &&
+        !caps.canEdit &&
+        !caps.canCreate
+      ) {
         throw new Error("אין הרשאה לערוך סידור הממתין לאישור");
       }
     } else if (!["draft", "rejected"].includes(sched.status)) {

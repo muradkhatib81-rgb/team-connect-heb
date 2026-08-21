@@ -981,10 +981,12 @@ function SchedulesPage() {
     const s = schedQ.data as any;
     if (!s || !scheduleViewerCaps) return null;
     const schedulePeriodStart = getPeriodStart(s.week_start as string, periodConfig);
-    if (schedulePeriodStart !== periodWeekStart) return null;
+    const periodMatches = schedulePeriodStart === periodWeekStart;
+    const openedById = !!focusedScheduleId && s.id === focusedScheduleId;
+    if (!periodMatches && !openedById) return null;
     if (!canViewScheduleContent(s, scheduleViewerCaps, managedDeptIds)) return null;
     return s;
-  }, [schedQ.data, scheduleViewerCaps, managedDeptIds, periodWeekStart, periodConfig]);
+  }, [schedQ.data, scheduleViewerCaps, managedDeptIds, periodWeekStart, periodConfig, focusedScheduleId]);
 
   const latestPublishedScheduleIdQ = useQuery({
     enabled:
@@ -1697,20 +1699,41 @@ function SchedulesPage() {
 
   const hasPublishedForPeriod = !!deptWeekFlagsQ.data?.hasPublished;
   const hasSavedForPeriod = !!deptWeekFlagsQ.data?.hasSavedAwaitingPublish;
+  const openingExistingSchedule = !!focusedScheduleId;
+
+  const viewingPeriodSchedule =
+    !!visible &&
+    (getPeriodStart(visible.week_start as string, periodConfig) === periodWeekStart ||
+      (!!focusedScheduleId && visible.id === focusedScheduleId));
+
+  const viewingPublishedSchedule =
+    viewingPeriodSchedule &&
+    visible!.status === "approved" &&
+    !!(visible as { published_at?: string | null }).published_at;
+
+  const viewingSavedSchedule =
+    viewingPeriodSchedule &&
+    isSavedScheduleAwaitingPublish(visible as { status: string; published_at: string | null });
 
   const managerSavedDraftBlocksMe =
     hasSavedForPeriod &&
-    isDeptHeadOnly;
+    isDeptHeadOnly &&
+    !viewingSavedSchedule &&
+    !openingExistingSchedule;
 
-  /** Editor tab is for new drafts only — keep the block even after the published row loads. */
+  /** Block new drafts in editor; allow opening an existing published schedule by id. */
   const publishedScheduleBlocksCreate =
     hasPublishedForPeriod &&
-    !isEmployee;
+    !isEmployee &&
+    !viewingPublishedSchedule &&
+    !openingExistingSchedule;
 
   const savedScheduleBlocksManager =
     hasSavedForPeriod &&
     !isEmployee &&
-    !isDeptHeadOnly;
+    !isDeptHeadOnly &&
+    !viewingSavedSchedule &&
+    !openingExistingSchedule;
 
   const periodScheduleBlocked =
     publishedScheduleBlocksCreate ||
@@ -1720,7 +1743,8 @@ function SchedulesPage() {
   const schedulePanelLoading =
     !selectedDept ||
     deptWeekFlagsQ.isLoading ||
-    (schedQ.isLoading && !hasPublishedForPeriod && !hasSavedForPeriod);
+    schedQ.isLoading ||
+    (openingExistingSchedule && !visible);
 
   const displayWeekStart =
     (visible?.week_start as string | undefined) ?? periodWeekStart;
@@ -1743,8 +1767,10 @@ function SchedulesPage() {
     !isDraftLockedForMe &&
     (((visible.status === "draft" || visible.status === "rejected") &&
       (isMainAdmin || isBranchManager || canEdit || visible.created_by === me?.id))
-      || (visible.status === "approved" && (isMainAdmin || canPublishDirect))
-      || (visible.status === "pending_approval" && (isMainAdmin || canApprove || canPublishDirect)));
+      || (visible.status === "approved" &&
+        (isMainAdmin || isBranchManager || canEdit || canCreate || canPublishDirect))
+      || (visible.status === "pending_approval" &&
+        (isMainAdmin || canApprove || canPublishDirect || canEdit || canCreate));
 
   const canToggleScheduleExclusion =
     canManageScheduleExclusion && !isEmployee && !!visible && editable;
@@ -2414,9 +2440,22 @@ function SchedulesPage() {
                 size="sm"
                 variant="outline"
                 className="mt-2"
-                onClick={() => setView("approved")}
+                onClick={() => {
+                  if (deptWeekFlagsQ.data?.schedule_id && selectedDept) {
+                    openScheduleFromPending({
+                      department_id: selectedDept,
+                      week_start:
+                        deptWeekFlagsQ.data.schedule_week_start ?? periodWeekStart,
+                      schedule_id: deptWeekFlagsQ.data.schedule_id,
+                    });
+                    return;
+                  }
+                  setView("approved");
+                }}
               >
-                {i18n.t("schedules.tabApproved")}
+                {deptWeekFlagsQ.data?.schedule_id
+                  ? i18n.t("schedules.openSchedule")
+                  : i18n.t("schedules.tabApproved")}
               </Button>
             </div>
           </div>
@@ -2479,9 +2518,22 @@ function SchedulesPage() {
                 size="sm"
                 variant="outline"
                 className="mt-2"
-                onClick={() => setView("saved")}
+                onClick={() => {
+                  if (deptWeekFlagsQ.data?.schedule_id && selectedDept) {
+                    openScheduleFromPending({
+                      department_id: selectedDept,
+                      week_start:
+                        deptWeekFlagsQ.data.schedule_week_start ?? periodWeekStart,
+                      schedule_id: deptWeekFlagsQ.data.schedule_id,
+                    });
+                    return;
+                  }
+                  setView("saved");
+                }}
               >
-                {i18n.t("schedules.tabSaved")}
+                {deptWeekFlagsQ.data?.schedule_id
+                  ? i18n.t("schedules.openSchedule")
+                  : i18n.t("schedules.tabSaved")}
               </Button>
             </div>
           </div>
