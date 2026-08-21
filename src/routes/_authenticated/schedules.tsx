@@ -730,16 +730,43 @@ function SchedulesPage() {
   });
 
 
+  const deptWeekFlagsQ = useQuery({
+    enabled: !!selectedDept && !!me?.id && view === "editor",
+    queryKey: ["dept-schedule-flags", selectedDept, periodWeekStart, me?.id],
+    queryFn: () =>
+      deptWeekFlagsFn({
+        data: { department_id: selectedDept!, week_start: periodWeekStart },
+      }),
+    staleTime: 30_000,
+  });
+
   // Schedule for selected dept+week
   const schedQ = useQuery({
-    enabled: !!selectedDept && !!me?.id && view === "editor",
-    queryKey: ["schedule", selectedDept, periodWeekStart, focusedScheduleId, me?.id],
+    enabled:
+      !!selectedDept &&
+      !!me?.id &&
+      view === "editor" &&
+      (!(isDeptHeadOnly || isEmployee) || !deptWeekFlagsQ.isLoading),
+    queryKey: [
+      "schedule",
+      selectedDept,
+      periodWeekStart,
+      focusedScheduleId,
+      me?.id,
+      deptWeekFlagsQ.data?.hasPublished,
+      deptWeekFlagsQ.data?.publishedScheduleId,
+    ],
     queryFn: async () => {
+      const publishedScheduleId =
+        (isDeptHeadOnly || isEmployee) && deptWeekFlagsQ.data?.hasPublished
+          ? (deptWeekFlagsQ.data.publishedScheduleId as string | null | undefined)
+          : null;
+      const scheduleId = focusedScheduleId ?? publishedScheduleId ?? undefined;
       const rows = await getSchedulesFn({
         data: {
           week_start: periodWeekStart,
           department_id: selectedDept!,
-          ...(focusedScheduleId ? { schedule_id: focusedScheduleId } : {}),
+          ...(scheduleId ? { schedule_id: scheduleId } : {}),
         },
       });
       return (rows ?? [])[0] ?? null;
@@ -762,23 +789,16 @@ function SchedulesPage() {
       const schedPeriodStart = getPeriodStart(sched.week_start as string, periodConfig);
       const matchesViewedPeriod =
         schedPeriodStart === periodWeekStart ||
-        (!!focusedScheduleId && sched.id === focusedScheduleId);
+        (!!focusedScheduleId && sched.id === focusedScheduleId) ||
+        (!!(isDeptHeadOnly || isEmployee) &&
+          !!deptWeekFlagsQ.data?.publishedScheduleId &&
+          sched.id === deptWeekFlagsQ.data.publishedScheduleId);
       if (matchesViewedPeriod) {
         return buildPeriodDays(schedPeriodStart, periodConfig);
       }
     }
     return buildPeriodDays(periodWeekStart, periodConfig);
-  }, [schedQ.data, periodWeekStart, periodConfig, focusedScheduleId]);
-
-  const deptWeekFlagsQ = useQuery({
-    enabled: !!selectedDept && !!me?.id && view === "editor",
-    queryKey: ["dept-schedule-flags", selectedDept, periodWeekStart, me?.id],
-    queryFn: () =>
-      deptWeekFlagsFn({
-        data: { department_id: selectedDept!, week_start: periodWeekStart },
-      }),
-    staleTime: 30_000,
-  });
+  }, [schedQ.data, periodWeekStart, periodConfig, focusedScheduleId, isDeptHeadOnly, isEmployee, deptWeekFlagsQ.data?.publishedScheduleId]);
 
   const blockedCreatorId = deptWeekFlagsQ.data?.awaitingPublish?.created_by ?? null;
   const blockedCreatorQ = useQuery({
@@ -949,10 +969,24 @@ function SchedulesPage() {
     const schedulePeriodStart = getPeriodStart(s.week_start as string, periodConfig);
     const periodMatches = schedulePeriodStart === periodWeekStart;
     const openedById = !!focusedScheduleId && s.id === focusedScheduleId;
-    if (!periodMatches && !openedById) return null;
+    const openedPublishedForViewer =
+      (isEmployee || isDeptHeadOnly) &&
+      !!deptWeekFlagsQ.data?.publishedScheduleId &&
+      s.id === deptWeekFlagsQ.data.publishedScheduleId;
+    if (!periodMatches && !openedById && !openedPublishedForViewer) return null;
     if (!canViewScheduleContent(s, scheduleViewerCaps, managedDeptIds)) return null;
     return s;
-  }, [schedQ.data, scheduleViewerCaps, managedDeptIds, periodWeekStart, periodConfig, focusedScheduleId]);
+  }, [
+    schedQ.data,
+    scheduleViewerCaps,
+    managedDeptIds,
+    periodWeekStart,
+    periodConfig,
+    focusedScheduleId,
+    isEmployee,
+    isDeptHeadOnly,
+    deptWeekFlagsQ.data?.publishedScheduleId,
+  ]);
 
   const latestPublishedScheduleIdQ = useQuery({
     enabled:
@@ -1680,12 +1714,14 @@ function SchedulesPage() {
   const managerSavedDraftBlocksMe =
     hasManagerSavedForPeriod &&
     isDeptHeadOnly &&
+    !hasPublishedForPeriod &&
     !viewingSavedSchedule &&
     !openingExistingSchedule;
 
   const deptHeadAwaitingApproval =
     hasDeptHeadPendingForPeriod &&
     isDeptHeadOnly &&
+    !hasPublishedForPeriod &&
     !viewingPublishedSchedule &&
     !openingExistingSchedule;
 

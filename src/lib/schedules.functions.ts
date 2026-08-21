@@ -2005,6 +2005,7 @@ export const getDepartmentWeekScheduleFlags = createServerFn({ method: "POST" })
       hasSavedAwaitingPublish,
       hasManagerSavedAwaitingPublish,
       hasDeptHeadPendingApproval,
+      publishedScheduleId: (publishedSched as { id?: string } | null)?.id ?? null,
       schedule_id: (sched as { id?: string } | null)?.id ?? null,
       schedule_week_start: (sched as { week_start?: string } | null)?.week_start ?? null,
       awaitingPublish: hasManagerSavedAwaitingPublish && blockingMeta
