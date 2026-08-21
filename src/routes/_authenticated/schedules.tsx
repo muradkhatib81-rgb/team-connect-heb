@@ -758,21 +758,23 @@ function SchedulesPage() {
         .lte("week_start", periodWeekEnd)
         .gte("week_end", periodWeekStart)
         .order("updated_at", { ascending: false })
-        .limit(5);
+        .limit(10);
       if (error) throw error;
-      for (const row of overlapRows ?? []) {
-        if (getPeriodStart(row.week_start as string, periodConfig) !== periodWeekStart) {
-          continue;
-        }
-        if (
+      const periodMatches = (overlapRows ?? []).filter(
+        (row) =>
+          getPeriodStart(row.week_start as string, periodConfig) === periodWeekStart &&
           scheduleViewerCaps &&
-          canViewScheduleContent(row, scheduleViewerCaps, managedDeptIds)
-        ) {
-          return row;
-        }
-      }
-
-      return null;
+          canViewScheduleContent(row, scheduleViewerCaps, managedDeptIds),
+      );
+      const published = periodMatches.find(
+        (row) => row.status === "approved" && !!(row as { published_at?: string | null }).published_at,
+      );
+      if (published) return published;
+      const saved = periodMatches.find((row) =>
+        isSavedScheduleAwaitingPublish(row as { status: string; published_at: string | null }),
+      );
+      if (saved) return saved;
+      return periodMatches[0] ?? null;
     },
   });
 
@@ -1725,6 +1727,8 @@ function SchedulesPage() {
     !isSupersededPublished &&
     !isEmployee &&
     !isDraftLockedForMe &&
+    !(deptWeekFlagsQ.data?.hasPublished && !viewingPublishedSchedule) &&
+    !(deptWeekFlagsQ.data?.hasSavedAwaitingPublish && !viewingSavedSchedule) &&
     (((visible.status === "draft" || visible.status === "rejected") &&
       (isMainAdmin || isBranchManager || canEdit || visible.created_by === me?.id))
       || (visible.status === "approved" && (isMainAdmin || canPublishDirect))
