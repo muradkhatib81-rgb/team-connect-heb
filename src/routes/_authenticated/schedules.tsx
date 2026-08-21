@@ -559,6 +559,9 @@ function SchedulesPage() {
         .select(
           "id, department_id, week_start, week_end, status, published_at, updated_at, created_by",
         )
+        .or(
+          "status.eq.draft,status.eq.pending_approval,and(status.eq.approved,published_at.is.null)",
+        )
         .order("week_start", { ascending: false });
       if (error) throw error;
       if (!scheds?.length) return { savedList: [] as SavedScheduleListItem[] };

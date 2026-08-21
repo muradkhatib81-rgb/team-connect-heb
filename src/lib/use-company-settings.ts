@@ -102,7 +102,7 @@ export function useCompanySettings(opts?: { allowUnscoped?: boolean }) {
 
   useEffect(() => {
     const channel = supabase
-      .channel(`company-settings-rt-${Date.now()}-${Math.random().toString(36).slice(2)}`)
+      .channel(`company-settings-rt-${activeBranchId ?? "none"}`)
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "company_settings" },
@@ -114,7 +114,7 @@ export function useCompanySettings(opts?: { allowUnscoped?: boolean }) {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [qc]);
+  }, [qc, activeBranchId]);
 
   return query;
 }

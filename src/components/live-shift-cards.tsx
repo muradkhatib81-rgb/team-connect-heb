@@ -146,7 +146,6 @@ export function LiveShiftCardsSection() {
       return (data ?? []) as TodayRow[];
     },
     staleTime: 30_000,
-    refetchOnMount: true,
   });
 
   // Branch staff + leave windows — same source as the dashboard "בחופשה" tile.
@@ -193,7 +192,6 @@ export function LiveShiftCardsSection() {
         }));
     },
     staleTime: 30_000,
-    refetchOnMount: true,
   });
 
   const scheduleEmpIds = useMemo(
