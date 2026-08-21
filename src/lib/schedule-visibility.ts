@@ -17,6 +17,7 @@ export type ScheduleVisibilityRow = {
   status: string;
   published_at: string | null;
   submitted_at?: string | null;
+  submitted_by?: string | null;
   created_by?: string | null;
   department_id: string;
 };
@@ -39,6 +40,47 @@ export function isSavedScheduleAwaitingPublish(
     schedule.status === "pending_approval" ||
     (schedule.status === "approved" && !schedule.published_at)
   );
+}
+
+/** Dept-head draft/rejected row they may still edit (draft before submit, or rejected for fixes). */
+export function isDeptHeadEditableDraft(
+  schedule: Pick<
+    ScheduleVisibilityRow,
+    "status" | "submitted_at" | "created_by" | "submitted_by"
+  >,
+  userId: string,
+): boolean {
+  const owns =
+    schedule.created_by === userId || schedule.submitted_by === userId;
+  if (!owns) return false;
+  if (schedule.status === "rejected") return true;
+  return schedule.status === "draft" && !schedule.submitted_at;
+}
+
+/** Dept-head submission waiting on management approval — hidden from editor. */
+export function isDeptHeadSubmittedAwaitingApproval(
+  schedule: Pick<
+    ScheduleVisibilityRow,
+    "status" | "submitted_at" | "created_by" | "submitted_by"
+  >,
+  userId: string,
+): boolean {
+  return (
+    schedule.status === "pending_approval" &&
+    !!schedule.submitted_at &&
+    (schedule.created_by === userId || schedule.submitted_by === userId)
+  );
+}
+
+/** Manager/branch saved schedule (not dept-head draft or pending submission). */
+export function isManagerSavedScheduleForDeptHead(
+  schedule: ScheduleVisibilityRow | null | undefined,
+  deptHeadUserId: string,
+): boolean {
+  if (!schedule || !isSavedScheduleAwaitingPublish(schedule)) return false;
+  if (isDeptHeadEditableDraft(schedule, deptHeadUserId)) return false;
+  if (isDeptHeadSubmittedAwaitingApproval(schedule, deptHeadUserId)) return false;
+  return true;
 }
 
 /** Branch-level schedule managers (not department heads acting on their own dept). */
@@ -82,8 +124,8 @@ export function isPlainScheduleEmployee(caps: ScheduleViewerCaps): boolean {
  * Does not alter role/permission definitions — only interprets existing caps for display.
  * - Employees: published approved schedules only.
  * - Branch managers / main admin / granular schedule perms: all schedules.
- * - Dept head: own-dept published; pending/approved-awaiting-publish; own drafts or
- *   post-submit rejected — but NOT manager-only drafts that were never submitted.
+ * - Dept head: own-dept published schedules; own draft/rejected before submit only.
+ *   Manager-saved rows and post-submit pending rows stay hidden until publish.
  */
 export function canViewScheduleContent(
   schedule: ScheduleVisibilityRow | null | undefined,
@@ -101,14 +143,8 @@ export function canViewScheduleContent(
   if (!isManagedDepartment(schedule.department_id, caps, managedDeptIds)) return false;
 
   if (schedule.status === "approved" && schedule.published_at) return true;
-  if (schedule.status === "pending_approval") return true;
-  if (schedule.status === "approved" && !schedule.published_at) return true;
 
-  if (schedule.status === "draft" || schedule.status === "rejected") {
-    if (schedule.submitted_at) return true;
-    if (schedule.created_by && schedule.created_by === caps.userId) return true;
-    return false;
-  }
+  if (isDeptHeadEditableDraft(schedule, caps.userId)) return true;
 
   return false;
 }

@@ -795,14 +795,18 @@ function SchedulesPage() {
   }, [schedQ.data?.week_end, schedQ.data?.week_start, periodWeekStart, periodWeekEnd]);
 
   const days = useMemo(() => {
-    if (schedQ.data?.week_start && schedQ.data?.week_end) {
-      return filterDaysByPeriodConfig(
-        buildDaysBetween(schedQ.data.week_start as string, schedQ.data.week_end as string),
-        periodConfig,
-      );
+    const sched = schedQ.data as { id?: string; week_start?: string } | null | undefined;
+    if (sched?.week_start) {
+      const schedPeriodStart = getPeriodStart(sched.week_start as string, periodConfig);
+      const matchesViewedPeriod =
+        schedPeriodStart === periodWeekStart ||
+        (!!focusedScheduleId && sched.id === focusedScheduleId);
+      if (matchesViewedPeriod) {
+        return buildPeriodDays(schedPeriodStart, periodConfig);
+      }
     }
     return buildPeriodDays(periodWeekStart, periodConfig);
-  }, [schedQ.data?.week_start, schedQ.data?.week_end, periodWeekStart, periodConfig]);
+  }, [schedQ.data, periodWeekStart, periodConfig, focusedScheduleId]);
 
   const deptWeekFlagsQ = useQuery({
     enabled: !!selectedDept && !!me?.id && view === "editor",
@@ -1020,24 +1024,16 @@ function SchedulesPage() {
   const deptHeadScheduleNavBlocked = useMemo(() => {
     if (!isDeptHeadOnly) return false;
     if (deptWeekFlagsQ.data?.hasPublished) return true;
-    if (deptWeekFlagsQ.data?.hasSavedAwaitingPublish) return true;
+    if (deptWeekFlagsQ.data?.hasManagerSavedAwaitingPublish) return true;
+    if (deptWeekFlagsQ.data?.hasDeptHeadPendingApproval) return true;
     if (visible?.status === "approved" && !!(visible as any).published_at) return true;
-    if (visible && isSavedScheduleAwaitingPublish(visible as any)) return true;
-    const deptId = selectedDept ?? myDeptId;
-    if (!deptId) return false;
-    return (weekSavedQ.data?.savedList ?? []).some((s) => {
-      if (s.department_id !== deptId) return false;
-      if (s.status === "approved" && s.published_at) return true;
-      return isSavedScheduleAwaitingPublish(s);
-    });
+    return false;
   }, [
     isDeptHeadOnly,
     deptWeekFlagsQ.data?.hasPublished,
-    deptWeekFlagsQ.data?.hasSavedAwaitingPublish,
+    deptWeekFlagsQ.data?.hasManagerSavedAwaitingPublish,
+    deptWeekFlagsQ.data?.hasDeptHeadPendingApproval,
     visible,
-    selectedDept,
-    myDeptId,
-    weekSavedQ.data?.savedList,
   ]);
 
   useEffect(() => {
@@ -1294,7 +1290,14 @@ function SchedulesPage() {
       if (deptWeekFlagsQ.data?.hasPublished) {
         throw new Error(i18n.t("schedules.publishedScheduleExists"));
       }
-      if (deptWeekFlagsQ.data?.hasSavedAwaitingPublish) {
+      if (isDeptHeadOnly) {
+        if (deptWeekFlagsQ.data?.hasManagerSavedAwaitingPublish) {
+          throw new Error(i18n.t("schedules.managerSavedBlocksCreate"));
+        }
+        if (deptWeekFlagsQ.data?.hasDeptHeadPendingApproval) {
+          throw new Error(i18n.t("schedules.awaitingApprovalMessage"));
+        }
+      } else if (deptWeekFlagsQ.data?.hasSavedAwaitingPublish) {
         throw new Error(i18n.t("schedules.savedScheduleExists"));
       }
       return createFn({ data: { department_id: selectedDept!, week_start: periodWeekStart } });
@@ -1699,6 +1702,8 @@ function SchedulesPage() {
 
   const hasPublishedForPeriod = !!deptWeekFlagsQ.data?.hasPublished;
   const hasSavedForPeriod = !!deptWeekFlagsQ.data?.hasSavedAwaitingPublish;
+  const hasManagerSavedForPeriod = !!deptWeekFlagsQ.data?.hasManagerSavedAwaitingPublish;
+  const hasDeptHeadPendingForPeriod = !!deptWeekFlagsQ.data?.hasDeptHeadPendingApproval;
   const openingExistingSchedule = !!focusedScheduleId;
 
   const viewingPeriodSchedule =
@@ -1711,14 +1716,24 @@ function SchedulesPage() {
     visible!.status === "approved" &&
     !!(visible as { published_at?: string | null }).published_at;
 
+  /** Dept heads and employees: view-only once a schedule is published. */
+  const publishedScheduleViewOnly =
+    viewingPublishedSchedule && (isEmployee || isDeptHeadOnly);
+
   const viewingSavedSchedule =
     viewingPeriodSchedule &&
     isSavedScheduleAwaitingPublish(visible as { status: string; published_at: string | null });
 
   const managerSavedDraftBlocksMe =
-    hasSavedForPeriod &&
+    hasManagerSavedForPeriod &&
     isDeptHeadOnly &&
     !viewingSavedSchedule &&
+    !openingExistingSchedule;
+
+  const deptHeadAwaitingApproval =
+    hasDeptHeadPendingForPeriod &&
+    isDeptHeadOnly &&
+    !viewingPublishedSchedule &&
     !openingExistingSchedule;
 
   /** Block new drafts in editor; allow opening an existing published schedule by id. */
@@ -1738,6 +1753,7 @@ function SchedulesPage() {
   const periodScheduleBlocked =
     publishedScheduleBlocksCreate ||
     managerSavedDraftBlocksMe ||
+    deptHeadAwaitingApproval ||
     savedScheduleBlocksManager;
 
   const schedulePanelLoading =
@@ -1746,10 +1762,8 @@ function SchedulesPage() {
     schedQ.isLoading ||
     (openingExistingSchedule && !visible);
 
-  const displayWeekStart =
-    (visible?.week_start as string | undefined) ?? periodWeekStart;
-  const displayWeekEnd =
-    (visible?.week_end as string | undefined) ?? periodWeekEnd;
+  const displayWeekStart = days[0] ?? periodWeekStart;
+  const displayWeekEnd = days[days.length - 1] ?? periodWeekEnd;
   const blockedAwaitingStatus =
     deptWeekFlagsQ.data?.awaitingPublish?.status ??
     (visible?.status as string | undefined);
@@ -1762,6 +1776,7 @@ function SchedulesPage() {
   const editable =
     !!visible &&
     !periodScheduleBlocked &&
+    !publishedScheduleViewOnly &&
     !isSupersededPublished &&
     !isEmployee &&
     !isDraftLockedForMe &&
@@ -2466,12 +2481,9 @@ function SchedulesPage() {
             <AlertTriangle className="size-5 text-destructive mt-0.5 shrink-0" />
             <div className="space-y-1.5 text-sm text-destructive">
               <p className="font-semibold text-base">
-                כבר קיים סידור עבודה שמור למחלקה זו
+                {i18n.t("schedules.managerSavedBlocksCreate")}
               </p>
-              <p>
-                הסידור נשמר על־ידי ההנהלה וממתין לפרסום. לא ניתן ליצור סידור חדש
-                עד לפרסום או מחיקת הסידור הקיים.
-              </p>
+              <p>{i18n.t("schedules.managerSavedBlocksCreateHint")}</p>
               <p>
                 נשמר על־ידי:{" "}
                 <span className="font-medium">
@@ -2491,6 +2503,28 @@ function SchedulesPage() {
                   סטטוס:{" "}
                   <span className="font-medium">
                     {getStatusLabel(blockedAwaitingStatus ?? "")}
+                  </span>
+                </p>
+              )}
+            </div>
+          </div>
+        </Card>
+      ) : deptHeadAwaitingApproval ? (
+        <Card className="card-elevated p-6 border-primary/40 bg-primary/5">
+          <div className="flex gap-3 items-start">
+            <Send className="size-5 text-primary mt-0.5 shrink-0" />
+            <div className="space-y-1.5 text-sm">
+              <p className="font-semibold text-base">
+                {i18n.t("schedules.awaitingApprovalTitle")}
+              </p>
+              <p className="text-muted-foreground">
+                {i18n.t("schedules.awaitingApprovalMessage")}
+              </p>
+              {deptWeekFlagsQ.data?.pendingApproval?.submitted_at && (
+                <p>
+                  נשלח בתאריך:{" "}
+                  <span className="font-medium" dir="ltr">
+                    {formatHeDateTime(deptWeekFlagsQ.data.pendingApproval.submitted_at)}
                   </span>
                 </p>
               )}
@@ -2548,8 +2582,11 @@ function SchedulesPage() {
           {canCreate &&
             !isEmployee &&
             !deptWeekFlagsQ.isLoading &&
-            !deptWeekFlagsQ.data?.hasSavedAwaitingPublish &&
-            !deptWeekFlagsQ.data?.hasPublished && (
+            !deptWeekFlagsQ.data?.hasPublished &&
+            !(isDeptHeadOnly
+              ? deptWeekFlagsQ.data?.hasManagerSavedAwaitingPublish ||
+                deptWeekFlagsQ.data?.hasDeptHeadPendingApproval
+              : deptWeekFlagsQ.data?.hasSavedAwaitingPublish) && (
             <Button onClick={() => createMut.mutate()} disabled={createMut.isPending}>
               {createMut.isPending && <Loader2 className="size-4 animate-spin" />}
               צור טיוטה
@@ -2558,6 +2595,15 @@ function SchedulesPage() {
         </Card>
       ) : (
         <>
+          {publishedScheduleViewOnly && (
+            <Card className="card-elevated p-4 border-emerald-500/40 bg-emerald-500/5">
+              <div className="flex gap-3 items-start text-sm">
+                <CheckCircle2 className="size-5 text-emerald-600 mt-0.5 shrink-0" />
+                <p>{i18n.t("schedules.publishedViewOnly")}</p>
+              </div>
+            </Card>
+          )}
+
           {isSupersededPublished && (
             <Card className="card-elevated p-4 border-amber-500/40 bg-amber-500/5">
               <div className="flex gap-3 items-start text-sm">

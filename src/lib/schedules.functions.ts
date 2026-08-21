@@ -9,6 +9,8 @@ import {
 import {
   canViewScheduleContent,
   isBranchLevelScheduleViewer,
+  isDeptHeadSubmittedAwaitingApproval,
+  isManagerSavedScheduleForDeptHead,
   isSavedScheduleAwaitingPublish,
   type ScheduleViewerCaps,
 } from "@/lib/schedule-visibility";
@@ -664,6 +666,20 @@ export const createOrGetSchedule = createServerFn({ method: "POST" })
       if (await isScheduleVisibleToCaps(savedSched, caps, context.userId, context.supabase)) {
         return savedSched;
       }
+      if (
+        caps.isDeptHeadOnly &&
+        isDeptHeadSubmittedAwaitingApproval(
+          savedSched as {
+            status: string;
+            submitted_at?: string | null;
+            created_by?: string | null;
+            submitted_by?: string | null;
+          },
+          context.userId,
+        )
+      ) {
+        throw new Error("הסידור נשלח לאישור ההנהלה וממתין לתשובה");
+      }
       throw new Error("כבר קיים סידור עבודה שמור למחלקה זו — ממתין לפרסום");
     }
     const existingRow = pickPrimaryDepartmentSchedule(periodSchedules);
@@ -762,6 +778,9 @@ export const saveScheduleShifts = createServerFn({ method: "POST" })
     );
     const isApproved = sched.status === "approved";
     const isPendingApproval = sched.status === "pending_approval";
+    if (isApproved && sched.published_at && caps.isDeptHeadOnly) {
+      throw new Error("אין הרשאה לערוך סידור מפורסם");
+    }
     if (isApproved) {
       if (!caps.isMainAdmin && !caps.canPublishDirect && !caps.canEdit && !caps.canCreate) {
         throw new Error("אין הרשאה לערוך סידור מאושר");
@@ -1893,30 +1912,79 @@ export const getDepartmentWeekScheduleFlags = createServerFn({ method: "POST" })
         (row as { status?: string }).status === "approved" &&
         !!(row as { published_at?: string | null }).published_at,
     );
+    const managerSavedSched = periodSchedules.find((row) =>
+      isManagerSavedScheduleForDeptHead(
+        row as {
+          status: string;
+          published_at: string | null;
+          submitted_at?: string | null;
+          created_by?: string | null;
+          submitted_by?: string | null;
+          department_id: string;
+        },
+        context.userId,
+      ),
+    );
+    const deptPendingSched = caps.isDeptHeadOnly
+      ? periodSchedules.find((row) =>
+          isDeptHeadSubmittedAwaitingApproval(
+            row as {
+              status: string;
+              submitted_at?: string | null;
+              created_by?: string | null;
+              submitted_by?: string | null;
+            },
+            context.userId,
+          ),
+        )
+      : undefined;
     const savedSched = periodSchedules.find((row) =>
       isSavedScheduleAwaitingPublish(row as { status: string; published_at: string | null }),
     );
-    const sched = publishedSched ?? savedSched ?? pickPrimaryDepartmentSchedule(periodSchedules);
+    const sched =
+      publishedSched ??
+      (caps.isDeptHeadOnly ? managerSavedSched : savedSched) ??
+      savedSched ??
+      pickPrimaryDepartmentSchedule(periodSchedules);
 
     const hasPublished = !!publishedSched;
     const hasSavedAwaitingPublish = periodSchedules.some((row) =>
       isSavedScheduleAwaitingPublish(row as { status: string; published_at: string | null }),
     );
+    const hasManagerSavedAwaitingPublish = !!managerSavedSched;
+    const hasDeptHeadPendingApproval = !!deptPendingSched;
+    const blockingMeta = managerSavedSched ?? savedSched;
 
     return {
       hasPublished,
       hasSavedAwaitingPublish,
+      hasManagerSavedAwaitingPublish,
+      hasDeptHeadPendingApproval,
       schedule_id: (sched as { id?: string } | null)?.id ?? null,
       schedule_week_start: (sched as { week_start?: string } | null)?.week_start ?? null,
-      awaitingPublish: hasSavedAwaitingPublish
+      awaitingPublish: hasManagerSavedAwaitingPublish && blockingMeta
         ? {
-            status: (sched as { status: string }).status,
-            created_by: ((sched as { created_by?: string | null }).created_by) ?? null,
-            /** Last save time (falls back to creation if never updated). */
+            status: (blockingMeta as { status: string }).status,
+            created_by: ((blockingMeta as { created_by?: string | null }).created_by) ?? null,
             saved_at:
-              ((sched as { updated_at?: string | null }).updated_at) ??
-              ((sched as { created_at?: string | null }).created_at) ??
+              ((blockingMeta as { updated_at?: string | null }).updated_at) ??
+              ((blockingMeta as { created_at?: string | null }).created_at) ??
               null,
+          }
+        : !caps.isDeptHeadOnly && hasSavedAwaitingPublish && blockingMeta
+          ? {
+              status: (blockingMeta as { status: string }).status,
+              created_by: ((blockingMeta as { created_by?: string | null }).created_by) ?? null,
+              saved_at:
+                ((blockingMeta as { updated_at?: string | null }).updated_at) ??
+                ((blockingMeta as { created_at?: string | null }).created_at) ??
+                null,
+            }
+          : null,
+      pendingApproval: hasDeptHeadPendingApproval && deptPendingSched
+        ? {
+            submitted_at:
+              ((deptPendingSched as { submitted_at?: string | null }).submitted_at) ?? null,
           }
         : null,
     };
