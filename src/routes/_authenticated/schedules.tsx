@@ -554,43 +554,45 @@ function SchedulesPage() {
       (canSeeScheduleQueues || canCreate),
     queryKey: ["schedules-branch-saved", me?.id],
     queryFn: async () => {
-      const { data: scheds, error } = await supabase
-        .from("schedules")
-        .select(
-          "id, department_id, week_start, week_end, status, published_at, updated_at, created_by",
-        )
-        .or(
-          "status.eq.draft,status.eq.pending_approval,and(status.eq.approved,published_at.is.null)",
-        )
-        .order("week_start", { ascending: false });
-      if (error) throw error;
-      if (!scheds?.length) return { savedList: [] as SavedScheduleListItem[] };
-      const ids = scheds.map((s: { id: string }) => s.id);
-      const { data: shiftRows, error: e2 } = await supabase
-        .from("schedule_shifts")
-        .select("schedule_id")
-        .in("schedule_id", ids);
-      if (e2) throw e2;
-      const withShiftsIds = new Set((shiftRows ?? []).map((r: { schedule_id: string }) => r.schedule_id));
-      const savedScheds = (scheds as any[]).filter((s) => withShiftsIds.has(s.id));
-      const visibleSavedScheds =
-        scheduleViewerCaps == null
-          ? savedScheds
-          : savedScheds.filter((s) =>
-              canViewScheduleContent(s, scheduleViewerCaps, managedDeptIds),
-            );
-      const savedList: SavedScheduleListItem[] = visibleSavedScheds
-        .map((s) => ({
-          schedule_id: s.id,
-          department_id: s.department_id,
-          week_start: s.week_start,
-          week_end: s.week_end,
-          status: s.status,
-          published_at: s.published_at ?? null,
-          updated_at: s.updated_at ?? null,
-        }))
-        .filter((s) => isSavedScheduleAwaitingPublish(s));
-      return { savedList };
+      try {
+        const { data: scheds, error } = await supabase
+          .from("schedules")
+          .select(
+            "id, department_id, week_start, week_end, status, published_at, updated_at, created_by",
+          )
+          .order("week_start", { ascending: false });
+        if (error) throw error;
+        if (!scheds?.length) return { savedList: [] as SavedScheduleListItem[] };
+        const ids = scheds.map((s: { id: string }) => s.id);
+        const { data: shiftRows, error: e2 } = await supabase
+          .from("schedule_shifts")
+          .select("schedule_id")
+          .in("schedule_id", ids);
+        if (e2) throw e2;
+        const withShiftsIds = new Set((shiftRows ?? []).map((r: { schedule_id: string }) => r.schedule_id));
+        const savedScheds = (scheds as any[]).filter((s) => withShiftsIds.has(s.id));
+        const visibleSavedScheds =
+          scheduleViewerCaps == null
+            ? savedScheds
+            : savedScheds.filter((s) =>
+                canViewScheduleContent(s, scheduleViewerCaps, managedDeptIds),
+              );
+        const savedList: SavedScheduleListItem[] = visibleSavedScheds
+          .map((s) => ({
+            schedule_id: s.id,
+            department_id: s.department_id,
+            week_start: s.week_start,
+            week_end: s.week_end,
+            status: s.status,
+            published_at: s.published_at ?? null,
+            updated_at: s.updated_at ?? null,
+          }))
+          .filter((s) => isSavedScheduleAwaitingPublish(s));
+        return { savedList };
+      } catch (err) {
+        console.error("[schedules-branch-saved]", err);
+        return { savedList: [] as SavedScheduleListItem[] };
+      }
     },
   });
 

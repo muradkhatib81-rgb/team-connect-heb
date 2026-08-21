@@ -5,6 +5,7 @@ import { getActiveBranchScope } from "@/integrations/supabase/branch-scope";
 import { useActiveBranch } from "@/lib/use-active-branch";
 import { BRANCH_NAME } from "@/lib/constants";
 import { mergeCompanyRowWithPeriodExtra } from "@/lib/schedule-period-settings";
+import { retainSharedRealtimeChannel } from "@/lib/realtime-shared-channel";
 
 export type ScheduleType = "weekly" | "monthly" | "custom";
 
@@ -101,19 +102,15 @@ export function useCompanySettings(opts?: { allowUnscoped?: boolean }) {
   });
 
   useEffect(() => {
-    const channel = supabase
-      .channel(`company-settings-rt-${activeBranchId ?? "none"}`)
-      .on(
+    return retainSharedRealtimeChannel(`company-settings-rt-${activeBranchId ?? "none"}`, (channel) =>
+      channel.on(
         "postgres_changes",
         { event: "*", schema: "public", table: "company_settings" },
         () => {
           qc.invalidateQueries({ queryKey: ["company-settings"] });
         },
-      )
-      .subscribe();
-    return () => {
-      supabase.removeChannel(channel);
-    };
+      ),
+    );
   }, [qc, activeBranchId]);
 
   return query;
