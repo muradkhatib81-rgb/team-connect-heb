@@ -510,8 +510,8 @@ function SchedulesPage() {
   // All schedules + shifts for the selected week. Powers:
   //  - `savedDeptSet`: departments with at least one saved shift (hidden from
   //    the department dropdown so each dept has only one saved schedule/week).
-  //  - `dailyShiftSummary`: cross-branch daily counters — saved shifts from
-  //    OTHER departments + current unsaved edits from the selected dept.
+  //  - `dailyShiftSummary`: cross-branch daily counters — persisted shifts from
+  //    all departments (unsaved edits in the open department are excluded).
   //  - The "סידורי עבודה שמורים" card listing saved departments.
   const weekSavedQ = useQuery({
     enabled: (view === "editor" || view === "saved") && !!scheduleViewerCaps,
@@ -1808,26 +1808,17 @@ function SchedulesPage() {
             seen.add(employeeId);
             members.push({ employeeId, departmentId });
           };
-          // Saved shifts from OTHER departments in this branch (already persisted).
+          // Persisted shifts across all departments — live (unsaved) grid edits
+          // for the open department are intentionally excluded.
           for (const row of weekSavedQ.data?.shifts ?? []) {
-            if (row.department_id === selectedDept) continue;
             if (row.day_date === day && row.shift === s.code) {
               add(row.employee_id, row.department_id);
-            }
-          }
-          // Current department: use the live (unsaved) edits so counters update
-          // as the manager builds the schedule.
-          if (selectedDept) {
-            for (const emp of empsQ.data ?? []) {
-              if (emp.excluded_from_schedule) continue;
-              const shift = effectiveScheduleShift(emp, day, edits[emp.id]?.[day]);
-              if (shift === s.code) add(emp.id, selectedDept);
             }
           }
           return { ...s, count: members.length, members };
         }),
       })),
-    [days, activeShifts, empsQ.data, edits, weekSavedQ.data, selectedDept, headcountExcludedSet],
+    [days, activeShifts, weekSavedQ.data, selectedDept, headcountExcludedSet],
   );
 
   const [summaryShiftPick, setSummaryShiftPick] = useState<SummaryShiftPick | null>(null);

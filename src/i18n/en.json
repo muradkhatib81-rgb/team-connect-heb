@@ -275,6 +275,7 @@
     "eomClickManage": "Click \"Manage\" to choose.",
     "months": ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"],
     "todayShifts": "Today's Shifts",
+    "dayShifts": "Shifts for {{date}}",
     "zeroEmployees": "0 employees",
     "oneEmployee": "1 employee",
     "nEmployeesCount": "{n} employees",

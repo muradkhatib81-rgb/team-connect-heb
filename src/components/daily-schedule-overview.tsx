@@ -346,6 +346,7 @@ export type DailyScheduleOverviewProps = {
   useCoworkersView?: boolean;
   showFullScheduleLink?: boolean;
   className?: string;
+  onSelectedDayChange?: (day: string) => void;
 };
 
 export function DailyScheduleOverview({
@@ -355,6 +356,7 @@ export function DailyScheduleOverview({
   useCoworkersView = false,
   showFullScheduleLink = true,
   className,
+  onSelectedDayChange,
 }: DailyScheduleOverviewProps) {
   const { data: profile } = useAuth();
   const getOverviewFn = useServerFn(getDailyScheduleOverview);
@@ -464,6 +466,10 @@ export function DailyScheduleOverview({
     setSelectedDay(defaultDay);
     setActiveFilter(null);
   }, [weekStart, defaultDay, q.data]);
+
+  useEffect(() => {
+    onSelectedDayChange?.(selectedDay);
+  }, [selectedDay, onSelectedDayChange]);
 
   const deptFlagsQ = useQuery({
     queryKey: ["dept-schedule-flags", departmentId, weekStart],

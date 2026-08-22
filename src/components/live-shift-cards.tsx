@@ -10,7 +10,7 @@ import { Users } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useShiftDefinitions } from "@/lib/use-shift-definitions";
 import { formatHHMM, usePlatformNow } from "@/lib/platform-time";
-import { getScheduleWeek } from "@/lib/schedule-week";
+import { getScheduleWeek, formatScheduleDayHe } from "@/lib/schedule-week";
 import { formatShiftTimeRange } from "@/lib/shift-hours";
 import { useActiveBranch } from "@/lib/use-active-branch";
 import { useAuth } from "@/lib/use-auth";
@@ -65,11 +65,13 @@ const OFF_SHIFT_CODE = "off";
  *   ends or is cleared.
  * - Honors excluded_from_headcount (תפקיד "לא נכלל במצבת").
  */
-export function LiveShiftCardsSection() {
+export function LiveShiftCardsSection({ dateISO: dateISOProp }: { dateISO?: string }) {
   const { data: profile } = useAuth();
   const { activeBranchId } = useActiveBranch();
   const shiftDefsQ = useShiftDefinitions({ activeOnly: true });
-  const { dateISO } = usePlatformNow();
+  const { dateISO: todayISO } = usePlatformNow();
+  const dateISO = dateISOProp ?? todayISO;
+  const isToday = dateISO === todayISO;
 
   const needsLoadedPerms = profile
     ? scheduleScopeNeedsLoadedPermissions(profile.roles)
@@ -331,7 +333,11 @@ export function LiveShiftCardsSection() {
 
   return (
     <section className="space-y-2">
-      <h2 className="text-sm font-semibold">{i18n.t("dashboard.todayShifts")}</h2>
+      <h2 className="text-sm font-semibold">
+        {isToday
+          ? i18n.t("dashboard.todayShifts")
+          : i18n.t("dashboard.dayShifts", { date: formatScheduleDayHe(dateISO) })}
+      </h2>
       <div
         className="grid gap-2"
         style={{

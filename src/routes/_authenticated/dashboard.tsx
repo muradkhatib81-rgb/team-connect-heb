@@ -92,6 +92,7 @@ import { ProfilePhoneField } from "@/components/contact-actions";
 import { CustodyDashboardSection } from "@/components/custody-dashboard-section";
 import { MorningBoard } from "@/components/morning-board";
 import { LiveShiftCardsSection } from "@/components/live-shift-cards";
+import { usePlatformNow } from "@/lib/platform-time";
 import {
   BREAK_PENDING_APPROVAL_STATUSES,
   BREAK_PRE_ACTIVE_STATUSES,
@@ -126,6 +127,9 @@ const MSG_RECIPIENTS_SELECT = "message_id, delivered_at, message:messages(id, ti
 function DashboardPage() {
   const { t } = useTranslation();
   const { data: profile } = useAuth();
+  const { dateISO: todayIso } = usePlatformNow();
+  const [shiftCardsDay, setShiftCardsDay] = useState<string | null>(null);
+  const shiftCardsDate = shiftCardsDay ?? todayIso;
   const { activeBranchId } = useActiveBranch();
   const admin = profile ? isAdmin(profile.roles) : false;
   const isDeptManager = profile ? profile.roles.includes("department_manager") : false;
@@ -357,11 +361,11 @@ function DashboardPage() {
 
       <EmployeeOfMonthSection />
 
-      <LiveShiftCardsSection />
+      <LiveShiftCardsSection dateISO={shiftCardsDate} />
 
       {showSchedulesStatsSection && <SchedulesStatsSection profile={profile} />}
 
-      <DashboardSchedulePanel profile={profile} />
+      <DashboardSchedulePanel profile={profile} onScheduleDayChange={setShiftCardsDay} />
 
       {admin || isDeptManager ? (
         <>
@@ -1615,7 +1619,13 @@ function StatCard({
   );
 }
 
-function DashboardSchedulePanel({ profile }: { profile: any }) {
+function DashboardSchedulePanel({
+  profile,
+  onScheduleDayChange,
+}: {
+  profile: any;
+  onScheduleDayChange?: (day: string) => void;
+}) {
   const needsLoadedPerms = scheduleScopeNeedsLoadedPermissions(profile.roles);
 
   const permsQ = useQuery({
@@ -1684,13 +1694,14 @@ function DashboardSchedulePanel({ profile }: { profile: any }) {
 
   const overview =
     scope.kind === "branch" ? (
-      <DailyScheduleOverview scope="branch" selfUserId={profile.id} />
+      <DailyScheduleOverview scope="branch" selfUserId={profile.id} onSelectedDayChange={onScheduleDayChange} />
     ) : (
       <DailyScheduleOverview
         scope="department"
         departmentId={scope.departmentId}
         selfUserId={profile.id}
         useCoworkersView={scope.useCoworkersView}
+        onSelectedDayChange={onScheduleDayChange}
       />
     );
 
