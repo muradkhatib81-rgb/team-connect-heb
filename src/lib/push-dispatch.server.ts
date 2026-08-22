@@ -95,8 +95,11 @@ export async function pushForScheduleNotification(opts: {
 }
 
 /**
- * Insert in-app notification rows (bypassing RLS) and always send Web Push.
- * Never throws — callers (save/publish/tasks) must not fail because of notify.
+ * Insert in-app notification rows (bypassing RLS).
+ * Web Push is sent ONLY by the DB trigger on schedule_notifications insert —
+ * calling dispatch here too caused every alert to arrive twice.
+ * If insert fails, fall back to a single app-side push.
+ * Never throws.
  */
 export async function notifyUsersWithPush(opts: {
   userIds: string[];
@@ -137,33 +140,33 @@ export async function notifyUsersWithPush(opts: {
     );
     if (insertErr) {
       console.warn("[notify] schedule_notifications insert failed:", insertErr.message);
+      // Insert failed → DB push trigger never ran; send one app-side push.
+      await dispatchPushBestEffort({
+        userIds,
+        message,
+        scheduleId: opts.scheduleId ?? null,
+        weekStart,
+        title: opts.title,
+        tag: opts.tag,
+        url: opts.url,
+        messageId: opts.messageId,
+      });
     }
-
-    // Push even if insert failed — employees must still get the OS alert.
-    await dispatchPushBestEffort({
-      userIds,
-      message,
-      scheduleId: opts.scheduleId ?? null,
-      weekStart,
-      title: opts.title,
-      tag: opts.tag,
-      url: opts.url,
-      messageId: opts.messageId,
-    });
   } catch (e) {
     console.warn("[notify] notifyUsersWithPush failed:", e);
   }
 }
 
-/** Notify every active profile in the branch except the actor. Never throws. */
+/**
+ * Notify every active profile in the branch except the actor (in-app + one push via DB trigger).
+ * Never throws.
+ */
 export async function notifyBranchExceptActor(opts: {
   branchId: string;
   excludeUserId: string;
   message: string;
   tag?: string;
   url?: string;
-  /** Default true. Set false when a DB trigger already inserted in-app rows. */
-  insertInApp?: boolean;
 }): Promise<number> {
   try {
     const message = opts.message.trim();
@@ -179,23 +182,13 @@ export async function notifyBranchExceptActor(opts: {
     const userIds = (profiles ?? []).map((p: { id: string }) => p.id);
     if (!userIds.length) return 0;
 
-    const url = opts.url ?? "/dashboard";
-    if (opts.insertInApp === false) {
-      await dispatchPushBestEffort({
-        userIds,
-        message,
-        tag: opts.tag,
-        url,
-      });
-    } else {
-      await notifyUsersWithPush({
-        userIds,
-        message,
-        branchId: opts.branchId,
-        tag: opts.tag,
-        url,
-      });
-    }
+    await notifyUsersWithPush({
+      userIds,
+      message,
+      branchId: opts.branchId,
+      tag: opts.tag,
+      url: opts.url ?? "/dashboard",
+    });
     return userIds.length;
   } catch (e) {
     console.warn("[notify] notifyBranchExceptActor failed:", e);
