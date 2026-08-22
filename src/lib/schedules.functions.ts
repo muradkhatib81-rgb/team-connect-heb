@@ -323,6 +323,8 @@ async function notifyScheduleDepartment(
       message,
     })),
   );
+  const { dispatchWebPushForInAppNotification } = await import("@/lib/web-push.server");
+  dispatchWebPushForInAppNotification(recipientIds, message, { scheduleId });
 }
 
 async function snapshotSubmittedShifts(supabase: any, scheduleId: string) {
@@ -1633,13 +1635,18 @@ export const rejectSchedule = createServerFn({ method: "POST" })
     if (sched.created_by) recipients.add(sched.created_by);
     if (dept?.manager_id && dept.code !== "management") recipients.add(dept.manager_id);
     if (recipients.size) {
+      const recipientList = [...recipients];
       await context.supabase.from("schedule_notifications").insert(
-        [...recipients].map((uid) => ({
+        recipientList.map((uid) => ({
           schedule_id: data.schedule_id,
           user_id: uid,
           message: `סידור העבודה נדחה: ${data.note}`,
         })),
       );
+      const { dispatchWebPushForInAppNotification } = await import("@/lib/web-push.server");
+      dispatchWebPushForInAppNotification(recipientList, `סידור העבודה נדחה: ${data.note}`, {
+        scheduleId: data.schedule_id,
+      });
     }
     return { ok: true };
   });

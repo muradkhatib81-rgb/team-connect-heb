@@ -1026,12 +1026,15 @@ export const updateEmployee = createServerFn({ method: "POST" })
 
           if (toCancel.length > 0) {
             try {
+              const msg = `החופשה שלך בוטלה על ידי ${actorName} · ${whenLocal}`;
               await supabaseAdmin.from("schedule_notifications").insert({
                 user_id: data.user_id,
                 schedule_id: null,
-                message: `החופשה שלך בוטלה על ידי ${actorName} · ${whenLocal}`,
+                message: msg,
                 branch_id: context.branchId,
               });
+              const { dispatchWebPushForInAppNotification } = await import("@/lib/web-push.server");
+              dispatchWebPushForInAppNotification([data.user_id], msg);
             } catch {
               /* non-fatal */
             }

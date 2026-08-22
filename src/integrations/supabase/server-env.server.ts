@@ -35,6 +35,14 @@ export function getSupabaseServiceRoleKey(): string | undefined {
   return process.env.SUPABASE_SERVICE_ROLE_KEY;
 }
 
+export function getVapidPublicKeyEnv(): string | undefined {
+  return process.env.VAPID_PUBLIC_KEY?.trim() || undefined;
+}
+
+export function getVapidPrivateKeyEnv(): string | undefined {
+  return process.env.VAPID_PRIVATE_KEY?.trim() || undefined;
+}
+
 export function missingSupabaseEnvMessage(missing: string[]): string {
   return `Missing Supabase server environment variable(s): ${missing.join(", ")}. Configure them in your deployment environment (e.g. Vercel project settings).`;
 }

@@ -145,7 +145,7 @@ export async function sendMessage(input: SendMessageInput) {
   }
 
   await logAudit("message", messageId, "sent", { recipients: recipientIds.length });
-  return { id: messageId };
+  return { id: messageId, recipientIds };
 }
 
 

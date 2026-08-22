@@ -15,6 +15,7 @@ import {
 import { supabase } from "@/integrations/supabase/client";
 import { useTranslation } from "react-i18next";
 import { resolveLeaveAccess } from "@/lib/leave-permissions";
+import { PushNotificationsSettings } from "@/components/push-notifications-settings";
 
 
 export const Route = createFileRoute("/_authenticated/profile")({
@@ -123,6 +124,8 @@ function ProfilePage() {
           </Link>
         </Button>
       </Card>
+
+      <PushNotificationsSettings />
 
       {showLeaveBalances && (
         <Card className="p-6 space-y-4">

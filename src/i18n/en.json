@@ -46,6 +46,19 @@
     "noBalances": "No balances recorded",
     "days": "days"
   },
+  "push": {
+    "title": "Device notifications",
+    "description": "Get system notifications with sound and vibration for schedules, messages, and tasks — even when the app is closed.",
+    "enabled": "Push notifications enabled",
+    "disabled": "Push notifications disabled",
+    "denied": "The browser blocked notifications. Enable them in browser settings.",
+    "deniedHint": "Notifications are blocked in your browser. Open site settings and allow notifications.",
+    "notConfigured": "Push service is not configured on the server yet.",
+    "unsupported": "This browser or device does not support push notifications.",
+    "blocked": "Blocked",
+    "subscribeError": "Could not subscribe to notifications",
+    "unsubscribeError": "Could not unsubscribe"
+  },
   "dashboard": {
     "greeting": "Hello,",
     "inactive": "Inactive",

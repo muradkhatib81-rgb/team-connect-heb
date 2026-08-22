@@ -1,8 +1,7 @@
 /**
- * Installability service worker (PWA).
+ * Installability + Web Push service worker (PWA).
  * Does NOT intercept network traffic — calling respondWith(fetch()) on every
- * request adds latency with no caching benefit. An empty fetch listener keeps
- * installability without slowing navigations or API calls.
+ * request adds latency with no caching benefit.
  */
 self.addEventListener("install", () => {
   self.skipWaiting();
@@ -22,5 +21,67 @@ self.addEventListener("activate", (event) => {
 });
 
 // Presence of a fetch listener satisfies installability checks.
-// Do not call event.respondWith — let the browser handle requests directly.
 self.addEventListener("fetch", () => {});
+
+function parsePushPayload(event) {
+  if (!event.data) return null;
+  try {
+    return event.data.json();
+  } catch {
+    const text = event.data.text();
+    return text ? { title: "מערכת ניהול עובדים", body: text, url: "/dashboard" } : null;
+  }
+}
+
+self.addEventListener("push", (event) => {
+  const data = parsePushPayload(event) ?? {
+    title: "מערכת ניהול עובדים",
+    body: "יש עדכון חדש",
+    url: "/dashboard",
+  };
+
+  const title = data.title || "מערכת ניהול עובדים";
+  const body = data.body || "";
+  const url = data.url || "/dashboard";
+  const tag = data.tag || "team-connect";
+
+  event.waitUntil(
+    self.registration.showNotification(title, {
+      body,
+      tag,
+      data: { url },
+      icon: "/icons/icon-192.png",
+      badge: "/icons/icon-192.png",
+      vibrate: [180, 80, 180],
+      requireInteraction: false,
+      renotify: true,
+    }),
+  );
+});
+
+self.addEventListener("notificationclick", (event) => {
+  event.notification.close();
+  const url = event.notification?.data?.url || "/dashboard";
+  const targetUrl = new URL(url, self.location.origin).href;
+
+  event.waitUntil(
+    (async () => {
+      const windowClients = await self.clients.matchAll({
+        type: "window",
+        includeUncontrolled: true,
+      });
+      for (const client of windowClients) {
+        if ("focus" in client) {
+          await client.focus();
+          if ("navigate" in client) {
+            await client.navigate(targetUrl);
+          }
+          return;
+        }
+      }
+      if (self.clients.openWindow) {
+        await self.clients.openWindow(targetUrl);
+      }
+    })(),
+  );
+});
