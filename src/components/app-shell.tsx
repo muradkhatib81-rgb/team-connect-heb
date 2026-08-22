@@ -1045,6 +1045,32 @@ function RealtimeBridge({ uid }: { uid: string }) {
       })
       .on(
         "postgres_changes",
+        {
+          event: "INSERT",
+          schema: "public",
+          table: "schedule_notifications",
+          filter: `user_id=eq.${uid}`,
+        },
+        (payload) => {
+          qc.invalidateQueries({ queryKey: ["notif", "schedule"] });
+          qc.invalidateQueries({ queryKey: ["emp-dash-notif"] });
+          const msg =
+            typeof (payload as { new?: { message?: string } })?.new?.message === "string"
+              ? (payload as { new: { message: string } }).new.message
+              : null;
+          // When the app is open, OS push is often quiet — vibrate + toast so it's not "silent".
+          try {
+            navigator.vibrate?.([300, 100, 300, 100, 500]);
+          } catch {
+            /* ignore */
+          }
+          if (msg?.trim()) {
+            toast.message(msg.trim(), { duration: 8_000 });
+          }
+        },
+      )
+      .on(
+        "postgres_changes",
         { event: "*", schema: "public", table: "schedule_notifications" },
         () => {
           qc.invalidateQueries({ queryKey: ["notif", "schedule"] });

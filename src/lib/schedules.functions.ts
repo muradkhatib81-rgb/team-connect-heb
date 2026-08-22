@@ -322,6 +322,7 @@ async function notifyScheduleDepartment(
     userIds: recipientIds,
     message,
     scheduleId,
+    title: "עדכון סידור עבודה",
   });
 }
 

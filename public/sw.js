@@ -43,8 +43,12 @@ self.addEventListener("push", (event) => {
   const title = data.title || "מערכת ניהול עובדים";
   const body = data.body || "";
   const url = data.url || "/dashboard";
-  const tag = data.tag || `team-connect-${Date.now()}`;
-  const vibrate = Array.isArray(data.vibrate) ? data.vibrate : [220, 80, 220, 80, 320];
+  // Always unique — never reuse a stale tag that the OS would replace silently.
+  const tag =
+    typeof data.tag === "string" && data.tag.trim()
+      ? data.tag.trim()
+      : `team-connect-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+  const vibrate = Array.isArray(data.vibrate) ? data.vibrate : [300, 100, 300, 100, 500];
 
   event.waitUntil(
     self.registration.showNotification(title, {
@@ -54,10 +58,10 @@ self.addEventListener("push", (event) => {
       icon: "/icons/icon-192.png",
       badge: "/icons/icon-192.png",
       vibrate,
-      // Never silent — schedule/message alerts must ring like a normal OS notification.
-      silent: data.silent === true ? true : false,
-      renotify: data.renotify !== false,
-      requireInteraction: false,
+      // Always ring — ignore any silent flag from the payload.
+      silent: false,
+      renotify: true,
+      requireInteraction: true,
     }),
   );
 });

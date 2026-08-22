@@ -13,22 +13,8 @@ export type PushDispatchInput = {
   tag?: string;
 };
 
-/** Drop duplicate sends to the same user+body within a few seconds (DB hook + app). */
-const recentPushAt = new Map<string, number>();
-const PUSH_DEDUPE_MS = 6_000;
-
-function filterDedupedUserIds(userIds: string[], body: string): string[] {
-  const now = Date.now();
-  for (const [key, at] of recentPushAt) {
-    if (now - at > PUSH_DEDUPE_MS) recentPushAt.delete(key);
-  }
-  return userIds.filter((uid) => {
-    const key = `${uid}\0${body}`;
-    const prev = recentPushAt.get(key);
-    if (prev != null && now - prev < PUSH_DEDUPE_MS) return false;
-    recentPushAt.set(key, now);
-    return true;
-  });
+function freshPushTag(prefix: string): string {
+  return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
 }
 
 async function resolveWeekStart(
@@ -49,14 +35,9 @@ async function resolveWeekStart(
 export async function dispatchPushNotification(
   input: PushDispatchInput,
 ): Promise<{ sent: number; failed: number }> {
+  const userIds = [...new Set(input.userIds.filter(Boolean))];
   const body = input.message.trim();
-  if (!body) return { sent: 0, failed: 0 };
-
-  const userIds = filterDedupedUserIds(
-    [...new Set(input.userIds.filter(Boolean))],
-    body,
-  );
-  if (!userIds.length) return { sent: 0, failed: 0 };
+  if (!userIds.length || !body) return { sent: 0, failed: 0 };
 
   const weekStart = await resolveWeekStart(input.scheduleId, input.weekStart);
   const url =
@@ -69,21 +50,17 @@ export async function dispatchPushNotification(
     title: input.title ?? "מערכת ניהול עובדים",
     body,
     url,
-    // Unique tag each time so OS re-alerts (sound/vibrate) instead of silently replacing.
+    // Brand-new tag every send so the OS must re-alert (sound/vibrate).
     tag:
-      input.tag ??
-      (input.messageId
-        ? `message-${input.messageId}-${Date.now()}`
-        : input.scheduleId
-          ? `schedule-${input.scheduleId}-${Date.now()}`
-          : `notif-${Date.now()}`),
+      input.tag?.trim() ||
+      freshPushTag(input.messageId ? "message" : input.scheduleId ? "schedule" : "notif"),
     silent: false,
   };
 
   return dispatchWebPushToUsers(userIds, payload);
 }
 
-/** Fire-and-forget push from app server code. Never throws. */
+/** Awaited push from app server code. Never throws. */
 export async function dispatchPushBestEffort(input: PushDispatchInput): Promise<void> {
   try {
     const result = await dispatchPushNotification(input);
@@ -91,6 +68,8 @@ export async function dispatchPushBestEffort(input: PushDispatchInput): Promise<
       console.warn("[push] dispatch skipped (no subs or VAPID missing)", {
         recipients: input.userIds.length,
       });
+    } else {
+      console.info("[push] dispatch result", result);
     }
   } catch (e) {
     console.warn("[push] app dispatch failed:", e);
@@ -110,16 +89,14 @@ export async function pushForScheduleNotification(opts: {
     message: opts.message,
     scheduleId: opts.scheduleId ?? null,
     weekStart: opts.weekStart ?? null,
-    // New tag every send so updates re-notify with sound.
-    tag: opts.scheduleId
-      ? `schedule-${opts.scheduleId}-${Date.now()}`
-      : `schedule-${Date.now()}`,
+    title: "עדכון סידור עבודה",
+    tag: freshPushTag(opts.scheduleId ? `schedule-${opts.scheduleId}` : "schedule"),
   });
 }
 
 /**
- * Insert in-app notification rows (bypassing RLS) then send one loud Web Push.
- * DB push hooks are disabled (app owns sound/vibrate); do not skip this push.
+ * Loud Web Push first, then in-app rows.
+ * Order matters: push must not depend on DB hooks (those are disabled / unreliable).
  * Never throws.
  */
 export async function notifyUsersWithPush(opts: {
@@ -151,6 +128,25 @@ export async function notifyUsersWithPush(opts: {
       weekStart = weekStart ?? row?.week_start?.slice(0, 10) ?? null;
     }
 
+    const tag =
+      opts.tag?.trim() ||
+      freshPushTag(
+        opts.messageId ? "message" : opts.scheduleId ? `schedule-${opts.scheduleId}` : "notif",
+      );
+
+    // 1) Web Push with sound — before insert so serverless always finishes it.
+    await dispatchPushBestEffort({
+      userIds,
+      message,
+      scheduleId: opts.scheduleId ?? null,
+      weekStart,
+      title: opts.title,
+      tag,
+      url: opts.url,
+      messageId: opts.messageId,
+    });
+
+    // 2) In-app bell rows (DB push hook is a no-op after migration).
     const { error: insertErr } = await supabaseAdmin.from("schedule_notifications").insert(
       userIds.map((uid) => ({
         user_id: uid,
@@ -162,17 +158,6 @@ export async function notifyUsersWithPush(opts: {
     if (insertErr) {
       console.warn("[notify] schedule_notifications insert failed:", insertErr.message);
     }
-
-    await dispatchPushBestEffort({
-      userIds,
-      message,
-      scheduleId: opts.scheduleId ?? null,
-      weekStart,
-      title: opts.title,
-      tag: opts.tag,
-      url: opts.url,
-      messageId: opts.messageId,
-    });
   } catch (e) {
     console.warn("[notify] notifyUsersWithPush failed:", e);
   }
@@ -206,11 +191,12 @@ export async function notifyBranchExceptActor(opts: {
     if (!userIds.length) return 0;
 
     const url = opts.url ?? "/dashboard";
+    const tag = opts.tag?.trim() || freshPushTag("branch");
     if (opts.insertInApp === false) {
       await dispatchPushBestEffort({
         userIds,
         message,
-        tag: opts.tag,
+        tag,
         url,
       });
     } else {
@@ -218,7 +204,7 @@ export async function notifyBranchExceptActor(opts: {
         userIds,
         message,
         branchId: opts.branchId,
-        tag: opts.tag,
+        tag,
         url,
       });
     }

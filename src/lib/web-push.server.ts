@@ -91,10 +91,11 @@ export async function dispatchWebPushToUsers(
     title: payload.title,
     body: payload.body,
     url: payload.url ?? "/dashboard",
-    tag: payload.tag ?? `notif-${Date.now()}`,
-    silent: payload.silent === true,
-    vibrate: [220, 80, 220, 80, 320],
+    tag: payload.tag ?? `notif-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+    silent: false,
+    vibrate: [300, 100, 300, 100, 500],
     renotify: true,
+    requireInteraction: true,
   });
 
   let sent = 0;

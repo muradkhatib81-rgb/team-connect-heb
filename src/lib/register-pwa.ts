@@ -33,7 +33,10 @@ export async function registerPwaServiceWorker(): Promise<void> {
 
   try {
     // Cache-bust so clients pick up push/sound fixes in sw.js.
-    await navigator.serviceWorker.register(`${PWA_SW_PATH}?v=push-sound-2`, { scope: "/" });
+    const reg = await navigator.serviceWorker.register(`${PWA_SW_PATH}?v=push-sound-3`, {
+      scope: "/",
+    });
+    void reg.update();
     void pruneForeignServiceWorkers();
   } catch (err) {
     console.warn("[pwa] service worker registration failed", err);
