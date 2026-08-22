@@ -25,6 +25,7 @@ AS $$
 DECLARE
   v_url text;
   v_secret text;
+  v_target text;
 BEGIN
   SELECT app_public_url, dispatch_secret INTO v_url, v_secret
   FROM public.internal_push_config WHERE id = 1;
@@ -32,14 +33,24 @@ BEGIN
     RETURN;
   END IF;
 
-  PERFORM net.http_post(
-    url := rtrim(v_url, '/') || '/api/public/hooks/dispatch-push',
-    headers := jsonb_build_object(
-      'Content-Type', 'application/json',
-      'x-push-secret', v_secret
-    ),
-    body := body
-  );
+  v_url := trim(v_url);
+  IF v_url !~* '^https?://' THEN
+    v_url := 'https://' || v_url;
+  END IF;
+  v_target := rtrim(v_url, '/') || '/api/public/hooks/dispatch-push';
+
+  BEGIN
+    PERFORM net.http_post(
+      url := v_target,
+      headers := jsonb_build_object(
+        'Content-Type', 'application/json',
+        'x-push-secret', v_secret
+      ),
+      body := body
+    );
+  EXCEPTION WHEN OTHERS THEN
+    NULL;
+  END;
 END;
 $$;
 
