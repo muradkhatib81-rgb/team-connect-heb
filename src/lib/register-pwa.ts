@@ -32,8 +32,8 @@ export async function registerPwaServiceWorker(): Promise<void> {
   if (!("serviceWorker" in navigator)) return;
 
   try {
-    // Register first so installability is available quickly; prune legacy SWs after.
-    await navigator.serviceWorker.register(PWA_SW_PATH, { scope: "/" });
+    // Cache-bust so clients pick up push/sound fixes in sw.js.
+    await navigator.serviceWorker.register(`${PWA_SW_PATH}?v=push-sound-2`, { scope: "/" });
     void pruneForeignServiceWorkers();
   } catch (err) {
     console.warn("[pwa] service worker registration failed", err);

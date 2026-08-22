@@ -484,6 +484,7 @@ function SchedulesPage() {
     enabled:
       view === "editor" &&
       !!me?.id &&
+      canViewPrePublishSummary &&
       (isMainAdmin ||
         canViewBranchSchedules ||
         canCreate ||
@@ -492,7 +493,7 @@ function SchedulesPage() {
         canPublishDirect),
     queryKey: ["branch-period-shifts", periodWeekStart, me?.id],
     queryFn: () => branchPeriodShiftsFn({ data: { week_start: periodWeekStart } }),
-    staleTime: 15_000,
+    staleTime: 60_000,
   });
   const weekSchedulesQ = useQuery({
     enabled: !!me?.id && view === "editor",
@@ -513,6 +514,7 @@ function SchedulesPage() {
           week_start: row.week_start as string | undefined,
         }));
     },
+    staleTime: 30_000,
   });
 
   const deptsWithSchedule = useMemo(
@@ -606,6 +608,7 @@ function SchedulesPage() {
       }));
       return { shifts, deptIdsWithSaved, savedList };
     },
+    staleTime: 30_000,
   });
 
   const getBranchSavedFn = useServerFn(getBranchSavedSchedulesAwaitingPublish);
@@ -623,6 +626,7 @@ function SchedulesPage() {
         return { savedList: [] as SavedScheduleListItem[] };
       }
     },
+    staleTime: 60_000,
   });
 
   const branchSavedList = useMemo(() => {
@@ -785,8 +789,7 @@ function SchedulesPage() {
       deptWeekFlagsFn({
         data: { department_id: selectedDept!, week_start: periodWeekStart },
       }),
-    staleTime: 15_000,
-    refetchOnMount: "always",
+    staleTime: 30_000,
   });
 
   /** Published id for the navigated period — server flags already matched the period. */

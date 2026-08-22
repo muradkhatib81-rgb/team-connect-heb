@@ -43,7 +43,8 @@ self.addEventListener("push", (event) => {
   const title = data.title || "מערכת ניהול עובדים";
   const body = data.body || "";
   const url = data.url || "/dashboard";
-  const tag = data.tag || "team-connect";
+  const tag = data.tag || `team-connect-${Date.now()}`;
+  const vibrate = Array.isArray(data.vibrate) ? data.vibrate : [220, 80, 220, 80, 320];
 
   event.waitUntil(
     self.registration.showNotification(title, {
@@ -52,9 +53,11 @@ self.addEventListener("push", (event) => {
       data: { url },
       icon: "/icons/icon-192.png",
       badge: "/icons/icon-192.png",
-      vibrate: [180, 80, 180],
+      vibrate,
+      // Never silent — schedule/message alerts must ring like a normal OS notification.
+      silent: data.silent === true ? true : false,
+      renotify: data.renotify !== false,
       requireInteraction: false,
-      renotify: true,
     }),
   );
 });

@@ -325,43 +325,48 @@ async function notifyScheduleDepartment(
       message,
     })),
   );
+  // Must await on serverless — fire-and-forget often dies before the push is sent.
   await pushForScheduleNotification({ userIds: recipientIds, message, scheduleId });
 }
 
 async function snapshotSubmittedShifts(supabase: any, scheduleId: string) {
-  const { data: cur } = await supabase
+  const { data: cur, error } = await supabase
     .from("schedule_shifts")
-    .select("id, shift, start_time, end_time, note")
+    .select("*")
     .eq("schedule_id", scheduleId);
-  for (const row of cur ?? []) {
-    await supabase
-      .from("schedule_shifts")
-      .update({
-        submitted_shift: row.shift,
-        submitted_start_time: row.start_time ?? null,
-        submitted_end_time: row.end_time ?? null,
-        submitted_note: row.note ?? null,
-      })
-      .eq("id", row.id);
-  }
+  if (error) throw new Error(error.message);
+  if (!cur?.length) return;
+  // One upsert instead of N sequential updates (was the main publish slowdown).
+  const { error: upErr } = await supabase.from("schedule_shifts").upsert(
+    (cur as Record<string, unknown>[]).map((row) => ({
+      ...row,
+      submitted_shift: row.shift,
+      submitted_start_time: (row.start_time as string | null) ?? null,
+      submitted_end_time: (row.end_time as string | null) ?? null,
+      submitted_note: (row.note as string | null) ?? null,
+    })),
+  );
+  if (upErr) throw new Error(upErr.message);
 }
 
 async function snapshotPublishedShifts(supabase: any, scheduleId: string) {
-  const { data: cur } = await supabase
+  const { data: cur, error } = await supabase
     .from("schedule_shifts")
-    .select("id, shift, start_time, end_time, note")
+    .select("*")
     .eq("schedule_id", scheduleId);
-  for (const row of cur ?? []) {
-    await supabase
-      .from("schedule_shifts")
-      .update({
-        published_shift: row.shift,
-        published_start_time: row.start_time ?? null,
-        published_end_time: row.end_time ?? null,
-        published_note: row.note ?? null,
-      })
-      .eq("id", row.id);
-  }
+  if (error) throw new Error(error.message);
+  if (!cur?.length) return;
+  // One upsert instead of N sequential updates (was the main publish slowdown).
+  const { error: upErr } = await supabase.from("schedule_shifts").upsert(
+    (cur as Record<string, unknown>[]).map((row) => ({
+      ...row,
+      published_shift: row.shift,
+      published_start_time: (row.start_time as string | null) ?? null,
+      published_end_time: (row.end_time as string | null) ?? null,
+      published_note: (row.note as string | null) ?? null,
+    })),
+  );
+  if (upErr) throw new Error(upErr.message);
 }
 
 // Normalize a date to the start/end of the branch schedule period.
@@ -407,78 +412,84 @@ async function findAllDepartmentSchedulesForPeriod(
   periodEnd: string,
   config: BranchPeriodConfig,
 ): Promise<Record<string, unknown>[]> {
+  const legacyStart = addDaysISO(periodStart, -1);
+  // One query covers exact start, in-period starts, Sat-keyed legacy, and week_end overlap.
+  // (Previously 5 sequential queries + a branch-wide shift scan — that made the app crawl.)
+  const { data, error } = await supabase
+    .from("schedules")
+    .select("*")
+    .eq("department_id", departmentId)
+    .or(
+      [
+        `and(week_start.gte.${legacyStart},week_start.lte.${periodEnd})`,
+        `and(week_start.lte.${periodEnd},week_end.gte.${periodStart})`,
+      ].join(","),
+    );
+  if (error) throw error;
+
   const seen = new Set<string>();
   const matches: Record<string, unknown>[] = [];
-
-  const add = (row: Record<string, unknown> | null | undefined) => {
-    const id = row?.id as string | undefined;
-    if (!row || !id || seen.has(id)) return;
-    if (!scheduleMatchesPeriod(row as { week_start: string }, periodStart, periodEnd, config)) return;
+  for (const row of data ?? []) {
+    const id = (row as { id?: string }).id;
+    if (!id || seen.has(id)) continue;
+    if (
+      !scheduleMatchesPeriod(
+        row as { week_start: string; week_end?: string | null },
+        periodStart,
+        periodEnd,
+        config,
+      )
+    ) {
+      continue;
+    }
     seen.add(id);
-    matches.push(row);
-  };
-
-  const { data: exactRows, error: exactErr } = await supabase
-    .from("schedules")
-    .select("*")
-    .eq("department_id", departmentId)
-    .eq("week_start", periodStart);
-  if (exactErr) throw exactErr;
-  for (const row of exactRows ?? []) add(row as Record<string, unknown>);
-
-  const { data: overlapRows, error: overlapErr } = await supabase
-    .from("schedules")
-    .select("*")
-    .eq("department_id", departmentId)
-    .lte("week_start", periodEnd)
-    .gte("week_end", periodStart);
-  if (overlapErr) throw overlapErr;
-  for (const row of overlapRows ?? []) add(row as Record<string, unknown>);
-
-  const { data: startInPeriodRows, error: startErr } = await supabase
-    .from("schedules")
-    .select("*")
-    .eq("department_id", departmentId)
-    .gte("week_start", periodStart)
-    .lte("week_start", periodEnd);
-  if (startErr) throw startErr;
-  for (const row of startInPeriodRows ?? []) add(row as Record<string, unknown>);
-
-  const { data: recentRows, error: recentErr } = await supabase
-    .from("schedules")
-    .select("*")
-    .eq("department_id", departmentId)
-    .order("updated_at", { ascending: false })
-    .limit(40);
-  if (recentErr) throw recentErr;
-  for (const row of recentRows ?? []) add(row as Record<string, unknown>);
-
-  const { data: shiftRows, error: shiftErr } = await supabase
-    .from("schedule_shifts")
-    .select("schedule_id")
-    .gte("day_date", periodStart)
-    .lte("day_date", periodEnd);
-  if (shiftErr) throw shiftErr;
-  const shiftScheduleIds = [
-    ...new Set(
-      (shiftRows ?? [])
-        .map((row) => (row as { schedule_id?: string }).schedule_id)
-        .filter(Boolean) as string[],
-    ),
-  ];
-  if (shiftScheduleIds.length > 0) {
-    const { data: shiftScheds, error: shiftSchedErr } = await supabase
-      .from("schedules")
-      .select("*")
-      .eq("department_id", departmentId)
-      .in("id", shiftScheduleIds);
-    if (shiftSchedErr) throw shiftSchedErr;
-    // Shifts in-window only hint at a candidate — still require period match so a
-    // published current-week schedule cannot leak into a future period.
-    for (const row of shiftScheds ?? []) add(row as Record<string, unknown>);
+    matches.push(row as Record<string, unknown>);
   }
-
   return matches;
+}
+
+/** Batch period lookup for many departments — one schedules query instead of N×findAll. */
+async function findSchedulesForDepartmentsInPeriod(
+  supabase: any,
+  departmentIds: string[],
+  periodStart: string,
+  periodEnd: string,
+  config: BranchPeriodConfig,
+): Promise<Map<string, Record<string, unknown>[]>> {
+  const byDept = new Map<string, Record<string, unknown>[]>();
+  if (!departmentIds.length) return byDept;
+
+  const legacyStart = addDaysISO(periodStart, -1);
+  const { data, error } = await supabase
+    .from("schedules")
+    .select("*")
+    .in("department_id", departmentIds)
+    .or(
+      [
+        `and(week_start.gte.${legacyStart},week_start.lte.${periodEnd})`,
+        `and(week_start.lte.${periodEnd},week_end.gte.${periodStart})`,
+      ].join(","),
+    );
+  if (error) throw error;
+
+  for (const row of data ?? []) {
+    const deptId = (row as { department_id?: string }).department_id;
+    if (!deptId) continue;
+    if (
+      !scheduleMatchesPeriod(
+        row as { week_start: string; week_end?: string | null },
+        periodStart,
+        periodEnd,
+        config,
+      )
+    ) {
+      continue;
+    }
+    const list = byDept.get(deptId) ?? [];
+    list.push(row as Record<string, unknown>);
+    byDept.set(deptId, list);
+  }
+  return byDept;
 }
 
 function pickPrimaryDepartmentSchedule(
@@ -656,42 +667,18 @@ export const getSchedulesForViewer = createServerFn({ method: "POST" })
       matched.push(schedule);
     };
 
-    const { data: overlapRows, error: overlapErr } = await context.supabase
+    const legacyStart = addDaysISO(weekStartKey, -1);
+    const { data: periodRows, error: periodErr } = await context.supabase
       .from("schedules")
       .select("*")
-      .lte("week_start", weekEndKey)
-      .gte("week_end", weekStartKey);
-    if (overlapErr) throw new Error(overlapErr.message);
-    for (const row of overlapRows ?? []) consider(row as Record<string, unknown>);
-
-    const { data: exactRows, error: exactErr } = await context.supabase
-      .from("schedules")
-      .select("*")
-      .eq("week_start", weekStartKey);
-    if (exactErr) throw new Error(exactErr.message);
-    for (const row of exactRows ?? []) consider(row as Record<string, unknown>);
-
-    const { data: shiftRows, error: shiftErr } = await context.supabase
-      .from("schedule_shifts")
-      .select("schedule_id")
-      .gte("day_date", weekStartKey)
-      .lte("day_date", weekEndKey);
-    if (shiftErr) throw new Error(shiftErr.message);
-    const shiftScheduleIds = [
-      ...new Set(
-        (shiftRows ?? [])
-          .map((row) => (row as { schedule_id?: string }).schedule_id)
-          .filter(Boolean) as string[],
-      ),
-    ];
-    if (shiftScheduleIds.length > 0) {
-      const { data: shiftScheds, error: shiftSchedErr } = await context.supabase
-        .from("schedules")
-        .select("*")
-        .in("id", shiftScheduleIds);
-      if (shiftSchedErr) throw new Error(shiftSchedErr.message);
-      for (const row of shiftScheds ?? []) consider(row as Record<string, unknown>);
-    }
+      .or(
+        [
+          `and(week_start.gte.${legacyStart},week_start.lte.${weekEndKey})`,
+          `and(week_start.lte.${weekEndKey},week_end.gte.${weekStartKey})`,
+        ].join(","),
+      );
+    if (periodErr) throw new Error(periodErr.message);
+    for (const row of periodRows ?? []) consider(row as Record<string, unknown>);
 
     const visible: any[] = [];
     for (const schedule of matched) {
@@ -1987,69 +1974,45 @@ export const getBranchPeriodScheduleShifts = createServerFn({ method: "POST" })
 
     const scheduleIds: string[] = [];
     const deptByScheduleId = new Map<string, string>();
-
-    await Promise.all(
-      ((depts ?? []) as { id: string }[]).map(async (dept) => {
-        const periodSchedules = await findAllDepartmentSchedulesForPeriod(
-          supabaseAdmin,
-          dept.id,
-          start,
-          end,
-          periodConfig,
-        );
-        let primary = null as
-          | { id?: string; status?: string; published_at?: string | null }
-          | null;
-        if (data.published_only) {
-          const publishedRows = periodSchedules.filter(
-            (row) =>
-              (row as { status?: string }).status === "approved" &&
-              !!(row as { published_at?: string | null }).published_at,
-          );
-          primary =
-            (pickPrimaryDepartmentSchedule(publishedRows) as typeof primary) ?? null;
-          if (!primary) {
-            const activePublished = await findActivePublishedSchedulesForDepartment(
-              supabaseAdmin,
-              dept.id,
-              periodConfig,
-              todayIsoCalendar(),
-            );
-            primary =
-              (activePublished.find((row) =>
-                scheduleMatchesPeriod(row as { week_start: string }, start, end, periodConfig),
-              ) as typeof primary) ?? null;
-          }
-        } else {
-          primary = pickPrimaryDepartmentSchedule(periodSchedules) as typeof primary;
-          if (!(primary?.status === "approved" && primary?.published_at)) {
-            const activePublished = await findActivePublishedSchedulesForDepartment(
-              supabaseAdmin,
-              dept.id,
-              periodConfig,
-              todayIsoCalendar(),
-            );
-            const publishedForPeriod = activePublished.find((row) =>
-              scheduleMatchesPeriod(row as { week_start: string }, start, end, periodConfig),
-            );
-            if (publishedForPeriod) primary = publishedForPeriod as typeof primary;
-          }
-        }
-        const id = primary?.id;
-        if (!id) return;
-        if (
-          data.published_only &&
-          !(
-            (primary as { status?: string }).status === "approved" &&
-            !!(primary as { published_at?: string | null }).published_at
-          )
-        ) {
-          return;
-        }
-        scheduleIds.push(id);
-        deptByScheduleId.set(id, dept.id);
-      }),
+    const deptIds = ((depts ?? []) as { id: string }[]).map((d) => d.id);
+    const byDept = await findSchedulesForDepartmentsInPeriod(
+      supabaseAdmin,
+      deptIds,
+      start,
+      end,
+      periodConfig,
     );
+
+    for (const deptId of deptIds) {
+      const periodSchedules = byDept.get(deptId) ?? [];
+      let primary = null as
+        | { id?: string; status?: string; published_at?: string | null }
+        | null;
+      if (data.published_only) {
+        const publishedRows = periodSchedules.filter(
+          (row) =>
+            (row as { status?: string }).status === "approved" &&
+            !!(row as { published_at?: string | null }).published_at,
+        );
+        primary =
+          (pickPrimaryDepartmentSchedule(publishedRows) as typeof primary) ?? null;
+      } else {
+        primary = pickPrimaryDepartmentSchedule(periodSchedules) as typeof primary;
+      }
+      const id = primary?.id;
+      if (!id) continue;
+      if (
+        data.published_only &&
+        !(
+          (primary as { status?: string }).status === "approved" &&
+          !!(primary as { published_at?: string | null }).published_at
+        )
+      ) {
+        continue;
+      }
+      scheduleIds.push(id);
+      deptByScheduleId.set(id, deptId);
+    }
 
     if (scheduleIds.length === 0) {
       return {
@@ -2152,34 +2115,17 @@ export const getWeekDepartmentStates = createServerFn({ method: "POST" })
     }
 
     const byDept = new Map<string, Record<string, unknown>>();
-    const todayIso = todayIsoCalendar();
-    await Promise.all(
-      activeDepts.map(async (d) => {
-        const periodSchedules = await findAllDepartmentSchedulesForPeriod(
-          supabaseAdmin,
-          d.id,
-          start,
-          end,
-          periodConfig,
-        );
-        let primary = pickPrimaryDepartmentSchedule(periodSchedules) as
-          | { status?: string; published_at?: string | null }
-          | null;
-        if (!(primary?.status === "approved" && primary?.published_at)) {
-          const activePublished = await findActivePublishedSchedulesForDepartment(
-            supabaseAdmin,
-            d.id,
-            periodConfig,
-            todayIso,
-          );
-          const publishedForPeriod = activePublished.find((row) =>
-            scheduleMatchesPeriod(row as { week_start: string }, start, end, periodConfig),
-          );
-          if (publishedForPeriod) primary = publishedForPeriod as typeof primary;
-        }
-        if (primary) byDept.set(d.id, primary);
-      }),
+    const periodByDept = await findSchedulesForDepartmentsInPeriod(
+      supabaseAdmin,
+      activeDepts.map((d) => d.id),
+      start,
+      end,
+      periodConfig,
     );
+    for (const d of activeDepts) {
+      const primary = pickPrimaryDepartmentSchedule(periodByDept.get(d.id) ?? []);
+      if (primary) byDept.set(d.id, primary);
+    }
 
     const noSchedule: { id: string; name: string }[] = [];
     const draft: { id: string; name: string }[] = [];
@@ -2257,7 +2203,11 @@ export const getBranchSavedSchedulesAwaitingPublish = createServerFn({ method: "
         "id, department_id, week_start, week_end, status, published_at, updated_at, created_by",
       )
       .in("department_id", deptIds)
-      .order("week_start", { ascending: false });
+      .or(
+        "status.eq.draft,status.eq.pending_approval,and(status.eq.approved,published_at.is.null)",
+      )
+      .order("week_start", { ascending: false })
+      .limit(200);
     if (error) throw new Error(error.message);
 
     const savedList = ((scheds ?? []) as any[])
@@ -2616,54 +2566,58 @@ export const getDashboardPublishedPeriods = createServerFn({ method: "POST" })
     }
 
     const periodByAnchor = new Map<string, DashboardPublishedPeriodRow>();
+    const deptIds = departments.map((d) => d.id);
+    if (!deptIds.length) return { periods: [] as DashboardPublishedPeriodRow[] };
 
-    for (const dept of departments) {
-      const published = await findActivePublishedSchedulesForDepartment(
-        supabaseAdmin,
-        dept.id,
-        periodConfig,
-        todayIso,
-      );
-      for (const row of published) {
-        const sched = row as {
-          week_start: string;
-          week_end?: string | null;
-          schedule_type?: string | null;
-          published_at: string | null;
-        };
-        if (!branchLevelViewer) {
-          const visible = await isScheduleVisibleToCaps(
-            row,
-            caps,
-            context.userId,
-            context.supabase,
-          );
-          if (!visible) continue;
-        }
+    const { data: publishedRows, error: pubErr } = await supabaseAdmin
+      .from("schedules")
+      .select("*")
+      .in("department_id", deptIds)
+      .eq("status", "approved")
+      .not("published_at", "is", null)
+      .order("week_start", { ascending: true });
+    if (pubErr) throw new Error(pubErr.message);
 
-        const { start: normStart } = weekStartOf(sched.week_start, periodConfig);
-        const days = weekDaysOfSchedule(sched, periodConfig);
-        if (!days.length) continue;
-
-        const periodStart = days[0]!;
-        const periodEnd = days[days.length - 1]!;
-        const publishedAt = sched.published_at;
-        const existing = periodByAnchor.get(normStart);
-        if (!existing) {
-          periodByAnchor.set(normStart, {
-            weekStart: normStart,
-            periodStart,
-            periodEnd,
-            publishedAt,
-          });
-          continue;
-        }
-        if ((publishedAt ?? "") > (existing.publishedAt ?? "")) {
-          existing.publishedAt = publishedAt;
-        }
-        if (periodStart < existing.periodStart) existing.periodStart = periodStart;
-        if (periodEnd > existing.periodEnd) existing.periodEnd = periodEnd;
+    for (const row of publishedRows ?? []) {
+      const sched = row as {
+        week_start: string;
+        week_end?: string | null;
+        schedule_type?: string | null;
+        published_at: string | null;
+      };
+      if (!scheduleIsActiveOrUpcoming(sched, periodConfig, todayIso)) continue;
+      if (!branchLevelViewer) {
+        const visible = await isScheduleVisibleToCaps(
+          row,
+          caps,
+          context.userId,
+          context.supabase,
+        );
+        if (!visible) continue;
       }
+
+      const { start: normStart } = weekStartOf(sched.week_start, periodConfig);
+      const days = weekDaysOfSchedule(sched, periodConfig);
+      if (!days.length) continue;
+
+      const periodStart = days[0]!;
+      const periodEnd = days[days.length - 1]!;
+      const publishedAt = sched.published_at;
+      const existing = periodByAnchor.get(normStart);
+      if (!existing) {
+        periodByAnchor.set(normStart, {
+          weekStart: normStart,
+          periodStart,
+          periodEnd,
+          publishedAt,
+        });
+        continue;
+      }
+      if ((publishedAt ?? "") > (existing.publishedAt ?? "")) {
+        existing.publishedAt = publishedAt;
+      }
+      if (periodStart < existing.periodStart) existing.periodStart = periodStart;
+      if (periodEnd > existing.periodEnd) existing.periodEnd = periodEnd;
     }
 
     const periods = dedupeOverlappingPublishedPeriods([...periodByAnchor.values()]);
@@ -2758,23 +2712,41 @@ export const getDailyScheduleOverview = createServerFn({ method: "POST" })
       return { departments: [], employeesByDept: {}, shifts: [] };
     }
 
-    const candidatesByDept = new Map<string, any[]>();
-    await Promise.all(
-      departments.map(async (dept) => {
-        const periodSchedules = await findAllDepartmentSchedulesForPeriod(
-          supabaseAdmin,
-          dept.id,
-          start,
-          end,
-          periodConfig,
-        );
-        if (periodSchedules.length) {
-          candidatesByDept.set(dept.id, periodSchedules);
-        }
-      }),
+    const candidatesByDept = await findSchedulesForDepartmentsInPeriod(
+      supabaseAdmin,
+      departments.map((d) => d.id),
+      start,
+      end,
+      periodConfig,
     );
 
     const todayIso = todayIsoCalendar();
+    const { data: publishedRows, error: pubErr } = await supabaseAdmin
+      .from("schedules")
+      .select("*")
+      .in(
+        "department_id",
+        departments.map((d) => d.id),
+      )
+      .eq("status", "approved")
+      .not("published_at", "is", null)
+      .order("week_start", { ascending: true });
+    if (pubErr) throw new Error(pubErr.message);
+
+    const activePublishedByDept = new Map<string, Record<string, unknown>[]>();
+    for (const row of publishedRows ?? []) {
+      const sched = row as {
+        department_id: string;
+        week_start: string;
+        week_end?: string | null;
+        schedule_type?: string | null;
+      };
+      if (!scheduleIsActiveOrUpcoming(sched, periodConfig, todayIso)) continue;
+      const list = activePublishedByDept.get(sched.department_id) ?? [];
+      list.push(row as Record<string, unknown>);
+      activePublishedByDept.set(sched.department_id, list);
+    }
+
     const departmentMeta: {
       id: string;
       overviewKey: string;
@@ -2792,12 +2764,7 @@ export const getDailyScheduleOverview = createServerFn({ method: "POST" })
 
     for (const dept of departments) {
       const periodCandidates = candidatesByDept.get(dept.id) ?? [];
-      const activePublished = await findActivePublishedSchedulesForDepartment(
-        supabaseAdmin,
-        dept.id,
-        periodConfig,
-        todayIso,
-      );
+      const activePublished = activePublishedByDept.get(dept.id) ?? [];
       const hasUnpublishedSaved = periodCandidates.some((s) =>
         isSavedScheduleAwaitingPublish(s as { status: string; published_at: string | null }),
       );

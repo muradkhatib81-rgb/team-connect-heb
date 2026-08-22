@@ -6,6 +6,8 @@ export type WebPushPayload = {
   body: string;
   url?: string;
   tag?: string;
+  /** When true, OS may suppress sound — always false for user-facing alerts. */
+  silent?: boolean;
 };
 
 let vapidConfigured = false;
@@ -90,6 +92,9 @@ export async function dispatchWebPushToUsers(
     body: payload.body,
     url: payload.url ?? "/dashboard",
     tag: payload.tag ?? `notif-${Date.now()}`,
+    silent: payload.silent === true,
+    vibrate: [220, 80, 220, 80, 320],
+    renotify: true,
   });
 
   let sent = 0;

@@ -46,13 +46,15 @@ export async function dispatchPushNotification(
     title: input.title ?? "מערכת ניהול עובדים",
     body,
     url,
+    // Unique tag each time so OS re-alerts (sound/vibrate) instead of silently replacing.
     tag:
       input.tag ??
       (input.messageId
-        ? `message-${input.messageId}`
+        ? `message-${input.messageId}-${Date.now()}`
         : input.scheduleId
-          ? `schedule-${input.scheduleId}`
+          ? `schedule-${input.scheduleId}-${Date.now()}`
           : `notif-${Date.now()}`),
+    silent: false,
   };
 
   return dispatchWebPushToUsers(userIds, payload);
@@ -85,6 +87,9 @@ export async function pushForScheduleNotification(opts: {
     message: opts.message,
     scheduleId: opts.scheduleId ?? null,
     weekStart: opts.weekStart ?? null,
-    tag: opts.scheduleId ? `schedule-${opts.scheduleId}` : undefined,
+    // New tag every send so updates re-notify with sound.
+    tag: opts.scheduleId
+      ? `schedule-${opts.scheduleId}-${Date.now()}`
+      : `schedule-${Date.now()}`,
   });
 }
