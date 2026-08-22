@@ -95,24 +95,33 @@ export async function dispatchWebPushToUsers(
     silent: false,
     vibrate: [300, 100, 300, 100, 500],
     renotify: true,
-    requireInteraction: true,
+    requireInteraction: false,
   });
 
   let sent = 0;
   let failed = 0;
   const staleIds: string[] = [];
 
+  const sendOne = async (sub: PushSubscriptionRow) => {
+    const send = webpush.sendNotification(
+      {
+        endpoint: sub.endpoint,
+        keys: { p256dh: sub.p256dh, auth: sub.auth },
+      },
+      body,
+      { TTL: 86_400, urgency: "high" },
+    );
+    // Hung endpoints must not stall the whole department notify.
+    await Promise.race([
+      send,
+      new Promise((_, reject) => setTimeout(() => reject(new Error("push-timeout")), 2_000)),
+    ]);
+  };
+
   await Promise.allSettled(
     (subs as PushSubscriptionRow[]).map(async (sub) => {
       try {
-        await webpush.sendNotification(
-          {
-            endpoint: sub.endpoint,
-            keys: { p256dh: sub.p256dh, auth: sub.auth },
-          },
-          body,
-          { TTL: 86_400, urgency: "high" },
-        );
+        await sendOne(sub);
         sent++;
       } catch (err: unknown) {
         failed++;

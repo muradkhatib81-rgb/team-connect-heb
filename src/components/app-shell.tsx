@@ -868,6 +868,7 @@ function RealtimeBridge({ uid }: { uid: string }) {
   const { activeBranchId } = useActiveBranch();
   useEffect(() => {
     let scheduleBumpTimer: ReturnType<typeof setTimeout> | null = null;
+    let notifBumpTimer: ReturnType<typeof setTimeout> | null = null;
     const bumpScheduleQueries = () => {
       if (scheduleBumpTimer) clearTimeout(scheduleBumpTimer);
       // Publish/save can fire dozens of row events; coalesce into one refetch wave.
@@ -1046,37 +1047,26 @@ function RealtimeBridge({ uid }: { uid: string }) {
       .on(
         "postgres_changes",
         {
-          event: "INSERT",
+          event: "*",
           schema: "public",
           table: "schedule_notifications",
           filter: `user_id=eq.${uid}`,
         },
         (payload) => {
-          qc.invalidateQueries({ queryKey: ["notif", "schedule"] });
-          qc.invalidateQueries({ queryKey: ["emp-dash-notif"] });
-          const msg =
-            typeof (payload as { new?: { message?: string } })?.new?.message === "string"
-              ? (payload as { new: { message: string } }).new.message
-              : null;
-          // When the app is open, OS push is often quiet — vibrate + toast so it's not "silent".
-          try {
-            navigator.vibrate?.([300, 100, 300, 100, 500]);
-          } catch {
-            /* ignore */
+          // Debounce — one schedule publish can insert dozens of rows; don't refetch per row.
+          if (notifBumpTimer) clearTimeout(notifBumpTimer);
+          notifBumpTimer = setTimeout(() => {
+            qc.invalidateQueries({ queryKey: ["notif", "schedule"] });
+            qc.invalidateQueries({ queryKey: ["emp-dash-notif"] });
+          }, 400);
+
+          if ((payload as { eventType?: string })?.eventType === "INSERT") {
+            try {
+              navigator.vibrate?.([220, 80, 220]);
+            } catch {
+              /* ignore */
+            }
           }
-          if (msg?.trim()) {
-            toast.message(msg.trim(), { duration: 8_000 });
-          }
-        },
-      )
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "schedule_notifications" },
-        () => {
-          qc.invalidateQueries({ queryKey: ["notif", "schedule"] });
-          qc.invalidateQueries({ queryKey: ["emp-dash-notif"] });
-          // Overview/dashboard refresh comes from the debounced schedules listener —
-          // don't refetch heavy schedule queries once per recipient on publish.
         },
       )
       .on("postgres_changes", { event: "*", schema: "public", table: "company_settings" }, () =>
@@ -1088,6 +1078,7 @@ function RealtimeBridge({ uid }: { uid: string }) {
       .subscribe();
     return () => {
       if (scheduleBumpTimer) clearTimeout(scheduleBumpTimer);
+      if (notifBumpTimer) clearTimeout(notifBumpTimer);
       supabase.removeChannel(ch);
     };
   }, [uid, qc, activeBranchId]);

@@ -50,7 +50,6 @@ export async function dispatchPushNotification(
     title: input.title ?? "מערכת ניהול עובדים",
     body,
     url,
-    // Brand-new tag every send so the OS must re-alert (sound/vibrate).
     tag:
       input.tag?.trim() ||
       freshPushTag(input.messageId ? "message" : input.scheduleId ? "schedule" : "notif"),
@@ -60,17 +59,20 @@ export async function dispatchPushNotification(
   return dispatchWebPushToUsers(userIds, payload);
 }
 
-/** Awaited push from app server code. Never throws. */
+/** Best-effort push — never throws. Caps wait so schedule save stays snappy. */
 export async function dispatchPushBestEffort(input: PushDispatchInput): Promise<void> {
   try {
-    const result = await dispatchPushNotification(input);
-    if (result.sent === 0 && result.failed === 0) {
-      console.warn("[push] dispatch skipped (no subs or VAPID missing)", {
-        recipients: input.userIds.length,
-      });
-    } else {
-      console.info("[push] dispatch result", result);
-    }
+    await Promise.race([
+      dispatchPushNotification(input).then((result) => {
+        if (result.sent === 0 && result.failed === 0) {
+          console.warn("[push] dispatch skipped (no subs or VAPID missing)", {
+            recipients: input.userIds.length,
+          });
+        }
+      }),
+      // Don't block save/publish for slow push endpoints.
+      new Promise<void>((resolve) => setTimeout(resolve, 2_500)),
+    ]);
   } catch (e) {
     console.warn("[push] app dispatch failed:", e);
   }
@@ -95,9 +97,8 @@ export async function pushForScheduleNotification(opts: {
 }
 
 /**
- * Loud Web Push first, then in-app rows.
- * Order matters: push must not depend on DB hooks (those are disabled / unreliable).
- * Never throws.
+ * Fast in-app insert, then best-effort Web Push (time-capped).
+ * Never throws — callers (save/publish) must stay responsive.
  */
 export async function notifyUsersWithPush(opts: {
   userIds: string[];
@@ -134,19 +135,7 @@ export async function notifyUsersWithPush(opts: {
         opts.messageId ? "message" : opts.scheduleId ? `schedule-${opts.scheduleId}` : "notif",
       );
 
-    // 1) Web Push with sound — before insert so serverless always finishes it.
-    await dispatchPushBestEffort({
-      userIds,
-      message,
-      scheduleId: opts.scheduleId ?? null,
-      weekStart,
-      title: opts.title,
-      tag,
-      url: opts.url,
-      messageId: opts.messageId,
-    });
-
-    // 2) In-app bell rows (DB push hook is a no-op after migration).
+    // 1) In-app rows first — cheap and unblocks the UI/realtime path.
     const { error: insertErr } = await supabaseAdmin.from("schedule_notifications").insert(
       userIds.map((uid) => ({
         user_id: uid,
@@ -158,6 +147,18 @@ export async function notifyUsersWithPush(opts: {
     if (insertErr) {
       console.warn("[notify] schedule_notifications insert failed:", insertErr.message);
     }
+
+    // 2) Web Push (capped wait) — must not stall schedule save for the whole department.
+    await dispatchPushBestEffort({
+      userIds,
+      message,
+      scheduleId: opts.scheduleId ?? null,
+      weekStart,
+      title: opts.title,
+      tag,
+      url: opts.url,
+      messageId: opts.messageId,
+    });
   } catch (e) {
     console.warn("[notify] notifyUsersWithPush failed:", e);
   }

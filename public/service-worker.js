@@ -57,7 +57,7 @@ self.addEventListener("push", (event) => {
       vibrate,
       silent: false,
       renotify: true,
-      requireInteraction: true,
+      requireInteraction: false,
     }),
   );
 });

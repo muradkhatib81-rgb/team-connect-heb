@@ -61,7 +61,7 @@ self.addEventListener("push", (event) => {
       // Always ring — ignore any silent flag from the payload.
       silent: false,
       renotify: true,
-      requireInteraction: true,
+      requireInteraction: false,
     }),
   );
 });

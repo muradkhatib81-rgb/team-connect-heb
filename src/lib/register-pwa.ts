@@ -33,7 +33,7 @@ export async function registerPwaServiceWorker(): Promise<void> {
 
   try {
     // Cache-bust so clients pick up push/sound fixes in sw.js.
-    const reg = await navigator.serviceWorker.register(`${PWA_SW_PATH}?v=push-sound-3`, {
+    const reg = await navigator.serviceWorker.register(`${PWA_SW_PATH}?v=push-sound-4`, {
       scope: "/",
     });
     void reg.update();
