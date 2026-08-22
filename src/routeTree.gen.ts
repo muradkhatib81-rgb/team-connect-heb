@@ -59,6 +59,7 @@ import { Route as AuthenticatedPlatformAnalyticsRouteImport } from './routes/_au
 import { Route as AuthenticatedPlatformAiRouteImport } from './routes/_authenticated/platform/ai'
 import { Route as AuthenticatedPlatformCompaniesIndexRouteImport } from './routes/_authenticated/platform/companies.index'
 import { Route as ApiPublicHooksGenerateRecurringTasksRouteImport } from './routes/api/public/hooks/generate-recurring-tasks'
+import { Route as ApiPublicHooksDispatchPushRouteImport } from './routes/api/public/hooks/dispatch-push'
 import { Route as AuthenticatedPlatformOwnersUserIdRouteImport } from './routes/_authenticated/platform/owners.$userId'
 import { Route as AuthenticatedPlatformCompaniesCompanyIdRouteImport } from './routes/_authenticated/platform/companies.$companyId'
 import { Route as AuthenticatedPlatformBranchesBranchIdRouteImport } from './routes/_authenticated/platform/branches.$branchId'
@@ -344,6 +345,12 @@ const ApiPublicHooksGenerateRecurringTasksRoute =
     path: '/api/public/hooks/generate-recurring-tasks',
     getParentRoute: () => rootRouteImport,
   } as any)
+const ApiPublicHooksDispatchPushRoute =
+  ApiPublicHooksDispatchPushRouteImport.update({
+    id: '/api/public/hooks/dispatch-push',
+    path: '/api/public/hooks/dispatch-push',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const AuthenticatedPlatformOwnersUserIdRoute =
   AuthenticatedPlatformOwnersUserIdRouteImport.update({
     id: '/$userId',
@@ -414,6 +421,7 @@ export interface FileRoutesByFullPath {
   '/platform/branches/$branchId': typeof AuthenticatedPlatformBranchesBranchIdRoute
   '/platform/companies/$companyId': typeof AuthenticatedPlatformCompaniesCompanyIdRoute
   '/platform/owners/$userId': typeof AuthenticatedPlatformOwnersUserIdRoute
+  '/api/public/hooks/dispatch-push': typeof ApiPublicHooksDispatchPushRoute
   '/api/public/hooks/generate-recurring-tasks': typeof ApiPublicHooksGenerateRecurringTasksRoute
   '/platform/companies/': typeof AuthenticatedPlatformCompaniesIndexRoute
 }
@@ -466,6 +474,7 @@ export interface FileRoutesByTo {
   '/platform/branches/$branchId': typeof AuthenticatedPlatformBranchesBranchIdRoute
   '/platform/companies/$companyId': typeof AuthenticatedPlatformCompaniesCompanyIdRoute
   '/platform/owners/$userId': typeof AuthenticatedPlatformOwnersUserIdRoute
+  '/api/public/hooks/dispatch-push': typeof ApiPublicHooksDispatchPushRoute
   '/api/public/hooks/generate-recurring-tasks': typeof ApiPublicHooksGenerateRecurringTasksRoute
   '/platform/companies': typeof AuthenticatedPlatformCompaniesIndexRoute
 }
@@ -522,6 +531,7 @@ export interface FileRoutesById {
   '/_authenticated/platform/branches/$branchId': typeof AuthenticatedPlatformBranchesBranchIdRoute
   '/_authenticated/platform/companies/$companyId': typeof AuthenticatedPlatformCompaniesCompanyIdRoute
   '/_authenticated/platform/owners/$userId': typeof AuthenticatedPlatformOwnersUserIdRoute
+  '/api/public/hooks/dispatch-push': typeof ApiPublicHooksDispatchPushRoute
   '/api/public/hooks/generate-recurring-tasks': typeof ApiPublicHooksGenerateRecurringTasksRoute
   '/_authenticated/platform/companies/': typeof AuthenticatedPlatformCompaniesIndexRoute
 }
@@ -578,6 +588,7 @@ export interface FileRouteTypes {
     | '/platform/branches/$branchId'
     | '/platform/companies/$companyId'
     | '/platform/owners/$userId'
+    | '/api/public/hooks/dispatch-push'
     | '/api/public/hooks/generate-recurring-tasks'
     | '/platform/companies/'
   fileRoutesByTo: FileRoutesByTo
@@ -630,6 +641,7 @@ export interface FileRouteTypes {
     | '/platform/branches/$branchId'
     | '/platform/companies/$companyId'
     | '/platform/owners/$userId'
+    | '/api/public/hooks/dispatch-push'
     | '/api/public/hooks/generate-recurring-tasks'
     | '/platform/companies'
   id:
@@ -685,6 +697,7 @@ export interface FileRouteTypes {
     | '/_authenticated/platform/branches/$branchId'
     | '/_authenticated/platform/companies/$companyId'
     | '/_authenticated/platform/owners/$userId'
+    | '/api/public/hooks/dispatch-push'
     | '/api/public/hooks/generate-recurring-tasks'
     | '/_authenticated/platform/companies/'
   fileRoutesById: FileRoutesById
@@ -696,6 +709,7 @@ export interface RootRouteChildren {
   ApiPwaManifestRoute: typeof ApiPwaManifestRoute
   ApiAiChatStreamRoute: typeof ApiAiChatStreamRoute
   ApiPushVapidPublicKeyRoute: typeof ApiPushVapidPublicKeyRoute
+  ApiPublicHooksDispatchPushRoute: typeof ApiPublicHooksDispatchPushRoute
   ApiPublicHooksGenerateRecurringTasksRoute: typeof ApiPublicHooksGenerateRecurringTasksRoute
 }
 
@@ -1051,6 +1065,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiPublicHooksGenerateRecurringTasksRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/public/hooks/dispatch-push': {
+      id: '/api/public/hooks/dispatch-push'
+      path: '/api/public/hooks/dispatch-push'
+      fullPath: '/api/public/hooks/dispatch-push'
+      preLoaderRoute: typeof ApiPublicHooksDispatchPushRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/_authenticated/platform/owners/$userId': {
       id: '/_authenticated/platform/owners/$userId'
       path: '/$userId'
@@ -1250,6 +1271,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiPwaManifestRoute: ApiPwaManifestRoute,
   ApiAiChatStreamRoute: ApiAiChatStreamRoute,
   ApiPushVapidPublicKeyRoute: ApiPushVapidPublicKeyRoute,
+  ApiPublicHooksDispatchPushRoute: ApiPublicHooksDispatchPushRoute,
   ApiPublicHooksGenerateRecurringTasksRoute:
     ApiPublicHooksGenerateRecurringTasksRoute,
 }
