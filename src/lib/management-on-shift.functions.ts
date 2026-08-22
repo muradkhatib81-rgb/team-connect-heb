@@ -20,8 +20,9 @@ async function actorDisplayName(userId: string): Promise<string> {
 }
 
 /**
- * End-shift only: start already inserts + pushes via DB trigger on management_on_shift.
- * Notifying again from the app caused every recipient to get the same alert twice.
+ * Management on-shift start/end: everyone in the branch except the actor.
+ * Start: DB trigger already inserts in-app rows → Web Push only.
+ * End: insert in-app + Web Push.
  */
 export const announceManagementOnShiftChange = createServerFn({ method: "POST" })
   .middleware([requireBranchContext])
@@ -29,10 +30,6 @@ export const announceManagementOnShiftChange = createServerFn({ method: "POST" }
     z.object({ action: z.enum(["start", "end"]) }).parse(d),
   )
   .handler(async ({ data, context }) => {
-    if (data.action === "start") {
-      return { ok: true as const, recipients: 0, skipped: "db_trigger" as const };
-    }
-
     const branchId = context.branchId;
     if (!branchId) return { ok: false as const, reason: "no_branch" };
 
@@ -46,20 +43,25 @@ export const announceManagementOnShiftChange = createServerFn({ method: "POST" }
     }
 
     const displayName = await actorDisplayName(context.userId);
+    const message =
+      data.action === "start"
+        ? `${displayName} נמצא/ת במשמרת`
+        : `${displayName} סיים/ה משמרת`;
+
     const recipients = await notifyBranchExceptActor({
       branchId,
       excludeUserId: context.userId,
-      message: `${displayName} סיים/ה משמרת`,
+      message,
       url: "/dashboard",
-      tag: `mos-end-${context.userId}-${Date.now()}`,
+      tag: `mos-${data.action}-${context.userId}-${Date.now()}`,
+      insertInApp: data.action === "end",
     });
 
     return { ok: true as const, recipients };
   });
 
 /**
- * After custody take / return: notify everyone in the branch except who clicked.
- * Single insert → single Web Push via DB trigger.
+ * Custody take / return: everyone in the branch except who clicked.
  */
 export const announceCustodyChange = createServerFn({ method: "POST" })
   .middleware([requireBranchContext])
@@ -88,6 +90,7 @@ export const announceCustodyChange = createServerFn({ method: "POST" })
       message,
       url: "/dashboard",
       tag: `custody-${data.action}-${context.userId}-${Date.now()}`,
+      insertInApp: true,
     });
 
     return { ok: true as const, recipients };

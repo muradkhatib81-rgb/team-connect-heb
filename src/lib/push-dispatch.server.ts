@@ -13,6 +13,24 @@ export type PushDispatchInput = {
   tag?: string;
 };
 
+/** Drop duplicate sends to the same user+body within a few seconds (DB hook + app). */
+const recentPushAt = new Map<string, number>();
+const PUSH_DEDUPE_MS = 6_000;
+
+function filterDedupedUserIds(userIds: string[], body: string): string[] {
+  const now = Date.now();
+  for (const [key, at] of recentPushAt) {
+    if (now - at > PUSH_DEDUPE_MS) recentPushAt.delete(key);
+  }
+  return userIds.filter((uid) => {
+    const key = `${uid}\0${body}`;
+    const prev = recentPushAt.get(key);
+    if (prev != null && now - prev < PUSH_DEDUPE_MS) return false;
+    recentPushAt.set(key, now);
+    return true;
+  });
+}
+
 async function resolveWeekStart(
   scheduleId?: string | null,
   weekStart?: string | null,
@@ -31,9 +49,14 @@ async function resolveWeekStart(
 export async function dispatchPushNotification(
   input: PushDispatchInput,
 ): Promise<{ sent: number; failed: number }> {
-  const userIds = [...new Set(input.userIds.filter(Boolean))];
   const body = input.message.trim();
-  if (!userIds.length || !body) return { sent: 0, failed: 0 };
+  if (!body) return { sent: 0, failed: 0 };
+
+  const userIds = filterDedupedUserIds(
+    [...new Set(input.userIds.filter(Boolean))],
+    body,
+  );
+  if (!userIds.length) return { sent: 0, failed: 0 };
 
   const weekStart = await resolveWeekStart(input.scheduleId, input.weekStart);
   const url =
@@ -95,10 +118,8 @@ export async function pushForScheduleNotification(opts: {
 }
 
 /**
- * Insert in-app notification rows (bypassing RLS).
- * Web Push is sent ONLY by the DB trigger on schedule_notifications insert —
- * calling dispatch here too caused every alert to arrive twice.
- * If insert fails, fall back to a single app-side push.
+ * Insert in-app notification rows (bypassing RLS) then send one loud Web Push.
+ * DB push hooks are disabled (app owns sound/vibrate); do not skip this push.
  * Never throws.
  */
 export async function notifyUsersWithPush(opts: {
@@ -140,25 +161,26 @@ export async function notifyUsersWithPush(opts: {
     );
     if (insertErr) {
       console.warn("[notify] schedule_notifications insert failed:", insertErr.message);
-      // Insert failed → DB push trigger never ran; send one app-side push.
-      await dispatchPushBestEffort({
-        userIds,
-        message,
-        scheduleId: opts.scheduleId ?? null,
-        weekStart,
-        title: opts.title,
-        tag: opts.tag,
-        url: opts.url,
-        messageId: opts.messageId,
-      });
     }
+
+    await dispatchPushBestEffort({
+      userIds,
+      message,
+      scheduleId: opts.scheduleId ?? null,
+      weekStart,
+      title: opts.title,
+      tag: opts.tag,
+      url: opts.url,
+      messageId: opts.messageId,
+    });
   } catch (e) {
     console.warn("[notify] notifyUsersWithPush failed:", e);
   }
 }
 
 /**
- * Notify every active profile in the branch except the actor (in-app + one push via DB trigger).
+ * Notify every active profile in the branch except the actor.
+ * @param insertInApp false = Web Push only (when a DB trigger already wrote in-app rows).
  * Never throws.
  */
 export async function notifyBranchExceptActor(opts: {
@@ -167,6 +189,7 @@ export async function notifyBranchExceptActor(opts: {
   message: string;
   tag?: string;
   url?: string;
+  insertInApp?: boolean;
 }): Promise<number> {
   try {
     const message = opts.message.trim();
@@ -182,13 +205,23 @@ export async function notifyBranchExceptActor(opts: {
     const userIds = (profiles ?? []).map((p: { id: string }) => p.id);
     if (!userIds.length) return 0;
 
-    await notifyUsersWithPush({
-      userIds,
-      message,
-      branchId: opts.branchId,
-      tag: opts.tag,
-      url: opts.url ?? "/dashboard",
-    });
+    const url = opts.url ?? "/dashboard";
+    if (opts.insertInApp === false) {
+      await dispatchPushBestEffort({
+        userIds,
+        message,
+        tag: opts.tag,
+        url,
+      });
+    } else {
+      await notifyUsersWithPush({
+        userIds,
+        message,
+        branchId: opts.branchId,
+        tag: opts.tag,
+        url,
+      });
+    }
     return userIds.length;
   } catch (e) {
     console.warn("[notify] notifyBranchExceptActor failed:", e);

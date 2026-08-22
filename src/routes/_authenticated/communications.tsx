@@ -1,6 +1,7 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
+import { useServerFn } from "@tanstack/react-start";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/use-auth";
 import { formatEmployeeName } from "@/lib/employee-name";
@@ -61,6 +62,7 @@ import {
   permanentDeleteMessage,
   type CommPriority,
 } from "@/lib/communications.functions";
+import { dispatchMessagePush } from "@/lib/push.functions";
 import { cn } from "@/lib/utils";
 import {
   AlertDialog,
@@ -1123,6 +1125,7 @@ function ComposeMessageDialog({
   myDeptId: string | null;
 }) {
   const qc = useQueryClient();
+  const dispatchPushFn = useServerFn(dispatchMessagePush);
   const depsQ = useDepartments();
   const empsQ = useEmployeesLite();
 
@@ -1172,9 +1175,7 @@ function ComposeMessageDialog({
 
   const sendMut = useMutation({
     mutationFn: async () => {
-      // Web Push is sent once by the DB trigger on message_recipients insert.
-      // Do not call dispatchMessagePush here — that duplicated every alert.
-      return sendMessage({
+      const result = await sendMessage({
         title,
         body,
         priority,
@@ -1186,6 +1187,13 @@ function ComposeMessageDialog({
           users: scope === "users" ? selectedUsers : [],
         },
       });
+      // App owns Web Push (DB hook disabled) — await so serverless doesn't drop it.
+      try {
+        await dispatchPushFn({ data: { messageId: result.id } });
+      } catch {
+        /* best-effort */
+      }
+      return result;
     },
     onSuccess: () => {
       toast.success(i18n.t("comm.msgSent"));
