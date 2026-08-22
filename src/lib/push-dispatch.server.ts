@@ -57,3 +57,34 @@ export async function dispatchPushNotification(
 
   return dispatchWebPushToUsers(userIds, payload);
 }
+
+/** Fire-and-forget push from app server code. Never throws. */
+export async function dispatchPushBestEffort(input: PushDispatchInput): Promise<void> {
+  try {
+    const result = await dispatchPushNotification(input);
+    if (result.sent === 0 && result.failed === 0) {
+      console.warn("[push] dispatch skipped (no subs or VAPID missing)", {
+        recipients: input.userIds.length,
+      });
+    }
+  } catch (e) {
+    console.warn("[push] app dispatch failed:", e);
+  }
+}
+
+export async function pushForScheduleNotification(opts: {
+  userIds: string[];
+  message: string;
+  scheduleId?: string | null;
+  weekStart?: string | null;
+}): Promise<void> {
+  const userIds = [...new Set(opts.userIds.filter(Boolean))];
+  if (!userIds.length || !opts.message.trim()) return;
+  await dispatchPushBestEffort({
+    userIds,
+    message: opts.message,
+    scheduleId: opts.scheduleId ?? null,
+    weekStart: opts.weekStart ?? null,
+    tag: opts.scheduleId ? `schedule-${opts.scheduleId}` : undefined,
+  });
+}

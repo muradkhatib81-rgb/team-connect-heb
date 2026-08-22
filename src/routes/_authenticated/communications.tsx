@@ -1,6 +1,7 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
+import { useServerFn } from "@tanstack/react-start";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/use-auth";
 import { formatEmployeeName } from "@/lib/employee-name";
@@ -61,6 +62,7 @@ import {
   permanentDeleteMessage,
   type CommPriority,
 } from "@/lib/communications.functions";
+import { dispatchMessagePush } from "@/lib/push.functions";
 import { cn } from "@/lib/utils";
 import {
   AlertDialog,
@@ -1123,6 +1125,7 @@ function ComposeMessageDialog({
   myDeptId: string | null;
 }) {
   const qc = useQueryClient();
+  const dispatchPushFn = useServerFn(dispatchMessagePush);
   const depsQ = useDepartments();
   const empsQ = useEmployeesLite();
 
@@ -1171,8 +1174,8 @@ function ComposeMessageDialog({
   );
 
   const sendMut = useMutation({
-    mutationFn: () =>
-      sendMessage({
+    mutationFn: async () => {
+      const result = await sendMessage({
         title,
         body,
         priority,
@@ -1183,7 +1186,14 @@ function ComposeMessageDialog({
           departments: scope === "departments" ? selectedDepts : [],
           users: scope === "users" ? selectedUsers : [],
         },
-      }),
+      });
+      try {
+        await dispatchPushFn({ data: { messageId: result.id } });
+      } catch {
+        /* push is best-effort */
+      }
+      return result;
+    },
     onSuccess: () => {
       toast.success(i18n.t("comm.msgSent"));
       qc.invalidateQueries({ queryKey: ["comm"] });

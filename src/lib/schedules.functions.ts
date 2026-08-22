@@ -19,6 +19,7 @@ import { SCHEDULE_NOTE_MAX, trimScheduleNote } from "@/lib/schedule-note";
 import {
   enforceSupersededPublishedSchedulePolicy,
 } from "@/lib/schedule-superseded";
+import { pushForScheduleNotification } from "@/lib/push-dispatch.server";
 import {
   buildPeriodDays,
   filterPeriodCalendarDays,
@@ -323,6 +324,7 @@ async function notifyScheduleDepartment(
       message,
     })),
   );
+  await pushForScheduleNotification({ userIds: recipientIds, message, scheduleId });
 }
 
 async function snapshotSubmittedShifts(supabase: any, scheduleId: string) {
@@ -1634,13 +1636,19 @@ export const rejectSchedule = createServerFn({ method: "POST" })
     if (dept?.manager_id && dept.code !== "management") recipients.add(dept.manager_id);
     if (recipients.size) {
       const recipientList = [...recipients];
+      const rejectMsg = `סידור העבודה נדחה: ${data.note}`;
       await context.supabase.from("schedule_notifications").insert(
         recipientList.map((uid) => ({
           schedule_id: data.schedule_id,
           user_id: uid,
-          message: `סידור העבודה נדחה: ${data.note}`,
+          message: rejectMsg,
         })),
       );
+      await pushForScheduleNotification({
+        userIds: recipientList,
+        message: rejectMsg,
+        scheduleId: data.schedule_id,
+      });
     }
     return { ok: true };
   });

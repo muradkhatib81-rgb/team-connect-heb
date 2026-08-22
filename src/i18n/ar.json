@@ -57,7 +57,11 @@
     "unsupported": "المتصفح أو الجهاز لا يدعم إشعارات Push.",
     "blocked": "محظور",
     "subscribeError": "تعذّر الاشتراك في الإشعارات",
-    "unsubscribeError": "تعذّر إلغاء الاشتراك"
+    "unsubscribeError": "تعذّر إلغاء الاشتراك",
+    "testButton": "إرسال إشعار تجريبي",
+    "testSent": "تم إرسال الإشعار التجريبي",
+    "testError": "فشل إرسال الإشعار التجريبي",
+    "testNoSub": "لا يوجد اشتراك Push — أوقف ثم فعّل الإشعارات مرة أخرى"
   },
   "dashboard": {
     "greeting": "مرحباً،",

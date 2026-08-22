@@ -1033,6 +1033,12 @@ export const updateEmployee = createServerFn({ method: "POST" })
                 message: msg,
                 branch_id: context.branchId,
               });
+              const { dispatchPushBestEffort } = await import("@/lib/push-dispatch.server");
+              await dispatchPushBestEffort({
+                userIds: [data.user_id],
+                message: msg,
+                tag: `leave-cancel-${data.user_id}`,
+              });
             } catch {
               /* non-fatal */
             }

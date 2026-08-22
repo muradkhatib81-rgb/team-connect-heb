@@ -57,7 +57,11 @@
     "unsupported": "This browser or device does not support push notifications.",
     "blocked": "Blocked",
     "subscribeError": "Could not subscribe to notifications",
-    "unsubscribeError": "Could not unsubscribe"
+    "unsubscribeError": "Could not unsubscribe",
+    "testButton": "Send test notification",
+    "testSent": "Test notification sent",
+    "testError": "Failed to send test notification",
+    "testNoSub": "No push subscription found — toggle notifications off and on again"
   },
   "dashboard": {
     "greeting": "Hello,",

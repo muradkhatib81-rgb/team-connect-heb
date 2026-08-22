@@ -57,7 +57,11 @@
     "unsupported": "הדפדפן או המכשיר לא תומכים בהתראות Push.",
     "blocked": "חסום",
     "subscribeError": "לא ניתן להירשם להתראות",
-    "unsubscribeError": "לא ניתן לבטל את ההרשמה"
+    "unsubscribeError": "לא ניתן לבטל את ההרשמה",
+    "testButton": "שלח/י התראת בדיקה",
+    "testSent": "התראת הבדיקה נשלחה",
+    "testError": "שליחת התראת הבדיקה נכשלה",
+    "testNoSub": "לא נמצא מנוי Push — כבה/י והפעל/י שוב את ההתראות"
   },
   "dashboard": {
     "greeting": "שלום,",

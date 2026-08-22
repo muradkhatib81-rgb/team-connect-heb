@@ -6,7 +6,7 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { toast } from "sonner";
-import { savePushSubscription, removePushSubscription } from "@/lib/push.functions";
+import { savePushSubscription, removePushSubscription, sendTestPush } from "@/lib/push.functions";
 
 function urlBase64ToUint8Array(base64String: string): Uint8Array {
   const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
@@ -32,11 +32,13 @@ export function PushNotificationsSettings() {
   const { t } = useTranslation();
   const saveSubFn = useServerFn(savePushSubscription);
   const removeSubFn = useServerFn(removePushSubscription);
+  const testPushFn = useServerFn(sendTestPush);
 
   const [supported, setSupported] = useState(true);
   const [enabled, setEnabled] = useState(false);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
+  const [testing, setTesting] = useState(false);
   const [permission, setPermission] = useState<NotificationPermission>("default");
 
   const refreshState = useCallback(async () => {
@@ -135,6 +137,19 @@ export function PushNotificationsSettings() {
     }
   };
 
+  const runTestPush = async () => {
+    setTesting(true);
+    try {
+      await testPushFn();
+      toast.success(t("push.testSent"));
+    } catch (e: unknown) {
+      const msg = (e as Error)?.message;
+      toast.error(msg === "no_subscription" ? t("push.testNoSub") : t("push.testError"));
+    } finally {
+      setTesting(false);
+    }
+  };
+
   if (loading) {
     return (
       <Card className="p-6 flex items-center justify-center">
@@ -156,34 +171,42 @@ export function PushNotificationsSettings() {
   }
 
   return (
-    <Card className="p-6 flex items-center justify-between gap-4">
-      <div className="flex items-start gap-3 min-w-0">
-        <Bell className="size-5 text-primary mt-0.5 shrink-0" />
-        <div className="min-w-0">
-          <p className="font-medium">{t("push.title")}</p>
-          <p className="text-sm text-muted-foreground mt-1">{t("push.description")}</p>
-          {permission === "denied" && (
-            <p className="text-sm text-destructive mt-2">{t("push.deniedHint")}</p>
+    <Card className="p-6 space-y-4">
+      <div className="flex items-center justify-between gap-4">
+        <div className="flex items-start gap-3 min-w-0">
+          <Bell className="size-5 text-primary mt-0.5 shrink-0" />
+          <div className="min-w-0">
+            <p className="font-medium">{t("push.title")}</p>
+            <p className="text-sm text-muted-foreground mt-1">{t("push.description")}</p>
+            {permission === "denied" && (
+              <p className="text-sm text-destructive mt-2">{t("push.deniedHint")}</p>
+            )}
+          </div>
+        </div>
+        <div className="flex items-center gap-2 shrink-0">
+          {permission === "denied" ? (
+            <Button variant="outline" size="sm" disabled>
+              {t("push.blocked")}
+            </Button>
+          ) : (
+            <>
+              <Switch
+                checked={enabled}
+                disabled={busy}
+                onCheckedChange={(on) => (on ? void enablePush() : void disablePush())}
+                aria-label={t("push.title")}
+              />
+              {busy && <Loader2 className="size-4 animate-spin text-muted-foreground" />}
+            </>
           )}
         </div>
       </div>
-      <div className="flex items-center gap-2 shrink-0">
-        {permission === "denied" ? (
-          <Button variant="outline" size="sm" disabled>
-            {t("push.blocked")}
-          </Button>
-        ) : (
-          <>
-            <Switch
-              checked={enabled}
-              disabled={busy}
-              onCheckedChange={(on) => (on ? void enablePush() : void disablePush())}
-              aria-label={t("push.title")}
-            />
-            {busy && <Loader2 className="size-4 animate-spin text-muted-foreground" />}
-          </>
-        )}
-      </div>
+      {enabled && permission === "granted" && (
+        <Button variant="outline" size="sm" disabled={testing} onClick={() => void runTestPush()}>
+          {testing ? <Loader2 className="size-4 animate-spin me-2" /> : null}
+          {t("push.testButton")}
+        </Button>
+      )}
     </Card>
   );
 }
