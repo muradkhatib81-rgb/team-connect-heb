@@ -111,47 +111,38 @@ export function ActiveBranchProvider({ children }: { children: ReactNode }) {
   const branches = branchesQ.data ?? [];
   const ownBranchId = (profile as any)?.branch_id ?? null;
 
-  const [activeBranchId, setActiveBranchIdState] = useState<string | null>(null);
+  // Owner selection only — non-owners derive branch from profile (avoids null→id remount race).
+  const [ownerSelectedId, setOwnerSelectedId] = useState<string | null>(() => readStored());
   const [ownerHydrated, setOwnerHydrated] = useState(false);
 
-  // Resolve initial / corrected active branch whenever inputs change.
+  const activeBranchId = !profile
+    ? null
+    : isOwner
+      ? ownerSelectedId
+      : ownBranchId;
+
+  // Resolve owner selection once the branch list is ready.
   useEffect(() => {
-    if (!profile) return;
-    if (!isOwner) {
-      // Every other role stays locked to their own branch (unchanged).
-      if (activeBranchId !== ownBranchId) {
-        setActiveBranchIdState(ownBranchId);
-        writeStored(ownBranchId);
-        setActiveBranchScope(ownBranchId);
-      }
-      return;
-    }
-    // Restore the owner's last explicit selection once the branch list is
-    // ready. Do not invent a "first branch" when nothing was stored.
-    // Note: we intentionally do NOT clear an in-session id that isn't in
-    // `branches` yet — Branch Mode can also be entered via the Platform
-    // bridge before the real-branches query refreshes.
+    if (!profile || !isOwner) return;
     if (ownerHydrated || branchesQ.isLoading) return;
     const stored = readStored();
     if (stored && branches.some((b) => b.id === stored)) {
-      setActiveBranchIdState(stored);
+      setOwnerSelectedId(stored);
       setActiveBranchScope(stored);
     } else if (stored && branches.length > 0 && !branches.some((b) => b.id === stored)) {
-      // Stale id from a deleted branch — drop it so server headers don't
-      // keep scoping to a missing store.
       writeStored(null);
+      setOwnerSelectedId(null);
       setActiveBranchScope(null);
     }
     setOwnerHydrated(true);
-  }, [
-    profile,
-    isOwner,
-    ownBranchId,
-    activeBranchId,
-    ownerHydrated,
-    branches,
-    branchesQ.isLoading,
-  ]);
+  }, [profile, isOwner, ownerHydrated, branches, branchesQ.isLoading]);
+
+  // Keep storage + supabase scope in lockstep for locked (non-owner) roles.
+  useEffect(() => {
+    if (!profile || isOwner) return;
+    writeStored(ownBranchId);
+    setActiveBranchScope(ownBranchId);
+  }, [profile, isOwner, ownBranchId]);
 
   // Keep the supabase scope in lockstep with the React state. Doing this
   // synchronously during render means the very next supabase.from(...)
@@ -162,17 +153,17 @@ export function ActiveBranchProvider({ children }: { children: ReactNode }) {
   const setActiveBranchId = useCallback(
     (id: string | null) => {
       if (!isOwner) return; // locked
-      if (id === activeBranchId) return;
+      if (id === ownerSelectedId) return;
       writeStored(id);
       setActiveBranchScope(id);
-      setActiveBranchIdState(id);
+      setOwnerSelectedId(id);
       // Cancel inflight requests bound to the old branch and force every
       // data-bearing query to refetch under the new branch (or, when
       // clearing, back to Branch Mode being off).
       qc.cancelQueries();
       qc.invalidateQueries();
     },
-    [isOwner, activeBranchId, qc],
+    [isOwner, ownerSelectedId, qc],
   );
 
   const activeBranch = useMemo(
@@ -192,13 +183,13 @@ export function ActiveBranchProvider({ children }: { children: ReactNode }) {
     [activeBranchId, activeBranch, branches, isOwner, branchesQ.isLoading, setActiveBranchId],
   );
 
+  // Remount on branch switch for owners only. Non-owners keep a stable key so
+  // profile→branch hydrate does not wipe the first paint and double-fetch.
+  const treeKey = isOwner ? (activeBranchId ?? "no-branch") : "locked-branch";
+
   return (
     <ActiveBranchContext.Provider value={value}>
-      {/* Keying on activeBranchId forces a full subtree remount when the
-          admin switches branches: every route component unmounts, local
-          state is cleared, and queries refetch from scratch under the
-          new scope. Prevents any stale-branch data from lingering. */}
-      <div key={activeBranchId ?? "no-branch"} className="contents">
+      <div key={treeKey} className="contents">
         {children}
       </div>
     </ActiveBranchContext.Provider>

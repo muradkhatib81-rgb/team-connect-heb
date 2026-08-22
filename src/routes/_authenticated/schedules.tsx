@@ -496,7 +496,7 @@ function SchedulesPage() {
     staleTime: 60_000,
   });
   const weekSchedulesQ = useQuery({
-    enabled: !!me?.id && view === "editor",
+    enabled: !!me?.id && view === "editor" && (deptsQ.isSuccess || deptsQ.isFetched),
     queryKey: ["week-schedules", periodWeekStart, me?.id, periodConfig.schedule_type, periodConfig.week_start_dow],
     queryFn: async () => {
       const rows = await getSchedulesFn({ data: { week_start: periodWeekStart } });
@@ -514,7 +514,7 @@ function SchedulesPage() {
           week_start: row.week_start as string | undefined,
         }));
     },
-    staleTime: 30_000,
+    staleTime: 60_000,
   });
 
   const deptsWithSchedule = useMemo(
@@ -799,8 +799,9 @@ function SchedulesPage() {
   }, [deptWeekFlagsQ.data?.hasPublished, deptWeekFlagsQ.data?.publishedScheduleId]);
 
   // Prefer an explicit schedule id; only auto-open published when it belongs to this period.
+  // Do not wait for deptWeekFlagsQ — start loading in parallel (flags update queryKey when ready).
   const schedQ = useQuery({
-    enabled: !!selectedDept && !!me?.id && view === "editor" && !deptWeekFlagsQ.isLoading,
+    enabled: !!selectedDept && !!me?.id && view === "editor",
     queryKey: [
       "schedule",
       selectedDept,

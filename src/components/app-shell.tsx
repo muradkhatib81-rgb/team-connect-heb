@@ -179,7 +179,14 @@ export function AppShell({ children }: { children: ReactNode }) {
   // routes/_authenticated/route.tsx). See <RealtimeBridge/> and
   // <BranchModeGuard/> below.
 
-  if (isLoading || !profile) {
+  if (isLoading) {
+    return (
+      <div className="flex min-h-screen items-center justify-center">
+        <Loader2 className="size-6 animate-spin text-primary" />
+      </div>
+    );
+  }
+  if (!profile) {
     return (
       <div className="flex min-h-screen items-center justify-center">
         <Loader2 className="size-6 animate-spin text-primary" />
@@ -943,7 +950,7 @@ function RealtimeBridge({ uid }: { uid: string }) {
         },
       )
       .on("postgres_changes", { event: "*", schema: "public", table: "departments" }, () => {
-        qc.invalidateQueries({ queryKey: ["auth", "me"] });
+        // Do not invalidate auth/me here — that re-spins the whole shell for every dept tweak.
         qc.invalidateQueries({ queryKey: ["departments"] });
         qc.invalidateQueries({ queryKey: ["dashboard", "stats"] });
         qc.invalidateQueries({ queryKey: ["dashboard", "department-managers"] });

@@ -585,8 +585,10 @@ async function isScheduleVisibleToCaps(
   caps: Omit<ScheduleViewerCaps, "userId">,
   userId: string,
   supabase: any,
+  managedDeptIdsPreload?: string[],
 ) {
-  const managedDeptIds = await getManagedDepartmentIds(supabase, caps, userId);
+  const managedDeptIds =
+    managedDeptIdsPreload ?? (await getManagedDepartmentIds(supabase, caps, userId));
   return canViewScheduleContent(schedule, { ...caps, userId }, managedDeptIds);
 }
 
@@ -629,9 +631,14 @@ export const getSchedulesForViewer = createServerFn({ method: "POST" })
         weekEndKey,
         periodConfig,
       );
+      const managedDeptIds = await getManagedDepartmentIds(
+        context.supabase,
+        caps,
+        context.userId,
+      );
       const visibleRows: Record<string, unknown>[] = [];
       for (const row of allRows) {
-        if (await isScheduleVisibleToCaps(row, caps, context.userId, context.supabase)) {
+        if (await isScheduleVisibleToCaps(row, caps, context.userId, context.supabase, managedDeptIds)) {
           visibleRows.push(row);
         }
       }
@@ -677,9 +684,22 @@ export const getSchedulesForViewer = createServerFn({ method: "POST" })
     if (periodErr) throw new Error(periodErr.message);
     for (const row of periodRows ?? []) consider(row as Record<string, unknown>);
 
+    const managedDeptIds = await getManagedDepartmentIds(
+      context.supabase,
+      caps,
+      context.userId,
+    );
     const visible: any[] = [];
     for (const schedule of matched) {
-      if (await isScheduleVisibleToCaps(schedule, caps, context.userId, context.supabase)) {
+      if (
+        await isScheduleVisibleToCaps(
+          schedule,
+          caps,
+          context.userId,
+          context.supabase,
+          managedDeptIds,
+        )
+      ) {
         visible.push(schedule);
       }
     }
@@ -2584,6 +2604,7 @@ export const getDashboardPublishedPeriods = createServerFn({ method: "POST" })
           caps,
           context.userId,
           context.supabase,
+          managedDeptIds,
         );
         if (!visible) continue;
       }
