@@ -135,7 +135,7 @@ export const sendTestPush = createServerFn({ method: "POST" })
         title: "בדיקת התראות",
         message: "ההתראות פועלות כראוי ✓",
         url: "/profile",
-        tag: "push-test",
+        tag: `push-test-${Date.now()}`,
       });
 
       if (result.sent > 0) return { ok: true, ...result };

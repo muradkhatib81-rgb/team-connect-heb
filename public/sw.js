@@ -42,24 +42,33 @@ self.addEventListener("push", (event) => {
   const title = data.title || "מערכת ניהול עובדים";
   const body = data.body || "";
   const url = data.url || "/dashboard";
-  const tag =
-    typeof data.tag === "string" && data.tag.trim()
-      ? data.tag.trim()
-      : `team-connect-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-  const vibrate = Array.isArray(data.vibrate) ? data.vibrate : [300, 100, 300, 100, 500];
+  // Always unique — reused tags can replace quietly on some OS/browsers.
+  const tag = `tc-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+  const vibrate = [400, 120, 400, 120, 600];
 
   event.waitUntil(
-    self.registration.showNotification(title, {
-      body,
-      tag,
-      data: { url },
-      icon: "/icons/icon-192.png",
-      badge: "/icons/icon-192.png",
-      vibrate,
-      silent: false,
-      renotify: true,
-      requireInteraction: false,
-    }),
+    (async () => {
+      try {
+        const existing = await self.registration.getNotifications();
+        await Promise.allSettled(existing.map((n) => n.close()));
+      } catch {
+        /* ignore */
+      }
+
+      await self.registration.showNotification(title, {
+        body,
+        tag,
+        data: { url },
+        icon: "/icons/icon-192.png",
+        badge: "/icons/icon-192.png",
+        vibrate,
+        // Explicit non-silent so Android/Chrome use the alert channel (not "silent").
+        silent: false,
+        renotify: true,
+        requireInteraction: true,
+        timestamp: Date.now(),
+      });
+    })(),
   );
 });
 

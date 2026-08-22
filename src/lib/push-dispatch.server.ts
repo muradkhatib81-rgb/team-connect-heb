@@ -59,20 +59,20 @@ export async function dispatchPushNotification(
   return dispatchWebPushToUsers(userIds, payload);
 }
 
-/** Best-effort push — never throws. Caps wait so schedule save stays snappy. */
+/** Best-effort push — never throws. Awaits completion so serverless does not kill the send. */
 export async function dispatchPushBestEffort(input: PushDispatchInput): Promise<void> {
   try {
-    await Promise.race([
-      dispatchPushNotification(input).then((result) => {
-        if (result.sent === 0 && result.failed === 0) {
-          console.warn("[push] dispatch skipped (no subs or VAPID missing)", {
-            recipients: input.userIds.length,
-          });
-        }
-      }),
-      // Don't block save/publish for slow push endpoints.
-      new Promise<void>((resolve) => setTimeout(resolve, 2_500)),
-    ]);
+    const result = await dispatchPushNotification(input);
+    if (result.sent === 0 && result.failed === 0) {
+      console.warn("[push] dispatch skipped (no subs or VAPID missing)", {
+        recipients: input.userIds.length,
+      });
+    } else if (result.sent === 0 && result.failed > 0) {
+      console.warn("[push] all endpoints failed", {
+        recipients: input.userIds.length,
+        failed: result.failed,
+      });
+    }
   } catch (e) {
     console.warn("[push] app dispatch failed:", e);
   }
@@ -135,7 +135,20 @@ export async function notifyUsersWithPush(opts: {
         opts.messageId ? "message" : opts.scheduleId ? `schedule-${opts.scheduleId}` : "notif",
       );
 
-    // 1) In-app rows first — cheap and unblocks the UI/realtime path.
+    // 1) Web Push first and await fully — serverless kills in-flight work after the response.
+    //    (A short timeout previously left only the silent in-app row.)
+    await dispatchPushBestEffort({
+      userIds,
+      message,
+      scheduleId: opts.scheduleId ?? null,
+      weekStart,
+      title: opts.title,
+      tag,
+      url: opts.url,
+      messageId: opts.messageId,
+    });
+
+    // 2) In-app rows (bell) after push — DB push hook must stay no-op to avoid duplicates.
     const { error: insertErr } = await supabaseAdmin.from("schedule_notifications").insert(
       userIds.map((uid) => ({
         user_id: uid,
@@ -147,18 +160,6 @@ export async function notifyUsersWithPush(opts: {
     if (insertErr) {
       console.warn("[notify] schedule_notifications insert failed:", insertErr.message);
     }
-
-    // 2) Web Push (capped wait) — must not stall schedule save for the whole department.
-    await dispatchPushBestEffort({
-      userIds,
-      message,
-      scheduleId: opts.scheduleId ?? null,
-      weekStart,
-      title: opts.title,
-      tag,
-      url: opts.url,
-      messageId: opts.messageId,
-    });
   } catch (e) {
     console.warn("[notify] notifyUsersWithPush failed:", e);
   }

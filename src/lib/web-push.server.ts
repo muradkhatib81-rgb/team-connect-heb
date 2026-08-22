@@ -91,11 +91,12 @@ export async function dispatchWebPushToUsers(
     title: payload.title,
     body: payload.body,
     url: payload.url ?? "/dashboard",
+    // Hint only — SW forces a fresh unique tag + silent:false.
     tag: payload.tag ?? `notif-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
     silent: false,
-    vibrate: [300, 100, 300, 100, 500],
+    vibrate: [400, 120, 400, 120, 600],
     renotify: true,
-    requireInteraction: false,
+    requireInteraction: true,
   });
 
   let sent = 0;
@@ -103,7 +104,7 @@ export async function dispatchWebPushToUsers(
   const staleIds: string[] = [];
 
   const sendOne = async (sub: PushSubscriptionRow) => {
-    const send = webpush.sendNotification(
+    await webpush.sendNotification(
       {
         endpoint: sub.endpoint,
         keys: { p256dh: sub.p256dh, auth: sub.auth },
@@ -111,11 +112,6 @@ export async function dispatchWebPushToUsers(
       body,
       { TTL: 86_400, urgency: "high" },
     );
-    // Hung endpoints must not stall the whole department notify.
-    await Promise.race([
-      send,
-      new Promise((_, reject) => setTimeout(() => reject(new Error("push-timeout")), 2_000)),
-    ]);
   };
 
   await Promise.allSettled(
