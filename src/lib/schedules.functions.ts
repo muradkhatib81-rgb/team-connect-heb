@@ -1139,11 +1139,16 @@ export const saveScheduleShifts = createServerFn({ method: "POST" })
     const shouldNotifyEmployees =
       changed && (isApproved || Boolean((sched as { published_at?: string | null }).published_at));
     if (shouldNotifyEmployees) {
+      const when = new Date().toLocaleTimeString("he-IL", {
+        hour: "2-digit",
+        minute: "2-digit",
+        hour12: false,
+      });
       await notifyScheduleDepartment(
         context.supabase,
         data.schedule_id,
         sched.department_id,
-        "סידור העבודה השבועי עודכן. נא לעיין בשינויים.",
+        `סידור העבודה השבועי עודכן (${when}). נא לעיין בשינויים.`,
         context.userId,
       );
     }

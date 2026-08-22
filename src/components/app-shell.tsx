@@ -1068,11 +1068,8 @@ function RealtimeBridge({ uid }: { uid: string }) {
           }, 400);
 
           if ((payload as { eventType?: string })?.eventType === "INSERT") {
-            try {
-              navigator.vibrate?.([220, 80, 220]);
-            } catch {
-              /* ignore */
-            }
+            // App-open fallback when OS push sound is suppressed.
+            void import("@/lib/alert-tone").then(({ playAlertTone }) => playAlertTone());
           }
         },
       )

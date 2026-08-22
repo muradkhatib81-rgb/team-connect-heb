@@ -20,7 +20,6 @@ self.addEventListener("activate", (event) => {
   );
 });
 
-// Presence of a fetch listener satisfies installability checks.
 self.addEventListener("fetch", () => {});
 
 function parsePushPayload(event) {
@@ -43,7 +42,6 @@ self.addEventListener("push", (event) => {
   const title = data.title || "מערכת ניהול עובדים";
   const body = data.body || "";
   const url = data.url || "/dashboard";
-  // Always unique — never reuse a stale tag that the OS would replace silently.
   const tag =
     typeof data.tag === "string" && data.tag.trim()
       ? data.tag.trim()
@@ -51,18 +49,34 @@ self.addEventListener("push", (event) => {
   const vibrate = Array.isArray(data.vibrate) ? data.vibrate : [300, 100, 300, 100, 500];
 
   event.waitUntil(
-    self.registration.showNotification(title, {
-      body,
-      tag,
-      data: { url },
-      icon: "/icons/icon-192.png",
-      badge: "/icons/icon-192.png",
-      vibrate,
-      // Always ring — ignore any silent flag from the payload.
-      silent: false,
-      renotify: true,
-      requireInteraction: false,
-    }),
+    (async () => {
+      // OS notification (rings when app is in background).
+      await self.registration.showNotification(title, {
+        body,
+        tag,
+        data: { url },
+        icon: "/icons/icon-192.png",
+        badge: "/icons/icon-192.png",
+        vibrate,
+        silent: false,
+        renotify: true,
+        requireInteraction: false,
+      });
+
+      // When a tab is open/focused, Chrome often suppresses OS sound —
+      // ask open clients to play a short in-app tone (same as feeling "ring").
+      const windowClients = await self.clients.matchAll({
+        type: "window",
+        includeUncontrolled: true,
+      });
+      for (const client of windowClients) {
+        try {
+          client.postMessage({ type: "PLAY_ALERT", title, body });
+        } catch {
+          /* ignore */
+        }
+      }
+    })(),
   );
 });
 

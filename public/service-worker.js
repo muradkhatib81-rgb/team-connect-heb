@@ -1,6 +1,5 @@
 /**
  * Alternate path kept in sync with /sw.js so old registrations update cleanly.
- * Installability + Web Push — does not intercept network traffic.
  */
 self.addEventListener("install", () => {
   self.skipWaiting();
@@ -48,17 +47,31 @@ self.addEventListener("push", (event) => {
   const vibrate = Array.isArray(data.vibrate) ? data.vibrate : [300, 100, 300, 100, 500];
 
   event.waitUntil(
-    self.registration.showNotification(title, {
-      body,
-      tag,
-      data: { url },
-      icon: "/icons/icon-192.png",
-      badge: "/icons/icon-192.png",
-      vibrate,
-      silent: false,
-      renotify: true,
-      requireInteraction: false,
-    }),
+    (async () => {
+      await self.registration.showNotification(title, {
+        body,
+        tag,
+        data: { url },
+        icon: "/icons/icon-192.png",
+        badge: "/icons/icon-192.png",
+        vibrate,
+        silent: false,
+        renotify: true,
+        requireInteraction: false,
+      });
+
+      const windowClients = await self.clients.matchAll({
+        type: "window",
+        includeUncontrolled: true,
+      });
+      for (const client of windowClients) {
+        try {
+          client.postMessage({ type: "PLAY_ALERT", title, body });
+        } catch {
+          /* ignore */
+        }
+      }
+    })(),
   );
 });
 

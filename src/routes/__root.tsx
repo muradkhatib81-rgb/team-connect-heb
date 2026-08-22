@@ -17,6 +17,7 @@ import { Toaster } from "@/components/ui/sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { PlatformProvider } from "@/platform";
 import { registerPwaServiceWorker } from "@/lib/register-pwa";
+import { installPushAlertToneListener } from "@/lib/alert-tone";
 import { applyPwaBranding, fetchPlatformPwaIconUrl } from "@/lib/pwa-branding";
 
 function NotFoundComponent() {
@@ -248,6 +249,8 @@ function RootComponent() {
     const t = window.setTimeout(run, 1200);
     return () => window.clearTimeout(t);
   }, []);
+
+  useEffect(() => installPushAlertToneListener(), []);
 
   useEffect(() => {
     const { data: sub } = supabase.auth.onAuthStateChange((event) => {
