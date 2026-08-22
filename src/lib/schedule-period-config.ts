@@ -189,7 +189,33 @@ export function getCurrentPeriodStart(
   )
     .toISOString()
     .slice(0, 10);
-  return getPeriodStart(refIso, config);
+  return getReferencePeriodStart(refIso, config);
+}
+
+/** Period to show when viewing schedules (handles gap days + Sun–Fri vs Sat). */
+export function getReferencePeriodStart(
+  refIso: string,
+  config: BranchPeriodConfig,
+): string {
+  if (config.schedule_type === "monthly") return getPeriodStart(refIso, config);
+
+  let start = getPeriodStart(refIso, config);
+  let days = buildPeriodDays(start, config);
+  let end = days[days.length - 1] ?? start;
+
+  while (refIso > end) {
+    start = shiftPeriodStart(start, config, 1);
+    days = buildPeriodDays(start, config);
+    end = days[days.length - 1] ?? start;
+  }
+
+  const refDow = utcDowFromSaturday(refIso);
+  const allowed = new Set(getConfiguredWeekDows(config.week_start_dow, config.week_end_dow));
+  if (!allowed.has(refDow) && refIso > end) {
+    start = shiftPeriodStart(start, config, 1);
+  }
+
+  return start;
 }
 
 export function shiftPeriodStart(

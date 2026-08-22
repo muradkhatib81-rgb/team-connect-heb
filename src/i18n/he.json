@@ -284,7 +284,11 @@
     "minutesShort": "דק׳",
     "departmentColleagues": "עמיתים במחלקה",
     "noColleagues": "אין עמיתים נוספים במחלקה",
-    "colleagueOnLeave": "בחופש"
+    "colleagueOnLeave": "בחופש",
+    "colleaguesCardSubtitle": "{n} עמיתים · לחץ לצפייה",
+    "colleaguesDialogTitle": "עמיתים במחלקה",
+    "deptHeadBadge": "אחראי/ת המחלקה",
+    "schedulePeriodRange": "{start} – {end}"
   },
   "roles": {
     "systemAdmin": "בעל המערכת הראשי",

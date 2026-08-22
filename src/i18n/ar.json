@@ -284,7 +284,11 @@
     "minutesShort": "د",
     "departmentColleagues": "زملاء القسم",
     "noColleagues": "لا يوجد زملاء آخرون في القسم",
-    "colleagueOnLeave": "في إجازة"
+    "colleagueOnLeave": "في إجازة",
+    "colleaguesCardSubtitle": "{n} زملاء · اضغط للعرض",
+    "colleaguesDialogTitle": "زملاء القسم",
+    "deptHeadBadge": "مسؤول القسم",
+    "schedulePeriodRange": "{start} – {end}"
   },
   "roles": {
     "systemAdmin": "مالك النظام الرئيسي",

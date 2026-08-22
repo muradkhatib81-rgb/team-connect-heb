@@ -1,7 +1,10 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { publishAllWeekSchedules, getWeekDepartmentStates } from "@/lib/schedules.functions";
+import {
+  publishAllWeekSchedules,
+  getWeekDepartmentStates,
+} from "@/lib/schedules.functions";
 import { getDashboardTaskStats } from "@/lib/tasks.functions";
 import { useEffect, useMemo, useState } from "react";
 import {
@@ -72,6 +75,7 @@ import { LEAVE_STATUS_LABEL } from "@/lib/leave.functions";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { EmployeeOfMonthSection } from "@/components/employee-of-month-section";
 import { DailyScheduleOverview } from "@/components/daily-schedule-overview";
+import { DepartmentColleaguesCard } from "@/components/department-colleagues-card";
 import { formatHeDateTime } from "@/lib/date-format";
 import {
   formatLeaveDateRange,
@@ -79,8 +83,10 @@ import {
   leaveDecisionMessage,
 } from "@/lib/employee-leave";
 import { formatScheduleDayHe } from "@/lib/schedule-week";
+import { useSchedulePeriodConfig } from "@/lib/use-schedule-period-config";
+import { DEFAULT_PERIOD_CONFIG, buildPeriodDays, getReferencePeriodStart } from "@/lib/schedule-period-config";
 import { resolveScheduleManagerCaps, resolveDashboardScheduleScope, scheduleScopeNeedsLoadedPermissions } from "@/lib/schedule-manager-caps";
-import { CreateEmployeeDialog } from "./employees";
+import { ContactActions } from "@/components/contact-actions";
 import { ManagementOnShiftCard } from "@/components/management-on-shift-card";
 import { ProfilePhoneField } from "@/components/contact-actions";
 import { CustodyDashboardSection } from "@/components/custody-dashboard-section";
@@ -128,6 +134,16 @@ function DashboardPage() {
     () => resolveScheduleManagerCaps(profile?.roles ?? [], permissionsQ.data),
     [profile?.roles, permissionsQ.data],
   );
+  const showSchedulesStatsSection = useMemo(() => {
+    if (!profile) return false;
+    const caps = scheduleCapsForBreaks;
+    return (
+      admin ||
+      isDeptManager ||
+      caps.isBranchMgr ||
+      (caps.isAssistantManager && caps.canView)
+    );
+  }, [profile, admin, isDeptManager, scheduleCapsForBreaks]);
   const isDeptHeadOnlyBreaks = scheduleCapsForBreaks.isDeptHeadOnly;
   const canCreateEmployee = profile
     ? hasBranchActionPermission(
@@ -343,7 +359,7 @@ function DashboardPage() {
 
       <LiveShiftCardsSection />
 
-      {(admin || isDeptManager) && <SchedulesStatsSection profile={profile} />}
+      {showSchedulesStatsSection && <SchedulesStatsSection profile={profile} />}
 
       <DashboardSchedulePanel profile={profile} />
 
@@ -1338,90 +1354,6 @@ function EmployeeDashboard({ profile }: { profile: any }) {
   );
 }
 
-function DepartmentColleaguesCard({ profile }: { profile: { id: string; department_id?: string | null; department_name?: string | null } }) {
-  const deptId = profile.department_id;
-  const q = useQuery({
-    queryKey: ["dept-colleagues", deptId],
-    enabled: !!deptId,
-    staleTime: 60_000,
-    queryFn: async () => {
-      const { data, error } = await (supabase as any)
-        .from("department_coworkers")
-        .select("id, full_name, job_title, on_leave, leave_start_date, leave_end_date")
-        .eq("department_id", deptId!)
-        .eq("is_active", true)
-        .order("full_name");
-      if (error) throw error;
-      return (data ?? []) as {
-        id: string;
-        full_name: string | null;
-        job_title: string | null;
-        on_leave: boolean | null;
-        leave_start_date: string | null;
-        leave_end_date: string | null;
-      }[];
-    },
-  });
-
-  if (!deptId) return null;
-
-  const colleagues = (q.data ?? []).filter((c) => c.id !== profile.id);
-  const initials = (name: string | null) => {
-    const parts = (name ?? "?").trim().split(/\s+/).filter(Boolean);
-    if (parts.length >= 2) return (parts[0]![0]! + parts[parts.length - 1]![0]!).toUpperCase();
-    return (parts[0]?.[0] ?? "?").toUpperCase();
-  };
-
-  return (
-    <Card className="card-elevated p-4">
-      <div className="flex items-center justify-between mb-3">
-        <h2 className="font-semibold text-base flex items-center gap-2">
-          <Users className="size-5 text-primary" />
-          {i18n.t("dashboard.departmentColleagues")}
-        </h2>
-        {profile.department_name && (
-          <Badge variant="outline" className="rounded-full text-xs">
-            {profile.department_name}
-          </Badge>
-        )}
-      </div>
-      {q.isLoading ? (
-        <div className="flex justify-center py-6">
-          <Loader2 className="size-5 animate-spin text-primary" />
-        </div>
-      ) : colleagues.length === 0 ? (
-        <p className="text-sm text-muted-foreground">{i18n.t("dashboard.noColleagues")}</p>
-      ) : (
-        <ul className="divide-y">
-          {colleagues.map((c) => {
-            const onLeave = isEmployeeCurrentlyOnLeave(c);
-            return (
-              <li key={c.id} className="flex items-center gap-3 py-2.5">
-                <Avatar className="size-9">
-                  <AvatarFallback className="text-xs font-medium bg-primary/10 text-primary">
-                    {initials(c.full_name)}
-                  </AvatarFallback>
-                </Avatar>
-                <div className="min-w-0 flex-1">
-                  <p className="text-sm font-medium truncate">{c.full_name ?? "—"}</p>
-                  {c.job_title && (
-                    <p className="text-xs text-muted-foreground truncate">{c.job_title}</p>
-                  )}
-                </div>
-                {onLeave && (
-                  <Badge variant="secondary" className="shrink-0 text-[10px] rounded-full">
-                    {i18n.t("dashboard.colleagueOnLeave")}
-                  </Badge>
-                )}
-              </li>
-            );
-          })}
-        </ul>
-      )}
-    </Card>
-  );
-}
-
 function EmployeeNotificationsCard({ userId }: { userId: string }) {
   const navigate = useNavigate();
   const q = useQuery({
@@ -1822,28 +1754,31 @@ function SchedulesStatsSection({ profile }: { profile: any }) {
     isMainAdmin,
     isDeptMgr,
     isBranchMgr,
+    isAssistantManager,
+    canView,
     canApprove,
     canPublishDirect,
   } = scheduleCaps;
-  const canViewBranchScheduleOverview = isBranchMgr;
+  const canViewBranchScheduleOverview =
+    isBranchMgr || (isAssistantManager && canView) || isMainAdmin;
   const canManageOwnDeptSchedule = isDeptMgr;
 
-  // Compute current week (Saturday-based) in Asia/Jerusalem-agnostic UTC slicing,
-  // matching getWeekStart logic in schedules.tsx.
-  const { weekStart, weekDays } = useMemo(() => {
-    const now = new Date();
-    const d = new Date(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate()));
-    const dowFromSat = (d.getUTCDay() + 1) % 7;
-    d.setUTCDate(d.getUTCDate() - dowFromSat);
-    const start = d.toISOString().slice(0, 10);
-    const days = Array.from({ length: 7 }, (_, i) => {
-      const x = new Date(d);
-      x.setUTCDate(d.getUTCDate() + i);
-      return x.toISOString().slice(0, 10);
-    });
-    return { weekStart: start, weekDays: days };
-  }, []);
-  const weekEnd = weekDays[6];
+  const periodConfigQ = useSchedulePeriodConfig();
+  const periodConfig = periodConfigQ.data ?? DEFAULT_PERIOD_CONFIG;
+  const { periodStart: weekStart, periodEnd: weekEnd } = useMemo(() => {
+    const start = getReferencePeriodStart(
+      new Date(Date.UTC(new Date().getFullYear(), new Date().getMonth(), new Date().getDate()))
+        .toISOString()
+        .slice(0, 10),
+      periodConfig,
+    );
+    const days = buildPeriodDays(start, periodConfig);
+    return { periodStart: start, periodEnd: days[days.length - 1] ?? start };
+  }, [
+    periodConfig.schedule_type,
+    periodConfig.week_start_dow,
+    periodConfig.week_end_dow,
+  ]);
 
   const publishAllMut = useMutation({
     mutationFn: () => publishAllFn({ data: { week_start: weekStart } }),
@@ -1924,7 +1859,7 @@ function SchedulesStatsSection({ profile }: { profile: any }) {
         draftCount: 0,
         draftDepts: emptyDepts,
         publishedCount: 0,
-        publishedDepts: emptyDepts,
+        publishedDepts: [] as { id: string; name: string; week_start: string; week_end: string | null }[],
       };
     },
   });
@@ -1983,6 +1918,7 @@ function SchedulesStatsSection({ profile }: { profile: any }) {
   );
 
   if (!canViewBranchScheduleOverview) return null;
+  if (periodConfigQ.isLoading) return null;
   if (statsQ.isLoading || !s) return null;
   if (deptStatesQ.isLoading && !deptStatesQ.data) return null;
 
@@ -2260,13 +2196,27 @@ function SchedulesStatsSection({ profile }: { profile: any }) {
                       setPublishedOpen(false);
                       navigate({
                         to: "/schedules",
-                        search: { dept: d.id, week: weekStart, view: "editor" } as any,
+                        search: {
+                          dept: d.id,
+                          week: d.week_start ?? weekStart,
+                          view: "editor",
+                        } as any,
                       });
                     }}
-                    className="w-full text-right py-3 px-2 hover:bg-accent/30 rounded-md flex items-center gap-2"
+                    className="w-full text-right py-3 px-2 hover:bg-accent/30 rounded-md flex items-center justify-between gap-2"
                   >
-                    <CheckCircle2 className="size-4 text-emerald-600" />
-                    <span className="font-medium">{d.name}</span>
+                    <span className="flex items-center gap-2 min-w-0">
+                      <CheckCircle2 className="size-4 text-emerald-600 shrink-0" />
+                      <span className="font-medium truncate">{d.name}</span>
+                    </span>
+                    {d.week_start && (
+                      <span className="text-xs text-muted-foreground shrink-0 tabular-nums">
+                        {formatScheduleDayHe(d.week_start)}
+                        {d.week_end && d.week_end !== d.week_start
+                          ? ` – ${formatScheduleDayHe(d.week_end)}`
+                          : ""}
+                      </span>
+                    )}
                   </button>
                 </li>
               ))}

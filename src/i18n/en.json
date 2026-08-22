@@ -284,7 +284,11 @@
     "minutesShort": "min",
     "departmentColleagues": "Department colleagues",
     "noColleagues": "No other colleagues in this department",
-    "colleagueOnLeave": "On leave"
+    "colleagueOnLeave": "On leave",
+    "colleaguesCardSubtitle": "{n} colleagues · tap to view",
+    "colleaguesDialogTitle": "Department colleagues",
+    "deptHeadBadge": "Department head",
+    "schedulePeriodRange": "{start} – {end}"
   },
   "roles": {
     "systemAdmin": "Primary System Owner",

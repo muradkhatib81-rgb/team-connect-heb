@@ -740,34 +740,11 @@ function SchedulesPage() {
     staleTime: 30_000,
   });
 
-  /** Published id for the navigated period — all roles use this so managers/admin load it too. */
+  /** Published id for the navigated period — server flags already matched the period. */
   const publishedIdForPeriod = useMemo(() => {
     if (!deptWeekFlagsQ.data?.hasPublished) return null;
-    const id = deptWeekFlagsQ.data.publishedScheduleId as string | null | undefined;
-    if (!id) return null;
-    const publishedWeekStart =
-      (deptWeekFlagsQ.data.published_week_start as string | null | undefined) ??
-      (deptWeekFlagsQ.data.schedule_week_start as string | null | undefined);
-    if (publishedWeekStart) {
-      const norm = getPeriodStart(publishedWeekStart, periodConfig);
-      const dayBefore = (() => {
-        const d = new Date(periodWeekStart + "T00:00:00Z");
-        d.setUTCDate(d.getUTCDate() - 1);
-        return d.toISOString().slice(0, 10);
-      })();
-      if (norm !== periodWeekStart && publishedWeekStart !== dayBefore && publishedWeekStart !== periodWeekStart) {
-        return null;
-      }
-    }
-    return id;
-  }, [
-    deptWeekFlagsQ.data?.hasPublished,
-    deptWeekFlagsQ.data?.publishedScheduleId,
-    deptWeekFlagsQ.data?.published_week_start,
-    deptWeekFlagsQ.data?.schedule_week_start,
-    periodWeekStart,
-    periodConfig,
-  ]);
+    return (deptWeekFlagsQ.data.publishedScheduleId as string | null | undefined) ?? null;
+  }, [deptWeekFlagsQ.data?.hasPublished, deptWeekFlagsQ.data?.publishedScheduleId]);
 
   // Schedule for selected dept+week
   const schedQ = useQuery({

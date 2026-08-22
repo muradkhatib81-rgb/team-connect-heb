@@ -25,10 +25,15 @@ import {
 } from "@/lib/employee-leave";
 import {
   formatScheduleDayHe,
-  getScheduleWeek,
-  getScheduleDayNames,
+  scheduleDayLabelForDate,
   type ScheduleShiftCode,
 } from "@/lib/schedule-week";
+import { useSchedulePeriodConfig } from "@/lib/use-schedule-period-config";
+import {
+  DEFAULT_PERIOD_CONFIG,
+  buildPeriodDays,
+  getReferencePeriodStart,
+} from "@/lib/schedule-period-config";
 import i18n from "@/i18n";
 import {
   buildChangeBaselineFromShiftRow,
@@ -76,9 +81,12 @@ type ShiftRow = {
 
 type DeptScheduleMeta = {
   id: string;
+  overviewKey?: string;
   name: string;
   hasPublishedSchedule: boolean;
   scheduleId: string | null;
+  scheduleWeekStart?: string | null;
+  scheduleWeekEnd?: string | null;
   hasSavedAwaitingPublish: boolean;
   changeBaselineKind: ScheduleChangeBaselineKind;
 };
@@ -202,6 +210,7 @@ function buildDepartmentEmployeeRows(args: {
   };
   selfId?: string;
   includeSubmittedDiffWhenPublished: boolean;
+  showAllDepartmentEmployees?: boolean;
 }): DailyScheduleEmployeeRow[] {
   const {
     dept,
@@ -213,6 +222,7 @@ function buildDepartmentEmployeeRows(args: {
     getTimesForDay,
     selfId,
     includeSubmittedDiffWhenPublished,
+    showAllDepartmentEmployees = false,
   } = args;
   if (!dept.scheduleId) return [];
 
@@ -297,6 +307,28 @@ function buildDepartmentEmployeeRows(args: {
       isTimeModified: false,
       isSelf: !!selfId && emp.id === selfId,
     });
+    processedIds.add(emp.id);
+  }
+
+  if (showAllDepartmentEmployees) {
+    for (const emp of employeesByDept[dept.id] ?? []) {
+      if (emp.excluded_from_schedule) continue;
+      if (!isCountedInDailySummary(emp)) continue;
+      if (processedIds.has(emp.id)) continue;
+      if (shiftFilter != null && shiftFilter !== "off") continue;
+      rows.push({
+        id: emp.id,
+        full_name: emp.full_name,
+        shift: "off",
+        shiftLabel: getShiftLabel("off"),
+        timeRange: null,
+        note: null,
+        isModified: false,
+        isNoteModified: false,
+        isTimeModified: false,
+        isSelf: !!selfId && emp.id === selfId,
+      });
+    }
   }
 
   rows.sort((a, b) => {
@@ -328,7 +360,32 @@ export function DailyScheduleOverview({
   const getOverviewFn = useServerFn(getDailyScheduleOverview);
   const getDeptFlagsFn = useServerFn(getDepartmentWeekScheduleFlags);
   const shiftDefsQ = useShiftDefinitions({ activeOnly: true });
-  const { weekStart, weekEnd, weekDays } = useMemo(() => getScheduleWeek(), []);
+  const periodConfigQ = useSchedulePeriodConfig();
+  const periodConfig = periodConfigQ.data ?? DEFAULT_PERIOD_CONFIG;
+
+  const todayIso = useMemo(() => {
+    const now = new Date();
+    return new Date(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate()))
+      .toISOString()
+      .slice(0, 10);
+  }, []);
+
+  const weekStart = useMemo(() => {
+    if (!periodConfigQ.isSuccess) return todayIso;
+    return getReferencePeriodStart(todayIso, periodConfig);
+  }, [
+    periodConfigQ.isSuccess,
+    todayIso,
+    periodConfig.schedule_type,
+    periodConfig.week_start_dow,
+    periodConfig.week_end_dow,
+  ]);
+
+  const localWeekDays = useMemo(
+    () => buildPeriodDays(weekStart, periodConfig),
+    [weekStart, periodConfig.schedule_type, periodConfig.week_start_dow, periodConfig.week_end_dow],
+  );
+  const weekEnd = localWeekDays[localWeekDays.length - 1] ?? weekStart;
 
   const permsQ = useQuery({
     enabled: !!profile?.id && !useCoworkersView,
@@ -363,22 +420,6 @@ export function DailyScheduleOverview({
     );
   }, [useCoworkersView, profile, permsQ.data]);
 
-  const todayIso = useMemo(() => {
-    const now = new Date();
-    return new Date(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate()))
-      .toISOString()
-      .slice(0, 10);
-  }, []);
-
-  const defaultDay = weekDays.includes(todayIso) ? todayIso : weekDays[0]!;
-  const [selectedDay, setSelectedDay] = useState(defaultDay);
-  const [activeFilter, setActiveFilter] = useState<DeptShiftFilter | null>(null);
-
-  useEffect(() => {
-    setSelectedDay(defaultDay);
-    setActiveFilter(null);
-  }, [weekStart, defaultDay]);
-
   const queryKey = [
     "daily-schedule-overview",
     scope,
@@ -398,9 +439,31 @@ export function DailyScheduleOverview({
           use_coworkers_view: useCoworkersView,
         },
       }),
-    enabled: scope === "branch" || !!departmentId,
+    enabled: (scope === "branch" || !!departmentId) && periodConfigQ.isSuccess,
     staleTime: 30_000,
   });
+
+  const weekDays = useMemo(() => {
+    const fromServer = (q.data as { weekDays?: string[] } | undefined)?.weekDays;
+    if (fromServer?.length) return fromServer;
+    return localWeekDays;
+  }, [q.data, localWeekDays]);
+
+  const displayWeekStart =
+    (q.data as { weekStart?: string } | undefined)?.weekStart ?? weekStart;
+  const displayWeekEnd =
+    (q.data as { weekEnd?: string } | undefined)?.weekEnd ?? weekEnd;
+
+  const defaultDay = weekDays.includes(todayIso)
+    ? todayIso
+    : weekDays.find((d) => d >= todayIso) ?? weekDays[0]!;
+  const [selectedDay, setSelectedDay] = useState(defaultDay);
+  const [activeFilter, setActiveFilter] = useState<DeptShiftFilter | null>(null);
+
+  useEffect(() => {
+    setSelectedDay(defaultDay);
+    setActiveFilter(null);
+  }, [weekStart, defaultDay, q.data]);
 
   const deptFlagsQ = useQuery({
     queryKey: ["dept-schedule-flags", departmentId, weekStart],
@@ -417,6 +480,13 @@ export function DailyScheduleOverview({
   const departments = useMemo(() => {
     const base = (q.data?.departments ?? []) as DeptScheduleMeta[];
     if (scope !== "department" || !deptFlagsQ.data) return base;
+    if (useCoworkersView) {
+      return base.map((d) => ({
+        ...d,
+        hasPublishedSchedule: d.hasPublishedSchedule || !!d.scheduleId,
+        hasSavedAwaitingPublish: false,
+      }));
+    }
     const flags = deptFlagsQ.data;
     return base.map((d) => {
       const hasPublished = d.hasPublishedSchedule || flags.hasPublished;
@@ -440,14 +510,13 @@ export function DailyScheduleOverview({
   const deptCounts = useMemo(() => {
     const out: Record<string, Record<ScheduleShiftCode, number>> = {};
     for (const dept of departments) {
-      out[dept.id] = computeDeptDayCounts(dept, employeesByDept, shifts, selectedDay);
+      const key = dept.overviewKey ?? dept.id;
+      out[key] = computeDeptDayCounts(dept, employeesByDept, shifts, selectedDay);
     }
     return out;
   }, [departments, employeesByDept, shifts, selectedDay]);
 
-  const selectedDayIndex = weekDays.indexOf(selectedDay);
-  const selectedDayName =
-    selectedDayIndex >= 0 ? getScheduleDayNames()[selectedDayIndex] : "";
+  const selectedDayName = selectedDay ? scheduleDayLabelForDate(selectedDay, "full") : "";
 
   const toggleDeptFilter = (deptId: string, shift: ScheduleShiftCode) => {
     setActiveFilter((prev) =>
@@ -498,7 +567,7 @@ export function DailyScheduleOverview({
         </h2>
         <div className="flex items-center gap-3 text-xs text-muted-foreground">
           <span>
-            {formatScheduleDayHe(weekStart)} – {formatScheduleDayHe(weekEnd)}
+            {formatScheduleDayHe(displayWeekStart)} – {formatScheduleDayHe(displayWeekEnd)}
           </span>
           {showFullScheduleLink && (
             <Link to="/schedules" className="text-sm text-primary hover:underline">
@@ -520,7 +589,7 @@ export function DailyScheduleOverview({
         <>
           <div className="px-3 pb-3 overflow-x-auto">
             <div className="flex gap-1 min-w-max">
-              {weekDays.map((day, i) => {
+              {weekDays.map((day) => {
                 const isSelected = day === selectedDay;
                 const isToday = day === todayIso;
                 return (
@@ -539,7 +608,9 @@ export function DailyScheduleOverview({
                       isToday && !isSelected && "border-primary/30",
                     )}
                   >
-                    <span className="text-xs font-semibold">{getScheduleDayNames()[i]}</span>
+                    <span className="text-xs font-semibold">
+                      {scheduleDayLabelForDate(day, "full")}
+                    </span>
                     <span className="text-[10px] text-muted-foreground tabular-nums">
                       {formatScheduleDayHe(day)}
                     </span>
@@ -573,9 +644,10 @@ export function DailyScheduleOverview({
 
           <div className="divide-y border-t max-h-[min(60vh,520px)] overflow-y-auto">
             {departments.map((dept) => {
-              const counts = deptCounts[dept.id] ?? { morning: 0, evening: 0, off: 0 };
+              const deptKey = dept.overviewKey ?? dept.id;
+              const counts = deptCounts[deptKey] ?? { morning: 0, evening: 0, off: 0 };
               const isFilterActive =
-                activeFilter?.deptId === dept.id ? activeFilter.shift : null;
+                activeFilter?.deptId === deptKey ? activeFilter.shift : null;
               const displayRows = buildDepartmentEmployeeRows({
                 dept,
                 employeesByDept,
@@ -586,13 +658,24 @@ export function DailyScheduleOverview({
                 getTimesForDay: shiftDefsQ.getTimesForDay,
                 selfId: selfUserId,
                 includeSubmittedDiffWhenPublished,
+                showAllDepartmentEmployees: useCoworkersView,
               });
 
               return (
-                <section key={dept.id} className="p-4">
-                  <div className="flex items-center gap-2 mb-3">
+                <section key={deptKey} className="p-4">
+                  <div className="flex flex-wrap items-center gap-2 mb-3">
                     <Building2 className="size-4 text-muted-foreground shrink-0" />
                     <h3 className="font-semibold text-sm">{dept.name}</h3>
+                    {dept.scheduleId && dept.scheduleWeekStart && (
+                      <Badge variant="outline" className="text-[10px] rounded-full font-normal">
+                        {i18n.t("dashboard.schedulePeriodRange")
+                          .replace("{start}", formatScheduleDayHe(dept.scheduleWeekStart))
+                          .replace(
+                            "{end}",
+                            formatScheduleDayHe(dept.scheduleWeekEnd ?? dept.scheduleWeekStart),
+                          )}
+                      </Badge>
+                    )}
                   </div>
 
                   {!dept.scheduleId ? (
@@ -616,7 +699,7 @@ export function DailyScheduleOverview({
                             <button
                               key={code}
                               type="button"
-                              onClick={() => toggleDeptFilter(dept.id, code)}
+                              onClick={() => toggleDeptFilter(deptKey, code)}
                               className={cn(
                                 "rounded-lg border p-2 text-center transition-all",
                                 active ? tone.activeClass : tone.idleClass,

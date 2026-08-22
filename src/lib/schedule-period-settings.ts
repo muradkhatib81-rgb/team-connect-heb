@@ -1,9 +1,63 @@
 import {
   branchPeriodConfigFromSettings,
+  DEFAULT_PERIOD_CONFIG,
   normalizeMonthlyWorkingDows,
   type BranchPeriodConfig,
 } from "@/lib/schedule-period-config";
 import type { ScheduleType } from "@/lib/use-company-settings";
+
+function configFromRpcPayload(raw: unknown): BranchPeriodConfig | null {
+  if (!raw || typeof raw !== "object") return null;
+  const row = raw as Record<string, unknown>;
+  if (row.schedule_type == null && row.week_start_dow == null) return null;
+  return branchPeriodConfigFromSettings(row);
+}
+
+/** Branch schedule period config — shared by client hook and server functions. */
+export async function fetchSchedulePeriodConfig(
+  supabase: {
+    rpc: (fn: string, args: Record<string, unknown>) => PromiseLike<{ data: unknown; error: unknown }>;
+    from: (table: string) => any;
+  },
+  branchId: string | null,
+): Promise<BranchPeriodConfig> {
+  const { data: rpcData, error: rpcErr } = await supabase.rpc("get_schedule_period_settings", {
+    p_branch_id: branchId,
+  });
+  if (!rpcErr) {
+    const fromRpc = configFromRpcPayload(rpcData);
+    if (fromRpc) return fromRpc;
+  }
+
+  let query = supabase
+    .from("company_settings")
+    .select("schedule_type, week_start_dow, week_end_dow, monthly_working_dows, extra, branch_id")
+    .eq("is_active", true)
+    .order("created_at", { ascending: true });
+
+  if (branchId) {
+    query = query.eq("branch_id", branchId);
+  }
+
+  const { data: scoped, error: scopedErr } = await query.limit(1).maybeSingle();
+  if (!scopedErr && scoped) {
+    return mergeCompanyRowWithPeriodExtra(scoped as Record<string, unknown>);
+  }
+
+  const { data: fallback } = await supabase
+    .from("company_settings")
+    .select("schedule_type, week_start_dow, week_end_dow, monthly_working_dows, extra")
+    .eq("is_active", true)
+    .order("created_at", { ascending: true })
+    .limit(1)
+    .maybeSingle();
+
+  if (fallback) {
+    return mergeCompanyRowWithPeriodExtra(fallback as Record<string, unknown>);
+  }
+
+  return DEFAULT_PERIOD_CONFIG;
+}
 
 export type StoredSchedulePeriod = {
   schedule_type: ScheduleType;
