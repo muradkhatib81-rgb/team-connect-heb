@@ -1,6 +1,5 @@
 import webpush from "web-push";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
-import { scheduleNotificationPushUrl } from "@/lib/notification-navigation";
 
 export type WebPushPayload = {
   title: string;
@@ -28,20 +27,6 @@ function ensureVapidConfigured(): boolean {
 export function getVapidPublicKey(): string | null {
   const key = process.env.VAPID_PUBLIC_KEY?.trim();
   return key || null;
-}
-
-/** Infer in-app navigation target from notification copy. */
-export function pushUrlFromMessage(
-  message: string,
-  opts?: { scheduleId?: string | null; weekStart?: string | null },
-): string {
-  const m = message.trim();
-  if (opts?.scheduleId || /סידור|schedule|לוח/i.test(m)) {
-    return scheduleNotificationPushUrl(opts?.weekStart);
-  }
-  if (/משימה|task/i.test(m)) return "/tasks";
-  if (/הודעה|message|תקשורת/i.test(m)) return "/communications";
-  return "/dashboard";
 }
 
 type PushSubscriptionRow = {
@@ -104,24 +89,4 @@ export async function dispatchWebPushToUsers(
   }
 
   return { sent, failed };
-}
-
-/** Fire-and-forget wrapper for in-app notification inserts. */
-export function dispatchWebPushForInAppNotification(
-  userIds: string[],
-  message: string,
-  opts?: { scheduleId?: string | null; weekStart?: string | null; title?: string },
-): void {
-  const body = message.trim();
-  if (!body) return;
-  const url = pushUrlFromMessage(body, {
-    scheduleId: opts?.scheduleId,
-    weekStart: opts?.weekStart,
-  });
-  void dispatchWebPushToUsers(userIds, {
-    title: opts?.title ?? "מערכת ניהול עובדים",
-    body,
-    url,
-    tag: opts?.scheduleId ? `schedule-${opts.scheduleId}` : `inapp-${Date.now()}`,
-  }).catch((e) => console.warn("[push] dispatch failed", e));
 }

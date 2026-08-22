@@ -48,7 +48,7 @@
   },
   "push": {
     "title": "Device notifications",
-    "description": "Get system notifications with sound and vibration for schedules, messages, and tasks — even when the app is closed.",
+    "description": "Get notifications for any system update — schedules, messages, tasks, breaks, and more — even when the app is closed.",
     "enabled": "Push notifications enabled",
     "disabled": "Push notifications disabled",
     "denied": "The browser blocked notifications. Enable them in browser settings.",

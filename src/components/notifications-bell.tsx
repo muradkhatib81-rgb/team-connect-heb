@@ -10,7 +10,7 @@ import { cn } from "@/lib/utils";
 import { formatHeDateTime } from "@/lib/date-format";
 import { markMessageRead } from "@/lib/communications.functions";
 import i18n from "@/i18n";
-import { scheduleNotificationSearch } from "@/lib/notification-navigation";
+import { notificationLinkTarget } from "@/lib/notification-navigation";
 
 type Kind = "schedule" | "message";
 
@@ -75,14 +75,18 @@ export function NotificationsBell() {
     const out: UnifiedItem[] = [];
     (schedQ.data ?? []).forEach((n: any) => {
       const weekStart = n.schedule?.week_start ?? null;
+      const link = notificationLinkTarget(n.message, {
+        scheduleId: n.schedule_id,
+        weekStart,
+      });
       out.push({
         id: `s-${n.id}`,
         kind: "schedule",
         title: n.message,
         created_at: n.created_at,
         read: !!n.read_at,
-        to: "/schedules",
-        search: scheduleNotificationSearch(weekStart),
+        to: link.to,
+        search: link.search,
         refId: n.id,
       });
     });

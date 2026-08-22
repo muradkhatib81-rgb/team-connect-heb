@@ -1033,8 +1033,6 @@ export const updateEmployee = createServerFn({ method: "POST" })
                 message: msg,
                 branch_id: context.branchId,
               });
-              const { dispatchWebPushForInAppNotification } = await import("@/lib/web-push.server");
-              dispatchWebPushForInAppNotification([data.user_id], msg);
             } catch {
               /* non-fatal */
             }

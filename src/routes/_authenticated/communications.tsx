@@ -1,5 +1,4 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useServerFn } from "@tanstack/react-start";
 import { useEffect, useMemo, useState } from "react";
 import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
@@ -51,7 +50,6 @@ import { formatHeDateTime } from "@/lib/date-format";
 import { BilingualContent } from "@/components/bilingual-content";
 import { SearchableMultiSelect, type SearchablePickerOption } from "@/components/searchable-picker";
 import { pickBilingualResult, useBilingualContentMap } from "@/lib/use-bilingual-content";
-import { dispatchMessagePush } from "@/lib/push.functions";
 import {
   sendMessage,
   markMessageRead,
@@ -1125,7 +1123,6 @@ function ComposeMessageDialog({
   myDeptId: string | null;
 }) {
   const qc = useQueryClient();
-  const pushFn = useServerFn(dispatchMessagePush);
   const depsQ = useDepartments();
   const empsQ = useEmployeesLite();
 
@@ -1187,20 +1184,10 @@ function ComposeMessageDialog({
           users: scope === "users" ? selectedUsers : [],
         },
       }),
-    onSuccess: (result) => {
+    onSuccess: () => {
       toast.success(i18n.t("comm.msgSent"));
       qc.invalidateQueries({ queryKey: ["comm"] });
       onOpenChange(false);
-      if (result?.recipientIds?.length && result.id) {
-        void pushFn({
-          data: {
-            recipientIds: result.recipientIds,
-            title: title.trim(),
-            body: body.trim().slice(0, 240),
-            messageId: result.id,
-          },
-        }).catch(() => undefined);
-      }
     },
     onError: (e: any) => toast.error(e?.message ?? i18n.t("comm.sendError")),
   });

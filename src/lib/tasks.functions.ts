@@ -149,8 +149,6 @@ async function notifyUsers(supabase: any, userIds: string[], message: string) {
   if (!ids.length) return;
   const rows = ids.map((uid) => ({ schedule_id: null, user_id: uid, message }));
   await supabase.from("schedule_notifications").insert(rows);
-  const { dispatchWebPushForInAppNotification } = await import("@/lib/web-push.server");
-  dispatchWebPushForInAppNotification(ids, message);
 }
 
 type TaskStatRow = {

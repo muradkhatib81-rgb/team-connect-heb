@@ -1,7 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
-import { dispatchWebPushToUsers } from "@/lib/web-push.server";
 
 const subscriptionSchema = z.object({
   endpoint: z.string().url(),
@@ -43,26 +42,4 @@ export const removePushSubscription = createServerFn({ method: "POST" })
       .eq("endpoint", data.endpoint);
     if (error) throw new Error(error.message);
     return { ok: true };
-  });
-
-const messagePushSchema = z.object({
-  recipientIds: z.array(z.string().uuid()).min(1),
-  title: z.string().trim().min(1).max(200),
-  body: z.string().trim().min(1).max(500),
-  messageId: z.string().uuid(),
-});
-
-/** Called after a message is sent so recipients get a system push. */
-export const dispatchMessagePush = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
-  .inputValidator((d: unknown) => messagePushSchema.parse(d))
-  .handler(async ({ data, context }) => {
-    const recipients = data.recipientIds.filter((id) => id !== context.userId);
-    if (!recipients.length) return { sent: 0 };
-    return dispatchWebPushToUsers(recipients, {
-      title: data.title,
-      body: data.body,
-      url: "/communications",
-      tag: `message-${data.messageId}`,
-    });
   });
