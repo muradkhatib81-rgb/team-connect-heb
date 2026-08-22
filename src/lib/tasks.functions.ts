@@ -2,7 +2,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { requireBranchContext } from "@/integrations/supabase/active-branch.server";
 import { canExecuteTask, canEditTaskContent, canViewTask } from "@/lib/task-execution";
 import { z } from "zod";
-import { dispatchPushBestEffort } from "@/lib/push-dispatch.server";
+import { notifyUsersWithPush } from "@/lib/push-dispatch.server";
 
 const PRIORITY = ["low", "medium", "high"] as const;
 const STATUS = ["new", "in_progress", "pending_approval", "pending_closure", "completed", "closed"] as const;
@@ -145,15 +145,14 @@ function enforceDeptHeadCreateScope(
   };
 }
 
-async function notifyUsers(supabase: any, userIds: string[], message: string) {
+async function notifyUsers(_supabase: any, userIds: string[], message: string) {
   const ids = Array.from(new Set(userIds.filter(Boolean)));
   if (!ids.length) return;
-  const rows = ids.map((uid) => ({ schedule_id: null, user_id: uid, message }));
-  await supabase.from("schedule_notifications").insert(rows);
-  await dispatchPushBestEffort({
+  await notifyUsersWithPush({
     userIds: ids,
     message,
-    tag: `task-notif-${ids[0]}-${message.length}`,
+    scheduleId: null,
+    tag: `task-notif-${Date.now()}`,
   });
 }
 

@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useServerFn } from "@tanstack/react-start";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -23,6 +24,7 @@ import {
   invalidateCustodyQueries,
   returnCustodyItem,
 } from "@/lib/custody-workflow";
+import { announceCustodyChange } from "@/lib/management-on-shift.functions";
 
 /** Daily equipment log table + filters (shared by page route). */
 export function CustodyLogPanel({ branchId }: { branchId: string }) {
@@ -34,6 +36,7 @@ export function CustodyLogPanel({ branchId }: { branchId: string }) {
 
   const { data: profile } = useAuth();
   const qc = useQueryClient();
+  const announceCustodyFn = useServerFn(announceCustodyChange);
 
   const capsQ = useQuery({
     enabled: !!profile,
@@ -49,9 +52,19 @@ export function CustodyLogPanel({ branchId }: { branchId: string }) {
   });
 
   const returnMut = useMutation({
-    mutationFn: (checkoutId: string) => returnCustodyItem(checkoutId, branchId),
-    onSuccess: () => {
+    mutationFn: async ({
+      checkoutId,
+      itemName,
+    }: {
+      checkoutId: string;
+      itemName: string;
+    }) => {
+      await returnCustodyItem(checkoutId, branchId);
+      return itemName;
+    },
+    onSuccess: (itemName) => {
       toast.success("הציוד הוחזר");
+      void announceCustodyFn({ data: { action: "return", itemName } }).catch(() => {});
       invalidateCustodyQueries(qc, branchId, profile?.id);
     },
     onError: (e: Error) => toast.error(e.message ?? "שגיאה בהחזרת ציוד"),
@@ -207,7 +220,9 @@ export function CustodyLogPanel({ branchId }: { branchId: string }) {
                           size="sm"
                           className="h-8 gap-1"
                           disabled={returnMut.isPending}
-                          onClick={() => returnMut.mutate(r.id)}
+                          onClick={() =>
+                            returnMut.mutate({ checkoutId: r.id, itemName: r.itemName })
+                          }
                         >
                           <RotateCcw className="size-3.5" />
                           החזר

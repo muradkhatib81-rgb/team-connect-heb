@@ -20,7 +20,8 @@ import { SCHEDULE_NOTE_MAX, trimScheduleNote } from "@/lib/schedule-note";
 import {
   enforceSupersededPublishedSchedulePolicy,
 } from "@/lib/schedule-superseded";
-import { pushForScheduleNotification } from "@/lib/push-dispatch.server";
+import { notifyUsersWithPush } from "@/lib/push-dispatch.server";
+import { supabaseAdmin } from "@/integrations/supabase/client.server";
 import {
   buildPeriodDays,
   filterPeriodCalendarDays,
@@ -287,17 +288,17 @@ function scheduleCellSaveSignature(s: {
 }
 
 async function getScheduleDepartmentRecipientIds(
-  supabase: any,
   departmentId: string,
   excludeUserId?: string | null,
 ): Promise<string[]> {
+  // Admin client only — user RLS often returns an empty employee list and silent-kills push.
   const [{ data: emps }, { data: dept }] = await Promise.all([
-    supabase
+    supabaseAdmin
       .from("profiles")
       .select("id")
       .eq("department_id", departmentId)
       .eq("is_active", true),
-    supabase.from("departments").select("manager_id, code").eq("id", departmentId).maybeSingle(),
+    supabaseAdmin.from("departments").select("manager_id, code").eq("id", departmentId).maybeSingle(),
   ]);
   const ids = new Set<string>((emps ?? []).map((e: any) => e.id as string));
   if (dept?.manager_id && dept.code !== "management") ids.add(dept.manager_id as string);
@@ -306,27 +307,22 @@ async function getScheduleDepartmentRecipientIds(
 }
 
 async function notifyScheduleDepartment(
-  supabase: any,
+  _supabase: any,
   scheduleId: string,
   departmentId: string,
   message: string,
   excludeUserId?: string | null,
 ) {
-  const recipientIds = await getScheduleDepartmentRecipientIds(
-    supabase,
-    departmentId,
-    excludeUserId,
-  );
-  if (!recipientIds.length) return;
-  await supabase.from("schedule_notifications").insert(
-    recipientIds.map((uid) => ({
-      schedule_id: scheduleId,
-      user_id: uid,
-      message,
-    })),
-  );
-  // Must await on serverless — fire-and-forget often dies before the push is sent.
-  await pushForScheduleNotification({ userIds: recipientIds, message, scheduleId });
+  const recipientIds = await getScheduleDepartmentRecipientIds(departmentId, excludeUserId);
+  if (!recipientIds.length) {
+    console.warn("[notify] no recipients for department", departmentId);
+    return;
+  }
+  await notifyUsersWithPush({
+    userIds: recipientIds,
+    message,
+    scheduleId,
+  });
 }
 
 async function snapshotSubmittedShifts(supabase: any, scheduleId: string) {
@@ -1118,7 +1114,10 @@ export const saveScheduleShifts = createServerFn({ method: "POST" })
         });
     }
 
-    if (isApproved && changed) {
+    // Any change to an approved/published schedule must push (in-app + Web Push).
+    const shouldNotifyEmployees =
+      changed && (isApproved || Boolean((sched as { published_at?: string | null }).published_at));
+    if (shouldNotifyEmployees) {
       await notifyScheduleDepartment(
         context.supabase,
         data.schedule_id,
@@ -1127,7 +1126,7 @@ export const saveScheduleShifts = createServerFn({ method: "POST" })
         context.userId,
       );
     }
-    return { ok: true, notified: isApproved && changed };
+    return { ok: true, notified: shouldNotifyEmployees };
   });
 
 // ---------- SUBMIT for approval ----------
@@ -1640,7 +1639,7 @@ export const rejectSchedule = createServerFn({ method: "POST" })
     if (auditErr) throw new Error(auditErr.message);
 
     // Notify the department manager / creator so they know to fix and resubmit.
-    const { data: dept } = await context.supabase
+    const { data: dept } = await supabaseAdmin
       .from("departments")
       .select("manager_id, code")
       .eq("id", sched.department_id)
@@ -1648,19 +1647,11 @@ export const rejectSchedule = createServerFn({ method: "POST" })
     const recipients = new Set<string>();
     if (sched.created_by) recipients.add(sched.created_by);
     if (dept?.manager_id && dept.code !== "management") recipients.add(dept.manager_id);
+    recipients.delete(context.userId);
     if (recipients.size) {
-      const recipientList = [...recipients];
-      const rejectMsg = `סידור העבודה נדחה: ${data.note}`;
-      await context.supabase.from("schedule_notifications").insert(
-        recipientList.map((uid) => ({
-          schedule_id: data.schedule_id,
-          user_id: uid,
-          message: rejectMsg,
-        })),
-      );
-      await pushForScheduleNotification({
-        userIds: recipientList,
-        message: rejectMsg,
+      await notifyUsersWithPush({
+        userIds: [...recipients],
+        message: `סידור העבודה נדחה: ${data.note}`,
         scheduleId: data.schedule_id,
       });
     }

@@ -93,3 +93,112 @@ export async function pushForScheduleNotification(opts: {
       : `schedule-${Date.now()}`,
   });
 }
+
+/**
+ * Insert in-app notification rows (bypassing RLS) and always send Web Push.
+ * Never throws — callers (save/publish/tasks) must not fail because of notify.
+ */
+export async function notifyUsersWithPush(opts: {
+  userIds: string[];
+  message: string;
+  scheduleId?: string | null;
+  weekStart?: string | null;
+  branchId?: string | null;
+  title?: string;
+  tag?: string;
+  url?: string;
+  messageId?: string;
+}): Promise<void> {
+  try {
+    const userIds = [...new Set(opts.userIds.filter(Boolean))];
+    const message = opts.message.trim();
+    if (!userIds.length || !message) return;
+
+    let branchId = opts.branchId ?? null;
+    let weekStart = opts.weekStart ?? null;
+    if (opts.scheduleId && (!branchId || !weekStart)) {
+      const { data } = await supabaseAdmin
+        .from("schedules")
+        .select("branch_id, week_start")
+        .eq("id", opts.scheduleId)
+        .maybeSingle();
+      const row = data as { branch_id?: string | null; week_start?: string | null } | null;
+      branchId = branchId ?? row?.branch_id ?? null;
+      weekStart = weekStart ?? row?.week_start?.slice(0, 10) ?? null;
+    }
+
+    const { error: insertErr } = await supabaseAdmin.from("schedule_notifications").insert(
+      userIds.map((uid) => ({
+        user_id: uid,
+        message,
+        schedule_id: opts.scheduleId ?? null,
+        ...(branchId ? { branch_id: branchId } : {}),
+      })),
+    );
+    if (insertErr) {
+      console.warn("[notify] schedule_notifications insert failed:", insertErr.message);
+    }
+
+    // Push even if insert failed — employees must still get the OS alert.
+    await dispatchPushBestEffort({
+      userIds,
+      message,
+      scheduleId: opts.scheduleId ?? null,
+      weekStart,
+      title: opts.title,
+      tag: opts.tag,
+      url: opts.url,
+      messageId: opts.messageId,
+    });
+  } catch (e) {
+    console.warn("[notify] notifyUsersWithPush failed:", e);
+  }
+}
+
+/** Notify every active profile in the branch except the actor. Never throws. */
+export async function notifyBranchExceptActor(opts: {
+  branchId: string;
+  excludeUserId: string;
+  message: string;
+  tag?: string;
+  url?: string;
+  /** Default true. Set false when a DB trigger already inserted in-app rows. */
+  insertInApp?: boolean;
+}): Promise<number> {
+  try {
+    const message = opts.message.trim();
+    if (!message || !opts.branchId) return 0;
+
+    const { data: profiles } = await supabaseAdmin
+      .from("profiles")
+      .select("id")
+      .eq("branch_id", opts.branchId)
+      .neq("id", opts.excludeUserId)
+      .eq("is_active", true);
+
+    const userIds = (profiles ?? []).map((p: { id: string }) => p.id);
+    if (!userIds.length) return 0;
+
+    const url = opts.url ?? "/dashboard";
+    if (opts.insertInApp === false) {
+      await dispatchPushBestEffort({
+        userIds,
+        message,
+        tag: opts.tag,
+        url,
+      });
+    } else {
+      await notifyUsersWithPush({
+        userIds,
+        message,
+        branchId: opts.branchId,
+        tag: opts.tag,
+        url,
+      });
+    }
+    return userIds.length;
+  } catch (e) {
+    console.warn("[notify] notifyBranchExceptActor failed:", e);
+    return 0;
+  }
+}

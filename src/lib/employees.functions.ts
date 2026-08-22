@@ -1027,17 +1027,13 @@ export const updateEmployee = createServerFn({ method: "POST" })
           if (toCancel.length > 0) {
             try {
               const msg = `החופשה שלך בוטלה על ידי ${actorName} · ${whenLocal}`;
-              await supabaseAdmin.from("schedule_notifications").insert({
-                user_id: data.user_id,
-                schedule_id: null,
-                message: msg,
-                branch_id: context.branchId,
-              });
-              const { dispatchPushBestEffort } = await import("@/lib/push-dispatch.server");
-              await dispatchPushBestEffort({
+              const { notifyUsersWithPush } = await import("@/lib/push-dispatch.server");
+              await notifyUsersWithPush({
                 userIds: [data.user_id],
                 message: msg,
-                tag: `leave-cancel-${data.user_id}`,
+                scheduleId: null,
+                branchId: context.branchId,
+                tag: `leave-cancel-${data.user_id}-${Date.now()}`,
               });
             } catch {
               /* non-fatal */

@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
+import { useServerFn } from "@tanstack/react-start";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Loader2, Package, RotateCcw, Hand, Settings2 } from "lucide-react";
@@ -20,6 +21,7 @@ import {
 } from "@/lib/custody-workflow";
 import { invalidateShiftVisibleQueries } from "@/lib/shift-visible-rpc";
 import { onManagementOnShiftChanges } from "@/lib/management-on-shift-realtime";
+import { announceCustodyChange } from "@/lib/management-on-shift.functions";
 import { CustodySettingsPanel } from "@/components/custody-settings-panel";
 import {
   Dialog,
@@ -34,7 +36,14 @@ export function CustodyBoardCard() {
   const { data: profile } = useAuth();
   const qc = useQueryClient();
   const { activeBranchId } = useActiveBranch();
+  const announceCustodyFn = useServerFn(announceCustodyChange);
   const scopedBranchId = activeBranchId ?? profile?.branch_id ?? null;
+
+  const announceCustody = (action: "take" | "return", itemName: string) => {
+    void announceCustodyFn({ data: { action, itemName } }).catch(() => {
+      /* push is best-effort */
+    });
+  };
 
   const visibleQ = useQuery({
     enabled: !!profile && !!scopedBranchId,
@@ -96,24 +105,34 @@ export function CustodyBoardCard() {
   }, [profile?.id, scopedBranchId, qc]);
 
   const checkoutMut = useMutation({
-    mutationFn: (itemTypeId: string) => {
+    mutationFn: async ({ itemTypeId, itemName }: { itemTypeId: string; itemName: string }) => {
       if (!scopedBranchId) throw new Error("לא נמצא סניף");
-      return checkoutCustodyItem(itemTypeId, scopedBranchId);
+      await checkoutCustodyItem(itemTypeId, scopedBranchId);
+      return itemName;
     },
-    onSuccess: () => {
+    onSuccess: (itemName) => {
       toast.success("הציוד נלקח בהצלחה");
+      announceCustody("take", itemName);
       invalidateCustodyQueries(qc, scopedBranchId, profile?.id);
     },
     onError: (e: Error) => toast.error(e.message ?? "שגיאה בלקיחת ציוד"),
   });
 
   const returnMut = useMutation({
-    mutationFn: (checkoutId: string) => {
+    mutationFn: async ({
+      checkoutId,
+      itemName,
+    }: {
+      checkoutId: string;
+      itemName: string;
+    }) => {
       if (!scopedBranchId) throw new Error("לא נמצא סניף");
-      return returnCustodyItem(checkoutId, scopedBranchId);
+      await returnCustodyItem(checkoutId, scopedBranchId);
+      return itemName;
     },
-    onSuccess: () => {
+    onSuccess: (itemName) => {
       toast.success("הציוד הוחזר");
+      announceCustody("return", itemName);
       invalidateCustodyQueries(qc, scopedBranchId, profile?.id);
     },
     onError: (e: Error) => toast.error(e.message ?? "שגיאה בהחזרת ציוד"),
@@ -212,8 +231,14 @@ export function CustodyBoardCard() {
                 type="button"
                 disabled={busy || (!canTake && !canReturn)}
                 onClick={() => {
-                  if (canTake) checkoutMut.mutate(slot.id);
-                  else if (canReturn && slot.checkout) returnMut.mutate(slot.checkout.id);
+                  if (canTake) {
+                    checkoutMut.mutate({ itemTypeId: slot.id, itemName: slot.name });
+                  } else if (canReturn && slot.checkout) {
+                    returnMut.mutate({
+                      checkoutId: slot.checkout.id,
+                      itemName: slot.name,
+                    });
+                  }
                 }}
                 className={[
                   "rounded-xl border-2 p-4 text-right transition-all min-h-[7.5rem]",

@@ -1,5 +1,6 @@
 import { useEffect, useMemo } from "react";
 import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
+import { useServerFn } from "@tanstack/react-start";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -16,6 +17,7 @@ import {
 } from "@/lib/shift-visible-rpc";
 import { custodyQueryKey } from "@/lib/custody-workflow";
 import { onManagementOnShiftChanges } from "@/lib/management-on-shift-realtime";
+import { announceManagementOnShiftChange } from "@/lib/management-on-shift.functions";
 import { employeeNameInitial, formatEmployeeName } from "@/lib/employee-name";
 
 type Row = {
@@ -50,10 +52,17 @@ export function ManagementOnShiftCard() {
   const { data: profile } = useAuth();
   const qc = useQueryClient();
   const { activeBranchId } = useActiveBranch();
+  const announceShiftFn = useServerFn(announceManagementOnShiftChange);
   const isEligible =
     !!profile &&
     (profile.roles.includes("branch_manager") ||
       profile.roles.includes("assistant_manager"));
+
+  const announceToBranch = (action: "start" | "end") => {
+    void announceShiftFn({ data: { action } }).catch(() => {
+      /* push is best-effort — never block the UI */
+    });
+  };
 
   // Effective branch to scope the card to. Platform Owners get the branch
   // they explicitly selected in the switcher; everyone else is locked to
@@ -107,6 +116,7 @@ export function ManagementOnShiftCard() {
     },
     onSuccess: () => {
       toast.success(i18n.t("dashboard.markedOnShift"));
+      announceToBranch("start");
       const branchId = activeBranchId ?? profile?.branch_id ?? null;
       if (branchId) {
         qc.invalidateQueries({ queryKey: ["management-on-shift", branchId] });
@@ -129,6 +139,7 @@ export function ManagementOnShiftCard() {
     },
     onSuccess: () => {
       toast.success(i18n.t("dashboard.markedShiftEnd"));
+      announceToBranch("end");
       const branchId = activeBranchId ?? profile?.branch_id ?? null;
       if (branchId) {
         qc.setQueryData<Row[]>(["management-on-shift", branchId], (prev) =>
