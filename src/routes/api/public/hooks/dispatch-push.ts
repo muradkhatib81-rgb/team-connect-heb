@@ -5,8 +5,8 @@ import { dispatchPushNotification } from "@/lib/push-dispatch.server";
 const payloadSchema = z.object({
   userIds: z.array(z.string().uuid()).min(1),
   message: z.string().trim().min(1).max(1000),
-  scheduleId: z.string().uuid().nullable().optional(),
-  weekStart: z.string().optional(),
+  scheduleId: z.string().uuid().nullish(),
+  weekStart: z.string().nullish(),
   title: z.string().trim().min(1).max(200).optional(),
   url: z.string().trim().max(500).optional(),
   messageId: z.string().uuid().optional(),
@@ -36,8 +36,8 @@ export const Route = createFileRoute("/api/public/hooks/dispatch-push")({
           const result = await dispatchPushNotification({
             userIds: data.userIds,
             message: data.message,
-            scheduleId: data.scheduleId,
-            weekStart: data.weekStart,
+            scheduleId: data.scheduleId ?? null,
+            weekStart: data.weekStart ?? null,
             title: data.title,
             url: data.url,
             messageId: data.messageId,
@@ -45,10 +45,8 @@ export const Route = createFileRoute("/api/public/hooks/dispatch-push")({
           });
           return Response.json({ ok: true, ...result });
         } catch (e: unknown) {
-          return new Response(
-            JSON.stringify({ ok: false, error: (e as Error)?.message ?? "failed" }),
-            { status: 400, headers: { "Content-Type": "application/json" } },
-          );
+          console.warn("[push] dispatch-push hook skipped:", e);
+          return Response.json({ ok: true, sent: 0, failed: 0, skipped: true });
         }
       },
     },

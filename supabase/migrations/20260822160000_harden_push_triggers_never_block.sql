@@ -1,20 +1,4 @@
--- Universal Web Push dispatch for all schedule_notifications, messages, and management-on-shift events.
--- Requires one-time setup in internal_push_config (see .env.example).
-
-CREATE EXTENSION IF NOT EXISTS pg_net WITH SCHEMA extensions;
-
-CREATE TABLE IF NOT EXISTS public.internal_push_config (
-  id integer PRIMARY KEY DEFAULT 1 CHECK (id = 1),
-  app_public_url text,
-  dispatch_secret text,
-  updated_at timestamptz NOT NULL DEFAULT now()
-);
-
-INSERT INTO public.internal_push_config (id) VALUES (1) ON CONFLICT (id) DO NOTHING;
-
-REVOKE ALL ON public.internal_push_config FROM PUBLIC, anon, authenticated;
-GRANT ALL ON public.internal_push_config TO service_role;
-ALTER TABLE public.internal_push_config ENABLE ROW LEVEL SECURITY;
+-- Harden all push triggers: never block messages, schedules, breaks, or management-on-shift.
 
 CREATE OR REPLACE FUNCTION public.invoke_push_dispatch_hook(body jsonb)
 RETURNS void
@@ -54,9 +38,6 @@ BEGIN
 END;
 $$;
 
-REVOKE ALL ON FUNCTION public.invoke_push_dispatch_hook(jsonb) FROM PUBLIC, anon, authenticated;
-GRANT EXECUTE ON FUNCTION public.invoke_push_dispatch_hook(jsonb) TO service_role;
-
 CREATE OR REPLACE FUNCTION public.trg_push_on_schedule_notification()
 RETURNS trigger
 LANGUAGE plpgsql
@@ -84,12 +65,6 @@ BEGIN
   RETURN NEW;
 END;
 $$;
-
-DROP TRIGGER IF EXISTS push_on_schedule_notification ON public.schedule_notifications;
-CREATE TRIGGER push_on_schedule_notification
-  AFTER INSERT ON public.schedule_notifications
-  FOR EACH ROW
-  EXECUTE FUNCTION public.trg_push_on_schedule_notification();
 
 CREATE OR REPLACE FUNCTION public.trg_push_on_message_recipient()
 RETURNS trigger
@@ -124,12 +99,6 @@ BEGIN
   RETURN NEW;
 END;
 $$;
-
-DROP TRIGGER IF EXISTS push_on_message_recipient ON public.message_recipients;
-CREATE TRIGGER push_on_message_recipient
-  AFTER INSERT ON public.message_recipients
-  FOR EACH ROW
-  EXECUTE FUNCTION public.trg_push_on_message_recipient();
 
 CREATE OR REPLACE FUNCTION public.trg_notify_branch_management_on_shift()
 RETURNS trigger
@@ -167,8 +136,12 @@ BEGIN
 END;
 $$;
 
-DROP TRIGGER IF EXISTS notify_branch_on_management_shift ON public.management_on_shift;
-CREATE TRIGGER notify_branch_on_management_shift
-  AFTER INSERT ON public.management_on_shift
-  FOR EACH ROW
-  EXECUTE FUNCTION public.trg_notify_branch_management_on_shift();
+UPDATE public.internal_push_config
+SET
+  app_public_url = CASE
+    WHEN app_public_url IS NULL OR length(trim(app_public_url)) = 0 THEN app_public_url
+    WHEN trim(app_public_url) ~* '^https?://' THEN rtrim(trim(app_public_url), '/')
+    ELSE 'https://' || rtrim(trim(app_public_url), '/')
+  END,
+  updated_at = now()
+WHERE id = 1;
