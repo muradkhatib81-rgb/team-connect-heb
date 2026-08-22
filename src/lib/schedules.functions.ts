@@ -9,6 +9,7 @@ import {
 import {
   canViewScheduleContent,
   isBranchLevelScheduleViewer,
+  isDeptHeadEditableDraft,
   isDeptHeadSubmittedAwaitingApproval,
   isManagerSavedScheduleForDeptHead,
   isSavedScheduleAwaitingPublish,
@@ -472,14 +473,9 @@ async function findAllDepartmentSchedulesForPeriod(
       .eq("department_id", departmentId)
       .in("id", shiftScheduleIds);
     if (shiftSchedErr) throw shiftSchedErr;
-    // Schedules with shifts on days in this period belong here even when week_start
-    // was stored with a legacy/off-by-one key (e.g. Saturday before a Sunday period).
-    for (const row of shiftScheds ?? []) {
-      const id = (row as { id?: string }).id;
-      if (!id || seen.has(id)) continue;
-      seen.add(id);
-      matches.push(row as Record<string, unknown>);
-    }
+    // Shifts in-window only hint at a candidate — still require period match so a
+    // published current-week schedule cannot leak into a future period.
+    for (const row of shiftScheds ?? []) add(row as Record<string, unknown>);
   }
 
   return matches;
@@ -694,12 +690,7 @@ export const getSchedulesForViewer = createServerFn({ method: "POST" })
         .select("*")
         .in("id", shiftScheduleIds);
       if (shiftSchedErr) throw new Error(shiftSchedErr.message);
-      for (const row of shiftScheds ?? []) {
-        const id = (row as { id?: string }).id;
-        if (!id || seen.has(id)) continue;
-        seen.add(id);
-        matched.push(row as Record<string, unknown>);
-      }
+      for (const row of shiftScheds ?? []) consider(row as Record<string, unknown>);
     }
 
     const visible: any[] = [];
@@ -764,7 +755,7 @@ export const createOrGetSchedule = createServerFn({ method: "POST" })
         month: "2-digit",
         day: "2-digit",
       }).format(new Date());
-      const currentPeriod = weekStartOf(todayHe, periodConfig).start;
+      const currentPeriod = getReferencePeriodStart(todayHe, periodConfig);
       const nextPeriod = shiftPeriodStart(currentPeriod, periodConfig, 1);
       if (start !== currentPeriod && start !== nextPeriod) {
         throw new Error("ניתן ליצור סידור רק לתקופה הנוכחית או לתקופה הבאה");
@@ -795,6 +786,22 @@ export const createOrGetSchedule = createServerFn({ method: "POST" })
     if (savedSched) {
       if (await isScheduleVisibleToCaps(savedSched, caps, context.userId, context.supabase)) {
         return savedSched;
+      }
+      if (
+        caps.isDeptHeadOnly &&
+        isManagerSavedScheduleForDeptHead(
+          savedSched as {
+            status: string;
+            published_at: string | null;
+            submitted_at?: string | null;
+            created_by?: string | null;
+            submitted_by?: string | null;
+            department_id: string;
+          },
+          context.userId,
+        )
+      ) {
+        throw new Error("כבר קיים סידור עבודה שמור למחלקה זו — ממתין לפרסום");
       }
       if (
         caps.isDeptHeadOnly &&
@@ -1541,26 +1548,46 @@ export const publishAllWeekSchedules = createServerFn({ method: "POST" })
     if (!caps.canPublishDirect) throw new Error("אין הרשאה לפרסם סידורי עבודה");
 
     const periodConfig = await fetchBranchPeriodConfig(context.supabase, context.branchId);
-    const { start } = weekStartOf(data.week_start, periodConfig);
-    const { data: scheds, error } = await context.supabase
-      .from("schedules")
-      .select("*")
-      .eq("week_start", start);
-    if (error) throw new Error(error.message);
+    const { start, end } = weekStartOf(data.week_start, periodConfig);
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
 
-    const unpublished = (scheds ?? []).filter(
-      (s: any) => !(s.status === "approved" && s.published_at),
+    let deptQ = supabaseAdmin
+      .from("departments")
+      .select("id, name")
+      .eq("is_active", true);
+    if (context.branchId) deptQ = deptQ.eq("branch_id", context.branchId);
+    const { data: depts, error: dErr } = await deptQ;
+    if (dErr) throw new Error(dErr.message);
+
+    const unpublished: any[] = [];
+    await Promise.all(
+      ((depts ?? []) as { id: string; name: string }[]).map(async (dept) => {
+        const periodSchedules = await findAllDepartmentSchedulesForPeriod(
+          supabaseAdmin,
+          dept.id,
+          start,
+          end,
+          periodConfig,
+        );
+        for (const row of periodSchedules) {
+          const s = row as { status?: string; published_at?: string | null };
+          if (!(s.status === "approved" && s.published_at)) {
+            unpublished.push(row);
+          }
+        }
+      }),
     );
+
     if (!unpublished.length) return { ok: true, published: 0, failed: 0, errors: [] as string[] };
 
     let published = 0;
     const errors: string[] = [];
     for (const sched of unpublished) {
       try {
-        await publishOneUnpublishedSchedule(context.supabase, context.userId, sched, caps);
+        await publishOneUnpublishedSchedule(supabaseAdmin, context.userId, sched, caps);
         published++;
       } catch (e: any) {
-        const { data: dept } = await context.supabase
+        const { data: dept } = await supabaseAdmin
           .from("departments")
           .select("name")
           .eq("id", sched.department_id)
@@ -1922,7 +1949,14 @@ export const getUnpublishedWeekSummary = createServerFn({ method: "POST" })
 /** Branch-wide shift rows for headcount cards — one primary schedule per department. */
 export const getBranchPeriodScheduleShifts = createServerFn({ method: "POST" })
   .middleware([requireBranchContext])
-  .inputValidator((d: unknown) => z.object({ week_start: z.string() }).parse(d))
+  .inputValidator((d: unknown) =>
+    z
+      .object({
+        week_start: z.string(),
+        published_only: z.boolean().optional(),
+      })
+      .parse(d),
+  )
   .handler(async ({ data, context }) => {
     const caps = await getCaps(context.supabase, context.userId);
     if (
@@ -1963,23 +1997,55 @@ export const getBranchPeriodScheduleShifts = createServerFn({ method: "POST" })
           end,
           periodConfig,
         );
-        let primary = pickPrimaryDepartmentSchedule(periodSchedules) as
+        let primary = null as
           | { id?: string; status?: string; published_at?: string | null }
           | null;
-        if (!(primary?.status === "approved" && primary?.published_at)) {
-          const activePublished = await findActivePublishedSchedulesForDepartment(
-            supabaseAdmin,
-            dept.id,
-            periodConfig,
-            todayIsoCalendar(),
+        if (data.published_only) {
+          const publishedRows = periodSchedules.filter(
+            (row) =>
+              (row as { status?: string }).status === "approved" &&
+              !!(row as { published_at?: string | null }).published_at,
           );
-          const publishedForPeriod = activePublished.find((row) =>
-            scheduleMatchesPeriod(row as { week_start: string }, start, end, periodConfig),
-          );
-          if (publishedForPeriod) primary = publishedForPeriod as typeof primary;
+          primary =
+            (pickPrimaryDepartmentSchedule(publishedRows) as typeof primary) ?? null;
+          if (!primary) {
+            const activePublished = await findActivePublishedSchedulesForDepartment(
+              supabaseAdmin,
+              dept.id,
+              periodConfig,
+              todayIsoCalendar(),
+            );
+            primary =
+              (activePublished.find((row) =>
+                scheduleMatchesPeriod(row as { week_start: string }, start, end, periodConfig),
+              ) as typeof primary) ?? null;
+          }
+        } else {
+          primary = pickPrimaryDepartmentSchedule(periodSchedules) as typeof primary;
+          if (!(primary?.status === "approved" && primary?.published_at)) {
+            const activePublished = await findActivePublishedSchedulesForDepartment(
+              supabaseAdmin,
+              dept.id,
+              periodConfig,
+              todayIsoCalendar(),
+            );
+            const publishedForPeriod = activePublished.find((row) =>
+              scheduleMatchesPeriod(row as { week_start: string }, start, end, periodConfig),
+            );
+            if (publishedForPeriod) primary = publishedForPeriod as typeof primary;
+          }
         }
         const id = primary?.id;
         if (!id) return;
+        if (
+          data.published_only &&
+          !(
+            (primary as { status?: string }).status === "approved" &&
+            !!(primary as { published_at?: string | null }).published_at
+          )
+        ) {
+          return;
+        }
         scheduleIds.push(id);
         deptByScheduleId.set(id, dept.id);
       }),
@@ -1994,13 +2060,15 @@ export const getBranchPeriodScheduleShifts = createServerFn({ method: "POST" })
           day_date: string;
           shift: string;
           leave_type_code: string | null;
+          start_time: string | null;
+          end_time: string | null;
         }[],
       };
     }
 
     const { data: shiftRows, error: shErr } = await supabaseAdmin
       .from("schedule_shifts")
-      .select("schedule_id, employee_id, day_date, shift, leave_type_code")
+      .select("schedule_id, employee_id, day_date, shift, leave_type_code, start_time, end_time")
       .in("schedule_id", scheduleIds)
       .gte("day_date", start)
       .lte("day_date", end);
@@ -2014,6 +2082,8 @@ export const getBranchPeriodScheduleShifts = createServerFn({ method: "POST" })
         day_date: row.day_date as string,
         shift: row.shift as string,
         leave_type_code: (row.leave_type_code as string | null) ?? null,
+        start_time: (row.start_time as string | null) ?? null,
+        end_time: (row.end_time as string | null) ?? null,
       }))
       .filter((row) => row.department_id);
 
@@ -2102,7 +2172,10 @@ export const getWeekDepartmentStates = createServerFn({ method: "POST" })
             periodConfig,
             todayIso,
           );
-          if (activePublished.length) primary = activePublished[0] as typeof primary;
+          const publishedForPeriod = activePublished.find((row) =>
+            scheduleMatchesPeriod(row as { week_start: string }, start, end, periodConfig),
+          );
+          if (publishedForPeriod) primary = publishedForPeriod as typeof primary;
         }
         if (primary) byDept.set(d.id, primary);
       }),
@@ -2131,6 +2204,86 @@ export const getWeekDepartmentStates = createServerFn({ method: "POST" })
       }
     }
     return { noSchedule, draft, published };
+  });
+
+/** All unpublished saved schedules for the branch — admin-backed (includes future periods). */
+export const getBranchSavedSchedulesAwaitingPublish = createServerFn({ method: "GET" })
+  .middleware([requireBranchContext])
+  .handler(async ({ context }) => {
+    const caps = await getCaps(context.supabase, context.userId);
+    if (
+      !(
+        caps.isMainAdmin ||
+        caps.isBranchMgr ||
+        caps.canView ||
+        caps.canCreate ||
+        caps.canEdit ||
+        caps.canApprove ||
+        caps.canPublishDirect
+      )
+    ) {
+      throw new Error("אין הרשאה");
+    }
+
+    const periodConfig = await fetchBranchPeriodConfig(context.supabase, context.branchId);
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+
+    let deptQ = supabaseAdmin
+      .from("departments")
+      .select("id")
+      .eq("is_active", true);
+    if (context.branchId) deptQ = deptQ.eq("branch_id", context.branchId);
+    const { data: depts, error: dErr } = await deptQ;
+    if (dErr) throw new Error(dErr.message);
+
+    const deptIds = ((depts ?? []) as { id: string }[]).map((d) => d.id);
+    if (!deptIds.length) {
+      return {
+        savedList: [] as {
+          schedule_id: string;
+          department_id: string;
+          week_start: string;
+          week_end: string;
+          status: string;
+          published_at: string | null;
+          updated_at: string | null;
+        }[],
+      };
+    }
+
+    const { data: scheds, error } = await supabaseAdmin
+      .from("schedules")
+      .select(
+        "id, department_id, week_start, week_end, status, published_at, updated_at, created_by",
+      )
+      .in("department_id", deptIds)
+      .order("week_start", { ascending: false });
+    if (error) throw new Error(error.message);
+
+    const savedList = ((scheds ?? []) as any[])
+      .filter((s) =>
+        isSavedScheduleAwaitingPublish({
+          status: s.status,
+          published_at: s.published_at ?? null,
+        }),
+      )
+      .map((s) => {
+        const weekStart = s.week_start as string;
+        const weekEnd =
+          (s.week_end as string | null) ??
+          getPeriodEnd(getPeriodStart(weekStart, periodConfig), periodConfig);
+        return {
+          schedule_id: s.id as string,
+          department_id: s.department_id as string,
+          week_start: weekStart,
+          week_end: weekEnd,
+          status: s.status as string,
+          published_at: (s.published_at as string | null) ?? null,
+          updated_at: (s.updated_at as string | null) ?? null,
+        };
+      });
+
+    return { savedList };
   });
 
 /** Returns publish-state flags for one department/week (no shift data). */
@@ -2173,20 +2326,14 @@ export const getDepartmentWeekScheduleFlags = createServerFn({ method: "POST" })
       end,
       periodConfig,
     );
-    let publishedSched = periodSchedules.find(
+    // Only a schedule that matches THIS period counts as published here.
+    // Never fall back to another week's active/upcoming published row — that
+    // leaked current-week publish banners into future weeks.
+    const publishedSched = periodSchedules.find(
       (row) =>
         (row as { status?: string }).status === "approved" &&
         !!(row as { published_at?: string | null }).published_at,
     );
-    if (!publishedSched) {
-      const activePublished = await findActivePublishedSchedulesForDepartment(
-        supabaseAdmin,
-        data.department_id,
-        periodConfig,
-        todayIsoCalendar(),
-      );
-      publishedSched = activePublished[0];
-    }
     const managerSavedSched = periodSchedules.find((row) =>
       isManagerSavedScheduleForDeptHead(
         row as {
@@ -2200,6 +2347,47 @@ export const getDepartmentWeekScheduleFlags = createServerFn({ method: "POST" })
         context.userId,
       ),
     );
+    // Fallback: any unpublished saved row the dept head does not own as an editable draft.
+    const blockingSavedForDeptHead =
+      managerSavedSched ??
+      (caps.isDeptHeadOnly
+        ? periodSchedules.find((row) => {
+            if (
+              !isSavedScheduleAwaitingPublish(
+                row as { status: string; published_at: string | null },
+              )
+            ) {
+              return false;
+            }
+            if (
+              isDeptHeadEditableDraft(
+                row as {
+                  status: string;
+                  submitted_at?: string | null;
+                  created_by?: string | null;
+                  submitted_by?: string | null;
+                },
+                context.userId,
+              )
+            ) {
+              return false;
+            }
+            if (
+              isDeptHeadSubmittedAwaitingApproval(
+                row as {
+                  status: string;
+                  submitted_at?: string | null;
+                  created_by?: string | null;
+                  submitted_by?: string | null;
+                },
+                context.userId,
+              )
+            ) {
+              return false;
+            }
+            return true;
+          })
+        : undefined);
     const deptPendingSched = caps.isDeptHeadOnly
       ? periodSchedules.find((row) =>
           isDeptHeadSubmittedAwaitingApproval(
@@ -2218,7 +2406,7 @@ export const getDepartmentWeekScheduleFlags = createServerFn({ method: "POST" })
     );
     const sched =
       publishedSched ??
-      (caps.isDeptHeadOnly ? managerSavedSched : savedSched) ??
+      (caps.isDeptHeadOnly ? blockingSavedForDeptHead : savedSched) ??
       savedSched ??
       pickPrimaryDepartmentSchedule(periodSchedules);
 
@@ -2226,9 +2414,9 @@ export const getDepartmentWeekScheduleFlags = createServerFn({ method: "POST" })
     const hasSavedAwaitingPublish = periodSchedules.some((row) =>
       isSavedScheduleAwaitingPublish(row as { status: string; published_at: string | null }),
     );
-    const hasManagerSavedAwaitingPublish = !!managerSavedSched;
+    const hasManagerSavedAwaitingPublish = !!blockingSavedForDeptHead;
     const hasDeptHeadPendingApproval = !!deptPendingSched;
-    const blockingMeta = managerSavedSched ?? savedSched;
+    const blockingMeta = blockingSavedForDeptHead ?? savedSched;
 
     return {
       hasPublished,
@@ -2240,19 +2428,14 @@ export const getDepartmentWeekScheduleFlags = createServerFn({ method: "POST" })
         (publishedSched as { week_start?: string } | null)?.week_start ?? null,
       schedule_id: (sched as { id?: string } | null)?.id ?? null,
       schedule_week_start: (sched as { week_start?: string } | null)?.week_start ?? null,
-      awaitingPublish: hasManagerSavedAwaitingPublish && blockingMeta
-        ? {
-            status: (blockingMeta as { status: string }).status,
-            created_by: ((blockingMeta as { created_by?: string | null }).created_by) ?? null,
-            saved_at:
-              ((blockingMeta as { updated_at?: string | null }).updated_at) ??
-              ((blockingMeta as { created_at?: string | null }).created_at) ??
-              null,
-          }
-        : !caps.isDeptHeadOnly && hasSavedAwaitingPublish && blockingMeta
+      awaitingPublish:
+        (hasManagerSavedAwaitingPublish ||
+          (!caps.isDeptHeadOnly && hasSavedAwaitingPublish)) &&
+        blockingMeta
           ? {
               status: (blockingMeta as { status: string }).status,
-              created_by: ((blockingMeta as { created_by?: string | null }).created_by) ?? null,
+              created_by:
+                ((blockingMeta as { created_by?: string | null }).created_by) ?? null,
               saved_at:
                 ((blockingMeta as { updated_at?: string | null }).updated_at) ??
                 ((blockingMeta as { created_at?: string | null }).created_at) ??
@@ -2317,6 +2500,175 @@ async function enrichOverviewEmployeesFromShifts(
   }
   return result;
 }
+
+type DashboardPublishedPeriodRow = {
+  weekStart: string;
+  periodStart: string;
+  periodEnd: string;
+  publishedAt: string | null;
+};
+
+function publishedPeriodsOverlap(
+  a: Pick<DashboardPublishedPeriodRow, "periodStart" | "periodEnd">,
+  b: Pick<DashboardPublishedPeriodRow, "periodStart" | "periodEnd">,
+): boolean {
+  return a.periodStart <= b.periodEnd && b.periodStart <= a.periodEnd;
+}
+
+/** When calendar ranges overlap, keep only the newest published period for dashboard cards. */
+function dedupeOverlappingPublishedPeriods(
+  periods: DashboardPublishedPeriodRow[],
+): DashboardPublishedPeriodRow[] {
+  const sorted = [...periods].sort((a, b) => {
+    const pubA = a.publishedAt ?? "";
+    const pubB = b.publishedAt ?? "";
+    if (pubA !== pubB) return pubB.localeCompare(pubA);
+    return b.weekStart.localeCompare(a.weekStart);
+  });
+  const kept: DashboardPublishedPeriodRow[] = [];
+  for (const period of sorted) {
+    if (!kept.some((existing) => publishedPeriodsOverlap(existing, period))) {
+      kept.push(period);
+    }
+  }
+  return kept.sort((a, b) => a.periodStart.localeCompare(b.periodStart));
+}
+
+/** Active published schedule periods for dashboard cards — same visibility as daily overview. */
+export const getDashboardPublishedPeriods = createServerFn({ method: "POST" })
+  .middleware([requireBranchContext])
+  .inputValidator((d: unknown) =>
+    z
+      .object({
+        scope: z.enum(["branch", "department"]),
+        department_id: z.string().uuid().optional(),
+        use_coworkers_view: z.boolean().optional(),
+      })
+      .parse(d),
+  )
+  .handler(async ({ data, context }) => {
+    const capsRaw = await getCaps(context.supabase, context.userId);
+    const caps: ScheduleViewerCaps = {
+      userId: context.userId,
+      isMainAdmin: capsRaw.isMainAdmin,
+      isBranchMgr: capsRaw.isBranchMgr,
+      isDeptMgr: capsRaw.isDeptMgr,
+      canView: capsRaw.canView,
+      canCreate: capsRaw.canCreate,
+      canEdit: capsRaw.canEdit,
+      canApprove: capsRaw.canApprove,
+      canPublishDirect: capsRaw.canPublishDirect,
+      departmentId: capsRaw.departmentId,
+    };
+    const managedDeptIds = await getManagedDepartmentIds(
+      context.supabase,
+      capsRaw,
+      context.userId,
+    );
+    const useCoworkersView = !!data.use_coworkers_view;
+    const periodConfig = await fetchBranchPeriodConfig(context.supabase, context.branchId);
+    const todayIso = todayIsoCalendar();
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const branchLevelViewer = isBranchLevelScheduleViewer(caps);
+
+    let departments: { id: string }[] = [];
+    if (data.scope === "department") {
+      const targetDeptId = data.department_id ?? caps.departmentId;
+      if (!targetDeptId) return { periods: [] as DashboardPublishedPeriodRow[] };
+
+      let allowed =
+        branchLevelViewer ||
+        (useCoworkersView && caps.departmentId === targetDeptId) ||
+        managedDeptIds.includes(targetDeptId);
+      if (!allowed) {
+        allowed = await isScheduleVisibleToCaps(
+          {
+            department_id: targetDeptId,
+            status: "approved",
+            published_at: new Date().toISOString(),
+          },
+          caps,
+          context.userId,
+          context.supabase,
+        ).catch(() => false);
+      }
+      if (!allowed) throw new Error("אין הרשאה");
+
+      const { data: dept, error } = await supabaseAdmin
+        .from("departments")
+        .select("id")
+        .eq("id", targetDeptId)
+        .eq("is_active", true)
+        .maybeSingle();
+      if (error) throw new Error(error.message);
+      departments = dept ? [{ id: dept.id }] : [];
+    } else {
+      if (!branchLevelViewer) throw new Error("אין הרשאה");
+      let deptQ = supabaseAdmin
+        .from("departments")
+        .select("id")
+        .eq("is_active", true)
+        .order("name");
+      if (context.branchId) deptQ = deptQ.eq("branch_id", context.branchId);
+      const { data: depts, error } = await deptQ;
+      if (error) throw new Error(error.message);
+      departments = (depts ?? []) as { id: string }[];
+    }
+
+    const periodByAnchor = new Map<string, DashboardPublishedPeriodRow>();
+
+    for (const dept of departments) {
+      const published = await findActivePublishedSchedulesForDepartment(
+        supabaseAdmin,
+        dept.id,
+        periodConfig,
+        todayIso,
+      );
+      for (const row of published) {
+        const sched = row as {
+          week_start: string;
+          week_end?: string | null;
+          schedule_type?: string | null;
+          published_at: string | null;
+        };
+        if (!branchLevelViewer) {
+          const visible = await isScheduleVisibleToCaps(
+            row,
+            caps,
+            context.userId,
+            context.supabase,
+          );
+          if (!visible) continue;
+        }
+
+        const { start: normStart } = weekStartOf(sched.week_start, periodConfig);
+        const days = weekDaysOfSchedule(sched, periodConfig);
+        if (!days.length) continue;
+
+        const periodStart = days[0]!;
+        const periodEnd = days[days.length - 1]!;
+        const publishedAt = sched.published_at;
+        const existing = periodByAnchor.get(normStart);
+        if (!existing) {
+          periodByAnchor.set(normStart, {
+            weekStart: normStart,
+            periodStart,
+            periodEnd,
+            publishedAt,
+          });
+          continue;
+        }
+        if ((publishedAt ?? "") > (existing.publishedAt ?? "")) {
+          existing.publishedAt = publishedAt;
+        }
+        if (periodStart < existing.periodStart) existing.periodStart = periodStart;
+        if (periodEnd > existing.periodEnd) existing.periodEnd = periodEnd;
+      }
+    }
+
+    const periods = dedupeOverlappingPublishedPeriods([...periodByAnchor.values()]);
+    return { periods };
+  });
 
 /** Dashboard daily overview — same visibility rules as the schedule editor, admin-backed reads. */
 export const getDailyScheduleOverview = createServerFn({ method: "POST" })

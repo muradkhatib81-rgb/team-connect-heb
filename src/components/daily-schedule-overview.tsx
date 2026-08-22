@@ -345,8 +345,14 @@ export type DailyScheduleOverviewProps = {
   selfUserId?: string;
   useCoworkersView?: boolean;
   showFullScheduleLink?: boolean;
+  /** When set, load this schedule period instead of the current reference period. */
+  weekStart?: string;
+  /** Render inside a parent card — no outer Card wrapper or period header. */
+  embedded?: boolean;
   className?: string;
   onSelectedDayChange?: (day: string) => void;
+  /** When false, day changes are not propagated (e.g. collapsed period card). */
+  reportDayChanges?: boolean;
 };
 
 export function DailyScheduleOverview({
@@ -355,8 +361,11 @@ export function DailyScheduleOverview({
   selfUserId,
   useCoworkersView = false,
   showFullScheduleLink = true,
+  weekStart: weekStartProp,
+  embedded = false,
   className,
   onSelectedDayChange,
+  reportDayChanges = true,
 }: DailyScheduleOverviewProps) {
   const { data: profile } = useAuth();
   const getOverviewFn = useServerFn(getDailyScheduleOverview);
@@ -373,9 +382,11 @@ export function DailyScheduleOverview({
   }, []);
 
   const weekStart = useMemo(() => {
+    if (weekStartProp) return weekStartProp;
     if (!periodConfigQ.isSuccess) return todayIso;
     return getReferencePeriodStart(todayIso, periodConfig);
   }, [
+    weekStartProp,
     periodConfigQ.isSuccess,
     todayIso,
     periodConfig.schedule_type,
@@ -468,8 +479,8 @@ export function DailyScheduleOverview({
   }, [weekStart, defaultDay, q.data]);
 
   useEffect(() => {
-    onSelectedDayChange?.(selectedDay);
-  }, [selectedDay, onSelectedDayChange]);
+    if (reportDayChanges) onSelectedDayChange?.(selectedDay);
+  }, [selectedDay, onSelectedDayChange, reportDayChanges]);
 
   const deptFlagsQ = useQuery({
     queryKey: ["dept-schedule-flags", departmentId, weekStart],
@@ -564,92 +575,73 @@ export function DailyScheduleOverview({
   const shiftCards: ScheduleShiftCode[] = ["morning", "evening", "off"];
   const hasAnyPublished = departments.some((d) => d.hasPublishedSchedule);
 
-  return (
-    <Card className={cn("card-elevated p-0 overflow-hidden", className)}>
-      <div className="px-4 pt-4 pb-2 flex flex-wrap items-center justify-between gap-2">
-        <h2 className="font-semibold text-base flex items-center gap-2">
-          <CalendarDays className="size-5 text-primary" />
-          {i18n.t("dashboard.dailySchedule")}
-        </h2>
-        <div className="flex items-center gap-3 text-xs text-muted-foreground">
-          <span>
-            {formatScheduleDayHe(displayWeekStart)} – {formatScheduleDayHe(displayWeekEnd)}
-          </span>
-          {showFullScheduleLink && (
-            <Link to="/schedules" className="text-sm text-primary hover:underline">
-              {i18n.t("dashboard.fullSchedule")}
-            </Link>
-          )}
+  const body = q.isLoading ? (
+    <div className="flex justify-center py-12">
+      <Loader2 className="size-6 animate-spin text-primary" />
+    </div>
+  ) : q.isError ? (
+    <p className="p-6 text-sm text-destructive text-center">
+      {(q.error as Error)?.message ?? i18n.t("dashboard.scheduleLoadError")}
+    </p>
+  ) : (
+    <>
+      <div className={cn("px-3 pb-3 overflow-x-auto", embedded && "pt-1")}>
+        <div className="flex gap-1 min-w-max">
+          {weekDays.map((day) => {
+            const isSelected = day === selectedDay;
+            const isToday = day === todayIso;
+            return (
+              <button
+                key={day}
+                type="button"
+                onClick={() => {
+                  setSelectedDay(day);
+                  setActiveFilter(null);
+                }}
+                className={cn(
+                  "flex flex-col items-center min-w-[4.5rem] px-2 py-2 rounded-lg border text-center transition-colors",
+                  isSelected
+                    ? "border-primary bg-primary/5 shadow-sm"
+                    : "border-transparent hover:bg-muted/50",
+                  isToday && !isSelected && "border-primary/30",
+                )}
+              >
+                <span className="text-xs font-semibold">
+                  {scheduleDayLabelForDate(day, "full")}
+                </span>
+                <span className="text-[10px] text-muted-foreground tabular-nums">
+                  {formatScheduleDayHe(day)}
+                </span>
+              </button>
+            );
+          })}
         </div>
       </div>
 
-      {q.isLoading ? (
-        <div className="flex justify-center py-12">
-          <Loader2 className="size-6 animate-spin text-primary" />
-        </div>
-      ) : q.isError ? (
-        <p className="p-6 text-sm text-destructive text-center">
-          {(q.error as Error)?.message ?? i18n.t("dashboard.scheduleLoadError")}
-        </p>
-      ) : (
-        <>
-          <div className="px-3 pb-3 overflow-x-auto">
-            <div className="flex gap-1 min-w-max">
-              {weekDays.map((day) => {
-                const isSelected = day === selectedDay;
-                const isToday = day === todayIso;
-                return (
-                  <button
-                    key={day}
-                    type="button"
-                    onClick={() => {
-                      setSelectedDay(day);
-                      setActiveFilter(null);
-                    }}
-                    className={cn(
-                      "flex flex-col items-center min-w-[4.5rem] px-2 py-2 rounded-lg border text-center transition-colors",
-                      isSelected
-                        ? "border-primary bg-primary/5 shadow-sm"
-                        : "border-transparent hover:bg-muted/50",
-                      isToday && !isSelected && "border-primary/30",
-                    )}
-                  >
-                    <span className="text-xs font-semibold">
-                      {scheduleDayLabelForDate(day, "full")}
-                    </span>
-                    <span className="text-[10px] text-muted-foreground tabular-nums">
-                      {formatScheduleDayHe(day)}
-                    </span>
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-
-          {selectedDayName && (
-            <div className="px-4 pb-2 text-xs text-muted-foreground">
-              {i18n.t("dashboard.dayOf").replace("{name}", selectedDayName).replace("{date}", formatScheduleDayHe(selectedDay))}
-              {activeFilter && (
-                <span className="ms-2">
-                  · {i18n.t("dashboard.showing")} {getShiftLabel(activeFilter.shift)} —{" "}
-                  {departments.find((d) => d.id === activeFilter.deptId)?.name}
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    className="h-6 px-2 text-xs gap-1 ms-1"
-                    onClick={() => setActiveFilter(null)}
-                  >
-                    <X className="size-3" />
-                    {i18n.t("common.cancel")}
-                  </Button>
-                </span>
-              )}
-            </div>
+      {selectedDayName && (
+        <div className="px-4 pb-2 text-xs text-muted-foreground">
+          {i18n.t("dashboard.dayOf").replace("{name}", selectedDayName).replace("{date}", formatScheduleDayHe(selectedDay))}
+          {activeFilter && (
+            <span className="ms-2">
+              · {i18n.t("dashboard.showing")} {getShiftLabel(activeFilter.shift)} —{" "}
+              {departments.find((d) => d.id === activeFilter.deptId)?.name}
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="h-6 px-2 text-xs gap-1 ms-1"
+                onClick={() => setActiveFilter(null)}
+              >
+                <X className="size-3" />
+                {i18n.t("common.cancel")}
+              </Button>
+            </span>
           )}
+        </div>
+      )}
 
-          <div className="divide-y-[3px] divide-muted-foreground/30 border-t-2 border-muted-foreground/25 max-h-[min(60vh,520px)] overflow-y-auto">
-            {departments.map((dept, deptIdx) => {
+      <div className="divide-y-[3px] divide-muted-foreground/30 border-t-2 border-muted-foreground/25 max-h-[min(60vh,520px)] overflow-y-auto">
+        {departments.map((dept, deptIdx) => {
               const deptKey = dept.overviewKey ?? dept.id;
               const counts = deptCounts[deptKey] ?? { morning: 0, evening: 0, off: 0 };
               const isFilterActive =
@@ -848,8 +840,32 @@ export function DailyScheduleOverview({
                 </p>
               )}
           </div>
-        </>
-      )}
+    </>
+  );
+
+  if (embedded) {
+    return <div className={className}>{body}</div>;
+  }
+
+  return (
+    <Card className={cn("card-elevated p-0 overflow-hidden", className)}>
+      <div className="px-4 pt-4 pb-2 flex flex-wrap items-center justify-between gap-2">
+        <h2 className="font-semibold text-base flex items-center gap-2">
+          <CalendarDays className="size-5 text-primary" />
+          {i18n.t("dashboard.dailySchedule")}
+        </h2>
+        <div className="flex items-center gap-3 text-xs text-muted-foreground">
+          <span>
+            {formatScheduleDayHe(displayWeekStart)} – {formatScheduleDayHe(displayWeekEnd)}
+          </span>
+          {showFullScheduleLink && (
+            <Link to="/schedules" className="text-sm text-primary hover:underline">
+              {i18n.t("dashboard.fullSchedule")}
+            </Link>
+          )}
+        </div>
+      </div>
+      {body}
     </Card>
   );
 }

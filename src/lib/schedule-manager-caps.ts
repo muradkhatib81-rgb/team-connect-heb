@@ -131,7 +131,12 @@ export function resolveScheduleManagerCaps(
       (isGranular && (!!p.can_edit_schedule || !!p.can_manage_schedule)) ||
       (isDeptMgr && !branchLevel),
     canApprove: isMainAdmin || (isGranular && !!p.can_approve_schedule),
-    canPublishDirect: isMainAdmin || (isGranular && !!p.can_publish_schedule),
+    // Anyone with create (or publish) schedule permission can publish drafts —
+    // including future periods. Department heads are not granular → send for approval.
+    canPublishDirect:
+      isMainAdmin ||
+      isBranchManager ||
+      (isGranular && (!!p.can_publish_schedule || !!p.can_create_schedule)),
   };
 }
 

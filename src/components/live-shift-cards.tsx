@@ -1,16 +1,26 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { useServerFn } from "@tanstack/react-start";
 import {
   Dialog,
   DialogContent,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Users } from "lucide-react";
+import { Card } from "@/components/ui/card";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible";
+import { ChevronDown, Clock, Loader2, Moon, Plane, Sun, Users } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useShiftDefinitions } from "@/lib/use-shift-definitions";
 import { formatHHMM, usePlatformNow } from "@/lib/platform-time";
-import { getScheduleWeek, formatScheduleDayHe } from "@/lib/schedule-week";
+import {
+  formatScheduleDayHe,
+  scheduleDayLabelForDate,
+} from "@/lib/schedule-week";
 import { formatShiftTimeRange } from "@/lib/shift-hours";
 import { useActiveBranch } from "@/lib/use-active-branch";
 import { useAuth } from "@/lib/use-auth";
@@ -26,7 +36,17 @@ import {
   isEmployeeOnLeaveOnDate,
   leaveOffLabel,
 } from "@/lib/employee-leave";
-import { isNonEmployeeIdentity } from "@/lib/employee-identity";
+import {
+  getBranchPeriodScheduleShifts,
+  getDashboardPublishedPeriods,
+} from "@/lib/schedules.functions";
+import { useSchedulePeriodConfig } from "@/lib/use-schedule-period-config";
+import {
+  buildPeriodDays,
+  DEFAULT_PERIOD_CONFIG,
+  getReferencePeriodStart,
+} from "@/lib/schedule-period-config";
+import { cn } from "@/lib/utils";
 
 type TodayRow = {
   employee_id: string;
@@ -41,7 +61,6 @@ type EmployeeInfo = {
   full_name: string;
   job_title: string | null;
   department_name: string | null;
-  /** Job-title flag: appear in app, but never in schedule headcount numbers/lists. */
   excluded_from_headcount: boolean;
   on_leave: boolean;
   leave_start_date: string | null;
@@ -52,26 +71,29 @@ type EmployeeInfo = {
 type DisplayEmployee = EmployeeInfo & { start: string | null; end: string | null };
 
 const OFF_SHIFT_CODE = "off";
+const CORE_SHIFT_CODES = ["morning", "evening", "off"] as const;
 
 /**
- * Dynamic shift summary cards for the Main Dashboard (branch-level viewers).
- *
- * - One card per active shift definition (ordered by sort_order).
- * - Working shifts (בוקר / ערב / …) = published schedule assignments for today.
- * - חופש (off) = anyone on leave today from any source that updates the profile
- *   leave window (manual employee-file leave, approved leave request, or
- *   schedule marking via apply_leave_to_schedule_shifts), plus anyone marked
- *   חופש in a published schedule. They stay counted until the leave window
- *   ends or is cleared.
- * - Honors excluded_from_headcount (תפקיד "לא נכלל במצבת").
+ * Single dashboard card: published schedule headcount for a chosen day (branch-wide).
+ * Visible to branch-level schedule viewers only.
  */
-export function LiveShiftCardsSection({ dateISO: dateISOProp }: { dateISO?: string }) {
+export function LiveShiftCardsSection() {
   const { data: profile } = useAuth();
   const { activeBranchId } = useActiveBranch();
   const shiftDefsQ = useShiftDefinitions({ activeOnly: true });
+  const periodConfigQ = useSchedulePeriodConfig();
+  const periodConfig = periodConfigQ.data ?? DEFAULT_PERIOD_CONFIG;
+  const branchShiftsFn = useServerFn(getBranchPeriodScheduleShifts);
+  const periodsFn = useServerFn(getDashboardPublishedPeriods);
   const { dateISO: todayISO } = usePlatformNow();
-  const dateISO = dateISOProp ?? todayISO;
-  const isToday = dateISO === todayISO;
+
+  const [open, setOpen] = useState(false);
+  const [selectedDate, setSelectedDate] = useState(todayISO);
+  const [openShift, setOpenShift] = useState<string | null>(null);
+
+  useEffect(() => {
+    setSelectedDate(todayISO);
+  }, [todayISO]);
 
   const needsLoadedPerms = profile
     ? scheduleScopeNeedsLoadedPermissions(profile.roles)
@@ -118,79 +140,72 @@ export function LiveShiftCardsSection({ dateISO: dateISOProp }: { dateISO?: stri
     });
   }, [profile, scheduleCaps]);
 
-  const weekStart = useMemo(
-    () => getScheduleWeek(new Date(`${dateISO}T12:00:00Z`)).weekStart,
-    [dateISO],
-  );
-
-  // Today's published assignments for the current schedule week.
-  const rowsQ = useQuery<TodayRow[]>({
-    enabled: canView && permsReady && !!dateISO,
-    queryKey: ["dashboard-shift-cards", "today", dateISO, weekStart, activeBranchId ?? "all"],
-    queryFn: async () => {
-      let schedQ = supabase
-        .from("schedules")
-        .select("id")
-        .eq("status", "approved")
-        .not("published_at", "is", null)
-        .eq("week_start", weekStart);
-      if (activeBranchId) schedQ = schedQ.eq("branch_id", activeBranchId);
-      const { data: scheds, error: schedErr } = await schedQ;
-      if (schedErr) throw schedErr;
-      const ids = (scheds ?? []).map((s: any) => s.id as string);
-      if (ids.length === 0) return [];
-      const { data, error } = await supabase
-        .from("schedule_shifts")
-        .select("employee_id, shift, start_time, end_time, schedule_id")
-        .eq("day_date", dateISO)
-        .in("schedule_id", ids);
-      if (error) throw error;
-      return (data ?? []) as TodayRow[];
-    },
+  const periodsQ = useQuery({
+    enabled: canView && permsReady,
+    queryKey: ["dashboard-published-periods", "branch", activeBranchId ?? "all"],
+    queryFn: () => periodsFn({ data: { scope: "branch" } }),
     staleTime: 30_000,
   });
 
-  // Branch staff + leave windows — same source as the dashboard "בחופשה" tile.
-  // Needed so חופש counts manual / approved leave even when no schedule is published.
-  const leaveEmpsQ = useQuery<EmployeeInfo[]>({
-    enabled: canView && permsReady && !!dateISO,
-    queryKey: ["dashboard-shift-cards", "leave-emps", dateISO, activeBranchId ?? "all"],
+  const dayOptions = useMemo(() => {
+    const periods = periodsQ.data?.periods ?? [];
+    const containing = periods.find(
+      (p) => p.periodStart <= selectedDate && p.periodEnd >= selectedDate,
+    );
+    if (!containing) {
+      if (!periodConfigQ.isSuccess) return [selectedDate];
+      const fallbackDays = buildPeriodDays(
+        getReferencePeriodStart(selectedDate, periodConfig),
+        periodConfig,
+      );
+      return fallbackDays.length ? fallbackDays : [selectedDate];
+    }
+    const days = buildPeriodDays(containing.weekStart, periodConfig);
+    return days.filter(
+      (day) => day >= containing.periodStart && day <= containing.periodEnd,
+    );
+  }, [periodsQ.data?.periods, selectedDate, periodConfig, periodConfigQ.isSuccess]);
+
+  useEffect(() => {
+    if (dayOptions.length && !dayOptions.includes(selectedDate)) {
+      const fallback =
+        dayOptions.find((d) => d >= todayISO) ?? dayOptions[dayOptions.length - 1]!;
+      setSelectedDate(fallback);
+    }
+  }, [dayOptions, selectedDate, todayISO]);
+
+  const periodWeekStart = useMemo(() => {
+    if (!periodConfigQ.isSuccess || !selectedDate) return null;
+    return getReferencePeriodStart(selectedDate, periodConfig);
+  }, [
+    periodConfigQ.isSuccess,
+    selectedDate,
+    periodConfig.schedule_type,
+    periodConfig.week_start_dow,
+    periodConfig.week_end_dow,
+  ]);
+
+  const rowsQ = useQuery<TodayRow[]>({
+    enabled: canView && permsReady && !!selectedDate && !!periodWeekStart,
+    queryKey: [
+      "dashboard-shift-cards",
+      "published",
+      selectedDate,
+      periodWeekStart,
+      activeBranchId ?? "all",
+    ],
     queryFn: async () => {
-      // Prefer server filter: flagged on_leave OR leave window covering today.
-      let q = supabase
-        .from("profiles")
-        .select(
-          "id, full_name, job_title, excluded_from_headcount, on_leave, leave_start_date, leave_end_date, leave_type_code, department_id, branch_id, departments(name)",
-        )
-        .or(
-          `on_leave.eq.true,and(leave_start_date.lte.${dateISO},leave_end_date.gte.${dateISO})`,
-        );
-      if (activeBranchId) q = q.eq("branch_id", activeBranchId);
-      const { data, error } = await q;
-      if (error) throw error;
-      return ((data ?? []) as any[])
-        .filter((row) => !isNonEmployeeIdentity(row))
-        .filter((row) =>
-          isEmployeeOnLeaveOnDate(
-            {
-              on_leave: !!row.on_leave,
-              leave_start_date: row.leave_start_date,
-              leave_end_date: row.leave_end_date,
-            },
-            dateISO,
-          ),
-        )
+      const { shifts } = await branchShiftsFn({
+        data: { week_start: periodWeekStart!, published_only: true },
+      });
+      return (shifts ?? [])
+        .filter((row) => row.day_date === selectedDate)
         .map((row) => ({
-          id: row.id as string,
-          full_name: row.full_name as string,
-          job_title: (row.job_title as string | null) ?? null,
-          department_name:
-            (row.departments?.name as string | null | undefined) ?? null,
-          excluded_from_headcount: !!row.excluded_from_headcount,
-          on_leave: !!row.on_leave,
-          leave_start_date: (row.leave_start_date as string | null) ?? null,
-          leave_end_date: (row.leave_end_date as string | null) ?? null,
-          leave_type_code: (row.leave_type_code as string | null) ?? null,
+          employee_id: row.employee_id,
+          shift: row.shift,
+          start_time: row.start_time ?? null,
+          end_time: row.end_time ?? null,
+          schedule_id: row.schedule_id,
         }));
     },
     staleTime: 30_000,
@@ -201,23 +216,20 @@ export function LiveShiftCardsSection({ dateISO: dateISOProp }: { dateISO?: stri
     [rowsQ.data],
   );
 
-  // Profiles for schedule assignees who are not already in the leave query result
-  // (working shifts still need names / headcount flags).
-  const scheduleOnlyIds = useMemo(() => {
-    const onLeave = new Set((leaveEmpsQ.data ?? []).map((e) => e.id));
-    return scheduleEmpIds.filter((id) => !onLeave.has(id));
-  }, [scheduleEmpIds, leaveEmpsQ.data]);
-
   const scheduleEmpsQ = useQuery<EmployeeInfo[]>({
-    enabled: scheduleOnlyIds.length > 0,
-    queryKey: ["dashboard-shift-cards", "emps", scheduleOnlyIds.slice().sort().join(",")],
+    enabled: scheduleEmpIds.length > 0,
+    queryKey: [
+      "dashboard-shift-cards",
+      "published-emps",
+      scheduleEmpIds.slice().sort().join(","),
+    ],
     queryFn: async () => {
       const { data, error } = await supabase
         .from("profiles")
         .select(
           "id, full_name, job_title, excluded_from_headcount, on_leave, leave_start_date, leave_end_date, leave_type_code, departments(name)",
         )
-        .in("id", scheduleOnlyIds);
+        .in("id", scheduleEmpIds);
       if (error) throw error;
       return ((data ?? []) as any[]).map((row) => ({
         id: row.id as string,
@@ -235,31 +247,28 @@ export function LiveShiftCardsSection({ dateISO: dateISOProp }: { dateISO?: stri
     staleTime: 60_000,
   });
 
-  // RealtimeBridge already invalidates dashboard-shift-cards.
-  // Group by shift: published assignments + profile leave windows for חופש.
-  // Same headcount rule: תפקיד "לא נכלל במצבת" omitted from numbers/lists.
+  const coreShiftDefs = useMemo(
+    () =>
+      CORE_SHIFT_CODES.map((code) => shiftDefsQ.map.get(code)).filter(
+        (def): def is NonNullable<typeof def> => !!def && def.is_active,
+      ),
+    [shiftDefsQ.map],
+  );
+
   const byShift = useMemo(() => {
     const empMap = new Map<string, EmployeeInfo>();
-    for (const e of leaveEmpsQ.data ?? []) empMap.set(e.id, e);
     for (const e of scheduleEmpsQ.data ?? []) empMap.set(e.id, e);
-
-    const onLeaveToday = new Set<string>();
-    for (const e of leaveEmpsQ.data ?? []) {
-      if (!e.excluded_from_headcount) onLeaveToday.add(e.id);
-    }
 
     const byShift = new Map<string, DisplayEmployee[]>();
     const seenByShift = new Map<string, Set<string>>();
-    for (const def of shiftDefsQ.list) {
-      byShift.set(def.code, []);
-      seenByShift.set(def.code, new Set());
+    for (const code of CORE_SHIFT_CODES) {
+      byShift.set(code, []);
+      seenByShift.set(code, new Set());
     }
 
-    // Wait for profile flags before counting so excluded roles never flash into totals.
-    const waitingScheduleEmps =
-      scheduleOnlyIds.length > 0 && !scheduleEmpsQ.data;
-    const waitingLeaveEmps = leaveEmpsQ.isLoading;
-    if (waitingScheduleEmps || waitingLeaveEmps) return byShift;
+    if (rowsQ.isLoading || (scheduleEmpIds.length > 0 && !scheduleEmpsQ.data)) {
+      return byShift;
+    }
 
     const pushEmp = (
       shiftCode: string,
@@ -267,8 +276,9 @@ export function LiveShiftCardsSection({ dateISO: dateISOProp }: { dateISO?: stri
       start: string | null,
       end: string | null,
     ) => {
-      const def = shiftDefsQ.map.get(shiftCode);
-      if (!def || !def.is_active) return;
+      if (!CORE_SHIFT_CODES.includes(shiftCode as (typeof CORE_SHIFT_CODES)[number])) {
+        return;
+      }
       const info = empMap.get(empId);
       if (info?.excluded_from_headcount) return;
       const seen = seenByShift.get(shiftCode);
@@ -292,10 +302,22 @@ export function LiveShiftCardsSection({ dateISO: dateISOProp }: { dateISO?: stri
     };
 
     for (const r of rowsQ.data ?? []) {
-      // Profile leave wins over a published בוקר/ערב cell (same as schedule UI).
-      const shiftCode = onLeaveToday.has(r.employee_id) ? OFF_SHIFT_CODE : r.shift;
-      const def = shiftDefsQ.map.get(shiftCode);
-      const resolved = shiftCode === OFF_SHIFT_CODE ? null : shiftDefsQ.getTimesForDay(shiftCode, dateISO);
+      const emp = empMap.get(r.employee_id);
+      const onLeave = emp
+        ? isEmployeeOnLeaveOnDate(
+            {
+              on_leave: emp.on_leave,
+              leave_start_date: emp.leave_start_date,
+              leave_end_date: emp.leave_end_date,
+            },
+            selectedDate,
+          )
+        : false;
+      const shiftCode = onLeave ? OFF_SHIFT_CODE : r.shift;
+      const resolved =
+        shiftCode === OFF_SHIFT_CODE
+          ? null
+          : shiftDefsQ.getTimesForDay(shiftCode, selectedDate);
       const start =
         shiftCode === OFF_SHIFT_CODE
           ? null
@@ -307,84 +329,201 @@ export function LiveShiftCardsSection({ dateISO: dateISOProp }: { dateISO?: stri
       pushEmp(shiftCode, r.employee_id, start, end);
     }
 
-    // Leave from employee file / approved request — even with no published schedule.
-    for (const emp of leaveEmpsQ.data ?? []) {
-      pushEmp(OFF_SHIFT_CODE, emp.id, null, null);
-    }
-
     for (const list of byShift.values()) {
       list.sort((a, b) => a.full_name.localeCompare(b.full_name, "he"));
     }
     return byShift;
   }, [
     rowsQ.data,
-    leaveEmpsQ.data,
-    leaveEmpsQ.isLoading,
+    rowsQ.isLoading,
     scheduleEmpsQ.data,
-    scheduleOnlyIds.length,
-    shiftDefsQ.list,
-    shiftDefsQ.map,
+    scheduleEmpIds.length,
+    selectedDate,
+    shiftDefsQ,
   ]);
 
-  const [openShift, setOpenShift] = useState<string | null>(null);
+  const isLoading = rowsQ.isLoading || (scheduleEmpIds.length > 0 && !scheduleEmpsQ.data);
+
+  const summaryParts = coreShiftDefs.map((def) => {
+    const count = byShift.get(def.code)?.length ?? 0;
+    const label =
+      def.code === "morning" || def.code === "evening" || def.code === "off"
+        ? i18n.t(`dashboard.${def.code}`)
+        : def.name;
+    return `${label} ${count}`;
+  });
+
+  const shiftTone = (code: string) => {
+    if (code === "morning") {
+      return {
+        label: i18n.t("dashboard.morning"),
+        icon: Sun,
+        activeClass: "ring-2 ring-amber-500 border-amber-400 bg-amber-50",
+        idleClass: "border-amber-200 bg-amber-50/40 hover:bg-amber-50",
+        color: shiftDefsQ.map.get("morning")?.color ?? "#f59e0b",
+      };
+    }
+    if (code === "evening") {
+      return {
+        label: i18n.t("dashboard.evening"),
+        icon: Moon,
+        activeClass: "ring-2 ring-sky-500 border-sky-400 bg-sky-50",
+        idleClass: "border-sky-200 bg-sky-50/40 hover:bg-sky-50",
+        color: shiftDefsQ.map.get("evening")?.color ?? "#0ea5e9",
+      };
+    }
+    return {
+      label: i18n.t("dashboard.off"),
+      icon: Plane,
+      activeClass: "ring-2 ring-emerald-500 border-emerald-400 bg-emerald-50",
+      idleClass: "border-emerald-200 bg-emerald-50/40 hover:bg-emerald-50",
+      color: shiftDefsQ.map.get("off")?.color ?? "#10b981",
+    };
+  };
 
   if (!canView || !permsReady) return null;
-  if (shiftDefsQ.list.length === 0) return null;
+  if (coreShiftDefs.length === 0) return null;
 
   return (
-    <section className="space-y-2">
-      <h2 className="text-sm font-semibold">
-        {isToday
-          ? i18n.t("dashboard.todayShifts")
-          : i18n.t("dashboard.dayShifts", { date: formatScheduleDayHe(dateISO) })}
-      </h2>
-      <div
-        className="grid gap-2"
-        style={{
-          gridTemplateColumns: `repeat(${Math.min(shiftDefsQ.list.length, 4)}, minmax(0, 1fr))`,
-        }}
-      >
-        {shiftDefsQ.list.map((def) => {
-          const list = byShift.get(def.code) ?? [];
-          const count = list.length;
-          const countLabel =
-            count === 0
-              ? i18n.t("dashboard.zeroEmployees")
-              : count === 1
-                ? i18n.t("dashboard.oneEmployee")
-                : i18n.t("dashboard.nEmployeesCount").replace("{n}", String(count));
-          const resolved = shiftDefsQ.getTimesForDay(def.code, dateISO);
-          const defaultRange =
-            formatShiftTimeRange(resolved.start_time, resolved.end_time) ??
-            formatShiftTimeRange(def.start_time, def.end_time) ??
-            "";
-          return (
-            <ShiftCard
-              key={def.id}
-              name={
-                def.code === "morning" || def.code === "evening" || def.code === "off"
-                  ? i18n.t(`dashboard.${def.code}`)
-                  : def.name
-              }
-              color={def.color}
-              count={count}
-              countLabel={countLabel}
-              defaultRange={defaultRange}
-              onOpen={() => setOpenShift(def.code)}
-            />
-          );
-        })}
-      </div>
+    <section>
+      <Collapsible open={open} onOpenChange={setOpen}>
+        <Card className="card-elevated overflow-hidden">
+          <CollapsibleTrigger asChild>
+            <button
+              type="button"
+              className="flex w-full items-center gap-2.5 p-3 text-right outline-none transition-colors hover:bg-accent/30 focus-visible:ring-2 focus-visible:ring-ring"
+            >
+              <div className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-primary/15 text-primary">
+                <Clock className="size-4" />
+              </div>
+              <div className="min-w-0 flex-1">
+                <h3 className="text-sm font-semibold leading-tight">
+                  {i18n.t("dashboard.employeesByDayShifts")}
+                </h3>
+                <p className="mt-0.5 line-clamp-2 text-[11px] leading-snug text-muted-foreground">
+                  {isLoading ? i18n.t("common.loading") : summaryParts.join(" · ")}
+                </p>
+              </div>
+              <ChevronDown
+                className={cn(
+                  "size-4 shrink-0 text-muted-foreground transition-transform",
+                  open && "rotate-180",
+                )}
+              />
+            </button>
+          </CollapsibleTrigger>
+
+          <CollapsibleContent>
+            <div className="space-y-3 border-t p-3">
+              <div className="overflow-x-auto">
+                <div className="flex min-w-max gap-1">
+                  {dayOptions.map((day) => {
+                    const isSelected = day === selectedDate;
+                    const isDayToday = day === todayISO;
+                    return (
+                      <button
+                        key={day}
+                        type="button"
+                        onClick={() => setSelectedDate(day)}
+                        className={cn(
+                          "flex min-w-[4.5rem] flex-col items-center rounded-lg border px-2 py-2 text-center transition-colors",
+                          isSelected
+                            ? "border-primary bg-primary/5 shadow-sm"
+                            : "border-transparent hover:bg-muted/50",
+                          isDayToday && !isSelected && "border-primary/30",
+                        )}
+                      >
+                        <span className="text-xs font-semibold">
+                          {scheduleDayLabelForDate(day, "full")}
+                        </span>
+                        <span className="text-[10px] tabular-nums text-muted-foreground">
+                          {formatScheduleDayHe(day)}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {isLoading ? (
+                <div className="flex justify-center py-6">
+                  <Loader2 className="size-5 animate-spin text-primary" />
+                </div>
+              ) : (
+                <div className="grid grid-cols-3 gap-2">
+                  {coreShiftDefs.map((def) => {
+                    const tone = shiftTone(def.code);
+                    const Icon = tone.icon;
+                    const list = byShift.get(def.code) ?? [];
+                    const count = list.length;
+                    const resolved = shiftDefsQ.getTimesForDay(def.code, selectedDate);
+                    const defaultRange =
+                      formatShiftTimeRange(resolved.start_time, resolved.end_time) ??
+                      formatShiftTimeRange(def.start_time, def.end_time) ??
+                      "";
+                    return (
+                      <button
+                        key={def.id}
+                        type="button"
+                        onClick={() => setOpenShift(def.code)}
+                        className={cn(
+                          "rounded-lg border p-2.5 text-center transition-all",
+                          tone.idleClass,
+                        )}
+                      >
+                        <div className="flex items-center justify-center gap-1 text-xs font-medium">
+                          <Icon className="size-3.5" />
+                          {tone.label}
+                        </div>
+                        {defaultRange ? (
+                          <div
+                            className="mt-0.5 text-[10px] tabular-nums text-muted-foreground"
+                            dir="ltr"
+                          >
+                            {defaultRange}
+                          </div>
+                        ) : null}
+                        <div
+                          className="mt-1 text-2xl font-bold tabular-nums leading-none"
+                          style={{ color: tone.color }}
+                        >
+                          {count}
+                        </div>
+                        <div className="mt-0.5 flex items-center justify-center gap-1 text-[10px] text-muted-foreground">
+                          <Users className="size-3" />
+                          {count === 1
+                            ? i18n.t("dashboard.oneEmployee")
+                            : count === 0
+                              ? i18n.t("dashboard.zeroEmployees")
+                              : i18n.t("dashboard.nEmployeesCount").replace(
+                                  "{n}",
+                                  String(count),
+                                )}
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          </CollapsibleContent>
+        </Card>
+      </Collapsible>
 
       <Dialog open={!!openShift} onOpenChange={(o) => !o && setOpenShift(null)}>
         <DialogContent className="max-w-md">
           <DialogHeader>
             <DialogTitle>
               {openShift
-                ? (openShift === "morning" || openShift === "evening" || openShift === "off"
+                ? (openShift === "morning" ||
+                  openShift === "evening" ||
+                  openShift === "off"
                     ? i18n.t(`dashboard.${openShift}`)
-                    : shiftDefsQ.map.get(openShift)?.name) ?? i18n.t("dashboard.shift")
+                    : shiftDefsQ.map.get(openShift)?.name) ??
+                  i18n.t("dashboard.shift")
                 : i18n.t("dashboard.shift")}
+              {" · "}
+              {formatScheduleDayHe(selectedDate)}
             </DialogTitle>
           </DialogHeader>
           {(() => {
@@ -392,7 +531,7 @@ export function LiveShiftCardsSection({ dateISO: dateISOProp }: { dateISO?: stri
             const isOffList = openShift === OFF_SHIFT_CODE;
             if (list.length === 0) {
               return (
-                <p className="text-sm text-muted-foreground py-4 text-center">
+                <p className="py-4 text-center text-sm text-muted-foreground">
                   {isOffList
                     ? i18n.t("dashboard.noLeaveToday")
                     : i18n.t("dashboard.noEmployeesThisShift")}
@@ -400,7 +539,7 @@ export function LiveShiftCardsSection({ dateISO: dateISOProp }: { dateISO?: stri
               );
             }
             return (
-              <ul className="divide-y max-h-[60vh] overflow-y-auto">
+              <ul className="max-h-[60vh] divide-y overflow-y-auto">
                 {list.map((e) => {
                   if (isOffList) {
                     const range = formatLeaveDateRange(
@@ -413,19 +552,22 @@ export function LiveShiftCardsSection({ dateISO: dateISOProp }: { dateISO?: stri
                     );
                     const typeLabel = leaveOffLabel(e.leave_type_code);
                     return (
-                      <li key={e.id} className="py-2.5 space-y-0.5">
-                        <div className="font-medium truncate">{e.full_name}</div>
+                      <li key={e.id} className="space-y-0.5 py-2.5">
+                        <div className="truncate font-medium">{e.full_name}</div>
                         {e.department_name && (
-                          <div className="text-xs text-muted-foreground truncate">
+                          <div className="truncate text-xs text-muted-foreground">
                             {e.department_name}
                           </div>
                         )}
-                        <div className="text-xs text-muted-foreground flex flex-wrap gap-x-2 gap-y-0.5">
+                        <div className="flex flex-wrap gap-x-2 gap-y-0.5 text-xs text-muted-foreground">
                           <span>{typeLabel}</span>
                           {range && <span>· {range}</span>}
                           {days != null && (
                             <span>
-                              · {days} {days === 1 ? i18n.t("dashboard.day") : i18n.t("common.days")}
+                              · {days}{" "}
+                              {days === 1
+                                ? i18n.t("dashboard.day")
+                                : i18n.t("common.days")}
                             </span>
                           )}
                         </div>
@@ -433,22 +575,28 @@ export function LiveShiftCardsSection({ dateISO: dateISOProp }: { dateISO?: stri
                     );
                   }
                   return (
-                    <li key={e.id} className="py-2 flex items-center justify-between gap-3">
+                    <li
+                      key={e.id}
+                      className="flex items-center justify-between gap-3 py-2"
+                    >
                       <div className="min-w-0">
-                        <div className="font-medium truncate">{e.full_name}</div>
+                        <div className="truncate font-medium">{e.full_name}</div>
                         {e.department_name && (
-                          <div className="text-xs text-muted-foreground truncate">
+                          <div className="truncate text-xs text-muted-foreground">
                             {e.department_name}
                           </div>
                         )}
                         {e.job_title && (
-                          <div className="text-[11px] text-muted-foreground/80 truncate">
+                          <div className="truncate text-[11px] text-muted-foreground/80">
                             {e.job_title}
                           </div>
                         )}
                       </div>
                       {e.start && e.end && (
-                        <div className="text-xs tabular-nums text-muted-foreground" dir="ltr">
+                        <div
+                          className="shrink-0 text-xs tabular-nums text-muted-foreground"
+                          dir="ltr"
+                        >
                           {e.start}–{e.end}
                         </div>
                       )}
@@ -463,51 +611,3 @@ export function LiveShiftCardsSection({ dateISO: dateISOProp }: { dateISO?: stri
     </section>
   );
 }
-
-const ShiftCard = ({
-  name,
-  color,
-  count,
-  countLabel,
-  defaultRange,
-  onOpen,
-}: {
-  name: string;
-  color: string;
-  count: number;
-  countLabel: string;
-  defaultRange: string;
-  onOpen: () => void;
-}) => {
-  return (
-    <button
-      type="button"
-      onClick={onOpen}
-      className="flex min-h-[4.75rem] w-full items-center gap-2 rounded-xl border bg-card p-3 text-right transition-colors hover:bg-accent/30 focus:outline-none focus:ring-2 focus:ring-ring"
-      aria-label={`${name}: ${countLabel}`}
-    >
-      <div className="min-w-0 flex-1 self-center">
-        <div className="flex items-center gap-2">
-          <span
-            aria-hidden
-            className="inline-block size-2.5 shrink-0 rounded-full"
-            style={{ backgroundColor: color }}
-          />
-          <span className="truncate text-sm font-semibold leading-tight">{name}</span>
-        </div>
-        {defaultRange ? (
-          <div className="mt-0.5 text-[11px] tabular-nums text-muted-foreground" dir="ltr">
-            {defaultRange}
-          </div>
-        ) : null}
-        <div className="mt-0.5 text-[11px] text-muted-foreground">{countLabel}</div>
-      </div>
-      <div className="flex h-7 w-[4.75rem] shrink-0 items-center justify-end gap-1">
-        <span className="text-2xl font-bold tabular-nums leading-none" style={{ color }}>
-          {count}
-        </span>
-        <Users className="size-3.5 shrink-0 text-muted-foreground" />
-      </div>
-    </button>
-  );
-};

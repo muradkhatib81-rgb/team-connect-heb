@@ -959,7 +959,11 @@ function RealtimeBridge({ uid }: { uid: string }) {
         qc.invalidateQueries({ queryKey: ["dashboard-approved-list"] });
         qc.invalidateQueries({ queryKey: ["emp-dash-schedule"] });
         qc.invalidateQueries({ queryKey: ["daily-schedule-overview"] });
+        qc.invalidateQueries({ queryKey: ["dashboard-published-periods"] });
         qc.invalidateQueries({ queryKey: ["dashboard-shift-cards"] });
+        qc.invalidateQueries({ queryKey: ["branch-period-shifts"] });
+        qc.invalidateQueries({ queryKey: ["dept-schedule-flags"] });
+        qc.invalidateQueries({ queryKey: ["schedules-branch-saved"] });
         qc.invalidateQueries({ queryKey: ["week-schedules"] });
         qc.invalidateQueries({ queryKey: ["schedules-week-saved"] });
         qc.invalidateQueries({ queryKey: ["dept-schedule-flags"] });
@@ -970,7 +974,11 @@ function RealtimeBridge({ uid }: { uid: string }) {
         qc.invalidateQueries({ queryKey: ["schedule-shifts"] });
         qc.invalidateQueries({ queryKey: ["emp-dash-schedule"] });
         qc.invalidateQueries({ queryKey: ["daily-schedule-overview"] });
+        qc.invalidateQueries({ queryKey: ["dashboard-published-periods"] });
         qc.invalidateQueries({ queryKey: ["dashboard-shift-cards"] });
+        qc.invalidateQueries({ queryKey: ["branch-period-shifts"] });
+        qc.invalidateQueries({ queryKey: ["dept-schedule-flags"] });
+        qc.invalidateQueries({ queryKey: ["schedules-branch-saved"] });
         qc.invalidateQueries({ queryKey: ["schedules-week-saved"] });
       })
       .on("postgres_changes", { event: "*", schema: "public", table: "shift_definitions" }, () => {

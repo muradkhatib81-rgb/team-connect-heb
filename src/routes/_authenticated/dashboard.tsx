@@ -74,7 +74,7 @@ import { useLeaveAccess } from "@/lib/leave-permissions";
 import { LEAVE_STATUS_LABEL } from "@/lib/leave.functions";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { EmployeeOfMonthSection } from "@/components/employee-of-month-section";
-import { DailyScheduleOverview } from "@/components/daily-schedule-overview";
+import { DailySchedulePeriodCards } from "@/components/daily-schedule-period-cards";
 import { DepartmentColleaguesCard } from "@/components/department-colleagues-card";
 import { formatHeDateTime } from "@/lib/date-format";
 import {
@@ -92,7 +92,6 @@ import { ProfilePhoneField } from "@/components/contact-actions";
 import { CustodyDashboardSection } from "@/components/custody-dashboard-section";
 import { MorningBoard } from "@/components/morning-board";
 import { LiveShiftCardsSection } from "@/components/live-shift-cards";
-import { usePlatformNow } from "@/lib/platform-time";
 import {
   BREAK_PENDING_APPROVAL_STATUSES,
   BREAK_PRE_ACTIVE_STATUSES,
@@ -127,9 +126,6 @@ const MSG_RECIPIENTS_SELECT = "message_id, delivered_at, message:messages(id, ti
 function DashboardPage() {
   const { t } = useTranslation();
   const { data: profile } = useAuth();
-  const { dateISO: todayIso } = usePlatformNow();
-  const [shiftCardsDay, setShiftCardsDay] = useState<string | null>(null);
-  const shiftCardsDate = shiftCardsDay ?? todayIso;
   const { activeBranchId } = useActiveBranch();
   const admin = profile ? isAdmin(profile.roles) : false;
   const isDeptManager = profile ? profile.roles.includes("department_manager") : false;
@@ -361,11 +357,11 @@ function DashboardPage() {
 
       <EmployeeOfMonthSection />
 
-      <LiveShiftCardsSection dateISO={shiftCardsDate} />
+      <LiveShiftCardsSection />
+
+      <DashboardSchedulePanel profile={profile} />
 
       {showSchedulesStatsSection && <SchedulesStatsSection profile={profile} />}
-
-      <DashboardSchedulePanel profile={profile} onScheduleDayChange={setShiftCardsDay} />
 
       {admin || isDeptManager ? (
         <>
@@ -1619,13 +1615,7 @@ function StatCard({
   );
 }
 
-function DashboardSchedulePanel({
-  profile,
-  onScheduleDayChange,
-}: {
-  profile: any;
-  onScheduleDayChange?: (day: string) => void;
-}) {
+function DashboardSchedulePanel({ profile }: { profile: any }) {
   const needsLoadedPerms = scheduleScopeNeedsLoadedPermissions(profile.roles);
 
   const permsQ = useQuery({
@@ -1675,12 +1665,9 @@ function DashboardSchedulePanel({
 
   if (!permsReady || (isDeptHeadOnly && managedDeptQ.isLoading)) {
     return (
-      <section className="space-y-4">
-        <DashboardScheduleHeader />
-        <div className="flex justify-center py-8">
-          <Loader2 className="size-6 animate-spin text-primary" />
-        </div>
-      </section>
+      <div className="flex justify-center py-8">
+        <Loader2 className="size-6 animate-spin text-primary" />
+      </div>
     );
   }
 
@@ -1692,38 +1679,22 @@ function DashboardSchedulePanel({
 
   if (scope.kind === "none") return null;
 
-  const overview =
+  const periodCards =
     scope.kind === "branch" ? (
-      <DailyScheduleOverview scope="branch" selfUserId={profile.id} onSelectedDayChange={onScheduleDayChange} />
+      <DailySchedulePeriodCards scope="branch" selfUserId={profile.id} />
     ) : (
-      <DailyScheduleOverview
+      <DailySchedulePeriodCards
         scope="department"
         departmentId={scope.departmentId}
         selfUserId={profile.id}
         useCoworkersView={scope.useCoworkersView}
-        onSelectedDayChange={onScheduleDayChange}
       />
     );
 
   return (
-    <section className="space-y-4">
-      <DashboardScheduleHeader />
-      {overview}
+    <section className="space-y-3">
+      {periodCards}
     </section>
-  );
-}
-
-function DashboardScheduleHeader() {
-  return (
-    <div className="flex items-center justify-between">
-      <h2 className="text-lg font-semibold flex items-center gap-2">
-        <CalendarDays className="size-5 text-primary" />
-        {i18n.t("dashboard.schedulesTitle")}
-      </h2>
-      <Link to="/schedules" className="text-sm text-primary hover:underline">
-        {i18n.t("dashboard.toSchedules")}
-      </Link>
-    </div>
   );
 }
 

@@ -63,6 +63,7 @@ import {
   getScheduleShiftsForViewer,
   getDepartmentWeekScheduleFlags,
   getBranchPeriodScheduleShifts,
+  getBranchSavedSchedulesAwaitingPublish,
   copyPreviousWeek,
   deleteSchedule,
   publishAllWeekSchedules,
@@ -101,6 +102,7 @@ import {
   getConfiguredWeekDows,
   getPeriodEnd,
   getPeriodStart,
+  getReferencePeriodStart,
   DEFAULT_PERIOD_CONFIG,
   shiftPeriodStart,
   getCurrentPeriodStart,
@@ -248,13 +250,14 @@ function SchedulePersonMetaRow({
   );
 }
 
+/** Maps a calendar date to the schedule period to open (skips ended periods on gap days). */
 function getPeriodStartFromDate(date: Date, config: BranchPeriodConfig): string {
   const refIso = new Date(
     Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()),
   )
     .toISOString()
     .slice(0, 10);
-  return getPeriodStart(refIso, config);
+  return getReferencePeriodStart(refIso, config);
 }
 
 function buildDaysBetween(startIso: string, endIso: string): string[] {
@@ -426,8 +429,9 @@ function SchedulesPage() {
 
   const initialWeekSetRef = useRef(!!search.week);
 
-  // On page entry default to the current schedule period (unless URL specifies ?week=).
-  // Re-normalizing a Sat-based placeholder with Sun–Fri config was jumping to an old week.
+  // On page entry default to the current/upcoming schedule period (unless URL specifies ?week=).
+  // Use getReferencePeriodStart so gap days (e.g. Saturday after a Sun–Fri period) open the next week,
+  // not the week that already ended.
   useEffect(() => {
     if (meLoading || !periodConfigQ.isSuccess) return;
 
@@ -437,7 +441,7 @@ function SchedulesPage() {
     }
 
     if (initialWeekSetRef.current) return;
-    setWeekStart(getPeriodStartFromDate(new Date(), periodConfig));
+    setWeekStart(getCurrentPeriodStart(periodConfig));
     initialWeekSetRef.current = true;
   }, [
     meLoading,
@@ -492,20 +496,37 @@ function SchedulesPage() {
   });
   const weekSchedulesQ = useQuery({
     enabled: !!me?.id && view === "editor",
-    queryKey: ["week-schedules", periodWeekStart, me?.id],
+    queryKey: ["week-schedules", periodWeekStart, me?.id, periodConfig.schedule_type, periodConfig.week_start_dow],
     queryFn: async () => {
       const rows = await getSchedulesFn({ data: { week_start: periodWeekStart } });
-      return (rows ?? []).map((row: any) => ({
-        id: row.id,
-        department_id: row.department_id,
-        status: row.status,
-        published_at: row.published_at,
-      }));
+      return (rows ?? [])
+        .filter((row: any) => {
+          const ws = row.week_start as string | undefined;
+          if (!ws) return true;
+          return getPeriodStart(ws, periodConfig) === periodWeekStart;
+        })
+        .map((row: any) => ({
+          id: row.id,
+          department_id: row.department_id,
+          status: row.status,
+          published_at: row.published_at,
+          week_start: row.week_start as string | undefined,
+        }));
     },
   });
 
   const deptsWithSchedule = useMemo(
     () => new Set((weekSchedulesQ.data ?? []).map((s) => s.department_id)),
+    [weekSchedulesQ.data],
+  );
+
+  const publishedDeptSet = useMemo(
+    () =>
+      new Set(
+        (weekSchedulesQ.data ?? [])
+          .filter((s) => s.status === "approved" && !!s.published_at)
+          .map((s) => s.department_id),
+      ),
     [weekSchedulesQ.data],
   );
 
@@ -536,8 +557,9 @@ function SchedulesPage() {
       const { data: scheds, error } = await supabase
         .from("schedules")
         .select("id, department_id, status, published_at, updated_at, submitted_at, created_by, week_start, week_end")
-        .lte("week_start", periodWeekEnd)
-        .gte("week_end", periodWeekStart);
+        .or(
+          `and(week_start.lte.${periodWeekEnd},week_end.gte.${periodWeekStart}),and(week_start.gte.${periodWeekStart},week_start.lte.${periodWeekEnd},week_end.is.null)`,
+        );
       if (error) throw error;
       const periodScheds = (scheds ?? []).filter(
         (s: { week_start: string; week_end?: string | null }) =>
@@ -586,6 +608,7 @@ function SchedulesPage() {
     },
   });
 
+  const getBranchSavedFn = useServerFn(getBranchSavedSchedulesAwaitingPublish);
   const branchSavedSchedulesQ = useQuery({
     enabled:
       !!scheduleViewerCaps &&
@@ -594,32 +617,7 @@ function SchedulesPage() {
     queryKey: ["schedules-branch-saved", me?.id],
     queryFn: async () => {
       try {
-        const { data: scheds, error } = await supabase
-          .from("schedules")
-          .select(
-            "id, department_id, week_start, week_end, status, published_at, updated_at, created_by",
-          )
-          .order("week_start", { ascending: false });
-        if (error) throw error;
-        if (!scheds?.length) return { savedList: [] as SavedScheduleListItem[] };
-        const visibleScheds =
-          scheduleViewerCaps == null
-            ? (scheds as any[])
-            : (scheds as any[]).filter((s) =>
-                canViewScheduleContent(s, scheduleViewerCaps, managedDeptIds),
-              );
-        const savedList: SavedScheduleListItem[] = visibleScheds
-          .filter((s) => isSavedScheduleAwaitingPublish(s))
-          .map((s) => ({
-            schedule_id: s.id,
-            department_id: s.department_id,
-            week_start: s.week_start,
-            week_end: s.week_end,
-            status: s.status,
-            published_at: s.published_at ?? null,
-            updated_at: s.updated_at ?? null,
-          }));
-        return { savedList };
+        return await getBranchSavedFn();
       } catch (err) {
         console.error("[schedules-branch-saved]", err);
         return { savedList: [] as SavedScheduleListItem[] };
@@ -627,21 +625,63 @@ function SchedulesPage() {
     },
   });
 
-  const branchSavedList = branchSavedSchedulesQ.data?.savedList ?? [];
+  const branchSavedList = useMemo(() => {
+    const byId = new Map<string, SavedScheduleListItem>();
+    for (const s of branchSavedSchedulesQ.data?.savedList ?? []) {
+      byId.set(s.schedule_id, s);
+    }
+    // Client-visible drafts for the open period — fills gaps if the branch query fails/lags.
+    for (const s of weekSavedQ.data?.savedList ?? []) {
+      if (byId.has(s.schedule_id)) continue;
+      byId.set(s.schedule_id, {
+        schedule_id: s.schedule_id,
+        department_id: s.department_id,
+        week_start: periodWeekStart,
+        week_end: periodWeekEnd,
+        status: s.status,
+        published_at: s.published_at,
+        updated_at: s.updated_at,
+      });
+    }
+    return Array.from(byId.values()).sort((a, b) =>
+      b.week_start.localeCompare(a.week_start),
+    );
+  }, [
+    branchSavedSchedulesQ.data?.savedList,
+    weekSavedQ.data?.savedList,
+    periodWeekStart,
+    periodWeekEnd,
+  ]);
+
   const branchSavedPeriodGroups = useMemo(
     () => groupSchedulesByPeriod(branchSavedList),
     [branchSavedList],
   );
 
-  const savedDeptSet = useMemo(
-    () => new Set(weekSavedQ.data?.deptIdsWithSaved ?? []),
-    [weekSavedQ.data],
+  const savedDeptSet = useMemo(() => {
+    const ids = new Set(weekSavedQ.data?.deptIdsWithSaved ?? []);
+    for (const s of branchSavedList) {
+      const periodStart = getPeriodStart(s.week_start, periodConfig);
+      if (periodStart === periodWeekStart || s.week_start === periodWeekStart) {
+        ids.add(s.department_id);
+      }
+    }
+    return ids;
+  }, [weekSavedQ.data?.deptIdsWithSaved, branchSavedList, periodWeekStart, periodConfig]);
+
+  /** Departments still free for a brand-new draft this period. */
+  const deptsPendingSchedule = useMemo(
+    () =>
+      (deptsQ.data ?? []).filter(
+        (d) => !savedDeptSet.has(d.id) && !deptsWithSchedule.has(d.id),
+      ),
+    [deptsQ.data, savedDeptSet, deptsWithSchedule],
   );
 
-  /** Departments with no saved schedule shifts yet for this week (includes none created). */
-  const deptsPendingSchedule = useMemo(
-    () => (deptsQ.data ?? []).filter((d) => !savedDeptSet.has(d.id)),
-    [deptsQ.data, savedDeptSet],
+  /** Depts with a saved (unpublished) schedule this period — reopen from switcher. */
+  const deptsWithSavedSchedule = useMemo(
+    () => (deptsQ.data ?? []).filter((d) => savedDeptSet.has(d.id) && d.id !== selectedDept),
+    [deptsQ.data, savedDeptSet, selectedDept],
   );
 
   const switchableDepts = useMemo(
@@ -745,7 +785,8 @@ function SchedulesPage() {
       deptWeekFlagsFn({
         data: { department_id: selectedDept!, week_start: periodWeekStart },
       }),
-    staleTime: 30_000,
+    staleTime: 15_000,
+    refetchOnMount: "always",
   });
 
   /** Published id for the navigated period — server flags already matched the period. */
@@ -754,7 +795,7 @@ function SchedulesPage() {
     return (deptWeekFlagsQ.data.publishedScheduleId as string | null | undefined) ?? null;
   }, [deptWeekFlagsQ.data?.hasPublished, deptWeekFlagsQ.data?.publishedScheduleId]);
 
-  // Schedule for selected dept+week
+  // Prefer an explicit schedule id; only auto-open published when it belongs to this period.
   const schedQ = useQuery({
     enabled: !!selectedDept && !!me?.id && view === "editor" && !deptWeekFlagsQ.isLoading,
     queryKey: [
@@ -774,7 +815,22 @@ function SchedulesPage() {
           ...(scheduleId ? { schedule_id: scheduleId } : {}),
         },
       });
-      return (rows ?? [])[0] ?? null;
+      const row = (rows ?? [])[0] ?? null;
+      if (!row) return null;
+      // Guard: never bind a published row from another period when navigating weeks.
+      if (
+        !focusedScheduleId &&
+        getPeriodStart(row.week_start as string, periodConfig) !== periodWeekStart
+      ) {
+        const periodRows = await getSchedulesFn({
+          data: {
+            week_start: periodWeekStart,
+            department_id: selectedDept!,
+          },
+        });
+        return (periodRows ?? [])[0] ?? null;
+      }
+      return row;
     },
   });
 
@@ -813,6 +869,12 @@ function SchedulesPage() {
       .on("postgres_changes", { event: "*", schema: "public", table: "schedules" }, () => {
         qc.invalidateQueries({ queryKey: ["dept-schedule-flags", selectedDept, periodWeekStart] });
         qc.invalidateQueries({ queryKey: ["schedule", selectedDept, periodWeekStart] });
+        qc.invalidateQueries({ queryKey: ["schedules-branch-saved"] });
+      })
+      .on("postgres_changes", { event: "*", schema: "public", table: "schedule_shifts" }, () => {
+        qc.invalidateQueries({ queryKey: ["dept-schedule-flags", selectedDept, periodWeekStart] });
+        qc.invalidateQueries({ queryKey: ["schedules-branch-saved"] });
+        qc.invalidateQueries({ queryKey: ["schedules-week-saved"] });
       })
       .subscribe();
     return () => {
@@ -964,10 +1026,14 @@ function SchedulesPage() {
     if (!s || !scheduleViewerCaps) return null;
     const schedulePeriodStart = getPeriodStart(s.week_start as string, periodConfig);
     const periodMatches = schedulePeriodStart === periodWeekStart;
-    const openedById = !!focusedScheduleId && s.id === focusedScheduleId;
-    const openedPublishedForPeriod =
-      !!publishedIdForPeriod && s.id === publishedIdForPeriod;
-    if (!periodMatches && !openedById && !openedPublishedForPeriod) return null;
+    // Opening by id is allowed only while still on that schedule's period
+    // (or an explicit deep-link). Never show another week's published row here.
+    const openedById =
+      !!focusedScheduleId &&
+      s.id === focusedScheduleId &&
+      (periodMatches ||
+        getPeriodStart((s.week_start as string) ?? "", periodConfig) === periodWeekStart);
+    if (!periodMatches && !openedById) return null;
     if (!canViewScheduleContent(s, scheduleViewerCaps, managedDeptIds)) return null;
     return s;
   }, [
@@ -977,7 +1043,6 @@ function SchedulesPage() {
     periodWeekStart,
     periodConfig,
     focusedScheduleId,
-    publishedIdForPeriod,
   ]);
 
   const latestPublishedScheduleIdQ = useQuery({
@@ -1277,7 +1342,10 @@ function SchedulesPage() {
         throw new Error(i18n.t("schedules.publishedScheduleExists"));
       }
       if (isDeptHeadOnly) {
-        if (deptWeekFlagsQ.data?.hasManagerSavedAwaitingPublish) {
+        if (
+          deptWeekFlagsQ.data?.hasManagerSavedAwaitingPublish ||
+          deptWeekFlagsQ.data?.hasSavedAwaitingPublish
+        ) {
           throw new Error(i18n.t("schedules.managerSavedBlocksCreate"));
         }
         if (deptWeekFlagsQ.data?.hasDeptHeadPendingApproval) {
@@ -1314,6 +1382,7 @@ function SchedulesPage() {
       qc.invalidateQueries({ queryKey: ["schedule-decision"] });
       qc.invalidateQueries({ queryKey: ["dashboard-schedules"] });
       qc.invalidateQueries({ queryKey: ["schedules-week-saved", weekStart] });
+      qc.invalidateQueries({ queryKey: ["schedules-branch-saved"] });
       qc.invalidateQueries({ queryKey: ["week-schedules"] });
       qc.invalidateQueries({ queryKey: ["daily-schedule-overview"] });
       qc.invalidateQueries({ queryKey: ["dept-schedule-flags"] });
@@ -1341,6 +1410,7 @@ function SchedulesPage() {
       qc.invalidateQueries({ queryKey: ["week-schedules"] });
       qc.invalidateQueries({ queryKey: ["dashboard-approved-list"] });
       qc.invalidateQueries({ queryKey: ["schedules-week-saved", weekStart] });
+      qc.invalidateQueries({ queryKey: ["schedules-branch-saved"] });
       qc.invalidateQueries({ queryKey: ["daily-schedule-overview"] });
       qc.invalidateQueries({ queryKey: ["dept-schedule-flags"] });
     },
@@ -1688,20 +1758,21 @@ function SchedulesPage() {
     (visible.status === "draft" || visible.status === "rejected") &&
     !isMainAdmin &&
     !isBranchManager &&
+    !isBranchMgr &&
     !canEdit &&
+    !canCreate &&
+    !canPublishDirect &&
     visible.created_by !== me?.id;
 
-  const hasPublishedForPeriod = !!deptWeekFlagsQ.data?.hasPublished;
-  const hasSavedForPeriod = !!deptWeekFlagsQ.data?.hasSavedAwaitingPublish;
   const hasManagerSavedForPeriod = !!deptWeekFlagsQ.data?.hasManagerSavedAwaitingPublish;
+  const hasSavedForPeriod = !!deptWeekFlagsQ.data?.hasSavedAwaitingPublish;
   const hasDeptHeadPendingForPeriod = !!deptWeekFlagsQ.data?.hasDeptHeadPendingApproval;
+  const hasPublishedForPeriod = !!deptWeekFlagsQ.data?.hasPublished;
   const openingExistingSchedule = !!focusedScheduleId;
 
   const viewingPeriodSchedule =
     !!visible &&
-    (getPeriodStart(visible.week_start as string, periodConfig) === periodWeekStart ||
-      (!!focusedScheduleId && visible.id === focusedScheduleId) ||
-      (!!publishedIdForPeriod && visible.id === publishedIdForPeriod));
+    getPeriodStart(visible.week_start as string, periodConfig) === periodWeekStart;
 
   const viewingPublishedSchedule =
     !!visible &&
@@ -1720,12 +1791,13 @@ function SchedulesPage() {
     viewingPeriodSchedule &&
     isSavedScheduleAwaitingPublish(visible as { status: string; published_at: string | null });
 
+  /** Manager/deputy saved a schedule for this dept+week — dept head must wait for publish. */
   const managerSavedDraftBlocksMe =
-    hasManagerSavedForPeriod &&
     isDeptHeadOnly &&
     !hasPublishedForPeriod &&
     !viewingSavedSchedule &&
-    !openingExistingSchedule;
+    !openingExistingSchedule &&
+    (hasManagerSavedForPeriod || (hasSavedForPeriod && !visible));
 
   const deptHeadAwaitingApproval =
     hasDeptHeadPendingForPeriod &&
@@ -1781,14 +1853,20 @@ function SchedulesPage() {
     !isEmployee &&
     !isDraftLockedForMe &&
     (((visible.status === "draft" || visible.status === "rejected") &&
-      (isMainAdmin || isBranchManager || canEdit || visible.created_by === me?.id))
+      (isMainAdmin ||
+        isBranchMgr ||
+        isBranchManager ||
+        canEdit ||
+        canCreate ||
+        canPublishDirect ||
+        visible.created_by === me?.id))
       || (visible.status === "approved" &&
         !visible.published_at &&
-        (isMainAdmin || isBranchManager || canEdit || canCreate || canPublishDirect))
+        (isMainAdmin || isBranchManager || isBranchMgr || canEdit || canCreate || canPublishDirect))
       || (visible.status === "approved" &&
         !!visible.published_at &&
         !isDeptHeadOnly &&
-        (isMainAdmin || isBranchManager || canEdit || canCreate || canPublishDirect))
+        (isMainAdmin || isBranchManager || isBranchMgr || canEdit || canCreate || canPublishDirect))
       || (visible.status === "pending_approval" &&
         (isMainAdmin || canApprove || canPublishDirect || canEdit || canCreate) &&
         !isDeptHeadOnly));
@@ -1803,12 +1881,20 @@ function SchedulesPage() {
     canApprove &&
     visible.created_by !== me?.id;
 
+  /** Publish on approved-unpublished rows. Drafts use canShowDraftPublishOrSubmit. */
   const canShowPublish =
     !!visible &&
+    viewingPeriodSchedule &&
     !isSupersededPublished &&
+    canPublishDirect &&
     visible.status === "approved" &&
-    !visible.published_at &&
-    canPublishDirect;
+    !visible.published_at;
+
+  /** Draft/rejected: publishers see explicit publish; others send for approval. */
+  const canShowDraftPublishOrSubmit =
+    editable &&
+    viewingPeriodSchedule &&
+    (visible.status === "draft" || visible.status === "rejected");
 
   const autoSaveMut = useMutation({
     mutationFn: () =>
@@ -1972,7 +2058,11 @@ function SchedulesPage() {
               ? i18n.t("schedules.subtitleApproved")
               : view === "saved"
               ? i18n.t("schedules.subtitleSaved")
-              : `${formatHeDate(displayWeekStart)} – ${formatHeDate(displayWeekEnd)}`}
+              : (
+                <span className="font-medium text-destructive tabular-nums">
+                  {formatHeDate(displayWeekStart)} – {formatHeDate(displayWeekEnd)}
+                </span>
+              )}
 
           </p>
         </div>
@@ -2450,15 +2540,20 @@ function SchedulesPage() {
                 <div className="p-3 border-b">
                   <p className="text-xs text-muted-foreground">מחלקה נוכחית</p>
                   <p className="font-medium">{deptsQ.data?.find((d) => d.id === selectedDept)?.name ?? "—"}</p>
+                  {savedDeptSet.has(selectedDept ?? "") && (
+                    <Badge variant="secondary" className="mt-1 text-xs">
+                      {i18n.t("schedules.tabSaved")}
+                    </Badge>
+                  )}
                 </div>
                 <div className="p-2">
-                  <p className="text-xs text-muted-foreground px-2 py-1">מחלקות ללא סידור שמור לשבוע זה</p>
+                  <p className="text-xs text-muted-foreground px-2 py-1">מחלקות ללא סידור לשבוע זה</p>
                   {switchableDepts.length === 0 ? (
                     <p className="text-sm text-muted-foreground px-2 py-3 text-center">
-                      כל שאר המחלקות כבר קיים להן סידור שמור.
+                      אין מחלקות פנויות ליצירת סידור חדש.
                     </p>
                   ) : (
-                    <ul className="max-h-56 overflow-auto">
+                    <ul className="max-h-40 overflow-auto">
                       {switchableDepts.map((d) => (
                         <li key={d.id}>
                           <button
@@ -2468,7 +2563,7 @@ function SchedulesPage() {
                           >
                             <span className="font-medium">{d.name}</span>
                             <Badge variant="outline" className="text-xs shrink-0">
-                              {deptsWithSchedule.has(d.id) ? i18n.t("schedules.draftLabel") : i18n.t("schedules.noScheduleShort")}
+                              {i18n.t("schedules.noScheduleShort")}
                             </Badge>
                           </button>
                         </li>
@@ -2476,6 +2571,49 @@ function SchedulesPage() {
                     </ul>
                   )}
                 </div>
+                {deptsWithSavedSchedule.length > 0 && (
+                  <div className="p-2 border-t">
+                    <p className="text-xs text-muted-foreground px-2 py-1">סידורים שמורים לשבוע זה</p>
+                    <ul className="max-h-40 overflow-auto">
+                      {deptsWithSavedSchedule.map((d) => (
+                        <li key={d.id}>
+                          <button
+                            type="button"
+                            className="w-full text-right px-3 py-2.5 rounded-md hover:bg-accent transition-colors flex items-center justify-between gap-2"
+                            onClick={() => {
+                              const fromWeek = weekSavedQ.data?.savedList?.find(
+                                (s) => s.department_id === d.id,
+                              );
+                              const fromBranch = branchSavedList.find(
+                                (s) =>
+                                  s.department_id === d.id &&
+                                  (getPeriodStart(s.week_start, periodConfig) ===
+                                    periodWeekStart ||
+                                    s.week_start === periodWeekStart),
+                              );
+                              const scheduleId =
+                                fromWeek?.schedule_id ?? fromBranch?.schedule_id;
+                              if (scheduleId) {
+                                openScheduleFromPending({
+                                  department_id: d.id,
+                                  week_start: fromBranch?.week_start ?? periodWeekStart,
+                                  schedule_id: scheduleId,
+                                });
+                                return;
+                              }
+                              selectDepartment(d.id);
+                            }}
+                          >
+                            <span className="font-medium">{d.name}</span>
+                            <Badge variant="secondary" className="text-xs shrink-0">
+                              {i18n.t("schedules.statusDraft")}
+                            </Badge>
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
               </PopoverContent>
             </Popover>
           ) : schedQ.data ? (
@@ -2485,22 +2623,53 @@ function SchedulesPage() {
           ) : (
             <Select
               value={selectedDept ?? undefined}
-              onValueChange={(v) => selectDepartment(v)}
+              onValueChange={(v) => {
+                const fromWeek = weekSavedQ.data?.savedList?.find(
+                  (s) => s.department_id === v,
+                );
+                const fromBranch = branchSavedList.find(
+                  (s) =>
+                    s.department_id === v &&
+                    (getPeriodStart(s.week_start, periodConfig) === periodWeekStart ||
+                      s.week_start === periodWeekStart),
+                );
+                const scheduleId = fromWeek?.schedule_id ?? fromBranch?.schedule_id;
+                if (scheduleId) {
+                  openScheduleFromPending({
+                    department_id: v,
+                    week_start: fromBranch?.week_start ?? periodWeekStart,
+                    schedule_id: scheduleId,
+                  });
+                  return;
+                }
+                selectDepartment(v);
+              }}
             >
               <SelectTrigger>
                 <SelectValue placeholder={i18n.t("schedules.selectDept")} />
               </SelectTrigger>
               <SelectContent>
-                {(deptsQ.data ?? [])
-                  .filter(
-                    (d) =>
-                      d.id === selectedDept || (!savedDeptSet.has(d.id) && !deptsWithSchedule.has(d.id)),
-                  )
-                  .map((d) => (
+                {(deptsQ.data ?? []).map((d) => {
+                  const isSaved = savedDeptSet.has(d.id);
+                  const isPublished = publishedDeptSet.has(d.id);
+                  return (
                     <SelectItem key={d.id} value={d.id}>
-                      {d.name}
+                      <span className="flex items-center gap-2">
+                        {d.name}
+                        {isSaved && (
+                          <Badge variant="secondary" className="text-[10px]">
+                            {i18n.t("schedules.statusDraft")}
+                          </Badge>
+                        )}
+                        {!isSaved && isPublished && (
+                          <Badge variant="outline" className="text-[10px]">
+                            {i18n.t("schedules.statusApproved")}
+                          </Badge>
+                        )}
+                      </span>
                     </SelectItem>
-                  ))}
+                  );
+                })}
               </SelectContent>
             </Select>
           )}
@@ -2563,22 +2732,22 @@ function SchedulesPage() {
               </p>
               <p>{i18n.t("schedules.managerSavedBlocksCreateHint")}</p>
               <p>
-                נשמר על־ידי:{" "}
+                {i18n.t("schedules.createdBy")}{" "}
                 <span className="font-medium">
                   {blockedCreatorQ.isLoading
-                    ? "נטען..."
-                    : (blockedCreatorQ.data ?? "לא ידוע")}
+                    ? i18n.t("schedules.loading")
+                    : (blockedCreatorQ.data ?? i18n.t("schedules.unknown"))}
                 </span>
               </p>
               <p>
-                נשמר בתאריך:{" "}
+                {i18n.t("schedules.colUpdated")}:{" "}
                 <span className="font-medium" dir="ltr">
-                  {blockedSavedAt ? formatHeDateTime(blockedSavedAt) : "לא ידוע"}
+                  {blockedSavedAt ? formatHeDateTime(blockedSavedAt) : i18n.t("schedules.unknown")}
                 </span>
               </p>
               {blockedAwaitingStatus && (
                 <p>
-                  סטטוס:{" "}
+                  {i18n.t("schedules.colStatus")}:{" "}
                   <span className="font-medium">
                     {getStatusLabel(blockedAwaitingStatus ?? "")}
                   </span>
@@ -2746,7 +2915,11 @@ function SchedulesPage() {
             </Card>
           ) : (
             <>
-          {(visible.status === "rejected" || visible.status === "approved") && (
+          {(visible.status === "rejected" ||
+            (viewingPublishedSchedule && viewingPeriodSchedule) ||
+            (visible.status === "approved" &&
+              !visible.published_at &&
+              viewingPeriodSchedule)) && (
             <Card
               className={`card-elevated p-4 ${
                 visible.status === "rejected"
@@ -2831,7 +3004,7 @@ function SchedulesPage() {
                   <div key={day.day} className="rounded-lg border bg-background/60 p-3">
                     <div className="flex items-center justify-between gap-2 mb-2">
                       <p className="font-semibold text-sm">יום {day.label}</p>
-                      <p className="text-xs text-muted-foreground">{formatHeDate(day.day)}</p>
+                      <p className="text-xs font-medium text-destructive tabular-nums">{formatHeDate(day.day)}</p>
                     </div>
                     <div className="flex flex-wrap gap-2">
                       {day.counts.map((s) => (
@@ -2872,7 +3045,7 @@ function SchedulesPage() {
                 שמור שינויים
               </Button>
             )}
-            {editable && visible.status !== "approved" && visible.status !== "pending_approval" && (
+            {canShowDraftPublishOrSubmit && (
               <>
                 {canSaveScheduleDraft && (
                   <Button onClick={() => saveMut.mutate()} disabled={saveMut.isPending} size="sm">
@@ -2948,7 +3121,7 @@ function SchedulesPage() {
                     return (
                       <th key={d} className="p-2 text-center min-w-[110px] align-top">
                         <div className="font-semibold">{scheduleDayLabelForDate(d, "short")}</div>
-                        <div className="text-xs text-muted-foreground">{formatHeDate(d)}</div>
+                        <div className="text-xs font-medium text-destructive tabular-nums">{formatHeDate(d)}</div>
                         {dayCounts.length > 0 && (
                           <div className="mt-1 flex flex-wrap gap-1 justify-center">
                             {dayCounts.map((s) => (
