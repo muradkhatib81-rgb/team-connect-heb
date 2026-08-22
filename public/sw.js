@@ -49,34 +49,17 @@ self.addEventListener("push", (event) => {
   const vibrate = Array.isArray(data.vibrate) ? data.vibrate : [300, 100, 300, 100, 500];
 
   event.waitUntil(
-    (async () => {
-      // OS notification (rings when app is in background).
-      await self.registration.showNotification(title, {
-        body,
-        tag,
-        data: { url },
-        icon: "/icons/icon-192.png",
-        badge: "/icons/icon-192.png",
-        vibrate,
-        silent: false,
-        renotify: true,
-        requireInteraction: false,
-      });
-
-      // When a tab is open/focused, Chrome often suppresses OS sound —
-      // ask open clients to play a short in-app tone (same as feeling "ring").
-      const windowClients = await self.clients.matchAll({
-        type: "window",
-        includeUncontrolled: true,
-      });
-      for (const client of windowClients) {
-        try {
-          client.postMessage({ type: "PLAY_ALERT", title, body });
-        } catch {
-          /* ignore */
-        }
-      }
-    })(),
+    self.registration.showNotification(title, {
+      body,
+      tag,
+      data: { url },
+      icon: "/icons/icon-192.png",
+      badge: "/icons/icon-192.png",
+      vibrate,
+      silent: false,
+      renotify: true,
+      requireInteraction: false,
+    }),
   );
 });
 

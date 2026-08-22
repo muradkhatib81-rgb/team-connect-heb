@@ -877,6 +877,8 @@ function SchedulesPage() {
       })
       .on("postgres_changes", { event: "*", schema: "public", table: "schedule_shifts" }, () => {
         qc.invalidateQueries({ queryKey: ["dept-schedule-flags", selectedDept, periodWeekStart] });
+        qc.invalidateQueries({ queryKey: ["schedule", selectedDept, periodWeekStart] });
+        qc.invalidateQueries({ queryKey: ["schedule-shifts"] });
         qc.invalidateQueries({ queryKey: ["schedules-branch-saved"] });
         qc.invalidateQueries({ queryKey: ["schedules-week-saved"] });
       })

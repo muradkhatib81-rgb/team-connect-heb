@@ -878,7 +878,7 @@ function RealtimeBridge({ uid }: { uid: string }) {
     let notifBumpTimer: ReturnType<typeof setTimeout> | null = null;
     const bumpScheduleQueries = () => {
       if (scheduleBumpTimer) clearTimeout(scheduleBumpTimer);
-      // Publish/save can fire dozens of row events; coalesce into one refetch wave.
+      // Tiny coalesce only — keep edits feeling realtime (was 500ms and felt laggy).
       scheduleBumpTimer = setTimeout(() => {
         qc.invalidateQueries({ queryKey: ["schedule"] });
         qc.invalidateQueries({ queryKey: ["schedules-pending"] });
@@ -896,7 +896,7 @@ function RealtimeBridge({ uid }: { uid: string }) {
         qc.invalidateQueries({ queryKey: ["schedules-week-saved"] });
         qc.invalidateQueries({ queryKey: ["dashboard-dept-states"] });
         qc.invalidateQueries({ queryKey: ["schedule-shifts"] });
-      }, 500);
+      }, 50);
     };
 
     const ch = supabase
@@ -1059,18 +1059,13 @@ function RealtimeBridge({ uid }: { uid: string }) {
           table: "schedule_notifications",
           filter: `user_id=eq.${uid}`,
         },
-        (payload) => {
+        () => {
           // Debounce — one schedule publish can insert dozens of rows; don't refetch per row.
           if (notifBumpTimer) clearTimeout(notifBumpTimer);
           notifBumpTimer = setTimeout(() => {
             qc.invalidateQueries({ queryKey: ["notif", "schedule"] });
             qc.invalidateQueries({ queryKey: ["emp-dash-notif"] });
           }, 400);
-
-          if ((payload as { eventType?: string })?.eventType === "INSERT") {
-            // App-open fallback when OS push sound is suppressed.
-            void import("@/lib/alert-tone").then(({ playAlertTone }) => playAlertTone());
-          }
         },
       )
       .on("postgres_changes", { event: "*", schema: "public", table: "company_settings" }, () =>
