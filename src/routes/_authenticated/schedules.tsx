@@ -2977,7 +2977,7 @@ function SchedulesPage() {
                   })}
                 </tr>
               </thead>
-              <tbody>
+              <tbody className="[&>tr:first-child]:border-t-0">
                 {(empsQ.data ?? []).length === 0 && (
                   <tr>
                     <td colSpan={8} className="p-6 text-center text-muted-foreground">
@@ -2985,12 +2985,19 @@ function SchedulesPage() {
                     </td>
                   </tr>
                 )}
-                {(empsQ.data ?? []).map((emp) => (
+                {(empsQ.data ?? []).map((emp, rowIdx) => {
+                  const rowMuted = rowIdx % 2 === 1;
+                  const rowBg = emp.excluded_from_schedule
+                    ? "bg-muted/50"
+                    : rowMuted
+                      ? "bg-muted/40"
+                      : "bg-background";
+                  return (
                   <tr
                     key={emp.id}
-                    className={`border-t ${emp.excluded_from_schedule ? "bg-muted/20" : ""}`}
+                    className={`border-t-[3px] border-muted-foreground/30 [&_td]:py-3.5 ${rowBg}`}
                   >
-                    <td className="p-3 sticky right-0 bg-card font-medium z-[1]">
+                    <td className={`px-3 py-4 sticky right-0 font-medium z-[1] shadow-[inset_-1px_0_0_0_hsl(var(--border))] ${rowBg}`}>
                       <div className="flex items-center gap-2 justify-end min-w-0">
                         <span className="min-w-0 truncate">{emp.full_name}</span>
                         {emp.excluded_from_schedule && (
@@ -3235,7 +3242,8 @@ function SchedulesPage() {
                       );
                     })}
                   </tr>
-                ))}
+                  );
+                })}
               </tbody>
             </table>
           </Card>

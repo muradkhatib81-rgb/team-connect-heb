@@ -648,8 +648,8 @@ export function DailyScheduleOverview({
             </div>
           )}
 
-          <div className="divide-y border-t max-h-[min(60vh,520px)] overflow-y-auto">
-            {departments.map((dept) => {
+          <div className="divide-y-[3px] divide-muted-foreground/30 border-t-2 border-muted-foreground/25 max-h-[min(60vh,520px)] overflow-y-auto">
+            {departments.map((dept, deptIdx) => {
               const deptKey = dept.overviewKey ?? dept.id;
               const counts = deptCounts[deptKey] ?? { morning: 0, evening: 0, off: 0 };
               const isFilterActive =
@@ -668,8 +668,15 @@ export function DailyScheduleOverview({
               });
 
               return (
-                <section key={deptKey} className="p-4">
-                  <div className="flex flex-wrap items-center gap-2 mb-3">
+                <section
+                  key={deptKey}
+                  className={cn(
+                    "px-4 py-5",
+                    deptIdx % 2 === 1 ? "bg-muted/35" : "bg-background",
+                    deptIdx > 0 && "border-t-[3px] border-muted-foreground/30",
+                  )}
+                >
+                  <div className="flex flex-wrap items-center gap-2 mb-4 pb-3 border-b-2 border-muted-foreground/25">
                     <Building2 className="size-4 text-muted-foreground shrink-0" />
                     <h3 className="font-semibold text-sm">{dept.name}</h3>
                     {dept.scheduleId && dept.scheduleWeekStart && (
@@ -737,10 +744,10 @@ export function DailyScheduleOverview({
                       ) : (
                         <ul
                           className={cn(
-                            "ps-1 mt-2",
+                            "ps-1 mt-3",
                             displayRows.length > 4
-                              ? "grid grid-cols-2 gap-1"
-                              : "space-y-1.5",
+                              ? "grid grid-cols-2 gap-3"
+                              : "space-y-3",
                           )}
                         >
                           {displayRows.map((emp) => {
@@ -750,8 +757,8 @@ export function DailyScheduleOverview({
                               <li
                                 key={emp.id}
                                 className={cn(
-                                  "flex items-center justify-between gap-1 rounded-md border",
-                                  compact ? "px-1.5 py-1" : "flex-wrap gap-2 px-2 py-1.5",
+                                  "flex items-center justify-between gap-1 rounded-lg border-2 border-muted-foreground/30 bg-background shadow-sm",
+                                  compact ? "px-2.5 py-2" : "flex-wrap gap-2 px-3 py-2.5",
                                   tone.row,
                                   emp.isSelf && "ring-2 ring-primary ring-offset-1",
                                   emp.isModified && "ring-2 ring-orange-500",
