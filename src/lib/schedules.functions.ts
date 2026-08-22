@@ -2197,22 +2197,21 @@ export const getDailyScheduleOverview = createServerFn({ method: "POST" })
       return { departments: [], employeesByDept: {}, shifts: [] };
     }
 
-    const deptIds = departments.map((d) => d.id);
-    const { data: schedRows, error: schedErr } = await supabaseAdmin
-      .from("schedules")
-      .select(
-        "id, department_id, status, published_at, submitted_at, created_by, week_start, week_end",
-      )
-      .eq("week_start", start)
-      .in("department_id", deptIds);
-    if (schedErr) throw new Error(schedErr.message);
-
     const candidatesByDept = new Map<string, any[]>();
-    for (const s of schedRows ?? []) {
-      const list = candidatesByDept.get(s.department_id) ?? [];
-      list.push(s);
-      candidatesByDept.set(s.department_id, list);
-    }
+    await Promise.all(
+      departments.map(async (dept) => {
+        const periodSchedules = await findAllDepartmentSchedulesForPeriod(
+          supabaseAdmin,
+          dept.id,
+          start,
+          end,
+          periodConfig,
+        );
+        if (periodSchedules.length) {
+          candidatesByDept.set(dept.id, periodSchedules);
+        }
+      }),
+    );
 
     const schedByDept = new Map<string, any>();
     const branchLevelViewer = isBranchLevelScheduleViewer(caps);

@@ -281,7 +281,10 @@
     "notifCenter": "مركز الإشعارات",
     "markAllRead": "تعيين الكل كمقروء",
     "noNewNotifs": "لا توجد إشعارات جديدة",
-    "minutesShort": "د"
+    "minutesShort": "د",
+    "departmentColleagues": "زملاء القسم",
+    "noColleagues": "لا يوجد زملاء آخرون في القسم",
+    "colleagueOnLeave": "في إجازة"
   },
   "roles": {
     "systemAdmin": "مالك النظام الرئيسي",

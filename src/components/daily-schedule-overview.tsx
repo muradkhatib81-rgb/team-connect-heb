@@ -417,11 +417,22 @@ export function DailyScheduleOverview({
   const departments = useMemo(() => {
     const base = (q.data?.departments ?? []) as DeptScheduleMeta[];
     if (scope !== "department" || !deptFlagsQ.data) return base;
-    return base.map((d) => ({
-      ...d,
-      hasSavedAwaitingPublish: deptFlagsQ.data!.hasSavedAwaitingPublish,
-    }));
-  }, [q.data?.departments, scope, deptFlagsQ.data]);
+    const flags = deptFlagsQ.data;
+    return base.map((d) => {
+      const hasPublished = d.hasPublishedSchedule || flags.hasPublished;
+      const scheduleId = d.scheduleId ?? flags.publishedScheduleId ?? null;
+      const hasSavedAwaitingPublish =
+        useCoworkersView
+          ? flags.hasSavedAwaitingPublish && !hasPublished
+          : flags.hasSavedAwaitingPublish;
+      return {
+        ...d,
+        hasPublishedSchedule: hasPublished,
+        scheduleId,
+        hasSavedAwaitingPublish,
+      };
+    });
+  }, [q.data?.departments, scope, deptFlagsQ.data, useCoworkersView]);
 
   const employeesByDept = (q.data?.employeesByDept ?? {}) as Record<string, DeptEmployee[]>;
   const shifts = (q.data?.shifts ?? []) as ShiftRow[];

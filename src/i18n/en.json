@@ -281,7 +281,10 @@
     "notifCenter": "Notifications",
     "markAllRead": "Mark all as read",
     "noNewNotifs": "No new notifications",
-    "minutesShort": "min"
+    "minutesShort": "min",
+    "departmentColleagues": "Department colleagues",
+    "noColleagues": "No other colleagues in this department",
+    "colleagueOnLeave": "On leave"
   },
   "roles": {
     "systemAdmin": "Primary System Owner",

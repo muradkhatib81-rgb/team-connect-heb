@@ -281,7 +281,10 @@
     "notifCenter": "מרכז התראות",
     "markAllRead": "סמן הכל כנקרא",
     "noNewNotifs": "אין התראות חדשות",
-    "minutesShort": "דק׳"
+    "minutesShort": "דק׳",
+    "departmentColleagues": "עמיתים במחלקה",
+    "noColleagues": "אין עמיתים נוספים במחלקה",
+    "colleagueOnLeave": "בחופש"
   },
   "roles": {
     "systemAdmin": "בעל המערכת הראשי",

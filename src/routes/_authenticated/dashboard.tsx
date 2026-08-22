@@ -44,6 +44,7 @@ import { isNonEmployeeIdentity } from "@/lib/employee-identity";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 
 /** Shared tile size for all dashboard summary/shortcut cards (matches leave cards). */
 const DASH_TILE =
@@ -1328,11 +1329,96 @@ function AdminDashboard({
 function EmployeeDashboard({ profile }: { profile: any }) {
   return (
     <div className="space-y-6">
+      <DepartmentColleaguesCard profile={profile} />
       <BreakShortcutCard userId={profile.id} />
       <LeaveShortcutCard userId={profile.id} />
       <EmployeeNotificationsCard userId={profile.id} />
       <EmployeeNewMessagesCard userId={profile.id} />
     </div>
+  );
+}
+
+function DepartmentColleaguesCard({ profile }: { profile: { id: string; department_id?: string | null; department_name?: string | null } }) {
+  const deptId = profile.department_id;
+  const q = useQuery({
+    queryKey: ["dept-colleagues", deptId],
+    enabled: !!deptId,
+    staleTime: 60_000,
+    queryFn: async () => {
+      const { data, error } = await (supabase as any)
+        .from("department_coworkers")
+        .select("id, full_name, job_title, on_leave, leave_start_date, leave_end_date")
+        .eq("department_id", deptId!)
+        .eq("is_active", true)
+        .order("full_name");
+      if (error) throw error;
+      return (data ?? []) as {
+        id: string;
+        full_name: string | null;
+        job_title: string | null;
+        on_leave: boolean | null;
+        leave_start_date: string | null;
+        leave_end_date: string | null;
+      }[];
+    },
+  });
+
+  if (!deptId) return null;
+
+  const colleagues = (q.data ?? []).filter((c) => c.id !== profile.id);
+  const initials = (name: string | null) => {
+    const parts = (name ?? "?").trim().split(/\s+/).filter(Boolean);
+    if (parts.length >= 2) return (parts[0]![0]! + parts[parts.length - 1]![0]!).toUpperCase();
+    return (parts[0]?.[0] ?? "?").toUpperCase();
+  };
+
+  return (
+    <Card className="card-elevated p-4">
+      <div className="flex items-center justify-between mb-3">
+        <h2 className="font-semibold text-base flex items-center gap-2">
+          <Users className="size-5 text-primary" />
+          {i18n.t("dashboard.departmentColleagues")}
+        </h2>
+        {profile.department_name && (
+          <Badge variant="outline" className="rounded-full text-xs">
+            {profile.department_name}
+          </Badge>
+        )}
+      </div>
+      {q.isLoading ? (
+        <div className="flex justify-center py-6">
+          <Loader2 className="size-5 animate-spin text-primary" />
+        </div>
+      ) : colleagues.length === 0 ? (
+        <p className="text-sm text-muted-foreground">{i18n.t("dashboard.noColleagues")}</p>
+      ) : (
+        <ul className="divide-y">
+          {colleagues.map((c) => {
+            const onLeave = isEmployeeCurrentlyOnLeave(c);
+            return (
+              <li key={c.id} className="flex items-center gap-3 py-2.5">
+                <Avatar className="size-9">
+                  <AvatarFallback className="text-xs font-medium bg-primary/10 text-primary">
+                    {initials(c.full_name)}
+                  </AvatarFallback>
+                </Avatar>
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-medium truncate">{c.full_name ?? "—"}</p>
+                  {c.job_title && (
+                    <p className="text-xs text-muted-foreground truncate">{c.job_title}</p>
+                  )}
+                </div>
+                {onLeave && (
+                  <Badge variant="secondary" className="shrink-0 text-[10px] rounded-full">
+                    {i18n.t("dashboard.colleagueOnLeave")}
+                  </Badge>
+                )}
+              </li>
+            );
+          })}
+        </ul>
+      )}
+    </Card>
   );
 }
 
