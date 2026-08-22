@@ -10,6 +10,7 @@ import { cn } from "@/lib/utils";
 import { formatHeDateTime } from "@/lib/date-format";
 import { markMessageRead } from "@/lib/communications.functions";
 import i18n from "@/i18n";
+import { scheduleNotificationSearch } from "@/lib/notification-navigation";
 
 type Kind = "schedule" | "message";
 
@@ -38,7 +39,7 @@ export function NotificationsBell() {
       try {
         const { data } = await supabase
           .from("schedule_notifications")
-          .select("id, schedule_id, message, read_at, created_at")
+          .select("id, schedule_id, message, read_at, created_at, schedule:schedules(week_start)")
           .order("created_at", { ascending: false })
           .limit(30);
         return data ?? [];
@@ -72,7 +73,8 @@ export function NotificationsBell() {
 
   const items: UnifiedItem[] = useMemo(() => {
     const out: UnifiedItem[] = [];
-    (schedQ.data ?? []).forEach((n: any) =>
+    (schedQ.data ?? []).forEach((n: any) => {
+      const weekStart = n.schedule?.week_start ?? null;
       out.push({
         id: `s-${n.id}`,
         kind: "schedule",
@@ -80,9 +82,10 @@ export function NotificationsBell() {
         created_at: n.created_at,
         read: !!n.read_at,
         to: "/schedules",
+        search: scheduleNotificationSearch(weekStart),
         refId: n.id,
-      }),
-    );
+      });
+    });
     (msgQ.data ?? []).forEach((r: any) =>
       out.push({
         id: `m-${r.message_id}`,

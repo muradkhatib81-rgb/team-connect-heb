@@ -1,5 +1,6 @@
 import webpush from "web-push";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
+import { scheduleNotificationPushUrl } from "@/lib/notification-navigation";
 
 export type WebPushPayload = {
   title: string;
@@ -30,12 +31,16 @@ export function getVapidPublicKey(): string | null {
 }
 
 /** Infer in-app navigation target from notification copy. */
-export function pushUrlFromMessage(message: string, scheduleId?: string | null): string {
-  if (scheduleId) return "/schedules";
+export function pushUrlFromMessage(
+  message: string,
+  opts?: { scheduleId?: string | null; weekStart?: string | null },
+): string {
   const m = message.trim();
+  if (opts?.scheduleId || /סידור|schedule|לוח/i.test(m)) {
+    return scheduleNotificationPushUrl(opts?.weekStart);
+  }
   if (/משימה|task/i.test(m)) return "/tasks";
   if (/הודעה|message|תקשורת/i.test(m)) return "/communications";
-  if (/סידור|schedule|לוח/i.test(m)) return "/schedules";
   return "/dashboard";
 }
 
@@ -105,11 +110,14 @@ export async function dispatchWebPushToUsers(
 export function dispatchWebPushForInAppNotification(
   userIds: string[],
   message: string,
-  opts?: { scheduleId?: string | null; title?: string },
+  opts?: { scheduleId?: string | null; weekStart?: string | null; title?: string },
 ): void {
   const body = message.trim();
   if (!body) return;
-  const url = pushUrlFromMessage(body, opts?.scheduleId);
+  const url = pushUrlFromMessage(body, {
+    scheduleId: opts?.scheduleId,
+    weekStart: opts?.weekStart,
+  });
   void dispatchWebPushToUsers(userIds, {
     title: opts?.title ?? "מערכת ניהול עובדים",
     body,
