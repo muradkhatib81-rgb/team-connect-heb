@@ -1919,6 +1919,107 @@ export const getUnpublishedWeekSummary = createServerFn({ method: "POST" })
   });
 
 
+/** Branch-wide shift rows for headcount cards — one primary schedule per department. */
+export const getBranchPeriodScheduleShifts = createServerFn({ method: "POST" })
+  .middleware([requireBranchContext])
+  .inputValidator((d: unknown) => z.object({ week_start: z.string() }).parse(d))
+  .handler(async ({ data, context }) => {
+    const caps = await getCaps(context.supabase, context.userId);
+    if (
+      !(
+        caps.isMainAdmin ||
+        caps.isBranchMgr ||
+        caps.canView ||
+        caps.canCreate ||
+        caps.canEdit ||
+        caps.canApprove ||
+        caps.canPublishDirect
+      )
+    ) {
+      throw new Error("אין הרשאה לצפות בסיכום משמרות");
+    }
+
+    const periodConfig = await fetchBranchPeriodConfig(context.supabase, context.branchId);
+    const { start, end } = weekStartOf(data.week_start, periodConfig);
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+
+    let deptQ = supabaseAdmin
+      .from("departments")
+      .select("id")
+      .eq("is_active", true);
+    if (context.branchId) deptQ = deptQ.eq("branch_id", context.branchId);
+    const { data: depts, error: dErr } = await deptQ;
+    if (dErr) throw new Error(dErr.message);
+
+    const scheduleIds: string[] = [];
+    const deptByScheduleId = new Map<string, string>();
+
+    await Promise.all(
+      ((depts ?? []) as { id: string }[]).map(async (dept) => {
+        const periodSchedules = await findAllDepartmentSchedulesForPeriod(
+          supabaseAdmin,
+          dept.id,
+          start,
+          end,
+          periodConfig,
+        );
+        let primary = pickPrimaryDepartmentSchedule(periodSchedules) as
+          | { id?: string; status?: string; published_at?: string | null }
+          | null;
+        if (!(primary?.status === "approved" && primary?.published_at)) {
+          const activePublished = await findActivePublishedSchedulesForDepartment(
+            supabaseAdmin,
+            dept.id,
+            periodConfig,
+            todayIsoCalendar(),
+          );
+          const publishedForPeriod = activePublished.find((row) =>
+            scheduleMatchesPeriod(row as { week_start: string }, start, end, periodConfig),
+          );
+          if (publishedForPeriod) primary = publishedForPeriod as typeof primary;
+        }
+        const id = primary?.id;
+        if (!id) return;
+        scheduleIds.push(id);
+        deptByScheduleId.set(id, dept.id);
+      }),
+    );
+
+    if (scheduleIds.length === 0) {
+      return {
+        shifts: [] as {
+          schedule_id: string;
+          department_id: string;
+          employee_id: string;
+          day_date: string;
+          shift: string;
+          leave_type_code: string | null;
+        }[],
+      };
+    }
+
+    const { data: shiftRows, error: shErr } = await supabaseAdmin
+      .from("schedule_shifts")
+      .select("schedule_id, employee_id, day_date, shift, leave_type_code")
+      .in("schedule_id", scheduleIds)
+      .gte("day_date", start)
+      .lte("day_date", end);
+    if (shErr) throw new Error(shErr.message);
+
+    const shifts = (shiftRows ?? [])
+      .map((row: any) => ({
+        schedule_id: row.schedule_id as string,
+        department_id: deptByScheduleId.get(row.schedule_id as string) as string,
+        employee_id: row.employee_id as string,
+        day_date: row.day_date as string,
+        shift: row.shift as string,
+        leave_type_code: (row.leave_type_code as string | null) ?? null,
+      }))
+      .filter((row) => row.department_id);
+
+    return { shifts };
+  });
+
 // ---------- Departments states for a week (RLS-independent enumeration) ----------
 // Returns, for the caller's active branch, which active departments have:
 //   - no schedule row at all for the exact week_start

@@ -62,6 +62,7 @@ import {
   getSchedulesForViewer,
   getScheduleShiftsForViewer,
   getDepartmentWeekScheduleFlags,
+  getBranchPeriodScheduleShifts,
   copyPreviousWeek,
   deleteSchedule,
   publishAllWeekSchedules,
@@ -474,6 +475,21 @@ function SchedulesPage() {
   const getSchedulesFn = useServerFn(getSchedulesForViewer);
   const getShiftsFn = useServerFn(getScheduleShiftsForViewer);
   const deptWeekFlagsFn = useServerFn(getDepartmentWeekScheduleFlags);
+  const branchPeriodShiftsFn = useServerFn(getBranchPeriodScheduleShifts);
+  const branchPeriodShiftsQ = useQuery({
+    enabled:
+      view === "editor" &&
+      !!me?.id &&
+      (isMainAdmin ||
+        canViewBranchSchedules ||
+        canCreate ||
+        canEdit ||
+        canApprove ||
+        canPublishDirect),
+    queryKey: ["branch-period-shifts", periodWeekStart, me?.id],
+    queryFn: () => branchPeriodShiftsFn({ data: { week_start: periodWeekStart } }),
+    staleTime: 15_000,
+  });
   const weekSchedulesQ = useQuery({
     enabled: !!me?.id && view === "editor",
     queryKey: ["week-schedules", periodWeekStart, me?.id],
@@ -811,6 +827,7 @@ function SchedulesPage() {
       .on("postgres_changes", { event: "*", schema: "public", table: "schedules" }, () => {
         qc.invalidateQueries({ queryKey: ["schedules-branch-saved"] });
         qc.invalidateQueries({ queryKey: ["schedules-week-saved"] });
+        qc.invalidateQueries({ queryKey: ["branch-period-shifts"] });
         qc.invalidateQueries({ queryKey: ["schedules-pending"] });
         qc.invalidateQueries({ queryKey: ["schedules-approved"] });
         qc.invalidateQueries({ queryKey: ["week-schedules"] });
@@ -818,6 +835,7 @@ function SchedulesPage() {
       .on("postgres_changes", { event: "*", schema: "public", table: "schedule_shifts" }, () => {
         qc.invalidateQueries({ queryKey: ["schedules-branch-saved"] });
         qc.invalidateQueries({ queryKey: ["schedules-week-saved"] });
+        qc.invalidateQueries({ queryKey: ["branch-period-shifts"] });
       })
       .subscribe();
     return () => {
@@ -1081,9 +1099,16 @@ function SchedulesPage() {
   const weekShiftEmployeeIds = useMemo(
     () =>
       Array.from(
-        new Set((weekSavedQ.data?.shifts ?? []).map((r) => r.employee_id).filter(Boolean)),
+        new Set(
+          [
+            ...(weekSavedQ.data?.shifts ?? []),
+            ...(branchPeriodShiftsQ.data?.shifts ?? []),
+          ]
+            .map((r) => r.employee_id)
+            .filter(Boolean),
+        ),
       ),
-    [weekSavedQ.data],
+    [weekSavedQ.data, branchPeriodShiftsQ.data],
   );
 
   const savedShiftHeadcountExcludedQ = useQuery({
@@ -1272,6 +1297,7 @@ function SchedulesPage() {
       qc.invalidateQueries({ queryKey: ["schedules-week-saved"] });
       qc.invalidateQueries({ queryKey: ["schedules-branch-saved"] });
       qc.invalidateQueries({ queryKey: ["dept-schedule-flags"] });
+      qc.invalidateQueries({ queryKey: ["branch-period-shifts"] });
     },
     onError: (e: any) => toast.error(e?.message ?? "שגיאה"),
   });
@@ -1291,6 +1317,7 @@ function SchedulesPage() {
       qc.invalidateQueries({ queryKey: ["week-schedules"] });
       qc.invalidateQueries({ queryKey: ["daily-schedule-overview"] });
       qc.invalidateQueries({ queryKey: ["dept-schedule-flags"] });
+      qc.invalidateQueries({ queryKey: ["branch-period-shifts"] });
     },
 
     onError: (e: any) => toast.error(e?.message ?? "שגיאה"),
@@ -1793,6 +1820,7 @@ function SchedulesPage() {
       qc.invalidateQueries({ queryKey: ["schedules-branch-saved"] });
       qc.invalidateQueries({ queryKey: ["dept-schedule-flags"] });
       qc.invalidateQueries({ queryKey: ["daily-schedule-overview"] });
+      qc.invalidateQueries({ queryKey: ["branch-period-shifts"] });
     },
   });
 
@@ -1824,8 +1852,9 @@ function SchedulesPage() {
   }, [deptsQ.data]);
 
   const dailyShiftSummary = useMemo(
-    () =>
-      days.map((day) => ({
+    () => {
+      const filledEdits = editsWithEmptyAsOff(edits);
+      return days.map((day) => ({
         day,
         label: scheduleDayLabelForDate(day, "full"),
         counts: activeShifts.map((s) => {
@@ -1837,8 +1866,10 @@ function SchedulesPage() {
             seen.add(employeeId);
             members.push({ employeeId, departmentId });
           };
-          // Saved shifts from other departments (draft or published).
-          for (const row of weekSavedQ.data?.shifts ?? []) {
+          // Persisted shifts from all other departments (published or saved draft).
+          const branchShifts =
+            branchPeriodShiftsQ.data?.shifts ?? weekSavedQ.data?.shifts ?? [];
+          for (const row of branchShifts) {
             if (row.department_id === selectedDept) continue;
             if (row.day_date === day && row.shift === s.code) {
               add(row.employee_id, row.department_id);
@@ -1848,14 +1879,28 @@ function SchedulesPage() {
           if (selectedDept) {
             for (const emp of empsQ.data ?? []) {
               if (emp.excluded_from_schedule) continue;
-              const shift = effectiveScheduleShift(emp, day, edits[emp.id]?.[day]);
+              const shift = effectiveScheduleShift(
+                emp,
+                day,
+                filledEdits[emp.id]?.[day],
+              );
               if (shift === s.code) add(emp.id, selectedDept);
             }
           }
           return { ...s, count: members.length, members };
         }),
-      })),
-    [days, activeShifts, empsQ.data, edits, weekSavedQ.data, selectedDept, headcountExcludedSet],
+      }));
+    },
+    [
+      days,
+      activeShifts,
+      empsQ.data,
+      edits,
+      branchPeriodShiftsQ.data,
+      weekSavedQ.data,
+      selectedDept,
+      headcountExcludedSet,
+    ],
   );
 
   const [summaryShiftPick, setSummaryShiftPick] = useState<SummaryShiftPick | null>(null);
