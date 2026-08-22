@@ -2721,31 +2721,8 @@ export const getDailyScheduleOverview = createServerFn({ method: "POST" })
     );
 
     const todayIso = todayIsoCalendar();
-    const { data: publishedRows, error: pubErr } = await supabaseAdmin
-      .from("schedules")
-      .select("*")
-      .in(
-        "department_id",
-        departments.map((d) => d.id),
-      )
-      .eq("status", "approved")
-      .not("published_at", "is", null)
-      .order("week_start", { ascending: true });
-    if (pubErr) throw new Error(pubErr.message);
-
-    const activePublishedByDept = new Map<string, Record<string, unknown>[]>();
-    for (const row of publishedRows ?? []) {
-      const sched = row as {
-        department_id: string;
-        week_start: string;
-        week_end?: string | null;
-        schedule_type?: string | null;
-      };
-      if (!scheduleIsActiveOrUpcoming(sched, periodConfig, todayIso)) continue;
-      const list = activePublishedByDept.get(sched.department_id) ?? [];
-      list.push(row as Record<string, unknown>);
-      activePublishedByDept.set(sched.department_id, list);
-    }
+    // Canonical days for the requested period only — never merge other weeks.
+    const periodDisplayDays = buildPeriodDays(start, periodConfig);
 
     const departmentMeta: {
       id: string;
@@ -2759,18 +2736,21 @@ export const getDailyScheduleOverview = createServerFn({ method: "POST" })
       changeBaselineKind: ReturnType<typeof resolveScheduleChangeBaselineKind>;
     }[] = [];
     const scheduleIdSet = new Set<string>();
-    const displayDaysSet = new Set<string>();
     const branchLevelViewer = isBranchLevelScheduleViewer(caps);
 
     for (const dept of departments) {
       const periodCandidates = candidatesByDept.get(dept.id) ?? [];
-      const activePublished = activePublishedByDept.get(dept.id) ?? [];
+      const publishedInPeriod = periodCandidates.filter(
+        (row) =>
+          (row as { status?: string }).status === "approved" &&
+          !!(row as { published_at?: string | null }).published_at,
+      );
       const hasUnpublishedSaved = periodCandidates.some((s) =>
         isSavedScheduleAwaitingPublish(s as { status: string; published_at: string | null }),
       );
 
-      if (activePublished.length > 0) {
-        for (const sched of activePublished) {
+      if (publishedInPeriod.length > 0) {
+        for (const sched of publishedInPeriod) {
           const row = sched as {
             id: string;
             week_start: string;
@@ -2780,8 +2760,6 @@ export const getDailyScheduleOverview = createServerFn({ method: "POST" })
             published_at: string | null;
             submitted_at?: string | null;
           };
-          const periodDays = weekDaysOfSchedule(row, periodConfig);
-          addScheduleDisplayDays(row, periodConfig, displayDaysSet);
           scheduleIdSet.add(row.id);
           departmentMeta.push({
             id: dept.id,
@@ -2789,8 +2767,9 @@ export const getDailyScheduleOverview = createServerFn({ method: "POST" })
             name: dept.name,
             hasPublishedSchedule: true,
             scheduleId: row.id,
-            scheduleWeekStart: periodDays[0] ?? null,
-            scheduleWeekEnd: periodDays[periodDays.length - 1] ?? null,
+            scheduleWeekStart: periodDisplayDays[0] ?? start,
+            scheduleWeekEnd:
+              periodDisplayDays[periodDisplayDays.length - 1] ?? end,
             hasSavedAwaitingPublish: false,
             changeBaselineKind: resolveScheduleChangeBaselineKind({
               status: row.status,
@@ -2859,16 +2838,8 @@ export const getDailyScheduleOverview = createServerFn({ method: "POST" })
         }
       }
 
-      const schedRow = sched as {
-        week_start: string;
-        week_end?: string | null;
-        schedule_type?: string | null;
-        id?: string;
-      } | null;
-      const periodDays = schedRow ? weekDaysOfSchedule(schedRow, periodConfig) : [];
       if (sched?.id) {
         scheduleIdSet.add(sched.id as string);
-        if (periodDays.length) addScheduleDisplayDays(schedRow!, periodConfig, displayDaysSet);
       }
 
       departmentMeta.push({
@@ -2877,8 +2848,8 @@ export const getDailyScheduleOverview = createServerFn({ method: "POST" })
         name: dept.name,
         hasPublishedSchedule: !!(sched?.status === "approved" && sched?.published_at),
         scheduleId: (sched as { id?: string } | null)?.id ?? null,
-        scheduleWeekStart: periodDays[0] ?? null,
-        scheduleWeekEnd: periodDays[periodDays.length - 1] ?? null,
+        scheduleWeekStart: periodDisplayDays[0] ?? start,
+        scheduleWeekEnd: periodDisplayDays[periodDisplayDays.length - 1] ?? end,
         hasSavedAwaitingPublish: useCoworkersView
           ? hasUnpublishedSaved
           : hasUnpublishedSaved || isSavedScheduleAwaitingPublish(sched),
@@ -2893,12 +2864,6 @@ export const getDailyScheduleOverview = createServerFn({ method: "POST" })
     }
 
     const scheduleIds = [...scheduleIdSet];
-    const shiftMin =
-      displayDaysSet.size > 0 ? [...displayDaysSet].sort()[0]! : start;
-    const shiftMax =
-      displayDaysSet.size > 0
-        ? [...displayDaysSet].sort()[displayDaysSet.size - 1]!
-        : end;
     let shifts: any[] = [];
     if (scheduleIds.length) {
       const { data: shiftRows, error: shiftErr } = await supabaseAdmin
@@ -2907,8 +2872,8 @@ export const getDailyScheduleOverview = createServerFn({ method: "POST" })
           "employee_id, day_date, shift, leave_type_code, published_shift, published_note, published_start_time, published_end_time, submitted_shift, submitted_note, submitted_start_time, submitted_end_time, start_time, end_time, note, schedule_id",
         )
         .in("schedule_id", scheduleIds)
-        .gte("day_date", shiftMin)
-        .lte("day_date", shiftMax);
+        .gte("day_date", start)
+        .lte("day_date", end);
       if (shiftErr) throw new Error(shiftErr.message);
       shifts = shiftRows ?? [];
     }
@@ -2931,18 +2896,13 @@ export const getDailyScheduleOverview = createServerFn({ method: "POST" })
       shifts,
     );
 
-    const weekDaysOut =
-      displayDaysSet.size > 0
-        ? [...displayDaysSet].sort()
-        : buildPeriodDays(getReferencePeriodStart(todayIso, periodConfig), periodConfig);
-
     return {
       departments: departmentMeta,
       employeesByDept: enrichedEmployees,
       shifts,
-      weekStart: weekDaysOut[0] ?? start,
-      weekEnd: weekDaysOut[weekDaysOut.length - 1] ?? end,
-      weekDays: weekDaysOut,
+      weekStart: start,
+      weekEnd: end,
+      weekDays: periodDisplayDays,
     };
   });
 

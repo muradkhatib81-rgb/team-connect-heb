@@ -457,15 +457,19 @@ export function DailyScheduleOverview({
   });
 
   const weekDays = useMemo(() => {
+    // Always prefer the navigated/card period days so other weeks never bleed in.
+    if (weekStartProp) return localWeekDays;
     const fromServer = (q.data as { weekDays?: string[] } | undefined)?.weekDays;
     if (fromServer?.length) return fromServer;
     return localWeekDays;
-  }, [q.data, localWeekDays]);
+  }, [q.data, localWeekDays, weekStartProp]);
 
-  const displayWeekStart =
-    (q.data as { weekStart?: string } | undefined)?.weekStart ?? weekStart;
-  const displayWeekEnd =
-    (q.data as { weekEnd?: string } | undefined)?.weekEnd ?? weekEnd;
+  const displayWeekStart = weekStartProp
+    ? weekStart
+    : ((q.data as { weekStart?: string } | undefined)?.weekStart ?? weekStart);
+  const displayWeekEnd = weekStartProp
+    ? weekEnd
+    : ((q.data as { weekEnd?: string } | undefined)?.weekEnd ?? weekEnd);
 
   const defaultDay = weekDays.includes(todayIso)
     ? todayIso
