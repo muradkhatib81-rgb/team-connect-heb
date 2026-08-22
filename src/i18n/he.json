@@ -61,7 +61,10 @@
     "testButton": "שלח/י התראת בדיקה",
     "testSent": "התראת הבדיקה נשלחה",
     "testError": "שליחת התראת הבדיקה נכשלה",
-    "testNoSub": "לא נמצא מנוי Push — כבה/י והפעל/י שוב את ההתראות"
+    "testNoSub": "לא נמצא מנוי Push — כבה/י והפעל/י שוב את ההתראות",
+    "testNoVapid": "מפתח VAPID חסר בשרת — הוסף/י VAPID_PUBLIC_KEY ב-Vercel",
+    "testPushFailed": "המנוי לא תקף — כבה/י והפעל/י שוב את ההתראות",
+    "testDbError": "שגיאת שרת בשמירת המנוי — נסו שוב"
   },
   "dashboard": {
     "greeting": "שלום,",

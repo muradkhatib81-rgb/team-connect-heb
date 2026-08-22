@@ -10,10 +10,22 @@ export type WebPushPayload = {
 
 let vapidConfigured = false;
 
+function readVapidPublicKey(): string | undefined {
+  return (
+    process.env.VAPID_PUBLIC_KEY?.trim() ||
+    process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY?.trim() ||
+    undefined
+  );
+}
+
+function readVapidPrivateKey(): string | undefined {
+  return process.env.VAPID_PRIVATE_KEY?.trim() || undefined;
+}
+
 function ensureVapidConfigured(): boolean {
   if (vapidConfigured) return true;
-  const publicKey = process.env.VAPID_PUBLIC_KEY?.trim();
-  const privateKey = process.env.VAPID_PRIVATE_KEY?.trim();
+  const publicKey = readVapidPublicKey();
+  const privateKey = readVapidPrivateKey();
   if (!publicKey || !privateKey) return false;
   const subject =
     process.env.VAPID_SUBJECT?.trim() ||
@@ -25,8 +37,7 @@ function ensureVapidConfigured(): boolean {
 }
 
 export function getVapidPublicKey(): string | null {
-  const key = process.env.VAPID_PUBLIC_KEY?.trim();
-  return key || null;
+  return readVapidPublicKey() || null;
 }
 
 type PushSubscriptionRow = {

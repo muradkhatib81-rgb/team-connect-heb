@@ -3,6 +3,15 @@ import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
 import { dispatchPushNotification } from "@/lib/push-dispatch.server";
+import { getVapidPublicKey } from "@/lib/web-push.server";
+
+export type PushTestResult =
+  | { ok: true; sent: number; failed: number }
+  | {
+      ok: false;
+      reason: "no_vapid" | "no_subscription" | "push_failed" | "db_error" | "server_error";
+      detail?: string;
+    };
 
 const subscriptionSchema = z.object({
   endpoint: z.string().url(),
@@ -13,23 +22,30 @@ const subscriptionSchema = z.object({
   userAgent: z.string().max(500).optional(),
 });
 
+async function upsertPushSubscription(
+  userId: string,
+  data: z.infer<typeof subscriptionSchema>,
+): Promise<void> {
+  const now = new Date().toISOString();
+  const { error } = await (supabaseAdmin as any).from("push_subscriptions").upsert(
+    {
+      user_id: userId,
+      endpoint: data.endpoint,
+      p256dh: data.keys.p256dh,
+      auth: data.keys.auth,
+      user_agent: data.userAgent ?? null,
+      updated_at: now,
+    },
+    { onConflict: "user_id,endpoint" },
+  );
+  if (error) throw new Error(error.message);
+}
+
 export const savePushSubscription = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: unknown) => subscriptionSchema.parse(d))
   .handler(async ({ data, context }) => {
-    const now = new Date().toISOString();
-    const { error } = await (context.supabase as any).from("push_subscriptions").upsert(
-      {
-        user_id: context.userId,
-        endpoint: data.endpoint,
-        p256dh: data.keys.p256dh,
-        auth: data.keys.auth,
-        user_agent: data.userAgent ?? null,
-        updated_at: now,
-      },
-      { onConflict: "user_id,endpoint" },
-    );
-    if (error) throw new Error(error.message);
+    await upsertPushSubscription(context.userId, data);
     return { ok: true };
   });
 
@@ -82,16 +98,52 @@ export const dispatchMessagePush = createServerFn({ method: "POST" })
 /** Send a test push to the current user's device. */
 export const sendTestPush = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .handler(async ({ context }) => {
-    const result = await dispatchPushNotification({
-      userIds: [context.userId],
-      title: "בדיקת התראות",
-      message: "ההתראות פועלות כראוי ✓",
-      url: "/profile",
-      tag: "push-test",
-    });
-    if (result.sent === 0 && result.failed === 0) {
-      throw new Error("no_subscription");
+  .inputValidator((d: unknown) =>
+    z.object({ subscription: subscriptionSchema.optional() }).parse(d ?? {}),
+  )
+  .handler(async ({ data, context }): Promise<PushTestResult> => {
+    try {
+      if (!getVapidPublicKey()) {
+        return { ok: false, reason: "no_vapid" };
+      }
+
+      if (data.subscription) {
+        try {
+          await upsertPushSubscription(context.userId, data.subscription);
+        } catch (e) {
+          const detail = (e as Error)?.message ?? "save failed";
+          console.warn("[push] test subscription save failed:", detail);
+          return { ok: false, reason: "db_error", detail };
+        }
+      }
+
+      const { data: subs, error: subErr } = await supabaseAdmin
+        .from("push_subscriptions")
+        .select("id")
+        .eq("user_id", context.userId)
+        .limit(1);
+      if (subErr) {
+        console.warn("[push] test subscription lookup failed:", subErr.message);
+        return { ok: false, reason: "db_error", detail: subErr.message };
+      }
+      if (!subs?.length) {
+        return { ok: false, reason: "no_subscription" };
+      }
+
+      const result = await dispatchPushNotification({
+        userIds: [context.userId],
+        title: "בדיקת התראות",
+        message: "ההתראות פועלות כראוי ✓",
+        url: "/profile",
+        tag: "push-test",
+      });
+
+      if (result.sent > 0) return { ok: true, ...result };
+      if (result.failed > 0) return { ok: false, reason: "push_failed" };
+      return { ok: false, reason: "no_subscription" };
+    } catch (e) {
+      const detail = (e as Error)?.message ?? "unknown";
+      console.warn("[push] sendTestPush failed:", detail);
+      return { ok: false, reason: "server_error", detail };
     }
-    return { ok: true, ...result };
   });

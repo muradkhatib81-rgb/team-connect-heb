@@ -61,7 +61,10 @@
     "testButton": "Send test notification",
     "testSent": "Test notification sent",
     "testError": "Failed to send test notification",
-    "testNoSub": "No push subscription found — toggle notifications off and on again"
+    "testNoSub": "No push subscription found — toggle notifications off and on again",
+    "testNoVapid": "VAPID key missing on server — add VAPID_PUBLIC_KEY in Vercel",
+    "testPushFailed": "Subscription invalid — toggle notifications off and on again",
+    "testDbError": "Server error saving subscription — try again"
   },
   "dashboard": {
     "greeting": "Hello,",

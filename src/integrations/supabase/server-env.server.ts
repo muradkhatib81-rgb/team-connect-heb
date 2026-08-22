@@ -36,7 +36,11 @@ export function getSupabaseServiceRoleKey(): string | undefined {
 }
 
 export function getVapidPublicKeyEnv(): string | undefined {
-  return process.env.VAPID_PUBLIC_KEY?.trim() || undefined;
+  return (
+    process.env.VAPID_PUBLIC_KEY?.trim() ||
+    process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY?.trim() ||
+    undefined
+  );
 }
 
 export function getVapidPrivateKeyEnv(): string | undefined {

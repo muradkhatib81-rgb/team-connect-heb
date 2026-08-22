@@ -83,13 +83,19 @@ export function PushNotificationsSettings() {
       }
 
       const reg = await navigator.serviceWorker.ready;
-      let sub = await reg.pushManager.getSubscription();
-      if (!sub) {
-        sub = await reg.pushManager.subscribe({
-          userVisibleOnly: true,
-          applicationServerKey: urlBase64ToUint8Array(publicKey) as BufferSource,
-        });
+      const existing = await reg.pushManager.getSubscription();
+      if (existing) {
+        try {
+          await existing.unsubscribe();
+        } catch {
+          /* fresh subscribe below */
+        }
       }
+
+      const sub = await reg.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: urlBase64ToUint8Array(publicKey) as BufferSource,
+      });
 
       const json = sub.toJSON();
       if (!json.endpoint || !json.keys?.p256dh || !json.keys?.auth) {
@@ -140,11 +146,43 @@ export function PushNotificationsSettings() {
   const runTestPush = async () => {
     setTesting(true);
     try {
-      await testPushFn();
-      toast.success(t("push.testSent"));
-    } catch (e: unknown) {
-      const msg = (e as Error)?.message;
-      toast.error(msg === "no_subscription" ? t("push.testNoSub") : t("push.testError"));
+      let subscription: {
+        endpoint: string;
+        keys: { p256dh: string; auth: string };
+        userAgent?: string;
+      } | undefined;
+
+      try {
+        const reg = await navigator.serviceWorker.ready;
+        const sub = await reg.pushManager.getSubscription();
+        const json = sub?.toJSON();
+        if (json?.endpoint && json.keys?.p256dh && json.keys?.auth) {
+          subscription = {
+            endpoint: json.endpoint,
+            keys: { p256dh: json.keys.p256dh, auth: json.keys.auth },
+            userAgent: navigator.userAgent.slice(0, 500),
+          };
+        }
+      } catch {
+        /* test without resync */
+      }
+
+      const result = await testPushFn({ data: { subscription } });
+      if (result.ok) {
+        toast.success(t("push.testSent"));
+        return;
+      }
+      const reasonKey = {
+        no_vapid: "push.testNoVapid",
+        no_subscription: "push.testNoSub",
+        push_failed: "push.testPushFailed",
+        db_error: "push.testDbError",
+        server_error: "push.testError",
+      }[result.reason] as string;
+      const detail = !result.ok && result.detail ? `: ${result.detail}` : "";
+      toast.error(`${t(reasonKey)}${detail}`);
+    } catch {
+      toast.error(t("push.testError"));
     } finally {
       setTesting(false);
     }
