@@ -22,18 +22,39 @@ function readVapidPrivateKey(): string | undefined {
   return process.env.VAPID_PRIVATE_KEY?.trim() || undefined;
 }
 
+/** VAPID subject must be mailto:… or a URL with scheme (https://…). */
+function normalizeVapidSubject(raw: string | undefined): string {
+  const fallback = "mailto:support@team-connect.local";
+  const value = raw?.trim();
+  if (!value) return fallback;
+  if (/^mailto:/i.test(value)) return value;
+  if (/^https?:\/\//i.test(value)) return value;
+  // Bare domain like team-connect-heb.vercel.app
+  if (/^[a-z0-9.-]+\.[a-z]{2,}/i.test(value)) return `https://${value.replace(/\/+$/, "")}`;
+  return fallback;
+}
+
+function readVapidSubject(): string {
+  return normalizeVapidSubject(
+    process.env.VAPID_SUBJECT?.trim() ||
+      process.env.VITE_APP_URL?.trim() ||
+      process.env.NEXT_PUBLIC_URL?.trim(),
+  );
+}
+
 function ensureVapidConfigured(): boolean {
   if (vapidConfigured) return true;
   const publicKey = readVapidPublicKey();
   const privateKey = readVapidPrivateKey();
   if (!publicKey || !privateKey) return false;
-  const subject =
-    process.env.VAPID_SUBJECT?.trim() ||
-    process.env.VITE_APP_URL?.trim() ||
-    "mailto:support@team-connect.local";
-  webpush.setVapidDetails(subject, publicKey, privateKey);
-  vapidConfigured = true;
-  return true;
+  try {
+    webpush.setVapidDetails(readVapidSubject(), publicKey, privateKey);
+    vapidConfigured = true;
+    return true;
+  } catch (e) {
+    console.warn("[push] VAPID configuration failed:", e);
+    return false;
+  }
 }
 
 export function getVapidPublicKey(): string | null {
