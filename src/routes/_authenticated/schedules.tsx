@@ -510,8 +510,8 @@ function SchedulesPage() {
   // All schedules + shifts for the selected week. Powers:
   //  - `savedDeptSet`: departments with at least one saved shift (hidden from
   //    the department dropdown so each dept has only one saved schedule/week).
-  //  - `dailyShiftSummary`: cross-branch daily counters — persisted shifts from
-  //    all departments (unsaved edits in the open department are excluded).
+  //  - `dailyShiftSummary`: branch-wide daily counters — saved shifts from all
+  //    OTHER departments + live grid edits for the department being edited.
   //  - The "סידורי עבודה שמורים" card listing saved departments.
   const weekSavedQ = useQuery({
     enabled: (view === "editor" || view === "saved") && !!scheduleViewerCaps,
@@ -1808,17 +1808,25 @@ function SchedulesPage() {
             seen.add(employeeId);
             members.push({ employeeId, departmentId });
           };
-          // Persisted shifts across all departments — live (unsaved) grid edits
-          // for the open department are intentionally excluded.
+          // Saved shifts from other departments (draft or published).
           for (const row of weekSavedQ.data?.shifts ?? []) {
+            if (row.department_id === selectedDept) continue;
             if (row.day_date === day && row.shift === s.code) {
               add(row.employee_id, row.department_id);
+            }
+          }
+          // Current department: live grid (updates immediately as you assign).
+          if (selectedDept) {
+            for (const emp of empsQ.data ?? []) {
+              if (emp.excluded_from_schedule) continue;
+              const shift = effectiveScheduleShift(emp, day, edits[emp.id]?.[day]);
+              if (shift === s.code) add(emp.id, selectedDept);
             }
           }
           return { ...s, count: members.length, members };
         }),
       })),
-    [days, activeShifts, weekSavedQ.data, selectedDept, headcountExcludedSet],
+    [days, activeShifts, empsQ.data, edits, weekSavedQ.data, selectedDept, headcountExcludedSet],
   );
 
   const [summaryShiftPick, setSummaryShiftPick] = useState<SummaryShiftPick | null>(null);
