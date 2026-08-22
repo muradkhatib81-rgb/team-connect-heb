@@ -545,15 +545,15 @@ function SchedulesPage() {
         ...r,
         department_id: schedById.get(r.schedule_id)?.department_id as string,
       }));
-      const withShiftsIds = new Set(shifts.map((r) => r.schedule_id));
-      const savedScheds = periodScheds.filter((s: any) => withShiftsIds.has(s.id));
-      const visibleSavedScheds =
+      const visiblePeriodScheds =
         scheduleViewerCaps == null
-          ? savedScheds
-          : savedScheds.filter((s) =>
+          ? periodScheds
+          : periodScheds.filter((s) =>
               canViewScheduleContent(s, scheduleViewerCaps, managedDeptIds),
             );
-      const awaitingPublishScheds = visibleSavedScheds.filter((s) =>
+      // Include draft/pending rows even before any shift rows exist — otherwise
+      // an in-progress schedule vanishes from saved lists after refresh.
+      const awaitingPublishScheds = visiblePeriodScheds.filter((s) =>
         isSavedScheduleAwaitingPublish(s),
       );
       const deptIdsWithSaved = Array.from(
@@ -586,21 +586,14 @@ function SchedulesPage() {
           .order("week_start", { ascending: false });
         if (error) throw error;
         if (!scheds?.length) return { savedList: [] as SavedScheduleListItem[] };
-        const ids = scheds.map((s: { id: string }) => s.id);
-        const { data: shiftRows, error: e2 } = await supabase
-          .from("schedule_shifts")
-          .select("schedule_id")
-          .in("schedule_id", ids);
-        if (e2) throw e2;
-        const withShiftsIds = new Set((shiftRows ?? []).map((r: { schedule_id: string }) => r.schedule_id));
-        const savedScheds = (scheds as any[]).filter((s) => withShiftsIds.has(s.id));
-        const visibleSavedScheds =
+        const visibleScheds =
           scheduleViewerCaps == null
-            ? savedScheds
-            : savedScheds.filter((s) =>
+            ? (scheds as any[])
+            : (scheds as any[]).filter((s) =>
                 canViewScheduleContent(s, scheduleViewerCaps, managedDeptIds),
               );
-        const savedList: SavedScheduleListItem[] = visibleSavedScheds
+        const savedList: SavedScheduleListItem[] = visibleScheds
+          .filter((s) => isSavedScheduleAwaitingPublish(s))
           .map((s) => ({
             schedule_id: s.id,
             department_id: s.department_id,
@@ -609,8 +602,7 @@ function SchedulesPage() {
             status: s.status,
             published_at: s.published_at ?? null,
             updated_at: s.updated_at ?? null,
-          }))
-          .filter((s) => isSavedScheduleAwaitingPublish(s));
+          }));
         return { savedList };
       } catch (err) {
         console.error("[schedules-branch-saved]", err);
@@ -1277,6 +1269,9 @@ function SchedulesPage() {
       qc.invalidateQueries({ queryKey: ["week-schedules", weekStart] });
       qc.invalidateQueries({ queryKey: ["dashboard-schedules"] });
       qc.invalidateQueries({ queryKey: ["week-schedules"] });
+      qc.invalidateQueries({ queryKey: ["schedules-week-saved"] });
+      qc.invalidateQueries({ queryKey: ["schedules-branch-saved"] });
+      qc.invalidateQueries({ queryKey: ["dept-schedule-flags"] });
     },
     onError: (e: any) => toast.error(e?.message ?? "שגיאה"),
   });
@@ -1788,6 +1783,40 @@ function SchedulesPage() {
     !visible.published_at &&
     canPublishDirect;
 
+  const autoSaveMut = useMutation({
+    mutationFn: () =>
+      saveFn({ data: { schedule_id: visible!.id, shifts: buildShiftPayload() } }),
+    onSuccess: () => {
+      editsDirtyRef.current = false;
+      qc.invalidateQueries({ queryKey: ["schedule-shifts", visible?.id] });
+      qc.invalidateQueries({ queryKey: ["schedules-week-saved"] });
+      qc.invalidateQueries({ queryKey: ["schedules-branch-saved"] });
+      qc.invalidateQueries({ queryKey: ["dept-schedule-flags"] });
+      qc.invalidateQueries({ queryKey: ["daily-schedule-overview"] });
+    },
+  });
+
+  useEffect(() => {
+    if (!visible?.id || !editable || !empsQ.data?.length || !shiftDefsQ.isSuccess) return;
+    if (!editsDirtyRef.current) return;
+    const timer = window.setTimeout(() => {
+      if (!editsDirtyRef.current || autoSaveMut.isPending || saveMut.isPending) return;
+      autoSaveMut.mutate();
+    }, 2500);
+    return () => window.clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- debounce on edit state; mutate refs are stable enough
+  }, [edits, timeEdits, noteEdits, leaveTypeByCell, visible?.id, editable, empsQ.data, shiftDefsQ.isSuccess, saveMut.isPending]);
+
+  useEffect(() => {
+    const onBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (!editsDirtyRef.current) return;
+      e.preventDefault();
+      e.returnValue = "";
+    };
+    window.addEventListener("beforeunload", onBeforeUnload);
+    return () => window.removeEventListener("beforeunload", onBeforeUnload);
+  }, []);
+
   const deptNameById = useMemo(() => {
     const m: Record<string, string> = {};
     for (const d of deptsQ.data ?? []) m[d.id] = d.name;
@@ -2031,6 +2060,7 @@ function SchedulesPage() {
                               openScheduleFromPending({
                                 department_id: s.department_id,
                                 week_start: s.week_start,
+                                schedule_id: s.schedule_id,
                               })
                             }
                           >
@@ -2042,6 +2072,7 @@ function SchedulesPage() {
                                   openScheduleFromPending({
                                     department_id: s.department_id,
                                     week_start: s.week_start,
+                                    schedule_id: s.schedule_id,
                                   });
                                 }}
                                 className="text-primary hover:underline font-semibold"
@@ -2068,6 +2099,7 @@ function SchedulesPage() {
                                   openScheduleFromPending({
                                     department_id: s.department_id,
                                     week_start: s.week_start,
+                                    schedule_id: s.schedule_id,
                                   })
                                 }
                               >
