@@ -20,16 +20,31 @@ export function detectSystemLanguage(): AppLanguage {
   return resolveAppLanguageFromTags(tags);
 }
 
+function parseLang(value: string | null): AppLanguage | null {
+  if (value === "he" || value === "ar" || value === "en") return value;
+  return null;
+}
+
 export function getSavedLanguage(userId?: string): AppLanguage {
   try {
     // Prefer user-specific key, fall back to legacy global key
     const saved =
-      localStorage.getItem(userKey(userId)) ?? localStorage.getItem(STORAGE_KEY);
-    if (saved === "he" || saved === "ar" || saved === "en") return saved;
+      parseLang(localStorage.getItem(userKey(userId))) ??
+      parseLang(localStorage.getItem(STORAGE_KEY));
+    if (saved) return saved;
   } catch {
     // SSR or localStorage not available
   }
   return detectSystemLanguage();
+}
+
+/** Language chosen on the login screen (no account yet). Null if they never picked one. */
+export function getGuestLanguage(): AppLanguage | null {
+  try {
+    return parseLang(localStorage.getItem(STORAGE_KEY));
+  } catch {
+    return null;
+  }
 }
 
 export function saveLanguage(lang: AppLanguage, userId?: string) {

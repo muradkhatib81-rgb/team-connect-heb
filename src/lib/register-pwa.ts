@@ -1,5 +1,7 @@
 /** Register the installability service worker without blocking the UI. */
 
+import { isNativeApp } from "@/lib/native-app";
+
 const PWA_SW_PATH = "/sw.js";
 
 function isOurInstallSw(scriptURL: string): boolean {
@@ -29,6 +31,8 @@ async function pruneForeignServiceWorkers(): Promise<void> {
 
 export async function registerPwaServiceWorker(): Promise<void> {
   if (typeof window === "undefined") return;
+  // Native Capacitor uses FCM — do not register the web push SW inside the WebView.
+  if (isNativeApp()) return;
   if (!("serviceWorker" in navigator)) return;
 
   try {

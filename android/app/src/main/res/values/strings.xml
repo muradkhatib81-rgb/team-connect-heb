@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Team Connect</string>
+    <string name="title_activity_main">Team Connect</string>
+    <string name="package_name">com.teamconnect.heb</string>
+    <string name="custom_url_scheme">com.teamconnect.heb</string>
+</resources>

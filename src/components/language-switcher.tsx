@@ -29,6 +29,7 @@ export function LanguageSwitcher({ userId }: LanguageSwitcherProps = {}) {
   function handleChange(code: AppLanguage) {
     i18n.changeLanguage(code);
     saveLanguage(code, userId);
+    saveLanguage(code);
     document.documentElement.dir = code === "en" ? "ltr" : "rtl";
     document.documentElement.lang = code;
     if (userId) {

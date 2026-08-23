@@ -5,6 +5,7 @@ import {
   isPlatformPushEventEnabled,
   isPlatformPushScopeAllowed,
 } from "@/lib/platform-push-settings.functions";
+import { dispatchFcmToUsers } from "@/lib/fcm.server";
 import { dispatchWebPushToUsers, type WebPushPayload } from "@/lib/web-push.server";
 
 export type PushDispatchInput = {
@@ -86,7 +87,11 @@ export async function dispatchPushNotification(
         : null),
   };
 
-  return dispatchWebPushToUsers(userIds, payload);
+  const [web, fcm] = await Promise.all([
+    dispatchWebPushToUsers(userIds, payload),
+    dispatchFcmToUsers(userIds, payload),
+  ]);
+  return { sent: web.sent + fcm.sent, failed: web.failed + fcm.failed };
 }
 
 /** Best-effort push — never throws. Awaits completion so serverless does not kill the send. */

@@ -1,5 +1,5 @@
 import { Link, useNavigate, useRouterState } from "@tanstack/react-router";
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import {
   LayoutDashboard,
   Users,
@@ -49,7 +49,9 @@ import {
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { useTranslation } from "react-i18next";
-import { getSavedLanguage, saveLanguage } from "@/i18n";
+import { getGuestLanguage, getSavedLanguage, saveLanguage } from "@/i18n";
+import { useServerFn } from "@tanstack/react-start";
+import { syncPreferredLanguage } from "@/lib/translate-content.functions";
 import { NotificationsBell } from "@/components/notifications-bell";
 import { LanguageSwitcher } from "@/components/language-switcher";
 import { useActiveBranch } from "@/lib/use-active-branch";
@@ -76,6 +78,7 @@ interface NavItem {
 
 export function AppShell({ children }: { children: ReactNode }) {
   const { t, i18n } = useTranslation();
+  const syncLangFn = useServerFn(syncPreferredLanguage);
   const { data: profile, isLoading } = useAuth();
   const { data: company } = useCompanySettings();
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -151,17 +154,31 @@ export function AppShell({ children }: { children: ReactNode }) {
     // Plain employees may now access /dashboard directly (clean employee view).
   }, [profile?.is_active, profile?.must_change_password, profile, pathname, navigate]);
 
-  // Load language from profile (server) with localStorage fallback, then apply.
+  // Language chosen on the login screen must survive sign-in.
+  // Apply the guest pick once per session, then let the profile / in-app switcher own it.
+  const appliedGuestForUser = useRef<string | null>(null);
   useEffect(() => {
     if (!profile?.id) return;
-    const lang = profile.preferred_language ?? getSavedLanguage(profile.id);
+    const guestLang = getGuestLanguage();
+    const applyGuest =
+      !!guestLang && appliedGuestForUser.current !== profile.id;
+    const lang = applyGuest
+      ? guestLang
+      : (profile.preferred_language ?? getSavedLanguage(profile.id));
     saveLanguage(lang, profile.id);
+    saveLanguage(lang);
     if (i18n.language !== lang) {
-      i18n.changeLanguage(lang);
+      void i18n.changeLanguage(lang);
       document.documentElement.dir = lang === "en" ? "ltr" : "rtl";
       document.documentElement.lang = lang;
     }
-  }, [profile?.id, profile?.preferred_language]);
+    if (applyGuest) {
+      appliedGuestForUser.current = profile.id;
+      if (guestLang !== profile.preferred_language) {
+        void syncLangFn({ data: { lang: guestLang } }).catch(() => {});
+      }
+    }
+  }, [profile?.id, profile?.preferred_language, i18n, syncLangFn]);
 
   const breakSelfServiceNav = useBreakSelfServiceNavVisible();
   const { canManageBreaks } = useCanManageBreaks();

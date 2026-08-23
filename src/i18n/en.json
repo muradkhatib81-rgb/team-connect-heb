@@ -53,6 +53,7 @@
     "disabled": "Bell notifications disabled",
     "denied": "The browser blocked notifications. Enable them in browser settings.",
     "deniedHint": "Notifications are blocked in your browser. Open site settings and allow notifications.",
+    "nativeDeniedHint": "Notifications are blocked for this app. Open Android settings → Apps → Team Connect → Notifications, and turn them on.",
     "notConfigured": "Push service is not configured on the server yet.",
     "unsupported": "This browser or device does not support notifications.",
     "blocked": "Blocked",

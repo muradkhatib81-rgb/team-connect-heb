@@ -1,5 +1,6 @@
 import webpush from "web-push";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
+import { FCM_KEY_MARKER, isFcmEndpoint } from "@/lib/fcm-endpoints";
 
 export type WebPushPayload = {
   title: string;
@@ -138,16 +139,18 @@ export async function dispatchWebPushToUsers(
   };
 
   await Promise.allSettled(
-    (subs as PushSubscriptionRow[]).map(async (sub) => {
-      try {
-        await sendOne(sub);
-        sent++;
-      } catch (err: unknown) {
-        failed++;
-        const status = (err as { statusCode?: number })?.statusCode;
-        if (status === 404 || status === 410) staleIds.push(sub.id);
-      }
-    }),
+    (subs as PushSubscriptionRow[])
+      .filter((sub) => sub.p256dh !== FCM_KEY_MARKER && !isFcmEndpoint(sub.endpoint))
+      .map(async (sub) => {
+        try {
+          await sendOne(sub);
+          sent++;
+        } catch (err: unknown) {
+          failed++;
+          const status = (err as { statusCode?: number })?.statusCode;
+          if (status === 404 || status === 410) staleIds.push(sub.id);
+        }
+      }),
   );
 
   if (staleIds.length) {

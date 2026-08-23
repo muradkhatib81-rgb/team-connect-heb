@@ -2,6 +2,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
+import { FCM_KEY_MARKER, fcmEndpointForToken } from "@/lib/fcm-endpoints";
 import { dispatchPushNotification } from "@/lib/push-dispatch.server";
 import { getVapidPublicKey } from "@/lib/web-push.server";
 
@@ -47,6 +48,37 @@ export const savePushSubscription = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     await upsertPushSubscription(context.userId, data);
     return { ok: true };
+  });
+
+export const saveFcmToken = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) =>
+    z
+      .object({
+        token: z.string().min(8).max(4096),
+        platform: z.enum(["android", "ios"]).default("android"),
+      })
+      .parse(d),
+  )
+  .handler(async ({ data, context }) => {
+    await upsertPushSubscription(context.userId, {
+      endpoint: fcmEndpointForToken(data.token),
+      keys: { p256dh: FCM_KEY_MARKER, auth: data.platform },
+      userAgent: `native-${data.platform}`,
+    });
+    return { ok: true as const };
+  });
+
+export const removeFcmToken = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    const { error } = await (context.supabase as any)
+      .from("push_subscriptions")
+      .delete()
+      .eq("user_id", context.userId)
+      .eq("p256dh", FCM_KEY_MARKER);
+    if (error) throw new Error(error.message);
+    return { ok: true as const };
   });
 
 export const removePushSubscription = createServerFn({ method: "POST" })
@@ -104,10 +136,6 @@ export const sendTestPush = createServerFn({ method: "POST" })
   )
   .handler(async ({ data, context }): Promise<PushTestResult> => {
     try {
-      if (!getVapidPublicKey()) {
-        return { ok: false, reason: "no_vapid" };
-      }
-
       if (data.subscription) {
         try {
           await upsertPushSubscription(context.userId, data.subscription);
@@ -120,15 +148,20 @@ export const sendTestPush = createServerFn({ method: "POST" })
 
       const { data: subs, error: subErr } = await supabaseAdmin
         .from("push_subscriptions")
-        .select("id")
+        .select("id, p256dh")
         .eq("user_id", context.userId)
-        .limit(1);
+        .limit(5);
       if (subErr) {
         console.warn("[push] test subscription lookup failed:", subErr.message);
         return { ok: false, reason: "db_error", detail: subErr.message };
       }
       if (!subs?.length) {
         return { ok: false, reason: "no_subscription" };
+      }
+
+      const hasFcm = (subs as { p256dh: string }[]).some((s) => s.p256dh === FCM_KEY_MARKER);
+      if (!hasFcm && !getVapidPublicKey()) {
+        return { ok: false, reason: "no_vapid" };
       }
 
       const result = await dispatchPushNotification({

@@ -1,0 +1,7 @@
+# Place your Firebase Android config here (do not commit the real file).
+# Download from Firebase Console → Project settings → Your apps → Android
+# Package name must be: com.teamconnect.heb
+#
+# After adding the file, run:
+#   npm run cap:sync
+#   npm run cap:open:android

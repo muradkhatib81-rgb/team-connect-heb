@@ -17,6 +17,9 @@ import { Toaster } from "@/components/ui/sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { PlatformProvider } from "@/platform";
 import { registerPwaServiceWorker } from "@/lib/register-pwa";
+import { initNativePush, isNativePushOptedIn } from "@/lib/native-push";
+import { isNativeApp } from "@/lib/native-app";
+import { saveFcmToken } from "@/lib/push.functions";
 import { applyPwaBranding, fetchPlatformPwaIconUrl } from "@/lib/pwa-branding";
 
 function NotFoundComponent() {
@@ -247,6 +250,27 @@ function RootComponent() {
     }
     const t = window.setTimeout(run, 1200);
     return () => window.clearTimeout(t);
+  }, []);
+
+  useEffect(() => {
+    if (!isNativeApp()) return;
+    if (!isNativePushOptedIn()) return;
+    let cancelled = false;
+    const t = window.setTimeout(() => {
+      void (async () => {
+        const token = await initNativePush();
+        if (!token || cancelled) return;
+        try {
+          await saveFcmToken({ data: { token: token.value, platform: token.platform } });
+        } catch {
+          /* signed-out or network */
+        }
+      })();
+    }, 800);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(t);
+    };
   }, []);
 
   useEffect(() => {
