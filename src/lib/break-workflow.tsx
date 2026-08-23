@@ -177,6 +177,39 @@ export function todayJerusalemDate(): string {
   }).format(new Date());
 }
 
+/** Calendar date (YYYY-MM-DD) in Asia/Jerusalem for an instant. */
+export function toJerusalemDate(iso: string | Date): string {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Jerusalem",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(typeof iso === "string" ? new Date(iso) : iso);
+}
+
+/** True if the break belongs to the given Jerusalem calendar day (or is still active). */
+export function isBreakOnJerusalemDay(
+  row: {
+    status?: string | null;
+    planned_start?: string | null;
+    approved_at_time?: string | null;
+    requested_at?: string | null;
+    created_at?: string | null;
+    started_at?: string | null;
+  },
+  day: string,
+): boolean {
+  if (row.status === "active") return true;
+  const start =
+    row.started_at ??
+    row.planned_start ??
+    row.approved_at_time ??
+    row.requested_at ??
+    row.created_at;
+  if (!start) return false;
+  return toJerusalemDate(start) === day;
+}
+
 export function breakStartIso(row: {
   planned_start?: string | null;
   approved_at_time?: string | null;

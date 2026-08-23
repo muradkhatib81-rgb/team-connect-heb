@@ -53,6 +53,7 @@ import {
   BreakLiveTimer,
   consumedBreakSettingIdsForJerusalemDay,
   fmtBreakTime,
+  isBreakOnJerusalemDay,
   isoFromLocalTime,
   toLocalTime,
   todayJerusalemDate,
@@ -121,14 +122,15 @@ function BreaksPage() {
 
   const myReqQ = useQuery({
     enabled: !!me?.id,
-    queryKey: ["my-break-requests", me?.id],
+    // Include Jerusalem day so the list resets after midnight.
+    queryKey: ["my-break-requests", me?.id, todayJerusalemDate()],
     queryFn: async () => {
       const { data, error } = await supabase
         .from("break_requests")
         .select("*")
         .eq("user_id", me!.id)
         .order("created_at", { ascending: false })
-        .limit(20);
+        .limit(50);
       if (error) throw error;
       return (data ?? []) as BreakRequest[];
     },
@@ -293,7 +295,11 @@ function BreaksPage() {
 
   if (!me) return null;
 
-  const myReqs = myReqQ.data ?? [];
+  // Show only today's requests (Asia/Jerusalem) — list clears every calendar day.
+  const myReqs = useMemo(() => {
+    const day = todayJerusalemDate();
+    return (myReqQ.data ?? []).filter((r) => isBreakOnJerusalemDay(r, day));
+  }, [myReqQ.data]);
 
   return (
     <div className="space-y-6">
