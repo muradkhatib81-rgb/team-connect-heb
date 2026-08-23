@@ -1034,6 +1034,7 @@ export const updateEmployee = createServerFn({ method: "POST" })
                 scheduleId: null,
                 branchId: context.branchId,
                 tag: `leave-cancel-${data.user_id}-${Date.now()}`,
+                eventKey: "leave_cancel",
               });
             } catch {
               /* non-fatal */

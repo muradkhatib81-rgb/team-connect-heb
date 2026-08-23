@@ -11,6 +11,7 @@ const payloadSchema = z.object({
   url: z.string().trim().max(500).optional(),
   messageId: z.string().uuid().optional(),
   tag: z.string().trim().max(120).optional(),
+  tone: z.enum(["break_start", "break_end", "break_late", "default"]).nullish(),
 });
 
 function authorizePushHook(request: Request): boolean {
@@ -42,6 +43,7 @@ export const Route = createFileRoute("/api/public/hooks/dispatch-push")({
             url: data.url,
             messageId: data.messageId,
             tag: data.tag,
+            tone: data.tone ?? null,
           });
           return Response.json({ ok: true, ...result });
         } catch (e: unknown) {

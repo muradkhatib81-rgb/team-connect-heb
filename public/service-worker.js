@@ -30,6 +30,35 @@ function parsePushPayload(event) {
   }
 }
 
+function vibrateForTone(tone) {
+  if (tone === "break_start") return [500, 100, 500, 100, 700, 120, 900];
+  if (tone === "break_end") return [700, 80, 700, 80, 700, 80, 1000];
+  if (tone === "break_late") return [300, 60, 300, 60, 300, 60, 300, 60, 800];
+  return [400, 120, 400, 120, 600];
+}
+
+function soundForTone(tone) {
+  if (tone === "break_start") return "/sounds/break-start.wav";
+  if (tone === "break_end") return "/sounds/break-end.wav";
+  if (tone === "break_late") return "/sounds/break-late.wav";
+  return undefined;
+}
+
+async function askOpenClientsToPlayTone(tone) {
+  if (!tone) return;
+  try {
+    const clients = await self.clients.matchAll({
+      type: "window",
+      includeUncontrolled: true,
+    });
+    for (const client of clients) {
+      client.postMessage({ type: "PLAY_ALERT_TONE", tone });
+    }
+  } catch {
+    /* ignore */
+  }
+}
+
 self.addEventListener("push", (event) => {
   const data = parsePushPayload(event) ?? {
     title: "מערכת ניהול עובדים",
@@ -41,7 +70,9 @@ self.addEventListener("push", (event) => {
   const body = data.body || "";
   const url = data.url || "/dashboard";
   const tag = `tc-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-  const vibrate = [400, 120, 400, 120, 600];
+  const tone = data.tone || null;
+  const vibrate = Array.isArray(data.vibrate) ? data.vibrate : vibrateForTone(tone);
+  const sound = data.sound || soundForTone(tone);
 
   event.waitUntil(
     (async () => {
@@ -52,10 +83,12 @@ self.addEventListener("push", (event) => {
         /* ignore */
       }
 
-      await self.registration.showNotification(title, {
+      await askOpenClientsToPlayTone(tone);
+
+      const options = {
         body,
         tag,
-        data: { url },
+        data: { url, tone },
         icon: "/icons/icon-192.png",
         badge: "/icons/icon-192.png",
         vibrate,
@@ -63,7 +96,10 @@ self.addEventListener("push", (event) => {
         renotify: true,
         requireInteraction: true,
         timestamp: Date.now(),
-      });
+      };
+      if (sound) options.sound = sound;
+
+      await self.registration.showNotification(title, options);
     })(),
   );
 });

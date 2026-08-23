@@ -298,10 +298,52 @@ async function getScheduleDepartmentRecipientIds(
       .select("id")
       .eq("department_id", departmentId)
       .eq("is_active", true),
-    supabaseAdmin.from("departments").select("manager_id, code").eq("id", departmentId).maybeSingle(),
+    supabaseAdmin
+      .from("departments")
+      .select("manager_id, code, branch_id")
+      .eq("id", departmentId)
+      .maybeSingle(),
   ]);
   const ids = new Set<string>((emps ?? []).map((e: any) => e.id as string));
   if (dept?.manager_id && dept.code !== "management") ids.add(dept.manager_id as string);
+
+  // Managers / schedule editors in the same branch also get schedule action notices.
+  const branchId = (dept as { branch_id?: string } | null)?.branch_id ?? null;
+  if (branchId) {
+    const [{ data: permRows }, { data: roleRows }] = await Promise.all([
+      supabaseAdmin
+        .from("user_task_permissions")
+        .select("user_id")
+        .eq("branch_id", branchId)
+        .or(
+          [
+            "can_create_schedule.eq.true",
+            "can_edit_schedule.eq.true",
+            "can_approve_schedule.eq.true",
+            "can_publish_schedule.eq.true",
+            "can_manage_schedule.eq.true",
+          ].join(","),
+        ),
+      supabaseAdmin
+        .from("user_roles")
+        .select("user_id")
+        .in("role", ["branch_manager", "assistant_manager", "main_admin", "system_admin"]),
+    ]);
+    for (const row of permRows ?? []) {
+      if (row.user_id) ids.add(row.user_id as string);
+    }
+    const roleUserIds = [...new Set((roleRows ?? []).map((r: { user_id: string }) => r.user_id))];
+    if (roleUserIds.length) {
+      const { data: branchProfiles } = await supabaseAdmin
+        .from("profiles")
+        .select("id")
+        .eq("branch_id", branchId)
+        .eq("is_active", true)
+        .in("id", roleUserIds);
+      for (const p of branchProfiles ?? []) ids.add(p.id as string);
+    }
+  }
+
   if (excludeUserId) ids.delete(excludeUserId);
   return [...ids];
 }
@@ -312,6 +354,7 @@ async function notifyScheduleDepartment(
   departmentId: string,
   message: string,
   excludeUserId?: string | null,
+  eventKey: string = "schedule_update",
 ) {
   const recipientIds = await getScheduleDepartmentRecipientIds(departmentId, excludeUserId);
   if (!recipientIds.length) {
@@ -323,6 +366,7 @@ async function notifyScheduleDepartment(
     message,
     scheduleId,
     title: "עדכון סידור עבודה",
+    eventKey,
   });
 }
 
@@ -1150,6 +1194,7 @@ export const saveScheduleShifts = createServerFn({ method: "POST" })
         sched.department_id,
         `סידור העבודה השבועי עודכן (${when}). נא לעיין בשינויים.`,
         context.userId,
+        "schedule_update",
       );
     }
     return { ok: true, notified: shouldNotifyEmployees };
@@ -1268,6 +1313,7 @@ export const submitSchedule = createServerFn({ method: "POST" })
         sched.department_id,
         "סידור העבודה השבועי פורסם. נא לעיין בסידור המעודכן.",
         context.userId,
+        "schedule_publish",
       );
 
       return { ok: true, approved: true, published: true };
@@ -1357,6 +1403,7 @@ export const approveSchedule = createServerFn({ method: "POST" })
         sched.department_id,
         "סידור העבודה השבועי פורסם. נא לעיין בסידור המעודכן.",
         context.userId,
+        "schedule_publish",
       );
     }
 
@@ -1404,6 +1451,7 @@ export const publishSchedule = createServerFn({ method: "POST" })
       sched.department_id,
       "סידור העבודה השבועי פורסם. נא לעיין בסידור המעודכן.",
       context.userId,
+      "schedule_publish",
     );
     return { ok: true };
   });
@@ -1420,6 +1468,7 @@ async function notifySchedulePublished(
     departmentId,
     "סידור העבודה השבועי פורסם. נא לעיין בסידור המעודכן.",
     excludeUserId,
+    "schedule_publish",
   );
 }
 
@@ -1664,23 +1713,15 @@ export const rejectSchedule = createServerFn({ method: "POST" })
       });
     if (auditErr) throw new Error(auditErr.message);
 
-    // Notify the department manager / creator so they know to fix and resubmit.
-    const { data: dept } = await supabaseAdmin
-      .from("departments")
-      .select("manager_id, code")
-      .eq("id", sched.department_id)
-      .maybeSingle();
-    const recipients = new Set<string>();
-    if (sched.created_by) recipients.add(sched.created_by);
-    if (dept?.manager_id && dept.code !== "management") recipients.add(dept.manager_id);
-    recipients.delete(context.userId);
-    if (recipients.size) {
-      await notifyUsersWithPush({
-        userIds: [...recipients],
-        message: `סידור העבודה נדחה: ${data.note}`,
-        scheduleId: data.schedule_id,
-      });
-    }
+    // Department employees + schedule editors/managers (same recipient set as publish/update).
+    await notifyScheduleDepartment(
+      context.supabase,
+      data.schedule_id,
+      sched.department_id,
+      `סידור העבודה נדחה: ${data.note}`,
+      context.userId,
+      "schedule_reject",
+    );
     return { ok: true };
   });
 

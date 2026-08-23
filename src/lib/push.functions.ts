@@ -91,6 +91,7 @@ export const dispatchMessagePush = createServerFn({ method: "POST" })
       message: (msg.body?.trim() || msg.title).slice(0, 240),
       messageId: data.messageId,
       url: "/communications",
+      eventKey: "messages",
     });
     return { ok: true, ...result };
   });

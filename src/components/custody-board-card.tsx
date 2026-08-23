@@ -41,7 +41,7 @@ export function CustodyBoardCard() {
 
   const announceCustody = (action: "take" | "return", itemName: string) => {
     void announceCustodyFn({ data: { action, itemName } }).catch(() => {
-      /* push is best-effort */
+      /* in-app announce is best-effort */
     });
   };
 

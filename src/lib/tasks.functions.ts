@@ -153,6 +153,7 @@ async function notifyUsers(_supabase: any, userIds: string[], message: string) {
     message,
     scheduleId: null,
     tag: `task-notif-${Date.now()}`,
+    eventKey: "tasks",
   });
 }
 

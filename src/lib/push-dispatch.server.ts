@@ -1,5 +1,10 @@
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
 import { notificationPushUrl } from "@/lib/notification-navigation";
+import {
+  filterUserIdsForPushScope,
+  isPlatformPushEventEnabled,
+  isPlatformPushScopeAllowed,
+} from "@/lib/platform-push-settings.functions";
 import { dispatchWebPushToUsers, type WebPushPayload } from "@/lib/web-push.server";
 
 export type PushDispatchInput = {
@@ -7,10 +12,14 @@ export type PushDispatchInput = {
   message: string;
   scheduleId?: string | null;
   weekStart?: string | null;
+  branchId?: string | null;
   title?: string;
   url?: string;
   messageId?: string;
   tag?: string;
+  /** Platform-owner toggle key. When set and disabled → skip Web Push only. */
+  eventKey?: string | null;
+  tone?: "break_start" | "break_end" | "break_late" | "default" | null;
 };
 
 function freshPushTag(prefix: string): string {
@@ -35,9 +44,23 @@ async function resolveWeekStart(
 export async function dispatchPushNotification(
   input: PushDispatchInput,
 ): Promise<{ sent: number; failed: number }> {
-  const userIds = [...new Set(input.userIds.filter(Boolean))];
+  let userIds = [...new Set(input.userIds.filter(Boolean))];
   const body = input.message.trim();
   if (!userIds.length || !body) return { sent: 0, failed: 0 };
+
+  if (input.eventKey) {
+    if (!(await isPlatformPushEventEnabled(input.eventKey))) {
+      return { sent: 0, failed: 0 };
+    }
+    if (input.branchId) {
+      if (!(await isPlatformPushScopeAllowed(input.branchId))) {
+        return { sent: 0, failed: 0 };
+      }
+    } else {
+      userIds = await filterUserIdsForPushScope(userIds);
+      if (!userIds.length) return { sent: 0, failed: 0 };
+    }
+  }
 
   const weekStart = await resolveWeekStart(input.scheduleId, input.weekStart);
   const url =
@@ -54,6 +77,13 @@ export async function dispatchPushNotification(
       input.tag?.trim() ||
       freshPushTag(input.messageId ? "message" : input.scheduleId ? "schedule" : "notif"),
     silent: false,
+    tone:
+      input.tone ??
+      (input.eventKey === "break_start" ||
+      input.eventKey === "break_end" ||
+      input.eventKey === "break_late"
+        ? input.eventKey
+        : null),
   };
 
   return dispatchWebPushToUsers(userIds, payload);
@@ -64,8 +94,9 @@ export async function dispatchPushBestEffort(input: PushDispatchInput): Promise<
   try {
     const result = await dispatchPushNotification(input);
     if (result.sent === 0 && result.failed === 0) {
-      console.warn("[push] dispatch skipped (no subs or VAPID missing)", {
+      console.warn("[push] dispatch skipped (no subs, VAPID missing, or event disabled)", {
         recipients: input.userIds.length,
+        eventKey: input.eventKey ?? null,
       });
     } else if (result.sent === 0 && result.failed > 0) {
       console.warn("[push] all endpoints failed", {
@@ -83,6 +114,7 @@ export async function pushForScheduleNotification(opts: {
   message: string;
   scheduleId?: string | null;
   weekStart?: string | null;
+  eventKey?: string | null;
 }): Promise<void> {
   const userIds = [...new Set(opts.userIds.filter(Boolean))];
   if (!userIds.length || !opts.message.trim()) return;
@@ -93,12 +125,14 @@ export async function pushForScheduleNotification(opts: {
     weekStart: opts.weekStart ?? null,
     title: "עדכון סידור עבודה",
     tag: freshPushTag(opts.scheduleId ? `schedule-${opts.scheduleId}` : "schedule"),
+    eventKey: opts.eventKey ?? "schedule_update",
   });
 }
 
 /**
- * Fast in-app insert, then best-effort Web Push (time-capped).
- * Never throws — callers (save/publish) must stay responsive.
+ * Always inserts silent in-app bell rows; Web Push only when platform owner
+ * enabled the event (or eventKey omitted → push on).
+ * Never throws — callers must stay responsive.
  */
 export async function notifyUsersWithPush(opts: {
   userIds: string[];
@@ -110,6 +144,9 @@ export async function notifyUsersWithPush(opts: {
   tag?: string;
   url?: string;
   messageId?: string;
+  eventKey?: string | null;
+  /** When false, skip Web Push (silent bell only). */
+  sendPush?: boolean;
 }): Promise<void> {
   try {
     const userIds = [...new Set(opts.userIds.filter(Boolean))];
@@ -135,20 +172,7 @@ export async function notifyUsersWithPush(opts: {
         opts.messageId ? "message" : opts.scheduleId ? `schedule-${opts.scheduleId}` : "notif",
       );
 
-    // 1) Web Push first and await fully — serverless kills in-flight work after the response.
-    //    (A short timeout previously left only the silent in-app row.)
-    await dispatchPushBestEffort({
-      userIds,
-      message,
-      scheduleId: opts.scheduleId ?? null,
-      weekStart,
-      title: opts.title,
-      tag,
-      url: opts.url,
-      messageId: opts.messageId,
-    });
-
-    // 2) In-app rows (bell) after push — DB push hook must stay no-op to avoid duplicates.
+    // 1) Silent in-app bell first — always, regardless of push toggles.
     const { error: insertErr } = await supabaseAdmin.from("schedule_notifications").insert(
       userIds.map((uid) => ({
         user_id: uid,
@@ -160,6 +184,21 @@ export async function notifyUsersWithPush(opts: {
     if (insertErr) {
       console.warn("[notify] schedule_notifications insert failed:", insertErr.message);
     }
+
+    // 2) Web Push only when allowed.
+    if (opts.sendPush === false) return;
+    await dispatchPushBestEffort({
+      userIds,
+      message,
+      scheduleId: opts.scheduleId ?? null,
+      weekStart,
+      branchId,
+      title: opts.title,
+      tag,
+      url: opts.url,
+      messageId: opts.messageId,
+      eventKey: opts.eventKey,
+    });
   } catch (e) {
     console.warn("[notify] notifyUsersWithPush failed:", e);
   }
@@ -168,6 +207,7 @@ export async function notifyUsersWithPush(opts: {
 /**
  * Notify every active profile in the branch except the actor.
  * @param insertInApp false = Web Push only (when a DB trigger already wrote in-app rows).
+ * @param sendPush false = silent in-app bell only (no Web Push).
  * Never throws.
  */
 export async function notifyBranchExceptActor(opts: {
@@ -177,6 +217,8 @@ export async function notifyBranchExceptActor(opts: {
   tag?: string;
   url?: string;
   insertInApp?: boolean;
+  sendPush?: boolean;
+  eventKey?: string | null;
 }): Promise<number> {
   try {
     const message = opts.message.trim();
@@ -194,12 +236,33 @@ export async function notifyBranchExceptActor(opts: {
 
     const url = opts.url ?? "/dashboard";
     const tag = opts.tag?.trim() || freshPushTag("branch");
-    if (opts.insertInApp === false) {
+    const sendPush = opts.sendPush !== false;
+    const insertInApp = opts.insertInApp !== false;
+
+    if (!sendPush) {
+      if (!insertInApp) return 0;
+      const { error: insertErr } = await supabaseAdmin.from("schedule_notifications").insert(
+        userIds.map((uid) => ({
+          user_id: uid,
+          message,
+          schedule_id: null,
+          branch_id: opts.branchId,
+        })),
+      );
+      if (insertErr) {
+        console.warn("[notify] in-app-only insert failed:", insertErr.message);
+      }
+      return userIds.length;
+    }
+
+    if (!insertInApp) {
       await dispatchPushBestEffort({
         userIds,
         message,
         tag,
         url,
+        branchId: opts.branchId,
+        eventKey: opts.eventKey,
       });
     } else {
       await notifyUsersWithPush({
@@ -208,6 +271,7 @@ export async function notifyBranchExceptActor(opts: {
         branchId: opts.branchId,
         tag,
         url,
+        eventKey: opts.eventKey,
       });
     }
     return userIds.length;

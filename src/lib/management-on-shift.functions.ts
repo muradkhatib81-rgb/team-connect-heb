@@ -55,13 +55,14 @@ export const announceManagementOnShiftChange = createServerFn({ method: "POST" }
       url: "/dashboard",
       tag: `mos-${data.action}-${context.userId}-${Date.now()}`,
       insertInApp: data.action === "end",
+      eventKey: "management_on_shift",
     });
 
     return { ok: true as const, recipients };
   });
 
 /**
- * Custody take / return: everyone in the branch except who clicked.
+ * Custody take / return: silent in-app bell for the branch (no Web Push).
  */
 export const announceCustodyChange = createServerFn({ method: "POST" })
   .middleware([requireBranchContext])
@@ -91,6 +92,7 @@ export const announceCustodyChange = createServerFn({ method: "POST" })
       url: "/dashboard",
       tag: `custody-${data.action}-${context.userId}-${Date.now()}`,
       insertInApp: true,
+      eventKey: data.action === "take" ? "custody_take" : "custody_return",
     });
 
     return { ok: true as const, recipients };

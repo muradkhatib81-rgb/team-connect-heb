@@ -8,6 +8,8 @@ export type WebPushPayload = {
   tag?: string;
   /** When true, OS may suppress sound — always false for user-facing alerts. */
   silent?: boolean;
+  /** Distinctive alert tone for break lifecycle (played in open tabs + vibrate pattern). */
+  tone?: "break_start" | "break_end" | "break_late" | "default" | null;
 };
 
 let vapidConfigured = false;
@@ -87,6 +89,25 @@ export async function dispatchWebPushToUsers(
 
   if (error || !subs?.length) return { sent: 0, failed: 0 };
 
+  const tone = payload.tone ?? null;
+  const vibrate =
+    tone === "break_start"
+      ? [500, 100, 500, 100, 700, 120, 900]
+      : tone === "break_end"
+        ? [700, 80, 700, 80, 700, 80, 1000]
+        : tone === "break_late"
+          ? [300, 60, 300, 60, 300, 60, 300, 60, 800]
+          : [400, 120, 400, 120, 600];
+
+  const sound =
+    tone === "break_start"
+      ? "/sounds/break-start.wav"
+      : tone === "break_end"
+        ? "/sounds/break-end.wav"
+        : tone === "break_late"
+          ? "/sounds/break-late.wav"
+          : undefined;
+
   const body = JSON.stringify({
     title: payload.title,
     body: payload.body,
@@ -94,7 +115,9 @@ export async function dispatchWebPushToUsers(
     // Hint only — SW forces a fresh unique tag + silent:false.
     tag: payload.tag ?? `notif-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
     silent: false,
-    vibrate: [400, 120, 400, 120, 600],
+    vibrate,
+    tone,
+    sound,
     renotify: true,
     requireInteraction: true,
   });

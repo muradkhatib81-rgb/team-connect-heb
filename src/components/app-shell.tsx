@@ -65,6 +65,7 @@ import {
 } from "@/lib/use-current-permissions";
 import { fetchCustodyUserCaps } from "@/lib/custody-workflow";
 import { useAiAccess } from "@/lib/use-ai-access";
+import { bindPushToneListener } from "@/lib/alert-tone";
 
 interface NavItem {
   to: string;
@@ -873,6 +874,9 @@ function IdleLogoutGuard({
 function RealtimeBridge({ uid }: { uid: string }) {
   const qc = useQueryClient();
   const { activeBranchId } = useActiveBranch();
+
+  useEffect(() => bindPushToneListener(), []);
+
   useEffect(() => {
     let scheduleBumpTimer: ReturnType<typeof setTimeout> | null = null;
     let notifBumpTimer: ReturnType<typeof setTimeout> | null = null;
