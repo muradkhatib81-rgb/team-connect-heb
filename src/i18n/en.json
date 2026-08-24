@@ -901,5 +901,58 @@
     "appDescription": "Employee management for teams, departments, schedules, and branch roles.",
     "menu": "Menu",
     "notifications": "Notifications"
+  },
+  "platformMonitoring": {
+    "title": "Platform monitoring",
+    "subtitle": "Server-side checks for every company and branch — including future ones. This page only shows saved results, without slowing the app.",
+    "refreshView": "Refresh view",
+    "runNow": "Run check now",
+    "running": "Checking…",
+    "healthyCount": "{{ok}} / {{total}} healthy",
+    "companiesCount": "{{count}} companies",
+    "branchesCount": "{{count}} branches",
+    "openFindings": "{{count}} open findings",
+    "scanHint": "Automatic server scan (local every 20 minutes · production at least once daily + manual button). View refreshes every minute. Last check: {{when}}",
+    "loadingStored": "Loading saved monitoring…",
+    "emptyStored": "No saved results yet. This is normal before the first migration / first scan.",
+    "runFirst": "Run first server check",
+    "sectionPlatform": "Platform summary",
+    "sectionCompanies": "All companies",
+    "sectionBranches": "All branches",
+    "sectionEvents": "Issues / overload / recovery log",
+    "noCompanies": "No companies to check",
+    "noBranches": "No branches to check",
+    "noEvents": "No events yet — that is a good sign.",
+    "checkedAt": "Checked: {{when}}",
+    "sectionLiveInfra": "Live infrastructure checks (light)",
+    "liveInfraHint": "DB / API / Storage / Realtime — read-only checks from this page, in addition to the company/branch server scan.",
+    "checking": "Checking…",
+    "scanFailed": "Check failed",
+    "scanOk": "Check complete · {{companies}} companies · {{branches}} branches",
+    "state": {
+      "healthy": "Healthy",
+      "degraded": "Degraded / warning",
+      "down": "Down",
+      "unknown": "Unknown"
+    },
+    "kind": {
+      "platform": "Platform",
+      "company": "Company",
+      "branch": "Branch",
+      "database": "Database",
+      "api": "API",
+      "storage": "Storage",
+      "realtime": "Real-Time",
+      "queue": "Job queue",
+      "sync": "Sync",
+      "configuration": "Configuration",
+      "managers": "Managers",
+      "department": "Department"
+    },
+    "event": {
+      "issue": "Issue",
+      "recovery": "Recovery",
+      "overload": "Overload"
+    }
   }
 }

@@ -901,5 +901,58 @@
     "appDescription": "מערכת ניהול עובדים לניהול צוות, מחלקות, סידורים ותפקידים בסניף.",
     "menu": "תפריט",
     "notifications": "התראות"
+  },
+  "platformMonitoring": {
+    "title": "ניטור פלטפורמה",
+    "subtitle": "בדיקות שרתיות לכל החברות והסניפים — כולל עתידיים. הדף מציג רק תוצאות שמורות, בלי להעמיס על האפליקציה.",
+    "refreshView": "רענון תצוגה",
+    "runNow": "הרץ בדיקה עכשיו",
+    "running": "בודק…",
+    "healthyCount": "{{ok}} / {{total}} תקינים",
+    "companiesCount": "{{count}} חברות",
+    "branchesCount": "{{count}} סניפים",
+    "openFindings": "{{count}} ממצאים פתוחים",
+    "scanHint": "סריקה אוטומטית מהשרת (מקומי כל 20 דקות · בפרודקשן לפחות פעם ביום + כפתור ידני). עדכון תצוגה כל דקה. בדיקה אחרונה: {{when}}",
+    "loadingStored": "טוען ניטור שמור…",
+    "emptyStored": "עדיין אין תוצאות שמורות. זה תקין לפני הרצת המיגרציה הראשונה / הסריקה הראשונה.",
+    "runFirst": "הרץ בדיקה ראשונה מהשרת",
+    "sectionPlatform": "סיכום פלטפורמה",
+    "sectionCompanies": "כל החברות",
+    "sectionBranches": "כל הסניפים",
+    "sectionEvents": "יומן תקלות / עומס / התאוששות",
+    "noCompanies": "אין חברות לבדיקה",
+    "noBranches": "אין סניפים לבדיקה",
+    "noEvents": "אין אירועים עדיין — זה סימן טוב.",
+    "checkedAt": "נבדק: {{when}}",
+    "sectionLiveInfra": "בדיקות תשתית חיות (קלות)",
+    "liveInfraHint": "DB / API / Storage / Realtime — בדיקות קריאה בלבד מהדף, בנוסף לסריקת החברות/סניפים מהשרת.",
+    "checking": "בודק…",
+    "scanFailed": "הבדיקה נכשלה",
+    "scanOk": "בדיקה הושלמה · חברות {{companies}} · סניפים {{branches}}",
+    "state": {
+      "healthy": "תקין",
+      "degraded": "מוגבל / אזהרה",
+      "down": "לא זמין",
+      "unknown": "לא ידוע"
+    },
+    "kind": {
+      "platform": "פלטפורמה",
+      "company": "חברה",
+      "branch": "סניף",
+      "database": "מסד נתונים",
+      "api": "API",
+      "storage": "אחסון",
+      "realtime": "Real-Time",
+      "queue": "תור עבודות",
+      "sync": "סנכרון",
+      "configuration": "תצורה",
+      "managers": "מנהלים",
+      "department": "מחלקה"
+    },
+    "event": {
+      "issue": "תקלה",
+      "recovery": "התאוששות",
+      "overload": "עומס"
+    }
   }
 }

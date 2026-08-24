@@ -2,6 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useMemo } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
+import { useTranslation } from "react-i18next";
 import {
   Activity,
   CheckCircle2,
@@ -31,91 +32,90 @@ export const Route = createFileRoute("/_authenticated/platform/monitoring")({
   component: PlatformMonitoringPage,
 });
 
-const STATE_META: Record<
-  HealthState,
-  { label: string; icon: typeof CheckCircle2; className: string }
-> = {
-  healthy: {
-    label: "תקין",
-    icon: CheckCircle2,
-    className: "text-emerald-600 bg-emerald-100 dark:bg-emerald-950/30 dark:text-emerald-400",
-  },
-  degraded: {
-    label: "מוגבל / אזהרה",
-    icon: AlertTriangle,
-    className: "text-amber-600 bg-amber-100 dark:bg-amber-950/30 dark:text-amber-400",
-  },
-  down: {
-    label: "לא זמין",
-    icon: XCircle,
-    className: "text-rose-600 bg-rose-100 dark:bg-rose-950/30 dark:text-rose-400",
-  },
-  unknown: { label: "לא ידוע", icon: HelpCircle, className: "text-muted-foreground bg-muted" },
+const STATE_ICONS: Record<HealthState, typeof CheckCircle2> = {
+  healthy: CheckCircle2,
+  degraded: AlertTriangle,
+  down: XCircle,
+  unknown: HelpCircle,
 };
 
-const KIND_LABEL: Record<string, string> = {
-  platform: "פלטפורמה",
-  company: "חברה",
-  branch: "סניף",
-  database: "מסד נתונים",
-  api: "API",
+const STATE_CLASS: Record<HealthState, string> = {
+  healthy: "text-emerald-600 bg-emerald-100 dark:bg-emerald-950/30 dark:text-emerald-400",
+  degraded: "text-amber-600 bg-amber-100 dark:bg-amber-950/30 dark:text-amber-400",
+  down: "text-rose-600 bg-rose-100 dark:bg-rose-950/30 dark:text-rose-400",
+  unknown: "text-muted-foreground bg-muted",
 };
 
-const EVENT_LABEL: Record<string, string> = {
-  issue: "תקלה",
-  recovery: "התאוששות",
-  overload: "עומס",
-};
+function localeForLang(lang: string): string {
+  if (lang.startsWith("ar")) return "ar";
+  if (lang.startsWith("en")) return "en-US";
+  return "he-IL";
+}
 
-function formatWhen(iso: string | null | undefined): string {
+function formatWhen(iso: string | null | undefined, lang: string): string {
   if (!iso) return "—";
   try {
-    return new Date(iso).toLocaleString("he-IL", { timeZone: "Asia/Jerusalem" });
+    return new Date(iso).toLocaleString(localeForLang(lang), { timeZone: "Asia/Jerusalem" });
   } catch {
     return iso;
   }
 }
 
 function SnapshotCard({ row }: { row: PlatformHealthSnapshot }) {
-  const meta = STATE_META[row.state] ?? STATE_META.unknown;
-  const Icon = meta.icon;
+  const { t, i18n } = useTranslation();
+  const state = (row.state in STATE_CLASS ? row.state : "unknown") as HealthState;
+  const Icon = STATE_ICONS[state];
+  const className = STATE_CLASS[state];
+  const kindLabel = t(`platformMonitoring.kind.${row.target_kind}`, {
+    defaultValue: row.target_kind,
+  });
+
   return (
     <Card className="card-elevated p-4 space-y-2">
       <div className="flex items-center justify-between gap-2">
         <div className="min-w-0">
-          <p className="text-sm font-medium truncate">{row.target_name || KIND_LABEL[row.target_kind]}</p>
-          <p className="text-[11px] text-muted-foreground">{KIND_LABEL[row.target_kind] ?? row.target_kind}</p>
+          <p className="text-sm font-medium truncate">{row.target_name || kindLabel}</p>
+          <p className="text-[11px] text-muted-foreground">{kindLabel}</p>
         </div>
-        <div className={`size-8 shrink-0 rounded-lg flex items-center justify-center ${meta.className}`}>
+        <div className={`size-8 shrink-0 rounded-lg flex items-center justify-center ${className}`}>
           <Icon className="size-4" />
         </div>
       </div>
-      <Badge variant="outline" className={meta.className.replace("bg-", "border-")}>
-        {meta.label}
+      <Badge variant="outline" className={className.replace("bg-", "border-")}>
+        {t(`platformMonitoring.state.${state}`)}
       </Badge>
       {row.message && (
         <p className="text-[11px] text-muted-foreground break-words" dir="auto">
           {row.message}
         </p>
       )}
-      <p className="text-[11px] text-muted-foreground">נבדק: {formatWhen(row.checked_at)}</p>
+      <p className="text-[11px] text-muted-foreground">
+        {t("platformMonitoring.checkedAt", { when: formatWhen(row.checked_at, i18n.language) })}
+      </p>
     </Card>
   );
 }
 
 function EventRow({ row }: { row: PlatformHealthEvent }) {
-  const meta = STATE_META[row.state] ?? STATE_META.unknown;
+  const { t, i18n } = useTranslation();
+  const state = (row.state in STATE_CLASS ? row.state : "unknown") as HealthState;
+  const className = STATE_CLASS[state];
+
   return (
     <div className="flex flex-col sm:flex-row sm:items-start gap-2 border-b border-border/60 py-3 last:border-0">
-      <div className="sm:w-40 shrink-0 text-[11px] text-muted-foreground">{formatWhen(row.created_at)}</div>
+      <div className="sm:w-40 shrink-0 text-[11px] text-muted-foreground">
+        {formatWhen(row.created_at, i18n.language)}
+      </div>
       <div className="min-w-0 flex-1 space-y-1">
         <div className="flex flex-wrap items-center gap-2">
-          <Badge variant="outline">{EVENT_LABEL[row.event_type] ?? row.event_type}</Badge>
-          <Badge variant="outline" className={meta.className.replace("bg-", "border-")}>
-            {meta.label}
+          <Badge variant="outline">
+            {t(`platformMonitoring.event.${row.event_type}`, { defaultValue: row.event_type })}
+          </Badge>
+          <Badge variant="outline" className={className.replace("bg-", "border-")}>
+            {t(`platformMonitoring.state.${state}`)}
           </Badge>
           <span className="text-xs text-muted-foreground">
-            {KIND_LABEL[row.target_kind] ?? row.target_kind}
+            {t(`platformMonitoring.kind.${row.target_kind}`, { defaultValue: row.target_kind })}
           </span>
         </div>
         <p className="text-sm font-medium truncate">{row.target_name || "—"}</p>
@@ -128,6 +128,7 @@ function EventRow({ row }: { row: PlatformHealthEvent }) {
 }
 
 function PlatformMonitoringPage() {
+  const { t, i18n } = useTranslation();
   const { runtime } = usePlatformContext();
   const qc = useQueryClient();
   const loadDashboard = useServerFn(getPlatformHealthDashboard);
@@ -139,7 +140,6 @@ function PlatformMonitoringPage() {
     refetchInterval: 60_000,
   });
 
-  // Keep existing light infra probes as a secondary live section (client read-only).
   const liveInfraQuery = useQuery({
     queryKey: ["platform-monitoring", "live-infra"],
     queryFn: () => runtime.getGlobalMonitoring(),
@@ -151,14 +151,17 @@ function PlatformMonitoringPage() {
     onSuccess: (result) => {
       void qc.invalidateQueries({ queryKey: ["platform-monitoring", "stored-health"] });
       if (!result.ok) {
-        toast.error(result.error ?? "הבדיקה נכשלה");
+        toast.error(result.error ?? t("platformMonitoring.scanFailed"));
         return;
       }
       toast.success(
-        `בדיקה הושלמה · חברות ${result.companies_checked ?? 0} · סניפים ${result.branches_checked ?? 0}`,
+        t("platformMonitoring.scanOk", {
+          companies: result.companies_checked ?? 0,
+          branches: result.branches_checked ?? 0,
+        }),
       );
     },
-    onError: (e: Error) => toast.error(e.message ?? "הבדיקה נכשלה"),
+    onError: (e: Error) => toast.error(e.message ?? t("platformMonitoring.scanFailed")),
   });
 
   const snapshots = healthQuery.data?.snapshots ?? [];
@@ -192,11 +195,8 @@ function PlatformMonitoringPage() {
             <Activity className="size-6" />
           </div>
           <div className="min-w-0">
-            <h1 className="truncate text-2xl sm:text-3xl font-bold">ניטור פלטפורמה</h1>
-            <p className="text-sm text-muted-foreground mt-1">
-              בדיקה שרתית לכל החברות והסניפים — כולל עתידיים. הדף רק מציג תוצאות שמורות, בלי
-              להעמיס על האפליקציה.
-            </p>
+            <h1 className="truncate text-2xl sm:text-3xl font-bold">{t("platformMonitoring.title")}</h1>
+            <p className="text-sm text-muted-foreground mt-1">{t("platformMonitoring.subtitle")}</p>
           </div>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -208,7 +208,7 @@ function PlatformMonitoringPage() {
             disabled={healthQuery.isFetching}
           >
             <RefreshCcw className={`size-4 ${healthQuery.isFetching ? "animate-spin" : ""}`} />
-            רענון תצוגה
+            {t("platformMonitoring.refreshView")}
           </Button>
           <Button
             size="sm"
@@ -217,44 +217,52 @@ function PlatformMonitoringPage() {
             disabled={scanMutation.isPending}
           >
             <Play className="size-4" />
-            {scanMutation.isPending ? "בודק…" : "הרץ בדיקה עכשיו"}
+            {scanMutation.isPending ? t("platformMonitoring.running") : t("platformMonitoring.runNow")}
           </Button>
         </div>
       </header>
 
       <Card className="card-elevated p-4 flex flex-wrap items-center gap-3">
         <Badge className="bg-emerald-100 text-emerald-800 dark:bg-emerald-950/30 dark:text-emerald-400">
-          {snapshots.length - issueCount} / {snapshots.length} תקינים
+          {t("platformMonitoring.healthyCount", {
+            ok: snapshots.length - issueCount,
+            total: snapshots.length,
+          })}
         </Badge>
-        <Badge variant="outline">{companyRows.length} חברות</Badge>
-        <Badge variant="outline">{branchRows.length} סניפים</Badge>
+        <Badge variant="outline">
+          {t("platformMonitoring.companiesCount", { count: companyRows.length })}
+        </Badge>
+        <Badge variant="outline">
+          {t("platformMonitoring.branchesCount", { count: branchRows.length })}
+        </Badge>
         {issueCount > 0 && (
           <Badge className="bg-amber-100 text-amber-800 dark:bg-amber-950/30 dark:text-amber-400">
-            {issueCount} ממצאים פתוחים
+            {t("platformMonitoring.openFindings", { count: issueCount })}
           </Badge>
         )}
         <p className="text-xs text-muted-foreground">
-          סריקה אוטומטית מהשרת (מקומי כל 20 דקות · בפרודקשן לפחות פעם ביום + כפתור ידני).
-          עדכון תצוגה כל דקה. בדיקה אחרונה: {formatWhen(lastChecked)}
+          {t("platformMonitoring.scanHint", {
+            when: formatWhen(lastChecked, i18n.language),
+          })}
         </p>
       </Card>
 
       {healthQuery.isLoading ? (
-        <Card className="p-8 text-sm text-muted-foreground text-center">טוען ניטור שמור…</Card>
+        <Card className="p-8 text-sm text-muted-foreground text-center">
+          {t("platformMonitoring.loadingStored")}
+        </Card>
       ) : snapshots.length === 0 ? (
         <Card className="p-6 space-y-3">
-          <p className="text-sm text-muted-foreground">
-            עדיין אין תוצאות שמורות. זה תקין לפני הרצת המיגרציה הראשונה / הסריקה הראשונה.
-          </p>
+          <p className="text-sm text-muted-foreground">{t("platformMonitoring.emptyStored")}</p>
           <Button size="sm" onClick={() => scanMutation.mutate()} disabled={scanMutation.isPending}>
-            הרץ בדיקה ראשונה מהשרת
+            {t("platformMonitoring.runFirst")}
           </Button>
         </Card>
       ) : (
         <>
           <section className="space-y-3">
             <h2 className="text-sm font-semibold flex items-center gap-2">
-              <Activity className="size-4" /> סיכום פלטפורמה
+              <Activity className="size-4" /> {t("platformMonitoring.sectionPlatform")}
             </h2>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
               {platformRows.map((row) => (
@@ -265,39 +273,43 @@ function PlatformMonitoringPage() {
 
           <section className="space-y-3">
             <h2 className="text-sm font-semibold flex items-center gap-2">
-              <Building2 className="size-4" /> כל החברות
+              <Building2 className="size-4" /> {t("platformMonitoring.sectionCompanies")}
             </h2>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
               {companyRows.map((row) => (
                 <SnapshotCard key={row.id} row={row} />
               ))}
               {companyRows.length === 0 && (
-                <Card className="p-4 text-sm text-muted-foreground">אין חברות לבדיקה</Card>
+                <Card className="p-4 text-sm text-muted-foreground">
+                  {t("platformMonitoring.noCompanies")}
+                </Card>
               )}
             </div>
           </section>
 
           <section className="space-y-3">
             <h2 className="text-sm font-semibold flex items-center gap-2">
-              <GitBranch className="size-4" /> כל הסניפים
+              <GitBranch className="size-4" /> {t("platformMonitoring.sectionBranches")}
             </h2>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
               {branchRows.map((row) => (
                 <SnapshotCard key={row.id} row={row} />
               ))}
               {branchRows.length === 0 && (
-                <Card className="p-4 text-sm text-muted-foreground">אין סניפים לבדיקה</Card>
+                <Card className="p-4 text-sm text-muted-foreground">
+                  {t("platformMonitoring.noBranches")}
+                </Card>
               )}
             </div>
           </section>
 
           <section className="space-y-3">
             <h2 className="text-sm font-semibold flex items-center gap-2">
-              <ScrollText className="size-4" /> יומן תקלות / עומס / התאוששות
+              <ScrollText className="size-4" /> {t("platformMonitoring.sectionEvents")}
             </h2>
             <Card className="card-elevated p-4">
               {events.length === 0 ? (
-                <p className="text-sm text-muted-foreground">אין אירועים עדיין — זה סימן טוב.</p>
+                <p className="text-sm text-muted-foreground">{t("platformMonitoring.noEvents")}</p>
               ) : (
                 events.map((row) => <EventRow key={row.id} row={row} />)
               )}
@@ -307,30 +319,34 @@ function PlatformMonitoringPage() {
       )}
 
       <section className="space-y-3">
-        <h2 className="text-sm font-semibold">בדיקות תשתית חיות (קלות)</h2>
-        <p className="text-xs text-muted-foreground">
-          DB / API / Storage / Realtime — בדיקות קריאה בלבד מהדף, בנוסף לסריקת החברות/סניפים
-          מהשרת.
-        </p>
+        <h2 className="text-sm font-semibold">{t("platformMonitoring.sectionLiveInfra")}</h2>
+        <p className="text-xs text-muted-foreground">{t("platformMonitoring.liveInfraHint")}</p>
         {liveInfraQuery.isLoading ? (
-          <Card className="p-6 text-sm text-muted-foreground text-center">בודק…</Card>
+          <Card className="p-6 text-sm text-muted-foreground text-center">
+            {t("platformMonitoring.checking")}
+          </Card>
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
             {(liveInfraQuery.data ?? []).map((result) => {
-              const meta = STATE_META[result.state] ?? STATE_META.unknown;
-              const Icon = meta.icon;
+              const state = (result.state in STATE_CLASS ? result.state : "unknown") as HealthState;
+              const Icon = STATE_ICONS[state];
+              const className = STATE_CLASS[state];
               return (
                 <Card key={result.id} className="card-elevated p-4 space-y-2">
                   <div className="flex items-center justify-between">
-                    <span className="text-sm font-medium">{result.target}</span>
+                    <span className="text-sm font-medium">
+                      {t(`platformMonitoring.kind.${result.target}`, {
+                        defaultValue: result.target,
+                      })}
+                    </span>
                     <div
-                      className={`size-8 shrink-0 rounded-lg flex items-center justify-center ${meta.className}`}
+                      className={`size-8 shrink-0 rounded-lg flex items-center justify-center ${className}`}
                     >
                       <Icon className="size-4" />
                     </div>
                   </div>
-                  <Badge variant="outline" className={meta.className.replace("bg-", "border-")}>
-                    {meta.label}
+                  <Badge variant="outline" className={className.replace("bg-", "border-")}>
+                    {t(`platformMonitoring.state.${state}`)}
                   </Badge>
                   {result.message && (
                     <p className="text-[11px] text-muted-foreground break-words" dir="auto">

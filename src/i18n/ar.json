@@ -901,5 +901,58 @@
     "appDescription": "نظام إدارة موظفين لإدارة الفريق والأقسام والجداول والمهام في الفرع.",
     "menu": "القائمة",
     "notifications": "الإشعارات"
+  },
+  "platformMonitoring": {
+    "title": "مراقبة المنصة",
+    "subtitle": "فحوصات من السيرفر لكل الشركات والفروع — بما فيها المستقبلية. الصفحة تعرض نتائج محفوظة فقط بدون إبطاء التطبيق.",
+    "refreshView": "تحديث العرض",
+    "runNow": "تشغيل الفحص الآن",
+    "running": "جاري الفحص…",
+    "healthyCount": "{{ok}} / {{total}} سليم",
+    "companiesCount": "{{count}} شركات",
+    "branchesCount": "{{count}} فروع",
+    "openFindings": "{{count}} ملاحظات مفتوحة",
+    "scanHint": "فحص تلقائي من السيرفر (محلياً كل 20 دقيقة · بالإنتاج مرة يومياً على الأقل + زر يدوي). تحديث العرض كل دقيقة. آخر فحص: {{when}}",
+    "loadingStored": "جاري تحميل المراقبة المحفوظة…",
+    "emptyStored": "لا توجد نتائج محفوظة بعد. هذا طبيعي قبل أول مايجريشن / أول فحص.",
+    "runFirst": "تشغيل أول فحص من السيرفر",
+    "sectionPlatform": "ملخص المنصة",
+    "sectionCompanies": "كل الشركات",
+    "sectionBranches": "كل الفروع",
+    "sectionEvents": "سجل الأعطال / الحمل الزائد / التعافي",
+    "noCompanies": "لا شركات للفحص",
+    "noBranches": "لا فروع للفحص",
+    "noEvents": "لا أحداث بعد — وهذا مؤشر جيد.",
+    "checkedAt": "تم الفحص: {{when}}",
+    "sectionLiveInfra": "فحوصات البنية التحتية الحية (خفيفة)",
+    "liveInfraHint": "DB / API / Storage / Realtime — فحوصات قراءة فقط من الصفحة، بالإضافة لفحص الشركات/الفروع من السيرفر.",
+    "checking": "جاري الفحص…",
+    "scanFailed": "فشل الفحص",
+    "scanOk": "اكتمل الفحص · {{companies}} شركات · {{branches}} فروع",
+    "state": {
+      "healthy": "سليم",
+      "degraded": "محدود / تحذير",
+      "down": "غير متاح",
+      "unknown": "غير معروف"
+    },
+    "kind": {
+      "platform": "المنصة",
+      "company": "شركة",
+      "branch": "فرع",
+      "database": "قاعدة البيانات",
+      "api": "API",
+      "storage": "التخزين",
+      "realtime": "Real-Time",
+      "queue": "طابور المهام",
+      "sync": "المزامنة",
+      "configuration": "الإعدادات",
+      "managers": "المدراء",
+      "department": "قسم"
+    },
+    "event": {
+      "issue": "مشكلة",
+      "recovery": "تعافي",
+      "overload": "حمل زائد"
+    }
   }
 }
