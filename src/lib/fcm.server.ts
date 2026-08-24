@@ -74,6 +74,7 @@ function channelForTone(tone: WebPushPayload["tone"]): string {
 export async function dispatchFcmToUsers(
   userIds: string[],
   payload: WebPushPayload,
+  options?: { skipEndpoints?: string[] },
 ): Promise<{ sent: number; failed: number }> {
   const sa = readServiceAccount();
   if (!sa) return { sent: 0, failed: 0 };
@@ -93,6 +94,14 @@ export async function dispatchFcmToUsers(
 
   if (error || !subs?.length) return { sent: 0, failed: 0 };
 
+  const skipEndpoints = new Set((options?.skipEndpoints ?? []).filter(Boolean));
+  const deliverable = skipEndpoints.size
+    ? (subs as { id: string; endpoint: string; p256dh: string }[]).filter(
+        (s) => !skipEndpoints.has(s.endpoint),
+      )
+    : (subs as { id: string; endpoint: string; p256dh: string }[]);
+  if (!deliverable.length) return { sent: 0, failed: 0 };
+
   const access = await getAccessToken(sa);
   if (!access) return { sent: 0, failed: (subs as { id: string }[]).length };
 
@@ -102,7 +111,7 @@ export async function dispatchFcmToUsers(
   const staleIds: string[] = [];
 
   await Promise.allSettled(
-    (subs as { id: string; endpoint: string; p256dh: string }[]).map(async (sub) => {
+    deliverable.map(async (sub) => {
       if (!isFcmEndpoint(sub.endpoint)) {
         failed++;
         return;

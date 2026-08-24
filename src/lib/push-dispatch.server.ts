@@ -21,6 +21,8 @@ export type PushDispatchInput = {
   /** Platform-owner toggle key. When set and disabled → skip Web Push only. */
   eventKey?: string | null;
   tone?: "break_start" | "break_end" | "break_late" | "default" | null;
+  /** Actor who triggered the event — never receive in-app or push. */
+  excludeUserId?: string | null;
 };
 
 function freshPushTag(prefix: string): string {
@@ -41,11 +43,28 @@ async function resolveWeekStart(
   return (data as { week_start?: string } | null)?.week_start?.slice(0, 10) ?? null;
 }
 
+function sameUserId(a?: string | null, b?: string | null): boolean {
+  return !!a && !!b && a.trim().toLowerCase() === b.trim().toLowerCase();
+}
+
+async function endpointsForUser(userId: string): Promise<string[]> {
+  const { data } = await supabaseAdmin
+    .from("push_subscriptions")
+    .select("endpoint")
+    .eq("user_id", userId);
+  return ((data ?? []) as { endpoint?: string | null }[])
+    .map((row) => row.endpoint)
+    .filter((endpoint): endpoint is string => !!endpoint);
+}
+
 /** Unified push dispatch for any in-app / realtime notification event. */
 export async function dispatchPushNotification(
   input: PushDispatchInput,
 ): Promise<{ sent: number; failed: number }> {
-  let userIds = [...new Set(input.userIds.filter(Boolean))];
+  const actorId = input.excludeUserId?.trim() || null;
+  let userIds = [
+    ...new Set(input.userIds.filter((id) => id && !sameUserId(id, actorId))),
+  ];
   const body = input.message.trim();
   if (!userIds.length || !body) return { sent: 0, failed: 0 };
 
@@ -76,7 +95,9 @@ export async function dispatchPushNotification(
     url,
     tag:
       input.tag?.trim() ||
-      freshPushTag(input.messageId ? "message" : input.scheduleId ? "schedule" : "notif"),
+      (input.scheduleId
+        ? `schedule-${input.scheduleId}`
+        : freshPushTag(input.messageId ? "message" : "notif")),
     silent: false,
     tone:
       input.tone ??
@@ -87,9 +108,11 @@ export async function dispatchPushNotification(
         : null),
   };
 
+  const skipEndpoints = actorId ? await endpointsForUser(actorId) : [];
+  const skipOpts = skipEndpoints.length ? { skipEndpoints } : undefined;
   const [web, fcm] = await Promise.all([
-    dispatchWebPushToUsers(userIds, payload),
-    dispatchFcmToUsers(userIds, payload),
+    dispatchWebPushToUsers(userIds, payload, skipOpts),
+    dispatchFcmToUsers(userIds, payload, skipOpts),
   ]);
   return { sent: web.sent + fcm.sent, failed: web.failed + fcm.failed };
 }
@@ -152,9 +175,14 @@ export async function notifyUsersWithPush(opts: {
   eventKey?: string | null;
   /** When false, skip Web Push (silent bell only). */
   sendPush?: boolean;
+  /** Actor who triggered the event — never receive in-app or push. */
+  excludeUserId?: string | null;
 }): Promise<void> {
   try {
-    const userIds = [...new Set(opts.userIds.filter(Boolean))];
+    const actorId = opts.excludeUserId?.trim() || null;
+    const userIds = [
+      ...new Set(opts.userIds.filter((id) => id && !sameUserId(id, actorId))),
+    ];
     const message = opts.message.trim();
     if (!userIds.length || !message) return;
 
@@ -173,9 +201,9 @@ export async function notifyUsersWithPush(opts: {
 
     const tag =
       opts.tag?.trim() ||
-      freshPushTag(
-        opts.messageId ? "message" : opts.scheduleId ? `schedule-${opts.scheduleId}` : "notif",
-      );
+      (opts.scheduleId
+        ? `schedule-${opts.scheduleId}`
+        : freshPushTag(opts.messageId ? "message" : "notif"));
 
     // 1) Silent in-app bell first — always, regardless of push toggles.
     const { error: insertErr } = await supabaseAdmin.from("schedule_notifications").insert(
@@ -203,6 +231,7 @@ export async function notifyUsersWithPush(opts: {
       url: opts.url,
       messageId: opts.messageId,
       eventKey: opts.eventKey,
+      excludeUserId: actorId,
     });
   } catch (e) {
     console.warn("[notify] notifyUsersWithPush failed:", e);

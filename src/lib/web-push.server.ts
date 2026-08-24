@@ -77,6 +77,7 @@ type PushSubscriptionRow = {
 export async function dispatchWebPushToUsers(
   userIds: string[],
   payload: WebPushPayload,
+  options?: { skipEndpoints?: string[] },
 ): Promise<{ sent: number; failed: number }> {
   if (!ensureVapidConfigured()) return { sent: 0, failed: 0 };
 
@@ -89,6 +90,12 @@ export async function dispatchWebPushToUsers(
     .in("user_id", uniqueIds);
 
   if (error || !subs?.length) return { sent: 0, failed: 0 };
+
+  const skipEndpoints = new Set((options?.skipEndpoints ?? []).filter(Boolean));
+  const deliverable = skipEndpoints.size
+    ? (subs as PushSubscriptionRow[]).filter((s) => !skipEndpoints.has(s.endpoint))
+    : (subs as PushSubscriptionRow[]);
+  if (!deliverable.length) return { sent: 0, failed: 0 };
 
   const tone = payload.tone ?? null;
   const vibrate =
@@ -113,7 +120,7 @@ export async function dispatchWebPushToUsers(
     title: payload.title,
     body: payload.body,
     url: payload.url ?? "/dashboard",
-    // Hint only — SW forces a fresh unique tag + silent:false.
+    // Used by the SW with renotify:true so later updates stay audible.
     tag: payload.tag ?? `notif-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
     silent: false,
     vibrate,
@@ -139,7 +146,7 @@ export async function dispatchWebPushToUsers(
   };
 
   await Promise.allSettled(
-    (subs as PushSubscriptionRow[])
+    deliverable
       .filter((sub) => sub.p256dh !== FCM_KEY_MARKER && !isFcmEndpoint(sub.endpoint))
       .map(async (sub) => {
         try {

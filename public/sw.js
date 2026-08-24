@@ -71,20 +71,16 @@ self.addEventListener("push", (event) => {
   const title = data.title || "מערכת ניהול עובדים";
   const body = data.body || "";
   const url = data.url || "/dashboard";
-  // Always unique — reused tags can replace quietly on some OS/browsers.
-  const tag = `tc-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+  const tag =
+    (typeof data.tag === "string" && data.tag.trim()) ||
+    `tc-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
   const tone = data.tone || null;
   const vibrate = Array.isArray(data.vibrate) ? data.vibrate : vibrateForTone(tone);
   const sound = data.sound || soundForTone(tone);
 
   event.waitUntil(
     (async () => {
-      try {
-        const existing = await self.registration.getNotifications();
-        await Promise.allSettled(existing.map((n) => n.close()));
-      } catch {
-        /* ignore */
-      }
+      // Do not close previous notifications — Chrome/Windows then silences the next ones.
 
       await askOpenClientsToPlayTone(tone);
 
@@ -95,13 +91,11 @@ self.addEventListener("push", (event) => {
         icon: "/icons/icon-192.png",
         badge: "/icons/icon-192.png",
         vibrate,
-        // Explicit non-silent so Android/Chrome use the alert channel (not "silent").
         silent: false,
         renotify: true,
         requireInteraction: true,
         timestamp: Date.now(),
       };
-      // Custom sound — supported on some browsers; ignored on Chrome Android.
       if (sound) options.sound = sound;
 
       await self.registration.showNotification(title, options);

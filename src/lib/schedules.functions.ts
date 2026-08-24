@@ -373,6 +373,7 @@ async function notifyScheduleDepartment(
     scheduleId,
     title: "עדכון סידור עבודה",
     eventKey,
+    excludeUserId,
   });
 }
 
