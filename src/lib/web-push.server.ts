@@ -108,13 +108,9 @@ export async function dispatchWebPushToUsers(
           : [400, 120, 400, 120, 600];
 
   const sound =
-    tone === "break_start"
+    tone === "break_start" || tone === "break_end" || tone === "break_late"
       ? "/sounds/break-start.wav"
-      : tone === "break_end"
-        ? "/sounds/break-end.wav"
-        : tone === "break_late"
-          ? "/sounds/break-late.wav"
-          : undefined;
+      : undefined;
 
   const body = JSON.stringify({
     title: payload.title,

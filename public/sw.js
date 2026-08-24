@@ -40,9 +40,10 @@ function vibrateForTone(tone) {
 }
 
 function soundForTone(tone) {
-  if (tone === "break_start") return "/sounds/break-start.wav";
-  if (tone === "break_end") return "/sounds/break-end.wav";
-  if (tone === "break_late") return "/sounds/break-late.wav";
+  // End + late use the same ringtone as start (push + SW).
+  if (tone === "break_start" || tone === "break_end" || tone === "break_late") {
+    return "/sounds/break-start.wav";
+  }
   return undefined;
 }
 

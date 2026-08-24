@@ -59,6 +59,19 @@ async function endpointsForUser(userId: string): Promise<string[]> {
     .filter((endpoint): endpoint is string => !!endpoint);
 }
 
+/** Break start / end / late: push only the break holder — never fan out. */
+const HOLDER_ONLY_BREAK_KEYS = new Set(["break_start", "break_end", "break_late"]);
+
+function isHolderOnlyBreakPush(
+  eventKey?: string | null,
+  tone?: string | null,
+): boolean {
+  return (
+    HOLDER_ONLY_BREAK_KEYS.has(eventKey ?? "") ||
+    HOLDER_ONLY_BREAK_KEYS.has(tone ?? "")
+  );
+}
+
 /** Unified push dispatch for any in-app / realtime notification event. */
 export async function dispatchPushNotification(
   input: PushDispatchInput,
@@ -67,6 +80,15 @@ export async function dispatchPushNotification(
   let userIds = [
     ...new Set(input.userIds.filter((id) => id && !sameUserId(id, actorId))),
   ];
+  // Hard cap: break lifecycle alerts go to exactly one person (the holder).
+  if (isHolderOnlyBreakPush(input.eventKey, input.tone) && userIds.length > 1) {
+    console.warn("[push] break lifecycle fan-out blocked; keeping first recipient only", {
+      eventKey: input.eventKey ?? null,
+      tone: input.tone ?? null,
+      dropped: userIds.length - 1,
+    });
+    userIds = userIds.slice(0, 1);
+  }
   const body = input.message.trim();
   if (!userIds.length || !body) return { sent: 0, failed: 0 };
 

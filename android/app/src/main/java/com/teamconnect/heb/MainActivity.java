@@ -15,7 +15,8 @@ import com.getcapacitor.BridgeActivity;
  * importance + sound so FCM can alert when the app is backgrounded or killed.
  */
 public class MainActivity extends BridgeActivity {
-    private static final int CHANNEL_VERSION = 2;
+    /** Bump when channel sound/importance changes so OEM recreates channels. */
+    private static final int CHANNEL_VERSION = 3;
     private static final String PREFS = "tc_push";
     private static final String PREFS_CHANNEL_VERSION = "channel_version";
 
@@ -62,12 +63,13 @@ public class MainActivity extends BridgeActivity {
             R.raw.break_start,
             attrs
         );
+        // Same ringtone as break start for end + late.
         createChannel(
             manager,
             "break_end",
             "סיום הפסקה",
             "התראה חזקה לסיום הפסקה",
-            R.raw.break_end,
+            R.raw.break_start,
             attrs
         );
         createChannel(
@@ -75,7 +77,7 @@ public class MainActivity extends BridgeActivity {
             "break_late",
             "איחור בהפסקה",
             "התראה חזקה לאיחור בהפסקה",
-            R.raw.break_late,
+            R.raw.break_start,
             attrs
         );
     }

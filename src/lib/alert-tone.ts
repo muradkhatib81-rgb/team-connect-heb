@@ -5,7 +5,7 @@
 
 const TONE_URLS = {
   break_start: "/sounds/break-start.wav",
-  // Same ringtone as break start (in-app only; push channels stay as-is).
+  // Same ringtone as break start (in-app + push payloads).
   break_end: "/sounds/break-start.wav",
   break_late: "/sounds/break-start.wav",
   default: "/sounds/notify.wav",

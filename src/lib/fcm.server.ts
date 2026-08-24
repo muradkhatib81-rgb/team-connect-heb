@@ -72,9 +72,10 @@ function channelForTone(tone: WebPushPayload["tone"]): string {
 }
 
 function soundForTone(tone: WebPushPayload["tone"]): string {
-  if (tone === "break_start") return "break_start";
-  if (tone === "break_end") return "break_end";
-  if (tone === "break_late") return "break_late";
+  // Same raw asset as break start for end + late (Android channel sound).
+  if (tone === "break_start" || tone === "break_end" || tone === "break_late") {
+    return "break_start";
+  }
   return "notify_default";
 }
 
