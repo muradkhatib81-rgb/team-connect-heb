@@ -21,6 +21,15 @@ import { useTranslation } from "react-i18next";
 
 const searchSchema = z.object({ redirect: z.string().optional() });
 
+/** Same-origin path only — blocks //evil, /\evil, and protocol URLs. */
+function safeInternalRedirectPath(raw: string | undefined, fallback = "/dashboard"): string {
+  if (!raw) return fallback;
+  const path = raw.trim();
+  if (!path.startsWith("/") || path.startsWith("//") || path.startsWith("/\\")) return fallback;
+  if (path.includes("://") || path.includes("\\") || /[\u0000-\u001f]/.test(path)) return fallback;
+  return path;
+}
+
 export const Route = createFileRoute("/auth")({
   validateSearch: searchSchema,
   head: () => ({ meta: [{ title: `התחברות | ${APP_NAME}` }] }),
@@ -63,8 +72,10 @@ function AuthPage() {
       if (cancelled) return;
       if (data.session) {
         const explicit = search.redirect as string | undefined;
-        const target = explicit || (await resolveLandingPath(data.session.user.id));
-        router.history.replace(target.startsWith("/") ? target : "/dashboard");
+        const target = safeInternalRedirectPath(
+          explicit || (await resolveLandingPath(data.session.user.id)),
+        );
+        router.history.replace(target);
         return;
       }
       // Check if a main admin already exists — if so, only show login.
@@ -115,9 +126,10 @@ function AuthPage() {
     if (userData.user) seedIdleSessionOnLogin(userData.user.id);
     setLoading(false);
     const explicit = search.redirect as string | undefined;
-    const target =
-      explicit || (userData.user ? await resolveLandingPath(userData.user.id) : "/dashboard");
-    router.history.replace(target.startsWith("/") ? target : "/dashboard");
+    const target = safeInternalRedirectPath(
+      explicit || (userData.user ? await resolveLandingPath(userData.user.id) : "/dashboard"),
+    );
+    router.history.replace(target);
   }
 
   async function handleBootstrap(e: React.FormEvent<HTMLFormElement>) {
