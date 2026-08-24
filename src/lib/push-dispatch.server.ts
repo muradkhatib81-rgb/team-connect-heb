@@ -152,9 +152,12 @@ export async function notifyUsersWithPush(opts: {
   eventKey?: string | null;
   /** When false, skip Web Push (silent bell only). */
   sendPush?: boolean;
+  /** Actor who triggered the event — never notify them. */
+  excludeUserId?: string | null;
 }): Promise<void> {
   try {
-    const userIds = [...new Set(opts.userIds.filter(Boolean))];
+    const excludeUserId = opts.excludeUserId ?? null;
+    const userIds = [...new Set(opts.userIds.filter((id) => id && id !== excludeUserId))];
     const message = opts.message.trim();
     if (!userIds.length || !message) return;
 

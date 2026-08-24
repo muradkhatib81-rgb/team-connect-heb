@@ -40,6 +40,7 @@ export function NotificationsBell() {
         const { data } = await supabase
           .from("schedule_notifications")
           .select("id, schedule_id, message, read_at, created_at, schedule:schedules(week_start)")
+          .eq("user_id", userId!)
           .is("read_at", null)
           .order("created_at", { ascending: false })
           .limit(30);

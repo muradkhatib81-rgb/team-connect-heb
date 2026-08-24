@@ -21,6 +21,7 @@ import {
   enforceSupersededPublishedSchedulePolicy,
 } from "@/lib/schedule-superseded";
 import { notifyUsersWithPush } from "@/lib/push-dispatch.server";
+import { formatHeTime } from "@/lib/date-format";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
 import {
   buildPeriodDays,
@@ -367,6 +368,7 @@ async function notifyScheduleDepartment(
     scheduleId,
     title: "עדכון סידור עבודה",
     eventKey,
+    excludeUserId,
   });
 }
 
@@ -925,6 +927,8 @@ const scheduleNoteSchema = z
 
 const saveShiftsSchema = z.object({
   schedule_id: z.string().uuid(),
+  /** When false, persist without in-app/push notify (autosave). Default true. */
+  notify: z.boolean().optional(),
   shifts: z.array(
     z.object({
       employee_id: z.string().uuid(),
@@ -1180,14 +1184,13 @@ export const saveScheduleShifts = createServerFn({ method: "POST" })
     }
 
     // Any change to an approved/published schedule must push (in-app + Web Push).
+    // Explicit Save only — autosave passes notify: false so the push path stays intact.
     const shouldNotifyEmployees =
-      changed && (isApproved || Boolean((sched as { published_at?: string | null }).published_at));
+      data.notify !== false &&
+      changed &&
+      (isApproved || Boolean((sched as { published_at?: string | null }).published_at));
     if (shouldNotifyEmployees) {
-      const when = new Date().toLocaleTimeString("he-IL", {
-        hour: "2-digit",
-        minute: "2-digit",
-        hour12: false,
-      });
+      const when = formatHeTime(new Date());
       await notifyScheduleDepartment(
         context.supabase,
         data.schedule_id,

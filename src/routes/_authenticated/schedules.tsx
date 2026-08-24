@@ -1904,7 +1904,7 @@ function SchedulesPage() {
 
   const autoSaveMut = useMutation({
     mutationFn: () =>
-      saveFn({ data: { schedule_id: visible!.id, shifts: buildShiftPayload() } }),
+      saveFn({ data: { schedule_id: visible!.id, shifts: buildShiftPayload(), notify: false } }),
     onSuccess: () => {
       editsDirtyRef.current = false;
       qc.invalidateQueries({ queryKey: ["schedule-shifts", visible?.id] });
@@ -1919,13 +1919,16 @@ function SchedulesPage() {
   useEffect(() => {
     if (!visible?.id || !editable || !empsQ.data?.length || !shiftDefsQ.isSuccess) return;
     if (!editsDirtyRef.current) return;
+    // Approved/published: keep edits local until explicit Save so other viewers
+    // and push recipients are not updated mid-edit.
+    if (visible.status === "approved" || visible.published_at) return;
     const timer = window.setTimeout(() => {
       if (!editsDirtyRef.current || autoSaveMut.isPending || saveMut.isPending) return;
       autoSaveMut.mutate();
     }, 2500);
     return () => window.clearTimeout(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps -- debounce on edit state; mutate refs are stable enough
-  }, [edits, timeEdits, noteEdits, leaveTypeByCell, visible?.id, editable, empsQ.data, shiftDefsQ.isSuccess, saveMut.isPending]);
+  }, [edits, timeEdits, noteEdits, leaveTypeByCell, visible?.id, visible?.status, visible?.published_at, editable, empsQ.data, shiftDefsQ.isSuccess, saveMut.isPending]);
 
   useEffect(() => {
     const onBeforeUnload = (e: BeforeUnloadEvent) => {

@@ -26,6 +26,20 @@ export function formatHeDate(value: string | Date | null | undefined): string {
   }).format(d);
 }
 
+/** HH:MM wall clock in Asia/Jerusalem (24h, Latin digits). */
+export function formatHeTime(value: string | Date | null | undefined): string {
+  if (!value) return "—";
+  const d = typeof value === "string" ? new Date(value) : value;
+  if (isNaN(d.getTime())) return "—";
+  return new Intl.DateTimeFormat("he-IL", {
+    timeZone: TZ,
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23",
+    numberingSystem: "latn",
+  }).format(d);
+}
+
 // Split an ISO datetime into local "YYYY-MM-DD" + "HH:MM" parts in Asia/Jerusalem.
 export function splitForInputs(iso?: string | null): { date: string; time: string } {
   if (!iso) return { date: "", time: "" };
