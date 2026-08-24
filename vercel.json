@@ -2,7 +2,7 @@
   "crons": [
     {
       "path": "/api/public/hooks/platform-health-scan",
-      "schedule": "*/20 * * * *"
+      "schedule": "0 2 * * *"
     }
   ]
 }

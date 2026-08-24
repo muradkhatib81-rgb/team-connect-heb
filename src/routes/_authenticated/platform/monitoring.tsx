@@ -194,8 +194,8 @@ function PlatformMonitoringPage() {
           <div className="min-w-0">
             <h1 className="truncate text-2xl sm:text-3xl font-bold">ניטור פלטפורמה</h1>
             <p className="text-sm text-muted-foreground mt-1">
-              בדיקה שרתית כל 20 דקות לכל החברות והסניפים — כולל עתידיים. הדף רק מציג תוצאות
-              שמורות, בלי להעמיס על האפליקציה.
+              בדיקה שרתית לכל החברות והסניפים — כולל עתידיים. הדף רק מציג תוצאות שמורות, בלי
+              להעמיס על האפליקציה.
             </p>
           </div>
         </div>
@@ -234,8 +234,8 @@ function PlatformMonitoringPage() {
           </Badge>
         )}
         <p className="text-xs text-muted-foreground">
-          סריקה אוטומטית מהשרת כל 20 דקות. עדכון תצוגה כל דקה. בדיקה אחרונה:{" "}
-          {formatWhen(lastChecked)}
+          סריקה אוטומטית מהשרת (מקומי כל 20 דקות · בפרודקשן לפחות פעם ביום + כפתור ידני).
+          עדכון תצוגה כל דקה. בדיקה אחרונה: {formatWhen(lastChecked)}
         </p>
       </Card>
 
