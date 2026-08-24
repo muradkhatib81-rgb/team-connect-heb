@@ -946,9 +946,11 @@
       "queue": "طابور المهام",
       "sync": "المزامنة",
       "configuration": "الإعدادات",
-      "managers": "المدراء",
+      "managers": "خدمات النظام",
       "department": "قسم"
     },
+    "systemServicesCount": "{{count}} خدمات نظام",
+    "systemServicesNone": "لا خدمات نظام مسجّلة",
     "event": {
       "issue": "مشكلة",
       "recovery": "تعافي",

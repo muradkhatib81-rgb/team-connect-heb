@@ -61,6 +61,21 @@ function formatWhen(iso: string | null | undefined, lang: string): string {
   }
 }
 
+function formatProbeMessage(
+  target: string,
+  message: string | null | undefined,
+  t: (key: string, opts?: Record<string, unknown>) => string,
+): string | null {
+  if (!message) return null;
+  if (target === "managers") {
+    const match = /^system_services:(\d+)$/.exec(message.trim());
+    const count = match ? Number(match[1]) : Number.parseInt(message.replace(/\D/g, ""), 10);
+    if (!Number.isFinite(count) || count <= 0) return t("platformMonitoring.systemServicesNone");
+    return t("platformMonitoring.systemServicesCount", { count });
+  }
+  return message;
+}
+
 function SnapshotCard({ row }: { row: PlatformHealthSnapshot }) {
   const { t, i18n } = useTranslation();
   const state = (row.state in STATE_CLASS ? row.state : "unknown") as HealthState;
@@ -331,6 +346,7 @@ function PlatformMonitoringPage() {
               const state = (result.state in STATE_CLASS ? result.state : "unknown") as HealthState;
               const Icon = STATE_ICONS[state];
               const className = STATE_CLASS[state];
+              const probeMessage = formatProbeMessage(result.target, result.message, t);
               return (
                 <Card key={result.id} className="card-elevated p-4 space-y-2">
                   <div className="flex items-center justify-between">
@@ -348,9 +364,9 @@ function PlatformMonitoringPage() {
                   <Badge variant="outline" className={className.replace("bg-", "border-")}>
                     {t(`platformMonitoring.state.${state}`)}
                   </Badge>
-                  {result.message && (
+                  {probeMessage && (
                     <p className="text-[11px] text-muted-foreground break-words" dir="auto">
-                      {result.message}
+                      {probeMessage}
                     </p>
                   )}
                 </Card>

@@ -946,9 +946,11 @@
       "queue": "Job queue",
       "sync": "Sync",
       "configuration": "Configuration",
-      "managers": "Managers",
+      "managers": "System services",
       "department": "Department"
     },
+    "systemServicesCount": "{{count}} system services",
+    "systemServicesNone": "No system services registered",
     "event": {
       "issue": "Issue",
       "recovery": "Recovery",

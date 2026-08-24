@@ -946,9 +946,11 @@
       "queue": "תור עבודות",
       "sync": "סנכרון",
       "configuration": "תצורה",
-      "managers": "מנהלים",
+      "managers": "שירותי מערכת",
       "department": "מחלקה"
     },
+    "systemServicesCount": "{{count}} שירותי מערכת",
+    "systemServicesNone": "לא נרשמו שירותי מערכת",
     "event": {
       "issue": "תקלה",
       "recovery": "התאוששות",

@@ -209,8 +209,8 @@ monitoringManager.registerCheck(
 monitoringManager.registerCheck(
   new SimpleHealthCheck("managers", () =>
     runtimeManagers.length > 0
-      ? { state: "healthy" as const, message: `${runtimeManagers.length} managers` }
-      : { state: "down" as const, message: "לא נרשמו managers" },
+      ? { state: "healthy" as const, message: `system_services:${runtimeManagers.length}` }
+      : { state: "down" as const, message: "system_services:0" },
   ),
 );
 
