@@ -1904,7 +1904,7 @@ function SchedulesPage() {
 
   const autoSaveMut = useMutation({
     mutationFn: () =>
-      saveFn({ data: { schedule_id: visible!.id, shifts: buildShiftPayload(), notify: false } }),
+      saveFn({ data: { schedule_id: visible!.id, shifts: buildShiftPayload() } }),
     onSuccess: () => {
       editsDirtyRef.current = false;
       qc.invalidateQueries({ queryKey: ["schedule-shifts", visible?.id] });

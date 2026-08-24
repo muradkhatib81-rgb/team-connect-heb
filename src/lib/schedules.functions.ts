@@ -345,7 +345,12 @@ async function getScheduleDepartmentRecipientIds(
     }
   }
 
-  if (excludeUserId) ids.delete(excludeUserId);
+  if (excludeUserId) {
+    const actor = excludeUserId.trim().toLowerCase();
+    for (const id of [...ids]) {
+      if (id.trim().toLowerCase() === actor) ids.delete(id);
+    }
+  }
   return [...ids];
 }
 
@@ -368,7 +373,6 @@ async function notifyScheduleDepartment(
     scheduleId,
     title: "עדכון סידור עבודה",
     eventKey,
-    excludeUserId,
   });
 }
 
@@ -927,8 +931,6 @@ const scheduleNoteSchema = z
 
 const saveShiftsSchema = z.object({
   schedule_id: z.string().uuid(),
-  /** When false, persist without in-app/push notify (autosave). Default true. */
-  notify: z.boolean().optional(),
   shifts: z.array(
     z.object({
       employee_id: z.string().uuid(),
@@ -1184,11 +1186,8 @@ export const saveScheduleShifts = createServerFn({ method: "POST" })
     }
 
     // Any change to an approved/published schedule must push (in-app + Web Push).
-    // Explicit Save only — autosave passes notify: false so the push path stays intact.
     const shouldNotifyEmployees =
-      data.notify !== false &&
-      changed &&
-      (isApproved || Boolean((sched as { published_at?: string | null }).published_at));
+      changed && (isApproved || Boolean((sched as { published_at?: string | null }).published_at));
     if (shouldNotifyEmployees) {
       const when = formatHeTime(new Date());
       await notifyScheduleDepartment(
@@ -1494,7 +1493,7 @@ async function publishOneUnpublishedSchedule(
     await supabase
       .from("schedule_audit_log")
       .insert({ schedule_id: sched.id, actor_id: userId, action: "published" });
-    await notifySchedulePublished(supabase, sched.id, sched.department_id, sched.created_by);
+    await notifySchedulePublished(supabase, sched.id, sched.department_id, userId);
     return;
   }
 
@@ -1518,7 +1517,7 @@ async function publishOneUnpublishedSchedule(
     await supabase
       .from("schedule_audit_log")
       .insert({ schedule_id: sched.id, actor_id: userId, action: "published" });
-    await notifySchedulePublished(supabase, sched.id, sched.department_id, sched.created_by);
+    await notifySchedulePublished(supabase, sched.id, sched.department_id, userId);
     return;
   }
 
