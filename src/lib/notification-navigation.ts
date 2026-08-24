@@ -27,6 +27,7 @@ export function notificationPushUrl(
   if (/הפסקה|break/i.test(m)) return "/dashboard";
   if (/חופש|leave/i.test(m)) return "/dashboard";
   if (/מזומנ|custody|כסף/i.test(m)) return "/dashboard";
+  if (/יומן בקרה|سجل الرقابة|control\s*log/i.test(m)) return "/control-log";
   return "/dashboard";
 }
 

@@ -29,6 +29,7 @@ import { Route as AuthenticatedDepartmentsRouteImport } from './routes/_authenti
 import { Route as AuthenticatedDashboardRouteImport } from './routes/_authenticated/dashboard'
 import { Route as AuthenticatedCustodySettingsRouteImport } from './routes/_authenticated/custody-settings'
 import { Route as AuthenticatedCustodyLogRouteImport } from './routes/_authenticated/custody-log'
+import { Route as AuthenticatedControlLogRouteImport } from './routes/_authenticated/control-log'
 import { Route as AuthenticatedCompanySettingsRouteImport } from './routes/_authenticated/company-settings'
 import { Route as AuthenticatedCommunicationsRouteImport } from './routes/_authenticated/communications'
 import { Route as AuthenticatedChangePasswordRouteImport } from './routes/_authenticated/change-password'
@@ -51,6 +52,7 @@ import { Route as AuthenticatedPlatformOwnersRouteImport } from './routes/_authe
 import { Route as AuthenticatedPlatformNotificationsRouteImport } from './routes/_authenticated/platform/notifications'
 import { Route as AuthenticatedPlatformMonitoringRouteImport } from './routes/_authenticated/platform/monitoring'
 import { Route as AuthenticatedPlatformFeatureFlagsRouteImport } from './routes/_authenticated/platform/feature-flags'
+import { Route as AuthenticatedPlatformControlLogRouteImport } from './routes/_authenticated/platform/control-log'
 import { Route as AuthenticatedPlatformCompaniesRouteImport } from './routes/_authenticated/platform/companies'
 import { Route as AuthenticatedPlatformBranchesRouteImport } from './routes/_authenticated/platform/branches'
 import { Route as AuthenticatedPlatformBillingRouteImport } from './routes/_authenticated/platform/billing'
@@ -168,6 +170,11 @@ const AuthenticatedCustodySettingsRoute =
 const AuthenticatedCustodyLogRoute = AuthenticatedCustodyLogRouteImport.update({
   id: '/custody-log',
   path: '/custody-log',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
+const AuthenticatedControlLogRoute = AuthenticatedControlLogRouteImport.update({
+  id: '/control-log',
+  path: '/control-log',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
 const AuthenticatedCompanySettingsRoute =
@@ -299,6 +306,12 @@ const AuthenticatedPlatformFeatureFlagsRoute =
     path: '/feature-flags',
     getParentRoute: () => AuthenticatedPlatformRouteRoute,
   } as any)
+const AuthenticatedPlatformControlLogRoute =
+  AuthenticatedPlatformControlLogRouteImport.update({
+    id: '/control-log',
+    path: '/control-log',
+    getParentRoute: () => AuthenticatedPlatformRouteRoute,
+  } as any)
 const AuthenticatedPlatformCompaniesRoute =
   AuthenticatedPlatformCompaniesRouteImport.update({
     id: '/companies',
@@ -389,6 +402,7 @@ export interface FileRoutesByFullPath {
   '/change-password': typeof AuthenticatedChangePasswordRoute
   '/communications': typeof AuthenticatedCommunicationsRoute
   '/company-settings': typeof AuthenticatedCompanySettingsRoute
+  '/control-log': typeof AuthenticatedControlLogRoute
   '/custody-log': typeof AuthenticatedCustodyLogRoute
   '/custody-settings': typeof AuthenticatedCustodySettingsRoute
   '/dashboard': typeof AuthenticatedDashboardRoute
@@ -412,6 +426,7 @@ export interface FileRoutesByFullPath {
   '/platform/billing': typeof AuthenticatedPlatformBillingRoute
   '/platform/branches': typeof AuthenticatedPlatformBranchesRouteWithChildren
   '/platform/companies': typeof AuthenticatedPlatformCompaniesRouteWithChildren
+  '/platform/control-log': typeof AuthenticatedPlatformControlLogRoute
   '/platform/feature-flags': typeof AuthenticatedPlatformFeatureFlagsRoute
   '/platform/monitoring': typeof AuthenticatedPlatformMonitoringRoute
   '/platform/notifications': typeof AuthenticatedPlatformNotificationsRoute
@@ -444,6 +459,7 @@ export interface FileRoutesByTo {
   '/change-password': typeof AuthenticatedChangePasswordRoute
   '/communications': typeof AuthenticatedCommunicationsRoute
   '/company-settings': typeof AuthenticatedCompanySettingsRoute
+  '/control-log': typeof AuthenticatedControlLogRoute
   '/custody-log': typeof AuthenticatedCustodyLogRoute
   '/custody-settings': typeof AuthenticatedCustodySettingsRoute
   '/dashboard': typeof AuthenticatedDashboardRoute
@@ -466,6 +482,7 @@ export interface FileRoutesByTo {
   '/platform/audit-log': typeof AuthenticatedPlatformAuditLogRoute
   '/platform/billing': typeof AuthenticatedPlatformBillingRoute
   '/platform/branches': typeof AuthenticatedPlatformBranchesRouteWithChildren
+  '/platform/control-log': typeof AuthenticatedPlatformControlLogRoute
   '/platform/feature-flags': typeof AuthenticatedPlatformFeatureFlagsRoute
   '/platform/monitoring': typeof AuthenticatedPlatformMonitoringRoute
   '/platform/notifications': typeof AuthenticatedPlatformNotificationsRoute
@@ -501,6 +518,7 @@ export interface FileRoutesById {
   '/_authenticated/change-password': typeof AuthenticatedChangePasswordRoute
   '/_authenticated/communications': typeof AuthenticatedCommunicationsRoute
   '/_authenticated/company-settings': typeof AuthenticatedCompanySettingsRoute
+  '/_authenticated/control-log': typeof AuthenticatedControlLogRoute
   '/_authenticated/custody-log': typeof AuthenticatedCustodyLogRoute
   '/_authenticated/custody-settings': typeof AuthenticatedCustodySettingsRoute
   '/_authenticated/dashboard': typeof AuthenticatedDashboardRoute
@@ -524,6 +542,7 @@ export interface FileRoutesById {
   '/_authenticated/platform/billing': typeof AuthenticatedPlatformBillingRoute
   '/_authenticated/platform/branches': typeof AuthenticatedPlatformBranchesRouteWithChildren
   '/_authenticated/platform/companies': typeof AuthenticatedPlatformCompaniesRouteWithChildren
+  '/_authenticated/platform/control-log': typeof AuthenticatedPlatformControlLogRoute
   '/_authenticated/platform/feature-flags': typeof AuthenticatedPlatformFeatureFlagsRoute
   '/_authenticated/platform/monitoring': typeof AuthenticatedPlatformMonitoringRoute
   '/_authenticated/platform/notifications': typeof AuthenticatedPlatformNotificationsRoute
@@ -559,6 +578,7 @@ export interface FileRouteTypes {
     | '/change-password'
     | '/communications'
     | '/company-settings'
+    | '/control-log'
     | '/custody-log'
     | '/custody-settings'
     | '/dashboard'
@@ -582,6 +602,7 @@ export interface FileRouteTypes {
     | '/platform/billing'
     | '/platform/branches'
     | '/platform/companies'
+    | '/platform/control-log'
     | '/platform/feature-flags'
     | '/platform/monitoring'
     | '/platform/notifications'
@@ -614,6 +635,7 @@ export interface FileRouteTypes {
     | '/change-password'
     | '/communications'
     | '/company-settings'
+    | '/control-log'
     | '/custody-log'
     | '/custody-settings'
     | '/dashboard'
@@ -636,6 +658,7 @@ export interface FileRouteTypes {
     | '/platform/audit-log'
     | '/platform/billing'
     | '/platform/branches'
+    | '/platform/control-log'
     | '/platform/feature-flags'
     | '/platform/monitoring'
     | '/platform/notifications'
@@ -670,6 +693,7 @@ export interface FileRouteTypes {
     | '/_authenticated/change-password'
     | '/_authenticated/communications'
     | '/_authenticated/company-settings'
+    | '/_authenticated/control-log'
     | '/_authenticated/custody-log'
     | '/_authenticated/custody-settings'
     | '/_authenticated/dashboard'
@@ -693,6 +717,7 @@ export interface FileRouteTypes {
     | '/_authenticated/platform/billing'
     | '/_authenticated/platform/branches'
     | '/_authenticated/platform/companies'
+    | '/_authenticated/platform/control-log'
     | '/_authenticated/platform/feature-flags'
     | '/_authenticated/platform/monitoring'
     | '/_authenticated/platform/notifications'
@@ -869,6 +894,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedCustodyLogRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/_authenticated/control-log': {
+      id: '/_authenticated/control-log'
+      path: '/control-log'
+      fullPath: '/control-log'
+      preLoaderRoute: typeof AuthenticatedControlLogRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
     '/_authenticated/company-settings': {
       id: '/_authenticated/company-settings'
       path: '/company-settings'
@@ -1023,6 +1055,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedPlatformFeatureFlagsRouteImport
       parentRoute: typeof AuthenticatedPlatformRouteRoute
     }
+    '/_authenticated/platform/control-log': {
+      id: '/_authenticated/platform/control-log'
+      path: '/control-log'
+      fullPath: '/platform/control-log'
+      preLoaderRoute: typeof AuthenticatedPlatformControlLogRouteImport
+      parentRoute: typeof AuthenticatedPlatformRouteRoute
+    }
     '/_authenticated/platform/companies': {
       id: '/_authenticated/platform/companies'
       path: '/companies'
@@ -1172,6 +1211,7 @@ interface AuthenticatedPlatformRouteRouteChildren {
   AuthenticatedPlatformBillingRoute: typeof AuthenticatedPlatformBillingRoute
   AuthenticatedPlatformBranchesRoute: typeof AuthenticatedPlatformBranchesRouteWithChildren
   AuthenticatedPlatformCompaniesRoute: typeof AuthenticatedPlatformCompaniesRouteWithChildren
+  AuthenticatedPlatformControlLogRoute: typeof AuthenticatedPlatformControlLogRoute
   AuthenticatedPlatformFeatureFlagsRoute: typeof AuthenticatedPlatformFeatureFlagsRoute
   AuthenticatedPlatformMonitoringRoute: typeof AuthenticatedPlatformMonitoringRoute
   AuthenticatedPlatformNotificationsRoute: typeof AuthenticatedPlatformNotificationsRoute
@@ -1191,6 +1231,7 @@ const AuthenticatedPlatformRouteRouteChildren: AuthenticatedPlatformRouteRouteCh
       AuthenticatedPlatformBranchesRouteWithChildren,
     AuthenticatedPlatformCompaniesRoute:
       AuthenticatedPlatformCompaniesRouteWithChildren,
+    AuthenticatedPlatformControlLogRoute: AuthenticatedPlatformControlLogRoute,
     AuthenticatedPlatformFeatureFlagsRoute:
       AuthenticatedPlatformFeatureFlagsRoute,
     AuthenticatedPlatformMonitoringRoute: AuthenticatedPlatformMonitoringRoute,
@@ -1236,6 +1277,7 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedChangePasswordRoute: typeof AuthenticatedChangePasswordRoute
   AuthenticatedCommunicationsRoute: typeof AuthenticatedCommunicationsRoute
   AuthenticatedCompanySettingsRoute: typeof AuthenticatedCompanySettingsRoute
+  AuthenticatedControlLogRoute: typeof AuthenticatedControlLogRoute
   AuthenticatedCustodyLogRoute: typeof AuthenticatedCustodyLogRoute
   AuthenticatedCustodySettingsRoute: typeof AuthenticatedCustodySettingsRoute
   AuthenticatedDashboardRoute: typeof AuthenticatedDashboardRoute
@@ -1264,6 +1306,7 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedChangePasswordRoute: AuthenticatedChangePasswordRoute,
   AuthenticatedCommunicationsRoute: AuthenticatedCommunicationsRoute,
   AuthenticatedCompanySettingsRoute: AuthenticatedCompanySettingsRoute,
+  AuthenticatedControlLogRoute: AuthenticatedControlLogRoute,
   AuthenticatedCustodyLogRoute: AuthenticatedCustodyLogRoute,
   AuthenticatedCustodySettingsRoute: AuthenticatedCustodySettingsRoute,
   AuthenticatedDashboardRoute: AuthenticatedDashboardRoute,

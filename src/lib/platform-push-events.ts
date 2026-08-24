@@ -17,6 +17,7 @@ export const PLATFORM_PUSH_EVENTS = [
   { key: "management_on_shift", label: "ניהול במשמרת", group: "ops" },
   { key: "tasks", label: "משימות", group: "ops" },
   { key: "messages", label: "הודעות", group: "ops" },
+  { key: "control_log", label: "יומן בקרה — רישום חדש", group: "ops" },
 ] as const;
 
 export type PlatformPushEventKey = (typeof PLATFORM_PUSH_EVENTS)[number]["key"];

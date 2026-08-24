@@ -33,6 +33,7 @@ import {
   ClipboardList,
   ChevronDown,
   Sparkles,
+  AlertTriangle,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
@@ -415,6 +416,13 @@ export function AppShell({ children }: { children: ReactNode }) {
       to: "/platform/branches",
       label: t("nav.platformBranches"),
       icon: GitBranch,
+      visible: isPlatformOwner,
+      section: t("nav.platformSection"),
+    },
+    {
+      to: "/platform/control-log",
+      label: t("nav.opsErrors"),
+      icon: AlertTriangle,
       visible: isPlatformOwner,
       section: t("nav.platformSection"),
     },
@@ -1047,6 +1055,10 @@ function RealtimeBridge({ uid }: { uid: string }) {
         qc.invalidateQueries({ queryKey: ["my-leave-balances"] });
         qc.invalidateQueries({ queryKey: ["leave-admin-balances"] });
         qc.invalidateQueries({ queryKey: ["auth", "me"] });
+      })
+      .on("postgres_changes", { event: "*", schema: "public", table: "ops_error_entries" }, () => {
+        qc.invalidateQueries({ queryKey: ["ops-error-entries"] });
+        qc.invalidateQueries({ queryKey: ["ops-error-caps"] });
       })
       .on("postgres_changes", { event: "*", schema: "public", table: "leave_balances" }, () => {
         qc.invalidateQueries({ queryKey: ["my-leave-balances"] });

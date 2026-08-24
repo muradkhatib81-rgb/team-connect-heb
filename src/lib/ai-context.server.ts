@@ -47,6 +47,27 @@ function leaveAvailable(row: {
   );
 }
 
+/** Best-effort monthly ops-errors summary (isolated feature; never throws). */
+async function loadOpsErrorsAiSummary(supabase: Db, userId: string) {
+  try {
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("branch_id")
+      .eq("id", userId)
+      .maybeSingle();
+    const branchId = (profile as { branch_id?: string | null } | null)?.branch_id;
+    if (!branchId) return null;
+    const { data, error } = await (supabase as any).rpc("summarize_ops_errors_for_branch", {
+      _branch_id: branchId,
+      _year_month: null,
+    });
+    if (error || !data) return null;
+    return data;
+  } catch {
+    return null;
+  }
+}
+
 function isCountedInHeadcount(row: Pick<CoworkerRow, "excluded_from_headcount">): boolean {
   return !row.excluded_from_headcount;
 }
@@ -66,7 +87,7 @@ export async function buildEmployeeSnapshot(supabase: Db, userId: string) {
   const today = jerusalemTodayIso();
   const { weekStart, weekDays } = getScheduleWeek(new Date(`${today}T12:00:00Z`));
 
-  const [profileRes, balancesRes, requestsRes, breaksRes] = await Promise.all([
+  const [profileRes, balancesRes, requestsRes, breaksRes, opsErrorsSummary] = await Promise.all([
     supabase
       .from("profiles")
       .select(
@@ -90,6 +111,7 @@ export async function buildEmployeeSnapshot(supabase: Db, userId: string) {
       .eq("user_id", userId)
       .order("created_at", { ascending: false })
       .limit(10),
+    loadOpsErrorsAiSummary(supabase, userId),
   ]);
 
   const profile = profileRes.data as {
@@ -199,6 +221,7 @@ export async function buildEmployeeSnapshot(supabase: Db, userId: string) {
     scheduleThisWeek: weekSchedule.length
       ? { weekStart, days: weekSchedule }
       : { weekStart, days: [], note: "No published schedule shifts found for this week." },
+    operationalErrorsThisMonth: opsErrorsSummary,
   };
 }
 
@@ -479,6 +502,8 @@ async function buildDeptHeadSnapshot(supabase: Db, userId: string) {
     },
     scheduleThisWeek,
     recentDepartmentTasks,
+    operationalErrorsThisMonth: (personal as { operationalErrorsThisMonth?: unknown })
+      ?.operationalErrorsThisMonth,
     personal,
   };
 }

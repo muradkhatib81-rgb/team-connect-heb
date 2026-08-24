@@ -709,6 +709,7 @@ export async function buildBranchOperatorSnapshot(supabase: Db, userId: string) 
   );
   const canManageEmployeeOfMonth = await canManageEomServer(supabase, userId, roles);
 
+  const personal = await buildEmployeeSnapshot(supabase, userId);
   const snapshot: Record<string, unknown> = {
     role: operatorRole,
     asOfDate: today,
@@ -722,11 +723,9 @@ export async function buildBranchOperatorSnapshot(supabase: Db, userId: string) 
       canViewEmployeeDetails,
       canManageEmployeeOfMonth,
     },
-    operationalErrors: {
-      available: false,
-      note: "Operational error journal is planned — not available yet.",
-    },
-    personal: await buildEmployeeSnapshot(supabase, userId),
+    operationalErrorsThisMonth: (personal as { operationalErrorsThisMonth?: unknown })
+      ?.operationalErrorsThisMonth ?? null,
+    personal,
   };
 
   if (!branchId) {

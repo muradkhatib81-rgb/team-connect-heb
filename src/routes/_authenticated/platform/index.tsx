@@ -18,6 +18,7 @@ import {
   Flag,
   BarChart3,
   Bell,
+  AlertTriangle,
 } from "lucide-react";
 import { useAuth } from "@/lib/use-auth";
 import {
@@ -28,6 +29,7 @@ import {
 } from "@/lib/platform-owners.hooks";
 import { useCompanyContext } from "@/platform";
 import { branchService } from "@/modules/branches";
+import { useTranslation } from "react-i18next";
 
 export const Route = createFileRoute("/_authenticated/platform/")({
   component: PlatformDashboardPage,
@@ -40,6 +42,7 @@ export const Route = createFileRoute("/_authenticated/platform/")({
 });
 
 function PlatformDashboardPage() {
+  const { t } = useTranslation();
   const { data: profile } = useAuth();
   const stats = usePlatformStats();
   const owners = usePlatformOwnersQuery();
@@ -237,6 +240,12 @@ function PlatformDashboardPage() {
             label="ניטור וזמינות"
             hint="Health Checks"
             onClick={() => navigate({ to: "/platform/monitoring" })}
+          />
+          <ModuleTile
+            icon={AlertTriangle}
+            label={t("opsErrors.platformTitle")}
+            hint={t("opsErrors.platformSubtitle")}
+            onClick={() => navigate({ to: "/platform/control-log" })}
           />
           <ModuleTile
             icon={Radio}
