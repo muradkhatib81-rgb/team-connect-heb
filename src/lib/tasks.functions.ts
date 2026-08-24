@@ -941,8 +941,12 @@ export const deleteRecurrence = createServerFn({ method: "POST" })
     return { ok: true };
   });
 
-// Cron-callable: generate due recurring tasks. Authorized via apikey (anon).
-export const generateDueRecurringTasks = createServerFn({ method: "POST" }).handler(async () => {
+/**
+ * Cron/hook-only: generate due recurring tasks via service role.
+ * Must NOT be exposed as a client-callable createServerFn.
+ * Call only from /api/public/hooks/generate-recurring-tasks after secret auth.
+ */
+export async function runGenerateDueRecurringTasks(): Promise<{ generated: number }> {
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
   const nowIso = new Date().toISOString();
   const { data: due, error } = await supabaseAdmin
@@ -997,7 +1001,7 @@ export const generateDueRecurringTasks = createServerFn({ method: "POST" }).hand
     generated++;
   }
   return { generated };
-});
+}
 
 // ---------- TASK PERMISSIONS (grant branch_manager / assistant_manager) ----------
 const grantSchema = z.object({
