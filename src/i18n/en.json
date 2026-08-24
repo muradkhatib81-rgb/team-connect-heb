@@ -49,6 +49,7 @@
   "push": {
     "title": "Bell notifications",
     "description": "Turn in-app bell notifications on or off.",
+    "nativeDescription": "Get alerts even when the app is closed. Applies to every Android app user.",
     "enabled": "Bell notifications enabled",
     "disabled": "Bell notifications disabled",
     "denied": "The browser blocked notifications. Enable them in browser settings.",

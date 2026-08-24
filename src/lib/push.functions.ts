@@ -28,6 +28,14 @@ async function upsertPushSubscription(
   data: z.infer<typeof subscriptionSchema>,
 ): Promise<void> {
   const now = new Date().toISOString();
+  // One physical device/browser must belong to the signed-in user only.
+  // Leftover rows from a previous login on the same Chrome profile would
+  // otherwise still receive pushes meant for that other account.
+  await (supabaseAdmin as any)
+    .from("push_subscriptions")
+    .delete()
+    .eq("endpoint", data.endpoint)
+    .neq("user_id", userId);
   const { error } = await (supabaseAdmin as any).from("push_subscriptions").upsert(
     {
       user_id: userId,

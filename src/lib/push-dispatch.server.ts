@@ -23,6 +23,8 @@ export type PushDispatchInput = {
   tone?: "break_start" | "break_end" | "break_late" | "default" | null;
   /** Actor who triggered the event — never receive in-app or push. */
   excludeUserId?: string | null;
+  /** Extra endpoints to skip (e.g. the actor's current Chrome/APK device). */
+  skipPushEndpoints?: string[] | null;
 };
 
 function freshPushTag(prefix: string): string {
@@ -95,9 +97,9 @@ export async function dispatchPushNotification(
     url,
     tag:
       input.tag?.trim() ||
-      (input.scheduleId
-        ? `schedule-${input.scheduleId}`
-        : freshPushTag(input.messageId ? "message" : "notif")),
+      freshPushTag(
+        input.scheduleId ? `schedule-${input.scheduleId}` : input.messageId ? "message" : "notif",
+      ),
     silent: false,
     tone:
       input.tone ??
@@ -108,7 +110,10 @@ export async function dispatchPushNotification(
         : null),
   };
 
-  const skipEndpoints = actorId ? await endpointsForUser(actorId) : [];
+  const skipEndpoints = [
+    ...(actorId ? await endpointsForUser(actorId) : []),
+    ...(input.skipPushEndpoints ?? []).filter(Boolean),
+  ];
   const skipOpts = skipEndpoints.length ? { skipEndpoints } : undefined;
   const [web, fcm] = await Promise.all([
     dispatchWebPushToUsers(userIds, payload, skipOpts),
@@ -177,6 +182,7 @@ export async function notifyUsersWithPush(opts: {
   sendPush?: boolean;
   /** Actor who triggered the event — never receive in-app or push. */
   excludeUserId?: string | null;
+  skipPushEndpoints?: string[] | null;
 }): Promise<void> {
   try {
     const actorId = opts.excludeUserId?.trim() || null;
@@ -201,9 +207,9 @@ export async function notifyUsersWithPush(opts: {
 
     const tag =
       opts.tag?.trim() ||
-      (opts.scheduleId
-        ? `schedule-${opts.scheduleId}`
-        : freshPushTag(opts.messageId ? "message" : "notif"));
+      freshPushTag(
+        opts.scheduleId ? `schedule-${opts.scheduleId}` : opts.messageId ? "message" : "notif",
+      );
 
     // 1) Silent in-app bell first — always, regardless of push toggles.
     const { error: insertErr } = await supabaseAdmin.from("schedule_notifications").insert(
@@ -232,6 +238,7 @@ export async function notifyUsersWithPush(opts: {
       messageId: opts.messageId,
       eventKey: opts.eventKey,
       excludeUserId: actorId,
+      skipPushEndpoints: opts.skipPushEndpoints,
     });
   } catch (e) {
     console.warn("[notify] notifyUsersWithPush failed:", e);

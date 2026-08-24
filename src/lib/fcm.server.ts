@@ -71,17 +71,34 @@ function channelForTone(tone: WebPushPayload["tone"]): string {
   return "general";
 }
 
+function soundForTone(tone: WebPushPayload["tone"]): string {
+  if (tone === "break_start") return "break_start";
+  if (tone === "break_end") return "break_end";
+  if (tone === "break_late") return "break_late";
+  return "notify_default";
+}
+
+function uniqueFcmTag(): string {
+  return `fcm-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+}
+
 export async function dispatchFcmToUsers(
   userIds: string[],
   payload: WebPushPayload,
   options?: { skipEndpoints?: string[] },
 ): Promise<{ sent: number; failed: number }> {
   const sa = readServiceAccount();
-  if (!sa) return { sent: 0, failed: 0 };
+  if (!sa) {
+    console.warn("[fcm] FIREBASE_SERVICE_ACCOUNT_JSON missing — native closed-app push skipped");
+    return { sent: 0, failed: 0 };
+  }
 
   const projectId =
     sa.project_id?.trim() || process.env.FIREBASE_PROJECT_ID?.trim() || "";
-  if (!projectId) return { sent: 0, failed: 0 };
+  if (!projectId) {
+    console.warn("[fcm] FIREBASE_PROJECT_ID missing — native closed-app push skipped");
+    return { sent: 0, failed: 0 };
+  }
 
   const uniqueIds = [...new Set(userIds.filter(Boolean))];
   if (!uniqueIds.length) return { sent: 0, failed: 0 };
@@ -132,6 +149,8 @@ export async function dispatchFcmToUsers(
           body: JSON.stringify({
             message: {
               token,
+              // `notification` is required so Android/iOS show a tray alert
+              // when the app is backgrounded or killed (data-only is silent).
               notification: {
                 title: payload.title,
                 body: payload.body,
@@ -139,12 +158,33 @@ export async function dispatchFcmToUsers(
               data: {
                 url: payload.url ?? "/dashboard",
                 tag: payload.tag ?? "",
+                tone: payload.tone ?? "",
               },
               android: {
                 priority: "HIGH",
+                ttl: "86400s",
                 notification: {
                   channel_id: channel,
-                  notification_count: 1,
+                  // Unique tag: reusing a schedule id replaces the tray item
+                  // and many OEMs play no sound on replacement.
+                  tag: uniqueFcmTag(),
+                  sound: soundForTone(payload.tone),
+                  default_vibrate_timings: true,
+                  notification_priority: "PRIORITY_MAX",
+                  visibility: "PUBLIC",
+                },
+              },
+              apns: {
+                headers: {
+                  "apns-priority": "10",
+                  "apns-push-type": "alert",
+                },
+                payload: {
+                  aps: {
+                    alert: { title: payload.title, body: payload.body },
+                    sound: "default",
+                    badge: 1,
+                  },
                 },
               },
             },

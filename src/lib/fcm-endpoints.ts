@@ -21,3 +21,6 @@ export function tokenFromFcmEndpoint(endpoint: string): string | null {
 }
 
 export const NATIVE_PUSH_OPT_IN_KEY = "native-push-opt-in";
+/** Explicit user opt-out. Missing key = native push should auto-register. */
+export const NATIVE_PUSH_OPT_OUT_KEY = "native-push-opt-out";
+export const NATIVE_FCM_TOKEN_EVENT = "tc:fcm-token";

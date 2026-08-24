@@ -1,9 +1,16 @@
 /**
- * Native push (Capacitor + FCM on Android).
+ * Native push (Capacitor + FCM on Android; APNs later on iOS).
+ * Closed-app delivery uses FCM's notification payload so the OS shows it
+ * even when the WebView is not running.
  */
 import { PushNotifications } from "@capacitor/push-notifications";
-import { isNativeApp } from "@/lib/native-app";
-import { NATIVE_PUSH_OPT_IN_KEY } from "@/lib/fcm-endpoints";
+import { playAlertTone, resolveAlertTone } from "@/lib/alert-tone";
+import {
+  NATIVE_FCM_TOKEN_EVENT,
+  NATIVE_PUSH_OPT_IN_KEY,
+  NATIVE_PUSH_OPT_OUT_KEY,
+} from "@/lib/fcm-endpoints";
+import { isNativeApp, nativePlatform } from "@/lib/native-app";
 
 export type NativePushToken = {
   value: string;
@@ -13,23 +20,45 @@ export type NativePushToken = {
 export type NativePushPermission = "granted" | "denied" | "prompt";
 
 let lastToken: string | null = null;
+let listenersReady = false;
 
 export function getLastNativePushToken(): string | null {
   return lastToken;
 }
 
+function currentPlatform(): "android" | "ios" {
+  return nativePlatform() === "ios" ? "ios" : "android";
+}
+
+function emitToken(value: string): NativePushToken {
+  lastToken = value;
+  const token: NativePushToken = { value, platform: currentPlatform() };
+  try {
+    window.dispatchEvent(new CustomEvent(NATIVE_FCM_TOKEN_EVENT, { detail: token }));
+  } catch {
+    /* ignore */
+  }
+  return token;
+}
+
+/** True unless the user turned native push off in settings. Default: on. */
 export function isNativePushOptedIn(): boolean {
   try {
-    return localStorage.getItem(NATIVE_PUSH_OPT_IN_KEY) === "1";
+    return localStorage.getItem(NATIVE_PUSH_OPT_OUT_KEY) !== "1";
   } catch {
-    return false;
+    return true;
   }
 }
 
 export function setNativePushOptIn(on: boolean): void {
   try {
-    if (on) localStorage.setItem(NATIVE_PUSH_OPT_IN_KEY, "1");
-    else localStorage.removeItem(NATIVE_PUSH_OPT_IN_KEY);
+    if (on) {
+      localStorage.setItem(NATIVE_PUSH_OPT_IN_KEY, "1");
+      localStorage.removeItem(NATIVE_PUSH_OPT_OUT_KEY);
+    } else {
+      localStorage.setItem(NATIVE_PUSH_OPT_OUT_KEY, "1");
+      localStorage.removeItem(NATIVE_PUSH_OPT_IN_KEY);
+    }
   } catch {
     /* ignore */
   }
@@ -47,9 +76,43 @@ export async function getNativePushPermission(): Promise<NativePushPermission> {
   }
 }
 
+async function ensureListeners(): Promise<void> {
+  if (listenersReady) return;
+  listenersReady = true;
+  await PushNotifications.removeAllListeners();
+
+  await PushNotifications.addListener("registration", (token) => {
+    emitToken(token.value);
+  });
+  await PushNotifications.addListener("registrationError", (err) => {
+    console.warn("[native-push] registration error", err);
+  });
+  await PushNotifications.addListener("pushNotificationReceived", (notification) => {
+    const title = notification.title || "מערכת ניהול עובדים";
+    const body = notification.body || "";
+    const data = (notification.data ?? {}) as { url?: string; tone?: string };
+    playAlertTone(resolveAlertTone(data.tone));
+    try {
+      navigator.vibrate?.([400, 120, 400, 120, 600]);
+    } catch {
+      /* ignore */
+    }
+    window.dispatchEvent(
+      new CustomEvent("tc:foreground-push", { detail: { title, body, url: data.url } }),
+    );
+  });
+  await PushNotifications.addListener("pushNotificationActionPerformed", (action) => {
+    const url = (action.notification.data as { url?: string } | undefined)?.url;
+    if (url && typeof window !== "undefined") {
+      window.location.assign(url);
+    }
+  });
+}
+
 /** Request permission + register for FCM. Resolves with the device token when possible. */
 export async function initNativePush(): Promise<NativePushToken | null> {
   if (!isNativeApp()) return null;
+  if (!isNativePushOptedIn()) return null;
 
   try {
     let perm = await PushNotifications.checkPermissions();
@@ -61,7 +124,7 @@ export async function initNativePush(): Promise<NativePushToken | null> {
       return null;
     }
 
-    await PushNotifications.removeAllListeners();
+    await ensureListeners();
 
     const tokenPromise = new Promise<string | null>((resolve) => {
       let settled = false;
@@ -71,33 +134,21 @@ export async function initNativePush(): Promise<NativePushToken | null> {
         resolve(value);
       };
 
-      void PushNotifications.addListener("registration", (token) => {
-        lastToken = token.value;
-        finish(token.value);
-      });
-      void PushNotifications.addListener("registrationError", (err) => {
-        console.warn("[native-push] registration error", err);
-        finish(null);
-      });
-      window.setTimeout(() => finish(lastToken), 8000);
-    });
-
-    void PushNotifications.addListener("pushNotificationReceived", (notification) => {
-      console.info("[native-push] received (foreground)", notification.title);
-    });
-
-    void PushNotifications.addListener("pushNotificationActionPerformed", (action) => {
-      const url = (action.notification.data as { url?: string } | undefined)?.url;
-      if (url && typeof window !== "undefined") {
-        window.location.assign(url);
-      }
+      const onToken = (event: Event) => {
+        const value = (event as CustomEvent<NativePushToken>).detail?.value;
+        if (value) finish(value);
+      };
+      window.addEventListener(NATIVE_FCM_TOKEN_EVENT, onToken);
+      window.setTimeout(() => {
+        window.removeEventListener(NATIVE_FCM_TOKEN_EVENT, onToken);
+        finish(lastToken);
+      }, 8000);
     });
 
     await PushNotifications.register();
     const value = await tokenPromise;
-    if (!value) return null;
-    const platform = /iphone|ipad|ios/i.test(navigator.userAgent) ? "ios" : "android";
-    return { value, platform };
+    if (!value) return lastToken ? { value: lastToken, platform: currentPlatform() } : null;
+    return { value, platform: currentPlatform() };
   } catch (err) {
     console.warn("[native-push] init failed", err);
     return null;

@@ -296,7 +296,9 @@ export function PushNotificationsSettings() {
           <Bell className="size-5 text-primary mt-0.5 shrink-0" />
           <div className="min-w-0">
             <p className="font-medium">{t("push.title")}</p>
-            <p className="text-sm text-muted-foreground mt-1">{t("push.description")}</p>
+            <p className="text-sm text-muted-foreground mt-1">
+              {native ? t("push.nativeDescription") : t("push.description")}
+            </p>
             {permission === "denied" && (
               <p className="text-sm text-destructive mt-2">{deniedHint}</p>
             )}

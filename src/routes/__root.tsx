@@ -17,7 +17,8 @@ import { Toaster } from "@/components/ui/sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { PlatformProvider } from "@/platform";
 import { registerPwaServiceWorker } from "@/lib/register-pwa";
-import { initNativePush, isNativePushOptedIn } from "@/lib/native-push";
+import { initNativePush, isNativePushOptedIn, type NativePushToken } from "@/lib/native-push";
+import { NATIVE_FCM_TOKEN_EVENT } from "@/lib/fcm-endpoints";
 import { isNativeApp } from "@/lib/native-app";
 import { saveFcmToken } from "@/lib/push.functions";
 import { applyPwaBranding, fetchPlatformPwaIconUrl } from "@/lib/pwa-branding";
@@ -254,22 +255,41 @@ function RootComponent() {
 
   useEffect(() => {
     if (!isNativeApp()) return;
-    if (!isNativePushOptedIn()) return;
+
+    const persistToken = async (token: NativePushToken) => {
+      try {
+        await saveFcmToken({ data: { token: token.value, platform: token.platform } });
+      } catch {
+        /* signed-out or network */
+      }
+    };
+
+    const onToken = (event: Event) => {
+      const detail = (event as CustomEvent<NativePushToken>).detail;
+      if (detail?.value) void persistToken(detail);
+    };
+    window.addEventListener(NATIVE_FCM_TOKEN_EVENT, onToken);
+
     let cancelled = false;
-    const t = window.setTimeout(() => {
+    const register = () => {
+      if (!isNativePushOptedIn()) return;
       void (async () => {
         const token = await initNativePush();
         if (!token || cancelled) return;
-        try {
-          await saveFcmToken({ data: { token: token.value, platform: token.platform } });
-        } catch {
-          /* signed-out or network */
-        }
+        await persistToken(token);
       })();
-    }, 800);
+    };
+
+    const t = window.setTimeout(register, 800);
+    const { data: auth } = supabase.auth.onAuthStateChange((event) => {
+      if (event === "SIGNED_IN") register();
+    });
+
     return () => {
       cancelled = true;
       window.clearTimeout(t);
+      window.removeEventListener(NATIVE_FCM_TOKEN_EVENT, onToken);
+      auth.subscription.unsubscribe();
     };
   }, []);
 

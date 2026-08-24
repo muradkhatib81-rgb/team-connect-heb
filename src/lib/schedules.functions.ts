@@ -361,6 +361,7 @@ async function notifyScheduleDepartment(
   message: string,
   excludeUserId?: string | null,
   eventKey: string = "schedule_update",
+  skipPushEndpoints?: string[] | null,
 ) {
   const recipientIds = await getScheduleDepartmentRecipientIds(departmentId, excludeUserId);
   if (!recipientIds.length) {
@@ -374,6 +375,7 @@ async function notifyScheduleDepartment(
     title: "עדכון סידור עבודה",
     eventKey,
     excludeUserId,
+    skipPushEndpoints,
   });
 }
 
@@ -943,6 +945,8 @@ const saveShiftsSchema = z.object({
       leave_type_code: z.enum(["regular", "sick"]).nullable().optional(),
     }),
   ),
+  /** Current device push endpoint — skip so the editor's Chrome/APK is never notified. */
+  actor_push_endpoint: z.string().min(8).max(4096).optional().nullable(),
 });
 
 export const saveScheduleShifts = createServerFn({ method: "POST" })
@@ -1198,6 +1202,7 @@ export const saveScheduleShifts = createServerFn({ method: "POST" })
         `סידור העבודה השבועי עודכן (${when}). נא לעיין בשינויים.`,
         context.userId,
         "schedule_update",
+        data.actor_push_endpoint ? [data.actor_push_endpoint] : undefined,
       );
     }
     return { ok: true, notified: shouldNotifyEmployees };
