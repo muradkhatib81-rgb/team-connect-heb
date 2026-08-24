@@ -3,11 +3,19 @@ import "./lib/error-capture";
 import { consumeLastCapturedError } from "./lib/error-capture";
 import { renderErrorPage } from "./lib/error-page";
 import { initializeFoundation, getErrorLogger } from "./core/bootstrap";
+import { startPlatformHealthScheduler } from "./lib/platform-health.server";
 
 // Part 6 — Runtime: start the Enterprise Foundation managers once per
 // worker/server instance. Fire-and-forget: never blocks or alters request
 // handling, and never connects to Supabase.
 void initializeFoundation();
+
+// Platform health scan every 20 minutes (server process). UI only reads results.
+try {
+  startPlatformHealthScheduler();
+} catch (e) {
+  console.warn("[platform-health] scheduler not started:", e);
+}
 
 type ServerEntry = {
   fetch: (request: Request, env: unknown, ctx: unknown) => Promise<Response> | Response;
