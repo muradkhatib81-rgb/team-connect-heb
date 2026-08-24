@@ -40,6 +40,7 @@ export function NotificationsBell() {
         const { data } = await supabase
           .from("schedule_notifications")
           .select("id, schedule_id, message, read_at, created_at, schedule:schedules(week_start)")
+          .is("read_at", null)
           .order("created_at", { ascending: false })
           .limit(30);
         return data ?? [];
@@ -109,6 +110,14 @@ export function NotificationsBell() {
 
   const markOneRead = async (n: UnifiedItem) => {
     if (!userId) return;
+    qc.setQueryData(["notif", "schedule", userId], (old: unknown) => {
+      if (n.kind !== "schedule" || !Array.isArray(old)) return old;
+      return old.filter((row: { id: string }) => row.id !== n.refId);
+    });
+    qc.setQueryData(["notif", "messages", userId], (old: unknown) => {
+      if (n.kind !== "message" || !Array.isArray(old)) return old;
+      return old.filter((row: { message_id: string }) => row.message_id !== n.refId);
+    });
     try {
       if (n.kind === "schedule") {
         await supabase
@@ -120,6 +129,7 @@ export function NotificationsBell() {
       }
     } finally {
       qc.invalidateQueries({ queryKey: ["notif"] });
+      qc.invalidateQueries({ queryKey: ["shell-comm-unread"] });
     }
   };
 
@@ -128,17 +138,47 @@ export function NotificationsBell() {
   const markAllRead = useMutation({
     mutationFn: async () => {
       if (!userId) return;
-      const schedIds = (schedQ.data ?? []).filter((n: any) => !n.read_at).map((n: any) => n.id);
+      const now = new Date().toISOString();
+      const schedIds = (schedQ.data ?? []).filter((n: { read_at?: string | null }) => !n.read_at).map((n: { id: string }) => n.id);
+      const msgIds = (msgQ.data ?? []).map((r: { message_id: string }) => r.message_id);
+      const jobs: Promise<unknown>[] = [];
       if (schedIds.length) {
-        await supabase
-          .from("schedule_notifications")
-          .update({ read_at: new Date().toISOString() })
-          .in("id", schedIds);
+        jobs.push(
+          supabase.from("schedule_notifications").update({ read_at: now }).in("id", schedIds),
+        );
       }
-      await Promise.all((msgQ.data ?? []).map((r: any) => markMessageRead(r.message_id)));
+      if (msgIds.length) {
+        jobs.push(
+          supabase
+            .from("message_recipients")
+            .update({ read_at: now })
+            .eq("user_id", userId)
+            .in("message_id", msgIds)
+            .is("read_at", null),
+        );
+      }
+      if (jobs.length) await Promise.all(jobs);
     },
-    onSuccess: () => {
+    onMutate: async () => {
+      await qc.cancelQueries({ queryKey: ["notif"] });
+      const prevSched = qc.getQueryData(["notif", "schedule", userId]);
+      const prevMsg = qc.getQueryData(["notif", "messages", userId]);
+      const prevUnread = qc.getQueryData(["shell-comm-unread", userId]);
+      qc.setQueryData(["notif", "schedule", userId], []);
+      qc.setQueryData(["notif", "messages", userId], []);
+      qc.setQueryData(["shell-comm-unread", userId], 0);
+      return { prevSched, prevMsg, prevUnread };
+    },
+    onError: (_err, _vars, ctx) => {
+      if (!ctx) return;
+      qc.setQueryData(["notif", "schedule", userId], ctx.prevSched);
+      qc.setQueryData(["notif", "messages", userId], ctx.prevMsg);
+      qc.setQueryData(["shell-comm-unread", userId], ctx.prevUnread);
+    },
+    onSettled: () => {
       qc.invalidateQueries({ queryKey: ["notif"] });
+      qc.invalidateQueries({ queryKey: ["shell-comm-unread"] });
+      qc.invalidateQueries({ queryKey: ["communications"] });
     },
   });
 

@@ -53,6 +53,7 @@ import { getGuestLanguage, getSavedLanguage, saveLanguage } from "@/i18n";
 import { useServerFn } from "@tanstack/react-start";
 import { syncPreferredLanguage } from "@/lib/translate-content.functions";
 import { NotificationsBell } from "@/components/notifications-bell";
+import { PullToRefresh } from "@/components/pull-to-refresh";
 import { LanguageSwitcher } from "@/components/language-switcher";
 import { useActiveBranch } from "@/lib/use-active-branch";
 import { useBreakSelfServiceNavVisible } from "@/lib/use-shift-self-service-visible";
@@ -859,8 +860,10 @@ export function AppShell({ children }: { children: ReactNode }) {
         </div>
 
         <main className="lg:ms-64 flex-1">
-          <div className="mx-auto max-w-6xl px-4 sm:px-6 py-6 lg:py-10">{children}</div>
-          <AppFooter />
+          <PullToRefresh>
+            <div className="mx-auto max-w-6xl px-4 sm:px-6 py-6 lg:py-10">{children}</div>
+            <AppFooter />
+          </PullToRefresh>
         </main>
       </div>
     </>

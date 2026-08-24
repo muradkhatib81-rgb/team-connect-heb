@@ -133,6 +133,7 @@
 
   html {
     direction: rtl;
+    overscroll-behavior-y: contain;
   }
 
   body {
