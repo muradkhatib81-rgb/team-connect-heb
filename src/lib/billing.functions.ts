@@ -34,6 +34,14 @@ import {
   type BillingAccountRow,
 } from "@/lib/billing-store.server";
 import {
+  getCompanyBillingState,
+  listPlanEntitlements,
+  startCompanyTrial,
+  type CompanyBillingState,
+} from "@/lib/billing-entitlements.server";
+import type { PlanEntitlementRow } from "@/lib/billing-entitlements";
+import { billingErrorCode } from "@/lib/billing-errors";
+import {
   appPublicUrl,
   getStripe,
   isStripeCheckoutConfigured,
@@ -67,30 +75,38 @@ export type BillingOverview = {
     currentPeriodEnd: string | null;
     cancelAtPeriodEnd: boolean;
     graceUntil: string | null;
+    trialEndsAt: string | null;
+    isTrialActive: boolean;
+    usage: { employees: number; branches: number };
   }>;
   payments: Awaited<ReturnType<typeof listRecentPayments>>;
   entitlements: BillingAiEntitlement[];
   grants: BillingAiGrantSlice[];
   storageEntitlements: BillingStorageEntitlement[];
   storageGrants: BillingStorageGrantSlice[];
+  planEntitlements: PlanEntitlementRow[];
 };
 
 function emptyPlatform(): BillingOverview["platform"] {
   return { plan: "free", source: null, status: "none", currentPeriodEnd: null };
 }
 
-function accountToCompanySlice(row: BillingAccountRow) {
+async function accountToCompanySlice(row: BillingAccountRow) {
+  const state = await getCompanyBillingState(row.company_id as string);
   return {
     companyId: row.company_id as string,
-    plan: effectivePlan(row),
+    plan: state.effectivePlan,
     storedPlan: row.plan,
     source: row.source,
-    status: row.status,
+    status: state.status,
     stripeCustomerId: row.stripe_customer_id,
     stripeSubscriptionId: row.stripe_subscription_id,
     currentPeriodEnd: row.current_period_end,
     cancelAtPeriodEnd: row.cancel_at_period_end,
     graceUntil: row.grace_until,
+    trialEndsAt: state.trialEndsAt,
+    isTrialActive: state.isTrialActive,
+    usage: state.usage,
   };
 }
 
@@ -99,7 +115,7 @@ export const getBillingOverview = createServerFn({ method: "GET" })
   .handler(async ({ context }): Promise<BillingOverview> => {
     const { supabase, userId } = context as { supabase: any; userId: string };
     await assertPlatformOwner(supabase, userId);
-    const [platform, accounts, payments, entitlements, grants, storageEntitlements, storageGrants] =
+    const [platform, accounts, payments, entitlements, grants, storageEntitlements, storageGrants, planEntitlements] =
       await Promise.all([
         loadPlatformAccount(),
         listBillingAccounts(),
@@ -108,8 +124,10 @@ export const getBillingOverview = createServerFn({ method: "GET" })
         listBillingAiGrants(),
         listBillingStorageEntitlements(),
         listBillingStorageGrants(),
+        listPlanEntitlements(),
       ]);
     const companyRows = accounts.filter((a) => a.company_id);
+    const companies = await Promise.all(companyRows.map((row) => accountToCompanySlice(row)));
     return {
       stripeConfigured: isStripeConfigured(),
       checkoutConfigured: isStripeCheckoutConfigured(),
@@ -121,14 +139,36 @@ export const getBillingOverview = createServerFn({ method: "GET" })
             currentPeriodEnd: platform.current_period_end,
           }
         : emptyPlatform(),
-      companies: companyRows.map(accountToCompanySlice),
+      companies,
       payments,
       entitlements,
       grants,
       storageEntitlements,
       storageGrants,
+      planEntitlements,
     };
   });
+
+const trialInput = z.object({
+  companyId: z.string().uuid(),
+  days: z.number().int().min(1).max(30).optional(),
+});
+
+export const startBillingTrial = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((raw: unknown) => trialInput.parse(raw))
+  .handler(async ({ data, context }) => {
+    const { supabase, userId } = context as { supabase: any; userId: string };
+    await assertPlatformOwner(supabase, userId);
+    const result = await startCompanyTrial({
+      companyId: data.companyId,
+      days: data.days,
+      updatedBy: userId,
+    });
+    return { ok: true, trialEndsAt: result.trialEndsAt };
+  });
+
+export type { CompanyBillingState, PlanEntitlementRow };
 
 const planInput = z.object({
   companyId: z.string().uuid().nullable(),
@@ -199,7 +239,7 @@ export const saveBillingAllocation = createServerFn({ method: "POST" })
         .maybeSingle();
       if (error) throw new Error(error.message);
       if (!assignment || assignment.company_id !== data.companyId) {
-        throw new Error("הסניף לא שייך לחברה שנבחרה");
+        throw new Error(billingErrorCode("branchNotInCompany"));
       }
     } else {
       await upsertManualPlan({
@@ -222,13 +262,13 @@ export const saveBillingAllocation = createServerFn({ method: "POST" })
       isActive: data.aiEnabled,
     });
     if (!aiResult.ok && aiResult.skipped === "planNotFound") {
-      throw new Error("לא נמצאה מכסת דקות לתוכנית זו");
+      throw new Error(billingErrorCode("aiPlanNotFound"));
     }
     if (!aiResult.ok && aiResult.skipped && /missing/i.test(aiResult.skipped)) {
-      throw new Error("טבלאות ה-AI עדיין לא הותקנו במסד");
+      throw new Error(billingErrorCode("aiTablesMissing"));
     }
     if (!aiResult.ok) {
-      throw new Error(aiResult.skipped ?? "שמירת הקצאת ה-AI נכשלה");
+      throw new Error(aiResult.skipped ?? billingErrorCode("aiSaveFailed"));
     }
 
     const storageResult = await applyStorageGrantFromBillingPlan({
@@ -240,15 +280,13 @@ export const saveBillingAllocation = createServerFn({ method: "POST" })
       isActive: true,
     });
     if (!storageResult.ok && storageResult.skipped === "planNotFound") {
-      throw new Error("לא נמצאה מכסת אחסון לתוכנית זו");
+      throw new Error(billingErrorCode("storagePlanNotFound"));
     }
     if (!storageResult.ok && storageResult.skipped && /missing/i.test(storageResult.skipped)) {
-      throw new Error(
-        "טבלאות האחסון עדיין לא הותקנו במסד. הריצו את המיגרציה 20260825130000_billing_storage_quotas.sql",
-      );
+      throw new Error(billingErrorCode("storageTablesMissing"));
     }
     if (!storageResult.ok) {
-      throw new Error(storageResult.skipped ?? "שמירת מכסת האחסון נכשלה");
+      throw new Error(storageResult.skipped ?? billingErrorCode("storageSaveFailed"));
     }
 
     return { ok: true };
@@ -268,7 +306,7 @@ export const createBillingCheckoutSession = createServerFn({ method: "POST" })
     const stripe = getStripe();
     const priceId = priceIdForPlan(data.plan);
     if (!stripe || !priceId) {
-      throw new Error("Stripe אינו מוגדר. הוסיפו STRIPE_SECRET_KEY ו-STRIPE_PRICE_STANDARD / STRIPE_PRICE_ENTERPRISE.");
+      throw new Error(billingErrorCode("stripeNotConfiguredCheckout"));
     }
 
     const { data: company, error: companyErr } = await (supabaseAdmin as any)
@@ -277,7 +315,7 @@ export const createBillingCheckoutSession = createServerFn({ method: "POST" })
       .eq("id", data.companyId)
       .maybeSingle();
     if (companyErr) throw new Error(companyErr.message);
-    if (!company) throw new Error("החברה לא נמצאה");
+    if (!company) throw new Error(billingErrorCode("companyNotFound"));
 
     const { data: existing } = await (supabaseAdmin as any)
       .from("billing_accounts")
@@ -311,7 +349,7 @@ export const createBillingCheckoutSession = createServerFn({ method: "POST" })
       },
       allow_promotion_codes: true,
     });
-    if (!session.url) throw new Error("Stripe לא החזיר כתובת תשלום");
+    if (!session.url) throw new Error(billingErrorCode("stripeNoCheckoutUrl"));
     return { url: session.url };
   });
 
@@ -324,7 +362,7 @@ export const createBillingPortalSession = createServerFn({ method: "POST" })
     const { supabase, userId } = context as { supabase: any; userId: string };
     await assertPlatformOwner(supabase, userId);
     const stripe = getStripe();
-    if (!stripe) throw new Error("Stripe אינו מוגדר.");
+    if (!stripe) throw new Error(billingErrorCode("stripeNotConfigured"));
 
     const { data: row } = await (supabaseAdmin as any)
       .from("billing_accounts")
@@ -332,7 +370,7 @@ export const createBillingPortalSession = createServerFn({ method: "POST" })
       .eq("company_id", data.companyId)
       .maybeSingle();
     const customerId = row?.stripe_customer_id as string | undefined;
-    if (!customerId) throw new Error("אין לקוח Stripe לחברה זו. התחילו בתשלום קודם.");
+    if (!customerId) throw new Error(billingErrorCode("noStripeCustomer"));
 
     const request = getRequest();
     const base = appPublicUrl(request);

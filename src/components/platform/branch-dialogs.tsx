@@ -33,8 +33,10 @@ import { branchService, type Branch } from "@/modules/branches";
 import { companyService } from "@/modules/companies";
 import { branchesQueryKey, ALL_BRANCH_ASSIGNMENTS_QUERY_KEY } from "@/platform";
 import { listRealBranches, REAL_BRANCHES_QUERY_KEY } from "@/lib/real-branches-directory";
-import { syncBranchCompanyName } from "@/lib/branches.functions";
+import { syncBranchCompanyName, assignCompanyBranch } from "@/lib/branches.functions";
+import { translateBillingError } from "@/lib/billing-errors";
 import { useServerFn } from "@tanstack/react-start";
+import { useTranslation } from "react-i18next";
 
 // -------------------- Assign existing branch --------------------
 // Deliberately not a "create" flow: Part 2 requires assigning an EXISTING
@@ -54,8 +56,10 @@ export function BranchCreateDialog({
   onCreated?: (branch: Branch) => void;
 }) {
   const queryClient = useQueryClient();
+  const { t } = useTranslation();
   const [selectedId, setSelectedId] = useState("");
   const syncCompanyName = useServerFn(syncBranchCompanyName);
+  const assignBranchFn = useServerFn(assignCompanyBranch);
 
   const realBranchesQuery = useQuery({
     queryKey: REAL_BRANCHES_QUERY_KEY,
@@ -81,13 +85,48 @@ export function BranchCreateDialog({
     mutationFn: async () => {
       const picked = available.find((b) => b.id === selectedId);
       if (!picked) throw new Error("יש לבחור סניף קיים לשיוך.");
-      const assigned = await branchService.assignBranch(companyId, picked);
+      const result = await assignBranchFn({
+        data: {
+          company_id: companyId,
+          source_branch_id: picked.id,
+          name: picked.name,
+          code: picked.code ?? null,
+          address: picked.address ?? null,
+          is_active: picked.is_active ?? true,
+        },
+      });
       const company = await companyService.getCompany(companyId);
       if (company?.name?.trim()) {
         await syncCompanyName({
           data: { branch_id: picked.id, company_name: company.name.trim() },
         });
       }
+      const row = result.branch as {
+        id: string;
+        company_id: string;
+        source_branch_id: string;
+        name: string;
+        code: string | null;
+        address: string | null;
+        is_active: boolean;
+        created_at: string;
+        updated_at: string;
+      };
+      const assigned: Branch = {
+        id: row.id,
+        companyId: row.company_id,
+        sourceBranchId: row.source_branch_id,
+        name: row.name,
+        code: row.code,
+        address: row.address,
+        isActive: row.is_active,
+        createdAt: new Date(row.created_at),
+        updatedAt: new Date(row.updated_at),
+        createdBy: null,
+        updatedBy: null,
+        deletedAt: null,
+        deletedBy: null,
+      };
       return assigned;
     },
     onSuccess: async (branch) => {
@@ -101,7 +140,7 @@ export function BranchCreateDialog({
       setSelectedId("");
       onCreated?.(branch);
     },
-    onError: (e: Error) => toast.error(e.message ?? "שיוך הסניף נכשל"),
+    onError: (e: Error) => toast.error(translateBillingError(e.message ?? "", t)),
   });
 
   const isLoading = realBranchesQuery.isLoading || assignmentsQuery.isLoading;

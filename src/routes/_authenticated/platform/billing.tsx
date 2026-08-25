@@ -2,7 +2,8 @@ import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { Building2, CreditCard, ExternalLink, GitBranch, HardDrive, Loader2, Sparkles } from "lucide-react";
+import { useTranslation } from "react-i18next";
+import { Building2, CreditCard, Clock, ExternalLink, GitBranch, HardDrive, Loader2, Sparkles, Users } from "lucide-react";
 import { toast } from "sonner";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -27,7 +28,15 @@ import {
   getBillingOverview,
   saveBillingAllocation,
   setManualBillingPlan,
+  startBillingTrial,
 } from "@/lib/billing.functions";
+import {
+  DEFAULT_PLAN_ENTITLEMENTS,
+  DEFAULT_TRIAL_DAYS,
+  formatLimit,
+  trialDaysRemaining,
+} from "@/lib/billing-entitlements";
+import { translateBillingError } from "@/lib/billing-errors";
 import {
   DEFAULT_STORAGE_QUOTA_MB,
   formatUsedBytes,
@@ -43,39 +52,30 @@ export const Route = createFileRoute("/_authenticated/platform/billing")({
   }),
 });
 
-const PLAN_LABELS: Record<BillingPlan, string> = {
-  free: "חינמי (Free)",
-  standard: "רגיל (Standard)",
-  enterprise: "מיזם (Enterprise)",
-};
-
 const PLAN_TONES: Record<BillingPlan, string> = {
   free: "bg-muted text-muted-foreground",
   standard: "bg-sky-100 text-sky-700 dark:bg-sky-950/30 dark:text-sky-400",
   enterprise: "bg-amber-100 text-amber-700 dark:bg-amber-950/30 dark:text-amber-500",
 };
 
-const STATUS_HE: Record<string, string> = {
-  active: "פעיל",
-  trialing: "ניסיון",
-  past_due: "באיחור",
-  canceled: "בוטל",
-  unpaid: "לא שולם",
-  incomplete: "לא הושלם",
-  incomplete_expired: "פג",
-  paused: "מושהה",
-  none: "אין מנוי",
-};
-
 const COMPANY_SCOPE = "__company__";
 const OVERVIEW_KEY = ["platform-billing-overview"] as const;
 
-function catalogMinutesLabel(minutes: number | null | undefined) {
-  if (minutes == null) return "ללא הגבלה";
-  return `${minutes} דק׳ / חודש`;
+function dateLocale(lang: string) {
+  return lang === "ar" ? "ar-SA" : lang === "en" ? "en-US" : "he-IL";
 }
 
 function PlatformBillingPage() {
+  const { t, i18n } = useTranslation();
+  const locale = dateLocale(i18n.language);
+  const planLabel = (plan: BillingPlan) => t(`platformBilling.plans.${plan}`);
+  const statusLabel = (status: string) =>
+    t(`platformBilling.status.${status}`, { defaultValue: status });
+  const unlimited = t("platformBilling.unlimited");
+  const catalogMinutesLabel = (minutes: number | null | undefined) =>
+    minutes == null ? unlimited : t("platformBilling.minutesPerMonth", { count: minutes });
+  const toastBillingError = (e: Error) => toast.error(translateBillingError(e.message, t));
+
   const { companies, isLoading: companiesLoading, activeCompanyId } = useCompanyContext();
   const qc = useQueryClient();
   const navigate = useNavigate();
@@ -85,6 +85,7 @@ function PlatformBillingPage() {
   const saveAllocFn = useServerFn(saveBillingAllocation);
   const checkoutFn = useServerFn(createBillingCheckoutSession);
   const portalFn = useServerFn(createBillingPortalSession);
+  const startTrialFn = useServerFn(startBillingTrial);
 
   const [selectedCompanyId, setSelectedCompanyId] = useState("");
   const [selectedBranchId, setSelectedBranchId] = useState(COMPANY_SCOPE);
@@ -105,14 +106,14 @@ function PlatformBillingPage() {
 
   useEffect(() => {
     if (search.checkout === "success") {
-      toast.success("התשלום הושלם. המנוי יתעדכן אחרי אישור Stripe.");
+      toast.success(t("platformBilling.checkoutSuccess"));
       void qc.invalidateQueries({ queryKey: OVERVIEW_KEY });
       void navigate({ to: "/platform/billing", search: {}, replace: true });
     } else if (search.checkout === "cancel") {
-      toast.message("התשלום בוטל");
+      toast.message(t("platformBilling.checkoutCancel"));
       void navigate({ to: "/platform/billing", search: {}, replace: true });
     }
-  }, [search.checkout, navigate, qc]);
+  }, [search.checkout, navigate, qc, t]);
 
   const companyOptions = useMemo(
     () => companies.map((c) => ({ id: c.id, label: c.name })),
@@ -124,14 +125,14 @@ function PlatformBillingPage() {
   );
   const branchOptions = useMemo(
     () => [
-      { id: COMPANY_SCOPE, label: "כל החברה" },
+      { id: COMPANY_SCOPE, label: t("platformBilling.wholeCompany") },
       ...companyBranches.map((b) => ({
         id: b.id,
         label: b.name,
         sublabel: b.code ?? undefined,
       })),
     ],
-    [companyBranches],
+    [companyBranches, t],
   );
   const byCompany = useMemo(() => {
     const map = new Map((overviewQ.data?.companies ?? []).map((c) => [c.companyId, c]));
@@ -141,6 +142,10 @@ function PlatformBillingPage() {
   const grants = overviewQ.data?.grants ?? [];
   const storageEntitlements = overviewQ.data?.storageEntitlements ?? [];
   const storageGrants = overviewQ.data?.storageGrants ?? [];
+  const planEntitlements =
+    overviewQ.data?.planEntitlements?.length
+      ? overviewQ.data.planEntitlements
+      : Object.values(DEFAULT_PLAN_ENTITLEMENTS);
   const storageCatalogMb = (plan: BillingPlan) =>
     storageEntitlements.find((e) => e.billing_plan === plan)?.storage_quota_mb ??
     DEFAULT_STORAGE_QUOTA_MB[plan];
@@ -232,24 +237,24 @@ function PlatformBillingPage() {
     mutationFn: (input: { companyId: string | null; plan: BillingPlan }) =>
       setPlanFn({ data: input }),
     onSuccess: () => {
-      toast.success("התוכנית נשמרה במסד הנתונים");
+      toast.success(t("platformBilling.planSaved"));
       void qc.invalidateQueries({ queryKey: OVERVIEW_KEY });
     },
-    onError: (e: Error) => toast.error(e.message),
+    onError: (e: Error) => toastBillingError(e),
   });
 
   const saveAllocMut = useMutation({
     mutationFn: () => {
-      if (!selectedCompanyId) throw new Error("בחרו חברה");
+      if (!selectedCompanyId) throw new Error(t("platformBilling.pickCompanyError"));
       const trimmed = draftMinutes.trim();
       const quotaMinutes = trimmed === "" ? null : Number(trimmed);
       if (quotaMinutes != null && !Number.isFinite(quotaMinutes)) {
-        throw new Error("מספר דקות לא תקין");
+        throw new Error(t("platformBilling.invalidMinutes"));
       }
       const storageTrimmed = draftStorageGb.trim();
       const storageGb = storageTrimmed === "" ? null : Number(storageTrimmed);
       if (storageGb != null && (!Number.isFinite(storageGb) || storageGb < 0)) {
-        throw new Error("נפח אחסון לא תקין");
+        throw new Error(t("platformBilling.invalidStorage"));
       }
       return saveAllocFn({
         data: {
@@ -265,10 +270,10 @@ function PlatformBillingPage() {
       });
     },
     onSuccess: () => {
-      toast.success("התוכנית, ה-AI והאחסון נשמרו");
+      toast.success(t("platformBilling.allocationSaved"));
       void qc.invalidateQueries({ queryKey: OVERVIEW_KEY });
     },
-    onError: (e: Error) => toast.error(e.message),
+    onError: (e: Error) => toastBillingError(e),
   });
 
   const checkoutMut = useMutation({
@@ -277,7 +282,7 @@ function PlatformBillingPage() {
     onSuccess: (res) => {
       window.location.href = res.url;
     },
-    onError: (e: Error) => toast.error(e.message),
+    onError: (e: Error) => toastBillingError(e),
   });
 
   const portalMut = useMutation({
@@ -285,13 +290,35 @@ function PlatformBillingPage() {
     onSuccess: (res) => {
       window.location.href = res.url;
     },
-    onError: (e: Error) => toast.error(e.message),
+    onError: (e: Error) => toastBillingError(e),
+  });
+
+  const trialMut = useMutation({
+    mutationFn: (companyId: string) =>
+      startTrialFn({ data: { companyId, days: DEFAULT_TRIAL_DAYS } }),
+    onSuccess: (res) => {
+      toast.success(
+        t("platformBilling.trialStarted", {
+          date: new Date(res.trialEndsAt).toLocaleDateString(locale),
+        }),
+      );
+      void qc.invalidateQueries({ queryKey: OVERVIEW_KEY });
+    },
+    onError: (e: Error) => toastBillingError(e),
   });
 
   const overview = overviewQ.data;
   const platformPlan = overview?.platform.plan ?? "free";
   const catalogForDraft = entitlements.find((e) => e.billing_plan === draftPlan);
   const storageCatalogForDraftMb = storageCatalogMb(draftPlan);
+  const trialDaysLeft = trialDaysRemaining(selectedRow?.trialEndsAt);
+  const canStartTrial =
+    isCompanyScope &&
+    !!selectedCompanyId &&
+    !selectedRow?.isTrialActive &&
+    companyPlan === "free" &&
+    !selectedRow?.stripeSubscriptionId;
+  const planLimits = planEntitlements.find((e) => e.billing_plan === companyPlan);
 
   return (
     <div className="space-y-6">
@@ -300,44 +327,43 @@ function PlatformBillingPage() {
           <CreditCard className="size-6" />
         </div>
         <div className="min-w-0">
-          <h1 className="truncate text-2xl sm:text-3xl font-bold">חיוב ומנויים (Billing &amp; Subscriptions)</h1>
-          <p className="text-sm text-muted-foreground mt-1">
-            תשלום Stripe לפי חברה. דקות AI ונפח אחסון לפי חברה או סניף — נקבעים כאן, לא ב-Stripe.
-          </p>
+          <h1 className="truncate text-2xl sm:text-3xl font-bold">{t("platformBilling.title")}</h1>
+          <p className="text-sm text-muted-foreground mt-1">{t("platformBilling.subtitle")}</p>
         </div>
       </header>
 
       {overviewQ.isError && (
         <Card className="p-4 text-sm text-destructive">
-          {overviewQ.error instanceof Error ? overviewQ.error.message : "טעינת החיוב נכשלה"}
+          {overviewQ.error instanceof Error
+            ? translateBillingError(overviewQ.error.message, t)
+            : t("platformBilling.loadFailed")}
         </Card>
       )}
 
       {overview && !overview.stripeConfigured && (
-        <Card className="p-4 text-sm text-muted-foreground">
-          Stripe עדיין לא מוגדר בשרת. בחירת תוכנית ידנית נשמרת. כדי לקבל תשלום אמיתי הוסיפו{" "}
-          <code className="text-xs">STRIPE_SECRET_KEY</code>,{" "}
-          <code className="text-xs">STRIPE_WEBHOOK_SECRET</code>,{" "}
-          <code className="text-xs">STRIPE_PRICE_STANDARD</code> ו-
-          <code className="text-xs">STRIPE_PRICE_ENTERPRISE</code>.
-        </Card>
+        <Card className="p-4 text-sm text-muted-foreground">{t("platformBilling.stripeNotConfigured")}</Card>
       )}
 
       {overview && (overview.storageEntitlements?.length ?? 0) === 0 && (
         <Card className="p-4 text-sm text-amber-900 bg-amber-50 border-amber-200">
-          טבלאות מכסת האחסון עדיין לא הותקנו. הריצו ב-Supabase SQL את הקובץ{" "}
-          <code className="text-xs">20260825130000_billing_storage_quotas.sql</code> ואז רעננו את
-          העמוד.
+          {t("platformBilling.storageTablesMissing")}
         </Card>
       )}
 
       <Card className="card-elevated p-5 space-y-3">
-        <h2 className="text-sm font-semibold text-muted-foreground">מנוי הפלטפורמה</h2>
+        <h2 className="text-sm font-semibold text-muted-foreground">
+          {t("platformBilling.platformSubscription")}
+        </h2>
         <div className="flex flex-wrap items-center gap-3">
-          <Badge className={PLAN_TONES[platformPlan]}>{PLAN_LABELS[platformPlan]}</Badge>
+          <Badge className={PLAN_TONES[platformPlan]}>{planLabel(platformPlan)}</Badge>
           {overview?.platform.source && (
             <span className="text-xs text-muted-foreground">
-              מקור: {overview.platform.source === "stripe" ? "Stripe" : "ידני"}
+              {t("platformBilling.source", {
+                source:
+                  overview.platform.source === "stripe"
+                    ? t("platformBilling.sourceStripe")
+                    : t("platformBilling.sourceManual"),
+              })}
             </span>
           )}
           <Select
@@ -351,9 +377,9 @@ function PlatformBillingPage() {
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              {Object.entries(PLAN_LABELS).map(([value, label]) => (
+              {(["free", "standard", "enterprise"] as BillingPlan[]).map((value) => (
                 <SelectItem key={value} value={value}>
-                  {label}
+                  {planLabel(value)}
                 </SelectItem>
               ))}
             </SelectContent>
@@ -365,21 +391,21 @@ function PlatformBillingPage() {
         <div>
           <h2 className="text-sm font-semibold text-muted-foreground flex items-center gap-2">
             <Building2 className="size-4" />
-            תוכנית והקצאה לפי חברה / סניף
+            {t("platformBilling.companyAllocationTitle")}
           </h2>
           <p className="text-xs text-muted-foreground mt-1">
-            בחרו חברה, אחר כך סניף או כל החברה. שמירה מעדכנת תוכנית, דקות AI ונפח אחסון.
+            {t("platformBilling.companyAllocationHint")}
           </p>
         </div>
         {companiesLoading || overviewQ.isLoading ? (
-          <div className="text-sm text-muted-foreground">טוען…</div>
+          <div className="text-sm text-muted-foreground">{t("platformBilling.loading")}</div>
         ) : companies.length === 0 ? (
-          <div className="text-sm text-muted-foreground">אין עדיין חברות בפלטפורמה</div>
+          <div className="text-sm text-muted-foreground">{t("platformBilling.noCompanies")}</div>
         ) : (
           <div className="space-y-4">
             <div className="grid gap-4 sm:grid-cols-2">
               <div className="space-y-2">
-                <Label>חברה</Label>
+                <Label>{t("platformBilling.company")}</Label>
                 <SearchableSingleSelect
                   options={companyOptions}
                   value={selectedCompanyId}
@@ -387,23 +413,23 @@ function PlatformBillingPage() {
                     setSelectedCompanyId(id);
                     setSelectedBranchId(COMPANY_SCOPE);
                   }}
-                  placeholder="בחרו חברה…"
-                  searchPlaceholder="הקלד לחיפוש לפי שם…"
-                  emptyText="לא נמצאה חברה"
+                  placeholder={t("platformBilling.pickCompany")}
+                  searchPlaceholder={t("platformBilling.searchCompany")}
+                  emptyText={t("platformBilling.noCompanyFound")}
                 />
               </div>
               <div className="space-y-2">
                 <Label className="flex items-center gap-1.5">
                   <GitBranch className="size-3.5" />
-                  סניף
+                  {t("platformBilling.branch")}
                 </Label>
                 <SearchableSingleSelect
                   options={branchOptions}
                   value={selectedBranchId}
                   onChange={setSelectedBranchId}
-                  placeholder="בחרו סניף…"
-                  searchPlaceholder="הקלד לחיפוש סניף…"
-                  emptyText="לא נמצא סניף"
+                  placeholder={t("platformBilling.pickBranch")}
+                  searchPlaceholder={t("platformBilling.searchBranch")}
+                  emptyText={t("platformBilling.noBranchFound")}
                   disabled={!selectedCompanyId}
                 />
               </div>
@@ -415,25 +441,75 @@ function PlatformBillingPage() {
                   <p className="text-base font-semibold">{selectedCompany.name}</p>
                   {!isCompanyScope && (
                     <Badge variant="outline">
-                      {companyBranches.find((b) => b.id === selectedBranchId)?.name ?? "סניף"}
+                      {companyBranches.find((b) => b.id === selectedBranchId)?.name ??
+                        t("platformBilling.branch")}
                     </Badge>
                   )}
-                  <Badge className={PLAN_TONES[companyPlan]}>{PLAN_LABELS[companyPlan]}</Badge>
+                  <Badge className={PLAN_TONES[companyPlan]}>{planLabel(companyPlan)}</Badge>
                 </div>
                 <p className="text-xs text-muted-foreground">
-                  מנוי החברה: {STATUS_HE[selectedRow?.status ?? "none"] ?? selectedRow?.status ?? "אין מנוי"}
-                  {selectedRow?.source ? ` · ${selectedRow.source === "stripe" ? "Stripe" : "ידני"}` : ""}
+                  {t("platformBilling.statusLine", {
+                    status: statusLabel(selectedRow?.status ?? "none"),
+                  })}
+                  {selectedRow?.isTrialActive && trialDaysLeft != null
+                    ? ` · ${t("platformBilling.trialDaysLeft", { count: trialDaysLeft })}`
+                    : ""}
+                  {selectedRow?.source
+                    ? ` · ${
+                        selectedRow.source === "stripe"
+                          ? t("platformBilling.sourceStripe")
+                          : t("platformBilling.sourceManual")
+                      }`
+                    : ""}
                   {selectedRow?.currentPeriodEnd
-                    ? ` · עד ${new Date(selectedRow.currentPeriodEnd).toLocaleDateString("he-IL")}`
+                    ? ` · ${t("platformBilling.periodUntil", {
+                        date: new Date(selectedRow.currentPeriodEnd).toLocaleDateString(locale),
+                      })}`
+                    : ""}
+                  {selectedRow?.trialEndsAt && !selectedRow.isTrialActive
+                    ? ` · ${t("platformBilling.trialEndedOn", {
+                        date: new Date(selectedRow.trialEndsAt).toLocaleDateString(locale),
+                      })}`
                     : ""}
                   {isCompanyScope
-                    ? " · שמירה כאן מעדכנת את תוכנית התשלום של החברה"
-                    : " · שמירה כאן מקצה AI ואחסון לסניף בלבד; התשלום נשאר ברמת החברה"}
+                    ? ` · ${t("platformBilling.saveUpdatesCompanyPlan")}`
+                    : ` · ${t("platformBilling.saveUpdatesBranchOnly")}`}
                 </p>
+
+                {isCompanyScope && selectedRow?.usage && planLimits && (
+                  <div className="flex flex-wrap gap-3 text-xs text-muted-foreground">
+                    <span className="inline-flex items-center gap-1">
+                      <Users className="size-3.5" />
+                      {t("platformBilling.employeesUsage", {
+                        used: selectedRow.usage.employees,
+                        max: planLimits.max_employees ?? "∞",
+                      })}
+                    </span>
+                    <span className="inline-flex items-center gap-1">
+                      <GitBranch className="size-3.5" />
+                      {t("platformBilling.branchesUsage", {
+                        used: selectedRow.usage.branches,
+                        max: planLimits.max_branches ?? "∞",
+                      })}
+                    </span>
+                    {planLimits.realtime_enabled ? (
+                      <Badge variant="secondary">{t("platformBilling.realtimeOn")}</Badge>
+                    ) : (
+                      <Badge variant="outline">{t("platformBilling.realtimeOff")}</Badge>
+                    )}
+                  </div>
+                )}
+
+                {selectedRow?.isTrialActive && (
+                  <div className="rounded-md border border-sky-200 bg-sky-50 px-3 py-2 text-xs text-sky-900 flex items-center gap-2">
+                    <Clock className="size-4 shrink-0" />
+                    {t("platformBilling.trialBanner")}
+                  </div>
+                )}
 
                 <div className="grid gap-4 sm:grid-cols-2">
                   <div className="space-y-2">
-                    <Label>תוכנית</Label>
+                    <Label>{t("platformBilling.plan")}</Label>
                     <Select
                       value={draftPlan}
                       onValueChange={(value) => {
@@ -448,52 +524,57 @@ function PlatformBillingPage() {
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
-                        {Object.entries(PLAN_LABELS).map(([value, label]) => (
+                        {(["free", "standard", "enterprise"] as BillingPlan[]).map((value) => (
                           <SelectItem key={value} value={value}>
-                            {label}
+                            {planLabel(value)}
                           </SelectItem>
                         ))}
                       </SelectContent>
                     </Select>
                     <p className="text-xs text-muted-foreground">
-                      ברירת מחדל: {catalogMinutesLabel(catalogForDraft?.monthly_minutes)}
-                      {" · "}
-                      אחסון {mbToGbLabel(storageCatalogForDraftMb)}
+                      {t("platformBilling.catalogDefault", {
+                        minutes: catalogMinutesLabel(catalogForDraft?.monthly_minutes),
+                        storage: mbToGbLabel(storageCatalogForDraftMb, unlimited),
+                      })}
                     </p>
                   </div>
                   <div className="space-y-2">
-                    <Label>דקות AI לחודש</Label>
+                    <Label>{t("platformBilling.aiMinutes")}</Label>
                     <Input
                       type="number"
                       min={0}
-                      placeholder="ריק = ללא הגבלה"
+                      placeholder={t("platformBilling.minutesUnlimitedPlaceholder")}
                       value={draftMinutes}
                       onChange={(e) => setDraftMinutes(e.target.value)}
                     />
                     {selectedGrant && (
                       <p className="text-xs text-muted-foreground">
-                        נוצלו {Number(selectedGrant.used_minutes ?? 0).toFixed(1)} דק׳
+                        {t("platformBilling.minutesUsed", {
+                          used: Number(selectedGrant.used_minutes ?? 0).toFixed(1),
+                        })}
                       </p>
                     )}
                   </div>
                   <div className="space-y-2 sm:col-span-2">
                     <Label className="flex items-center gap-1.5">
                       <HardDrive className="size-3.5" />
-                      נפח אחסון (GB)
+                      {t("platformBilling.storageGb")}
                     </Label>
                     <Input
                       type="number"
                       min={0}
                       step="0.1"
-                      placeholder="ריק = ללא הגבלה"
+                      placeholder={t("platformBilling.minutesUnlimitedPlaceholder")}
                       value={draftStorageGb}
                       onChange={(e) => setDraftStorageGb(e.target.value)}
                       className="sm:max-w-xs"
                     />
                     <p className="text-xs text-muted-foreground">
-                      חינמי ברירת מחדל 0.5 GB · רגיל 10 GB · מיזם ללא הגבלה. אפשר לשנות ידנית.
+                      {t("platformBilling.storageHint")}
                       {selectedStorageGrant
-                        ? ` · בשימוש כעת: ${formatUsedBytes(Number(selectedStorageGrant.used_bytes ?? 0))}`
+                        ? ` · ${t("platformBilling.storageUsed", {
+                            used: formatUsedBytes(Number(selectedStorageGrant.used_bytes ?? 0)),
+                          })}`
                         : ""}
                     </p>
                   </div>
@@ -503,31 +584,43 @@ function PlatformBillingPage() {
                   <div className="flex items-center gap-2 min-w-0">
                     <Sparkles className="size-4 text-primary shrink-0" />
                     <div className="min-w-0">
-                      <p className="text-sm font-medium">עוזר AI</p>
-                      <p className="text-xs text-muted-foreground">מפעיל את המכסה שנשמרה למעלה</p>
+                      <p className="text-sm font-medium">{t("platformBilling.aiAssistant")}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {t("platformBilling.aiAssistantHint")}
+                      </p>
                     </div>
                   </div>
                   <Switch checked={draftAiEnabled} onCheckedChange={setDraftAiEnabled} />
                 </div>
 
                 <div className="rounded-md bg-muted/50 px-3 py-2 text-xs text-muted-foreground space-y-1">
-                  <p>
-                    Stripe גובה כסף לפי Price ID — לא בוחר דקות, AI או אחסון. את אלה קובעים כאן.
-                  </p>
-                  <p>
-                    מכסת האחסון נשמרת עכשיו. חסימת העלאות כשחורגים מהמכסה תתווסף בשלב הבא. ספקים
-                    ויומן שימוש נשארים ב־ניהול AI.
-                  </p>
+                  <p>{t("platformBilling.stripeVsAppHint")}</p>
+                  <p>{t("platformBilling.storageNextStepHint")}</p>
                   <Link to="/platform/ai" className="text-primary underline-offset-2 hover:underline">
-                    פתיחת ניהול AI (ספקים ושימוש)
+                    {t("platformBilling.openAiAdmin")}
                   </Link>
                 </div>
 
                 <div className="flex flex-wrap items-center gap-2">
                   <Button onClick={() => saveAllocMut.mutate()} disabled={saveAllocMut.isPending}>
                     {saveAllocMut.isPending ? <Loader2 className="size-4 animate-spin" /> : null}
-                    שמור תוכנית והקצאה
+                    {t("platformBilling.saveAllocation")}
                   </Button>
+                  {canStartTrial && (
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      disabled={trialMut.isPending}
+                      onClick={() => trialMut.mutate(selectedCompany.id)}
+                    >
+                      {trialMut.isPending ? (
+                        <Loader2 className="size-4 animate-spin" />
+                      ) : (
+                        <Clock className="size-4" />
+                      )}
+                      {t("platformBilling.startTrial", { days: DEFAULT_TRIAL_DAYS })}
+                    </Button>
+                  )}
                   {overview?.checkoutConfigured && isCompanyScope && (
                     <>
                       <Select
@@ -538,8 +631,8 @@ function PlatformBillingPage() {
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="standard">{PLAN_LABELS.standard}</SelectItem>
-                          <SelectItem value="enterprise">{PLAN_LABELS.enterprise}</SelectItem>
+                          <SelectItem value="standard">{planLabel("standard")}</SelectItem>
+                          <SelectItem value="enterprise">{planLabel("enterprise")}</SelectItem>
                         </SelectContent>
                       </Select>
                       <Button
@@ -555,7 +648,7 @@ function PlatformBillingPage() {
                         ) : (
                           <CreditCard className="size-4" />
                         )}
-                        תשלום
+                        {t("platformBilling.pay")}
                       </Button>
                       <Button
                         size="sm"
@@ -564,7 +657,7 @@ function PlatformBillingPage() {
                         onClick={() => portalMut.mutate(selectedCompany.id)}
                       >
                         <ExternalLink className="size-4" />
-                        פורטל
+                        {t("platformBilling.portal")}
                       </Button>
                     </>
                   )}
@@ -574,23 +667,33 @@ function PlatformBillingPage() {
 
             {visibleGrants.length > 0 && (
               <div className="space-y-2">
-                <p className="text-xs font-medium text-muted-foreground">הקצאות AI לחברה זו</p>
+                <p className="text-xs font-medium text-muted-foreground">
+                  {t("platformBilling.aiGrantsTitle")}
+                </p>
                 <ul className="divide-y rounded-lg border text-sm">
                   {visibleGrants.map((g) => {
                     const name =
                       g.scope_type === "company"
-                        ? selectedCompany?.name ?? "חברה"
+                        ? selectedCompany?.name ?? t("platformBilling.company")
                         : companyBranches.find((b) => b.id === g.scope_id)?.name ?? g.scope_id;
                     return (
                       <li key={`${g.scope_type}:${g.scope_id}`} className="flex flex-wrap items-center gap-2 p-3">
-                        <Badge variant="outline">{g.scope_type === "company" ? "חברה" : "סניף"}</Badge>
+                        <Badge variant="outline">
+                          {g.scope_type === "company"
+                            ? t("platformBilling.company")
+                            : t("platformBilling.branch")}
+                        </Badge>
                         <span className="font-medium truncate flex-1">{name}</span>
                         <span className="text-xs text-muted-foreground tabular-nums">
-                          {g.quota_minutes == null ? "∞" : `${g.quota_minutes} דק׳`}
+                          {g.quota_minutes == null ? "∞" : `${g.quota_minutes}`}
                           {" · "}
-                          נוצלו {Number(g.used_minutes ?? 0).toFixed(1)}
+                          {t("platformBilling.minutesUsed", {
+                            used: Number(g.used_minutes ?? 0).toFixed(1),
+                          })}
                         </span>
-                        {!g.is_active && <Badge variant="secondary">כבוי</Badge>}
+                        {!g.is_active && (
+                          <Badge variant="secondary">{t("platformBilling.off")}</Badge>
+                        )}
                       </li>
                     );
                   })}
@@ -600,21 +703,32 @@ function PlatformBillingPage() {
 
             {visibleStorageGrants.length > 0 && (
               <div className="space-y-2">
-                <p className="text-xs font-medium text-muted-foreground">מכסות אחסון לחברה זו</p>
+                <p className="text-xs font-medium text-muted-foreground">
+                  {t("platformBilling.storageGrantsTitle")}
+                </p>
                 <ul className="divide-y rounded-lg border text-sm">
                   {visibleStorageGrants.map((g) => {
                     const name =
                       g.scope_type === "company"
-                        ? selectedCompany?.name ?? "חברה"
+                        ? selectedCompany?.name ?? t("platformBilling.company")
                         : companyBranches.find((b) => b.id === g.scope_id)?.name ?? g.scope_id;
                     return (
-                      <li key={`storage:${g.scope_type}:${g.scope_id}`} className="flex flex-wrap items-center gap-2 p-3">
-                        <Badge variant="outline">{g.scope_type === "company" ? "חברה" : "סניף"}</Badge>
+                      <li
+                        key={`storage:${g.scope_type}:${g.scope_id}`}
+                        className="flex flex-wrap items-center gap-2 p-3"
+                      >
+                        <Badge variant="outline">
+                          {g.scope_type === "company"
+                            ? t("platformBilling.company")
+                            : t("platformBilling.branch")}
+                        </Badge>
                         <span className="font-medium truncate flex-1">{name}</span>
                         <span className="text-xs text-muted-foreground tabular-nums">
-                          {mbToGbLabel(g.storage_quota_mb)}
+                          {mbToGbLabel(g.storage_quota_mb, unlimited)}
                           {" · "}
-                          בשימוש {formatUsedBytes(Number(g.used_bytes ?? 0))}
+                          {t("platformBilling.storageUsed", {
+                            used: formatUsedBytes(Number(g.used_bytes ?? 0)),
+                          })}
                         </span>
                       </li>
                     );
@@ -626,18 +740,61 @@ function PlatformBillingPage() {
         )}
       </Card>
 
+      <Card className="card-elevated p-5 space-y-3">
+        <h2 className="text-sm font-semibold text-muted-foreground">
+          {t("platformBilling.catalogTitle")}
+        </h2>
+        <p className="text-xs text-muted-foreground">{t("platformBilling.catalogHint")}</p>
+        <div className="overflow-x-auto rounded-lg border">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b bg-muted/40 text-xs text-muted-foreground">
+                <th className="p-2 text-start font-medium">{t("platformBilling.colPlan")}</th>
+                <th className="p-2 text-start font-medium">{t("platformBilling.colEmployees")}</th>
+                <th className="p-2 text-start font-medium">{t("platformBilling.colBranches")}</th>
+                <th className="p-2 text-start font-medium">{t("platformBilling.colRealtime")}</th>
+                <th className="p-2 text-start font-medium">{t("platformBilling.colTrial")}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {planEntitlements.map((row) => (
+                <tr key={row.billing_plan} className="border-b last:border-0">
+                  <td className="p-2 font-medium">{planLabel(row.billing_plan)}</td>
+                  <td className="p-2 tabular-nums">
+                    {formatLimit(row.max_employees, t("platformBilling.employeesUnit"), unlimited)}
+                  </td>
+                  <td className="p-2 tabular-nums">
+                    {formatLimit(row.max_branches, t("platformBilling.branchesUnit"), unlimited)}
+                  </td>
+                  <td className="p-2">
+                    {row.realtime_enabled ? t("platformBilling.yes") : t("platformBilling.no")}
+                  </td>
+                  <td className="p-2 tabular-nums">
+                    {row.default_trial_days > 0
+                      ? t("platformBilling.trialDays", { count: row.default_trial_days })
+                      : "—"}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </Card>
+
       {(overview?.payments?.length ?? 0) > 0 && (
         <Card className="card-elevated overflow-hidden">
           <div className="p-4 border-b">
-            <h2 className="text-sm font-semibold text-muted-foreground">תשלומים אחרונים</h2>
+            <h2 className="text-sm font-semibold text-muted-foreground">
+              {t("platformBilling.recentPayments")}
+            </h2>
           </div>
           <ul className="divide-y text-sm">
             {overview!.payments.map((p) => (
               <li key={p.id} className="flex items-center justify-between gap-3 p-3">
                 <span className="text-muted-foreground">
                   {p.paid_at
-                    ? new Date(p.paid_at).toLocaleString("he-IL")
-                    : new Date(p.created_at).toLocaleString("he-IL")}
+                    ? new Date(p.paid_at).toLocaleString(locale)
+                    : new Date(p.created_at).toLocaleString(locale)}
                   {" · "}
                   {p.status}
                 </span>

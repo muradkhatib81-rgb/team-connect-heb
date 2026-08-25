@@ -15,8 +15,8 @@ export function gbToMb(gb: number | null): number | null {
   return Math.round(gb * 1024);
 }
 
-export function mbToGbLabel(mb: number | null | undefined): string {
-  if (mb == null) return "ללא הגבלה";
+export function mbToGbLabel(mb: number | null | undefined, unlimitedLabel = "∞"): string {
+  if (mb == null) return unlimitedLabel;
   if (mb >= 1024) {
     const gb = mb / 1024;
     return Number.isInteger(gb) ? `${gb} GB` : `${gb.toFixed(1)} GB`;

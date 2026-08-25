@@ -451,6 +451,14 @@ export const createEmployee = createServerFn({ method: "POST" })
 
     const branchId = (dept as { branch_id: string }).branch_id;
 
+    const { companyIdForPhysicalBranch, assertCanAddEmployee } = await import(
+      "@/lib/billing-entitlements.server"
+    );
+    const companyId = await companyIdForPhysicalBranch(branchId);
+    if (companyId) {
+      await assertCanAddEmployee(companyId);
+    }
+
     // Duplicate checks via the authenticated, branch-scoped client (RLS).
     const { data: existing, error: exErr } = await context.supabase
       .from("profiles")

@@ -5,6 +5,8 @@ import { useState, useMemo, useRef, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { createEmployee, resetEmployeePassword, deleteEmployee, setEmployeeActive, updateEmployee } from "@/lib/employees.functions";
 import { extractServerFnErrorMessage } from "@/lib/server-fn-error";
+import { translateBillingError } from "@/lib/billing-errors";
+import { useTranslation } from "react-i18next";
 import { formatLeaveDateRange, isEmployeeCurrentlyOnLeave } from "@/lib/employee-leave";
 import { HebrewDateInput } from "@/components/hebrew-datetime";
 import {
@@ -850,6 +852,7 @@ export function CreateEmployeeDialog({
   canEditJobTitle?: boolean;
 }) {
   const qc = useQueryClient();
+  const { t } = useTranslation();
   const createFn = useServerFn(createEmployee);
   const jobTitlesQ = useJobTitles();
   const roleOptions = assignableRoleOptionsFor(currentUserRoles, canManageRoles);
@@ -961,7 +964,7 @@ export function CreateEmployeeDialog({
         });
         return;
       }
-      toast.error(msg);
+      toast.error(translateBillingError(msg, t));
     },
   });
 
@@ -977,7 +980,8 @@ export function CreateEmployeeDialog({
       setArchived(null);
       onClose();
     },
-    onError: (e: any) => toast.error(extractServerFnErrorMessage(e, "שגיאה ביצירת עובד")),
+    onError: (e: any) =>
+      toast.error(translateBillingError(extractServerFnErrorMessage(e, "שגיאה ביצירת עובד"), t)),
   });
 
 

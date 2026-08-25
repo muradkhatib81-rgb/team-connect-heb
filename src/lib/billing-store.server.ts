@@ -8,6 +8,7 @@ import { supabaseAdmin } from "@/integrations/supabase/client.server";
 import type { BillingPlan } from "@/core/managers/billing-manager";
 import { applyCompanyAiGrantFromBillingPlan } from "@/lib/billing-ai-sync.server";
 import { applyCompanyStorageFromBillingPlan } from "@/lib/billing-storage.server";
+import { resolveEffectivePlan } from "@/lib/billing-entitlements.server";
 import {
   invoiceSubscriptionId,
   mapStripeSubscriptionStatus,
@@ -30,19 +31,16 @@ export type BillingAccountRow = {
   current_period_end: string | null;
   cancel_at_period_end: boolean;
   grace_until: string | null;
+  trial_ends_at: string | null;
   updated_by: string | null;
   created_at: string;
   updated_at: string;
 };
 
-export function effectivePlan(row: Pick<BillingAccountRow, "plan" | "status" | "grace_until">): BillingPlan {
-  if (row.status === "canceled" || row.status === "unpaid" || row.status === "incomplete_expired") {
-    return "free";
-  }
-  if (row.status === "past_due" && row.grace_until && new Date(row.grace_until).getTime() < Date.now()) {
-    return "free";
-  }
-  return row.plan;
+export function effectivePlan(
+  row: Pick<BillingAccountRow, "plan" | "status" | "grace_until" | "trial_ends_at">,
+): BillingPlan {
+  return resolveEffectivePlan(row);
 }
 
 async function loadByCompanyId(companyId: string): Promise<BillingAccountRow | null> {
@@ -94,6 +92,7 @@ export async function upsertManualPlan(opts: {
     source: "manual" as const,
     status: "active",
     grace_until: null,
+    trial_ends_at: null,
     updated_by: opts.updatedBy,
     updated_at: now,
   };

@@ -174,6 +174,55 @@ export const syncBranchCompanyName = createServerFn({ method: "POST" })
     return { ok: true };
   });
 
+const assignCompanyBranchSchema = z.object({
+  company_id: z.string().uuid(),
+  source_branch_id: z.string().uuid(),
+  name: z.string().trim().min(1).max(100),
+  code: z.string().trim().max(40).optional().nullable(),
+  address: z.string().trim().max(200).optional().nullable(),
+  is_active: z.boolean().optional(),
+});
+
+/** Assign an existing real branch to a company — enforces billing branch limits. */
+export const assignCompanyBranch = createServerFn({ method: "POST" })
+  .middleware([requireBranchContext])
+  .inputValidator((data: unknown) => assignCompanyBranchSchema.parse(data))
+  .handler(async ({ data, context }) => {
+    await assertSystemAdmin(context.supabase, context.userId);
+    const { assertCanAddBranch } = await import("@/lib/billing-entitlements.server");
+    const { billingErrorCode } = await import("@/lib/billing-errors");
+    await assertCanAddBranch(data.company_id);
+
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { data: existing } = await (supabaseAdmin as any)
+      .from("company_branch_assignments")
+      .select("id")
+      .eq("source_branch_id", data.source_branch_id)
+      .is("deleted_at", null)
+      .maybeSingle();
+    if (existing?.id) {
+      throw new Error(billingErrorCode("branchAlreadyAssigned"));
+    }
+
+    const now = new Date().toISOString();
+    const { data: inserted, error } = await (supabaseAdmin as any)
+      .from("company_branch_assignments")
+      .insert({
+        company_id: data.company_id,
+        source_branch_id: data.source_branch_id,
+        name: data.name,
+        code: data.code ?? null,
+        address: data.address ?? null,
+        is_active: data.is_active ?? true,
+        created_at: now,
+        updated_at: now,
+      })
+      .select("id, company_id, source_branch_id, name, code, address, is_active, created_at, updated_at")
+      .single();
+    if (error) throw new Error(error.message);
+    return { ok: true, branch: inserted };
+  });
+
 export const createBranch = createServerFn({ method: "POST" })
   .middleware([requireBranchContext])
   .inputValidator((data: unknown) => createSchema.parse(data))
