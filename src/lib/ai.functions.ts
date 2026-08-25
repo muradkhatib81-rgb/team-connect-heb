@@ -6,6 +6,7 @@ import type { AiAssistantKind, AiGrantSource, AiProviderCode, ResolvedAiAccess }
 import { routeAiChat } from "@/modules/ai";
 import { ensureAiProvidersRegistered } from "@/lib/ai-providers.server";
 import { aiErrorCode } from "@/lib/ai-errors";
+import { applyCompanyAiGrantFromBillingPlan } from "@/lib/billing-ai-sync.server";
 import { buildAiUserContext } from "@/lib/ai-context.server";
 import {
   buildAiChatMessages,
@@ -225,38 +226,19 @@ export const syncCompanyAiGrantFromBillingPlan = createServerFn({ method: "POST"
   .inputValidator((raw: unknown) => syncBillingInput.parse(raw))
   .handler(async ({ context, data }) => {
     await assertCanManageAiGrants(context.supabase, context.userId);
-
-    const { data: ent, error: entErr } = await context.supabase
-      .from("ai_plan_entitlements")
-      .select("*")
-      .eq("billing_plan", data.plan)
-      .maybeSingle();
-    if (entErr) throw new Error(entErr.message);
-    if (!ent) throw new Error(aiErrorCode("planNotFound"));
-
-    const { data: grant, error } = await context.supabase
-      .from("ai_grants")
-      .upsert(
-        {
-          scope_type: "company",
-          scope_id: data.companyId,
-          provider_code: ent.default_provider_code,
-          grant_source: "billing_plan",
-          billing_plan: data.plan,
-          quota_minutes: ent.monthly_minutes,
-          quota_period: "monthly",
-          is_active: true,
-          granted_by: context.userId,
-          used_minutes: 0,
-          period_started_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-        },
-        { onConflict: "scope_type,scope_id" },
-      )
-      .select("*")
-      .single();
-    if (error) throw new Error(error.message);
-    return grant;
+    const result = await applyCompanyAiGrantFromBillingPlan({
+      companyId: data.companyId,
+      plan: data.plan,
+      grantedBy: context.userId,
+      resetUsage: true,
+    });
+    if (!result.ok && result.skipped === "planNotFound") {
+      throw new Error(aiErrorCode("planNotFound"));
+    }
+    if (!result.ok) {
+      throw new Error(result.skipped ?? "ai grant sync failed");
+    }
+    return { ok: true };
   });
 
 const providerPatchInput = z.object({

@@ -60,6 +60,7 @@ import { Route as AuthenticatedPlatformAuditLogRouteImport } from './routes/_aut
 import { Route as AuthenticatedPlatformAnalyticsRouteImport } from './routes/_authenticated/platform/analytics'
 import { Route as AuthenticatedPlatformAiRouteImport } from './routes/_authenticated/platform/ai'
 import { Route as AuthenticatedPlatformCompaniesIndexRouteImport } from './routes/_authenticated/platform/companies.index'
+import { Route as ApiPublicHooksStripeWebhookRouteImport } from './routes/api/public/hooks/stripe-webhook'
 import { Route as ApiPublicHooksPlatformHealthScanRouteImport } from './routes/api/public/hooks/platform-health-scan'
 import { Route as ApiPublicHooksGenerateRecurringTasksRouteImport } from './routes/api/public/hooks/generate-recurring-tasks'
 import { Route as ApiPublicHooksDispatchPushRouteImport } from './routes/api/public/hooks/dispatch-push'
@@ -353,6 +354,12 @@ const AuthenticatedPlatformCompaniesIndexRoute =
     path: '/',
     getParentRoute: () => AuthenticatedPlatformCompaniesRoute,
   } as any)
+const ApiPublicHooksStripeWebhookRoute =
+  ApiPublicHooksStripeWebhookRouteImport.update({
+    id: '/api/public/hooks/stripe-webhook',
+    path: '/api/public/hooks/stripe-webhook',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const ApiPublicHooksPlatformHealthScanRoute =
   ApiPublicHooksPlatformHealthScanRouteImport.update({
     id: '/api/public/hooks/platform-health-scan',
@@ -446,6 +453,7 @@ export interface FileRoutesByFullPath {
   '/api/public/hooks/dispatch-push': typeof ApiPublicHooksDispatchPushRoute
   '/api/public/hooks/generate-recurring-tasks': typeof ApiPublicHooksGenerateRecurringTasksRoute
   '/api/public/hooks/platform-health-scan': typeof ApiPublicHooksPlatformHealthScanRoute
+  '/api/public/hooks/stripe-webhook': typeof ApiPublicHooksStripeWebhookRoute
   '/platform/companies/': typeof AuthenticatedPlatformCompaniesIndexRoute
 }
 export interface FileRoutesByTo {
@@ -502,6 +510,7 @@ export interface FileRoutesByTo {
   '/api/public/hooks/dispatch-push': typeof ApiPublicHooksDispatchPushRoute
   '/api/public/hooks/generate-recurring-tasks': typeof ApiPublicHooksGenerateRecurringTasksRoute
   '/api/public/hooks/platform-health-scan': typeof ApiPublicHooksPlatformHealthScanRoute
+  '/api/public/hooks/stripe-webhook': typeof ApiPublicHooksStripeWebhookRoute
   '/platform/companies': typeof AuthenticatedPlatformCompaniesIndexRoute
 }
 export interface FileRoutesById {
@@ -562,6 +571,7 @@ export interface FileRoutesById {
   '/api/public/hooks/dispatch-push': typeof ApiPublicHooksDispatchPushRoute
   '/api/public/hooks/generate-recurring-tasks': typeof ApiPublicHooksGenerateRecurringTasksRoute
   '/api/public/hooks/platform-health-scan': typeof ApiPublicHooksPlatformHealthScanRoute
+  '/api/public/hooks/stripe-webhook': typeof ApiPublicHooksStripeWebhookRoute
   '/_authenticated/platform/companies/': typeof AuthenticatedPlatformCompaniesIndexRoute
 }
 export interface FileRouteTypes {
@@ -622,6 +632,7 @@ export interface FileRouteTypes {
     | '/api/public/hooks/dispatch-push'
     | '/api/public/hooks/generate-recurring-tasks'
     | '/api/public/hooks/platform-health-scan'
+    | '/api/public/hooks/stripe-webhook'
     | '/platform/companies/'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -678,6 +689,7 @@ export interface FileRouteTypes {
     | '/api/public/hooks/dispatch-push'
     | '/api/public/hooks/generate-recurring-tasks'
     | '/api/public/hooks/platform-health-scan'
+    | '/api/public/hooks/stripe-webhook'
     | '/platform/companies'
   id:
     | '__root__'
@@ -737,6 +749,7 @@ export interface FileRouteTypes {
     | '/api/public/hooks/dispatch-push'
     | '/api/public/hooks/generate-recurring-tasks'
     | '/api/public/hooks/platform-health-scan'
+    | '/api/public/hooks/stripe-webhook'
     | '/_authenticated/platform/companies/'
   fileRoutesById: FileRoutesById
 }
@@ -750,6 +763,7 @@ export interface RootRouteChildren {
   ApiPublicHooksDispatchPushRoute: typeof ApiPublicHooksDispatchPushRoute
   ApiPublicHooksGenerateRecurringTasksRoute: typeof ApiPublicHooksGenerateRecurringTasksRoute
   ApiPublicHooksPlatformHealthScanRoute: typeof ApiPublicHooksPlatformHealthScanRoute
+  ApiPublicHooksStripeWebhookRoute: typeof ApiPublicHooksStripeWebhookRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -1111,6 +1125,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedPlatformCompaniesIndexRouteImport
       parentRoute: typeof AuthenticatedPlatformCompaniesRoute
     }
+    '/api/public/hooks/stripe-webhook': {
+      id: '/api/public/hooks/stripe-webhook'
+      path: '/api/public/hooks/stripe-webhook'
+      fullPath: '/api/public/hooks/stripe-webhook'
+      preLoaderRoute: typeof ApiPublicHooksStripeWebhookRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/public/hooks/platform-health-scan': {
       id: '/api/public/hooks/platform-health-scan'
       path: '/api/public/hooks/platform-health-scan'
@@ -1339,6 +1360,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiPublicHooksGenerateRecurringTasksRoute:
     ApiPublicHooksGenerateRecurringTasksRoute,
   ApiPublicHooksPlatformHealthScanRoute: ApiPublicHooksPlatformHealthScanRoute,
+  ApiPublicHooksStripeWebhookRoute: ApiPublicHooksStripeWebhookRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

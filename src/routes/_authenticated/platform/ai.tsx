@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
@@ -170,7 +170,19 @@ function PlatformAiPage() {
           <TabsTrigger value="settings">{t("ai.platformAdmin.tabs.settings")}</TabsTrigger>
         </TabsList>
 
-        <TabsContent value="grants" className="mt-4">
+        <TabsContent value="grants" className="mt-4 space-y-3">
+          <Card className="p-4 text-sm">
+            <p className="font-medium">הקצאות לפי חברה וסניף עברו לחיוב</p>
+            <p className="text-muted-foreground mt-1">
+              בחירת תוכנית, דקות AI וסניף נעשית ב־חיוב ומנויים. כאן נשארים ספקים, יומן שימוש והגדרות פלטפורמה.
+            </p>
+            <Link
+              to="/platform/billing"
+              className="inline-block mt-2 text-primary underline-offset-2 hover:underline"
+            >
+              מעבר לחיוב ומנויים
+            </Link>
+          </Card>
           <Card className="card-elevated overflow-hidden">
             {grantsQ.isLoading ? (
               <div className="p-8 flex justify-center">

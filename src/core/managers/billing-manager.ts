@@ -1,4 +1,7 @@
-/** Billing Manager — foundation for future plan/subscription tracking. No payment provider. */
+/**
+ * Billing Manager — in-memory fallback used by the Foundation runtime.
+ * Durable plans live in `billing_accounts` (see billing.functions.ts / Stripe webhooks).
+ */
 
 import type { UUID } from "../types";
 import { BaseManager } from "./manager.interface";
