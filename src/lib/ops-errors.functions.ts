@@ -181,6 +181,30 @@ export const listOpsErrorFeatureScopes = createServerFn({ method: "GET" })
     return data ?? [];
   });
 
+/**
+ * Platform branch pickers expose `company_branch_assignments.id`.
+ * `ops_error_feature_scopes.branch_id` (and grants) FK to operational
+ * `public.branches.id` — resolve assignment ids before write.
+ */
+async function resolveOperationalBranchId(scopeId: string): Promise<string> {
+  const { data: branch } = await supabaseAdmin
+    .from("branches")
+    .select("id")
+    .eq("id", scopeId)
+    .maybeSingle();
+  if (branch?.id) return branch.id as string;
+
+  const { data: assignment } = await (supabaseAdmin as any)
+    .from("company_branch_assignments")
+    .select("source_branch_id")
+    .eq("id", scopeId)
+    .is("deleted_at", null)
+    .maybeSingle();
+  if (assignment?.source_branch_id) return assignment.source_branch_id as string;
+
+  throw new Error("הסניף שנבחר אינו קיים במערכת");
+}
+
 export const upsertOpsErrorFeatureScope = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator(
@@ -193,15 +217,17 @@ export const upsertOpsErrorFeatureScope = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     const { supabase, userId } = context as { supabase: any; userId: string };
     await assertPlatformOwner(supabase, userId);
+    const branchId =
+      data.scopeType === "branch" ? await resolveOperationalBranchId(data.scopeId) : null;
     const row =
       data.scopeType === "company"
         ? { company_id: data.scopeId, branch_id: null, enabled: data.enabled, granted_by: userId }
-        : { company_id: null, branch_id: data.scopeId, enabled: data.enabled, granted_by: userId };
+        : { company_id: null, branch_id: branchId, enabled: data.enabled, granted_by: userId };
 
     if (data.scopeType === "company") {
       await supabase.from("ops_error_feature_scopes").delete().eq("company_id", data.scopeId);
     } else {
-      await supabase.from("ops_error_feature_scopes").delete().eq("branch_id", data.scopeId);
+      await supabase.from("ops_error_feature_scopes").delete().eq("branch_id", branchId);
     }
     const { error: insErr } = await supabase.from("ops_error_feature_scopes").insert(row);
     if (insErr) throw new Error(insErr.message);
@@ -252,19 +278,20 @@ export const upsertOpsErrorUserGrant = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     const { supabase, userId } = context as { supabase: any; userId: string };
     await assertPlatformOwner(supabase, userId);
+    const branchId = await resolveOperationalBranchId(data.branchId);
     if (!data.can_log && !data.can_view_log && !data.can_delete) {
       const { error } = await supabase
         .from("ops_error_user_grants")
         .delete()
         .eq("user_id", data.userId)
-        .eq("branch_id", data.branchId);
+        .eq("branch_id", branchId);
       if (error) throw new Error(error.message);
       return { ok: true, removed: true };
     }
     const { error } = await supabase.from("ops_error_user_grants").upsert(
       {
         user_id: data.userId,
-        branch_id: data.branchId,
+        branch_id: branchId,
         can_log: data.can_log,
         can_view_log: data.can_view_log,
         can_delete: data.can_delete,
@@ -472,10 +499,11 @@ export const listBranchProfilesForErrorGrants = createServerFn({ method: "GET" }
   .handler(async ({ data, context }) => {
     const { supabase, userId } = context as { supabase: any; userId: string };
     await assertPlatformOwner(supabase, userId);
+    const branchId = await resolveOperationalBranchId(data.branchId);
     const { data: rows, error } = await supabaseAdmin
       .from("profiles")
       .select("id, full_name, is_active")
-      .eq("branch_id", data.branchId)
+      .eq("branch_id", branchId)
       .eq("is_active", true)
       .order("full_name")
       .limit(500);

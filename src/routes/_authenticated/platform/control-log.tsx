@@ -18,6 +18,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { SearchableSingleSelect } from "@/components/searchable-picker";
 import { useCompanyContext } from "@/platform";
 import { branchService } from "@/modules/branches";
 import {
@@ -89,10 +90,28 @@ function PlatformOpsErrorsPage() {
     () => new Map(companies.map((c) => [c.id, c.name])),
     [companies],
   );
-  const branchMap = useMemo(
-    () => new Map((branchesQ.data ?? []).map((b) => [b.id, b.name])),
+  /** Operational `public.branches.id` — assignment `id` is not a valid FK target. */
+  const operationalBranches = useMemo(
+    () => (branchesQ.data ?? []).filter((b) => !!b.sourceBranchId),
     [branchesQ.data],
   );
+  const branchMap = useMemo(
+    () => new Map(operationalBranches.map((b) => [b.sourceBranchId, b.name])),
+    [operationalBranches],
+  );
+  const companyOptions = useMemo(
+    () => companies.map((c) => ({ id: c.id, label: c.name })),
+    [companies],
+  );
+  const branchOptions = useMemo(
+    () => operationalBranches.map((b) => ({ id: b.sourceBranchId, label: b.name })),
+    [operationalBranches],
+  );
+  const grantUserOptions = useMemo(
+    () => (profilesQ.data ?? []).map((p) => ({ id: p.id, label: p.full_name ?? p.id })),
+    [profilesQ.data],
+  );
+  const scopeTargetOptions = scopeType === "company" ? companyOptions : branchOptions;
   const profileMap = useMemo(() => {
     const m = new Map<string, string>();
     for (const p of profilesQ.data ?? []) {
@@ -212,24 +231,14 @@ function PlatformOpsErrorsPage() {
               </div>
               <div className="sm:col-span-2">
                 <Label>{t("opsErrors.scopeTarget")}</Label>
-                <Select value={scopeId} onValueChange={setScopeId}>
-                  <SelectTrigger>
-                    <SelectValue placeholder={t("opsErrors.choose")} />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {scopeType === "company"
-                      ? companies.map((c) => (
-                          <SelectItem key={c.id} value={c.id}>
-                            {c.name}
-                          </SelectItem>
-                        ))
-                      : (branchesQ.data ?? []).map((b) => (
-                          <SelectItem key={b.id} value={b.id}>
-                            {b.name}
-                          </SelectItem>
-                        ))}
-                  </SelectContent>
-                </Select>
+                <SearchableSingleSelect
+                  options={scopeTargetOptions}
+                  value={scopeId}
+                  onChange={setScopeId}
+                  placeholder={t("opsErrors.choose")}
+                  searchPlaceholder={t("common.searchPlaceholder")}
+                  emptyText={t("common.noResults")}
+                />
               </div>
             </div>
             <Button
@@ -323,39 +332,29 @@ function PlatformOpsErrorsPage() {
             <div className="grid gap-3 sm:grid-cols-2">
               <div>
                 <Label>{t("opsErrors.branch")}</Label>
-                <Select
+                <SearchableSingleSelect
+                  options={branchOptions}
                   value={grantBranchId}
-                  onValueChange={(v) => {
-                    setGrantBranchId(v);
+                  onChange={(id) => {
+                    setGrantBranchId(id);
                     setGrantUserId("");
                   }}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder={t("opsErrors.choose")} />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {(branchesQ.data ?? []).map((b) => (
-                      <SelectItem key={b.id} value={b.id}>
-                        {b.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                  placeholder={t("opsErrors.choose")}
+                  searchPlaceholder={t("common.searchPlaceholder")}
+                  emptyText={t("common.noResults")}
+                />
               </div>
               <div>
                 <Label>{t("opsErrors.user")}</Label>
-                <Select value={grantUserId} onValueChange={setGrantUserId} disabled={!grantBranchId}>
-                  <SelectTrigger>
-                    <SelectValue placeholder={t("opsErrors.choose")} />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {(profilesQ.data ?? []).map((p) => (
-                      <SelectItem key={p.id} value={p.id}>
-                        {p.full_name ?? p.id}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <SearchableSingleSelect
+                  options={grantUserOptions}
+                  value={grantUserId}
+                  onChange={setGrantUserId}
+                  disabled={!grantBranchId}
+                  placeholder={t("opsErrors.choose")}
+                  searchPlaceholder={t("common.searchPlaceholder")}
+                  emptyText={t("common.noResults")}
+                />
               </div>
             </div>
             <div className="flex flex-wrap gap-4">
