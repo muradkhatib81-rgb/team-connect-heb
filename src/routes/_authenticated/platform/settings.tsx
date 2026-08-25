@@ -24,9 +24,8 @@ export const Route = createFileRoute("/_authenticated/platform/settings")({
   component: PlatformSettingsPage,
 });
 
-const SUPPORT_EMAIL_KEY = "supportEmail";
 const MAINTENANCE_MODE_KEY = "maintenanceMode";
-const WHATSAPP_QUERY_KEY = ["platform-settings-whatsapp"] as const;
+const PLATFORM_SETTINGS_QUERY_KEY = ["platform-settings"] as const;
 
 function PlatformSettingsPage() {
   const { runtime, platform } = usePlatformContext();
@@ -38,16 +37,19 @@ function PlatformSettingsPage() {
   const [saving, setSaving] = useState(false);
   const [uploadingIcon, setUploadingIcon] = useState(false);
 
-  const whatsappQ = useQuery({
-    queryKey: WHATSAPP_QUERY_KEY,
+  const settingsQ = useQuery({
+    queryKey: PLATFORM_SETTINGS_QUERY_KEY,
     queryFn: async () => {
       const { data, error } = await supabase
         .from("platform_settings")
-        .select("whatsapp_number")
+        .select("whatsapp_number, support_email")
         .eq("id", 1)
         .maybeSingle();
       if (error) throw error;
-      return data?.whatsapp_number ?? "";
+      return {
+        whatsappNumber: data?.whatsapp_number ?? "",
+        supportEmail: data?.support_email ?? "",
+      };
     },
   });
 
@@ -57,15 +59,15 @@ function PlatformSettingsPage() {
   });
 
   useEffect(() => {
-    setSupportEmail(runtime.getPlatformSetting<string>(SUPPORT_EMAIL_KEY) ?? "");
     setMaintenanceMode(runtime.getPlatformSetting<boolean>(MAINTENANCE_MODE_KEY) ?? false);
   }, [runtime]);
 
   useEffect(() => {
-    if (whatsappQ.data !== undefined) {
-      setWhatsappNumber(whatsappQ.data);
+    if (settingsQ.data !== undefined) {
+      setWhatsappNumber(settingsQ.data.whatsappNumber);
+      setSupportEmail(settingsQ.data.supportEmail);
     }
-  }, [whatsappQ.data]);
+  }, [settingsQ.data]);
 
   const environment = runtime.getGlobalConfiguration<string>("environment") ?? "development";
   const previewIcon = iconQ.data || DEFAULT_PWA_ICON_192;
@@ -78,16 +80,18 @@ function PlatformSettingsPage() {
     }
     setSaving(true);
     try {
-      runtime.setPlatformSetting(SUPPORT_EMAIL_KEY, supportEmail.trim());
       runtime.setPlatformSetting(MAINTENANCE_MODE_KEY, maintenanceMode);
 
       const { error } = await supabase
         .from("platform_settings")
-        .update({ whatsapp_number: trimmed || null })
+        .update({
+          whatsapp_number: trimmed || null,
+          support_email: supportEmail.trim() || null,
+        })
         .eq("id", 1);
       if (error) throw error;
 
-      await qc.invalidateQueries({ queryKey: WHATSAPP_QUERY_KEY });
+      await qc.invalidateQueries({ queryKey: PLATFORM_SETTINGS_QUERY_KEY });
       toast.success("הגדרות הפלטפורמה נשמרו");
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "שמירת ההגדרות נכשלה");
@@ -161,7 +165,7 @@ function PlatformSettingsPage() {
             onChange={(e) => setWhatsappNumber(e.target.value)}
             maxLength={20}
             placeholder="0501234567 או 972501234567"
-            disabled={whatsappQ.isLoading}
+            disabled={settingsQ.isLoading}
           />
           <p className="text-xs text-muted-foreground">
             יוצג כקישור וואטסאפ בתחתית מסך ההתחברות. השאר ריק כדי להסתיר.

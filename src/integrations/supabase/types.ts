@@ -1230,6 +1230,7 @@ export type Database = {
           created_at: string
           id: number
           pwa_icon_url: string | null
+          support_email: string | null
           updated_at: string
           whatsapp_number: string | null
         }
@@ -1237,6 +1238,7 @@ export type Database = {
           created_at?: string
           id?: number
           pwa_icon_url?: string | null
+          support_email?: string | null
           updated_at?: string
           whatsapp_number?: string | null
         }
@@ -1244,6 +1246,7 @@ export type Database = {
           created_at?: string
           id?: number
           pwa_icon_url?: string | null
+          support_email?: string | null
           updated_at?: string
           whatsapp_number?: string | null
         }
