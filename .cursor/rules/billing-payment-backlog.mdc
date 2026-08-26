@@ -1,0 +1,51 @@
+---
+description: Billing/payment backlog — Stripe foundation in progress; do not touch roles
+alwaysApply: true
+---
+
+# Billing / نظام الدفع
+
+**Do not commit/push billing work unless the user approves.**
+**Do not touch `user_roles` / `user_task_permissions`.**
+
+## Implemented (this pass)
+
+- Durable `billing_accounts` / `billing_payments` / `billing_webhook_events`
+- Platform owner `/platform/billing` reads/writes DB (manual plan still available)
+- Company + branch picker: Stripe pays at company; AI minutes + storage can be company or branch
+- AI minute grants sync from plan (`applyAiGrantFromBillingPlan`); custom minutes on billing page
+- Storage quotas: `billing_storage_entitlements` + `billing_storage_grants` (defaults free 0.5GB / standard 10GB / enterprise unlimited)
+- Stripe Checkout + Customer Portal (needs env price IDs)
+- Webhook `/api/public/hooks/stripe-webhook` with idempotency
+
+## Checkpoint — Stripe Test setup (paused 2026-08-26)
+
+**Mode:** Test / Sandbox only (Stripe does not support IL/PS as merchant country; Live needs entity in a supported country later).
+
+### Done
+- Stripe sandbox account created (`teamconnect sandbox`, US for test only)
+- Secret key `sk_test_...` in local `.env`
+- Products Standard + Enterprise with Price IDs in `.env` (`STRIPE_PRICE_STANDARD`, `STRIPE_PRICE_ENTERPRISE`)
+- Customer Portal configured + saved (`/test/settings/billing/portal`)
+
+### Next when resuming (in order)
+1. Install Stripe CLI (not installed yet): https://stripe.com/docs/stripe-cli
+2. `stripe login` then `stripe listen --forward-to localhost:8080/api/public/hooks/stripe-webhook`
+3. Put CLI `whsec_...` into `.env` as `STRIPE_WEBHOOK_SECRET` and restart `npm run dev`
+4. Confirm billing SQL ran on Supabase if needed: `20260825120000`, `20260825130000`, `20260825140000`
+5. Test: `/platform/billing` → company → Checkout with `4242 4242 4242 4242` → plan becomes active
+6. Optional later: same keys on Vercel + production webhook URL (still Test until Live is possible)
+
+### Local `.env` expected keys
+`STRIPE_SECRET_KEY`, `STRIPE_PRICE_STANDARD`, `STRIPE_PRICE_ENTERPRISE`, `STRIPE_WEBHOOK_SECRET` (pending), `APP_PUBLIC_URL=http://localhost:8080`
+
+## Still later (product)
+
+- Enforce storage quota on uploads (track `used_bytes`, block when over)
+- Tax/VAT invoices / PDF receipts as a product requirement
+- Company self-serve page (non-owner)
+- Enforce `billingEnabled` as a hard feature gate across the app
+- Dunning emails beyond 3-day grace on `past_due`
+- Live Stripe (needs supported-country business entity + bank) or local PSP alternative
+
+Key files: `src/lib/billing.functions.ts`, `src/lib/billing-store.server.ts`, `src/lib/billing-stripe.server.ts`, `src/lib/billing-storage.server.ts`, `src/routes/api/public/hooks/stripe-webhook.ts`, `src/routes/_authenticated/platform/billing.tsx`, `supabase/migrations/20260825120000_billing_stripe_foundation.sql`, `supabase/migrations/20260825130000_billing_storage_quotas.sql`
