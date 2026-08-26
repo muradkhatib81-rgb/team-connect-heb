@@ -19,6 +19,7 @@ import {
   BarChart3,
   Bell,
   AlertTriangle,
+  Fingerprint,
 } from "lucide-react";
 import { useAuth } from "@/lib/use-auth";
 import {
@@ -246,6 +247,12 @@ function PlatformDashboardPage() {
             label={t("opsErrors.platformTitle")}
             hint={t("opsErrors.platformSubtitle")}
             onClick={() => navigate({ to: "/platform/control-log" })}
+          />
+          <ModuleTile
+            icon={Fingerprint}
+            label={t("attendance.platformTitle")}
+            hint={t("attendance.platformSubtitle")}
+            onClick={() => navigate({ to: "/platform/attendance" })}
           />
           <ModuleTile
             icon={Radio}

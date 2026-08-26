@@ -37,6 +37,7 @@ import { Route as AuthenticatedBreaksAdminRouteImport } from './routes/_authenti
 import { Route as AuthenticatedBreaksRouteImport } from './routes/_authenticated/breaks'
 import { Route as AuthenticatedBreakSettingsRouteImport } from './routes/_authenticated/break-settings'
 import { Route as AuthenticatedBreakPlanningRouteImport } from './routes/_authenticated/break-planning'
+import { Route as AuthenticatedAttendanceRouteImport } from './routes/_authenticated/attendance'
 import { Route as AuthenticatedAiAssistantRouteImport } from './routes/_authenticated/ai-assistant'
 import { Route as AuthenticatedPlatformRouteRouteImport } from './routes/_authenticated/platform/route'
 import { Route as AuthenticatedPlatformIndexRouteImport } from './routes/_authenticated/platform/index'
@@ -57,6 +58,7 @@ import { Route as AuthenticatedPlatformCompaniesRouteImport } from './routes/_au
 import { Route as AuthenticatedPlatformBranchesRouteImport } from './routes/_authenticated/platform/branches'
 import { Route as AuthenticatedPlatformBillingRouteImport } from './routes/_authenticated/platform/billing'
 import { Route as AuthenticatedPlatformAuditLogRouteImport } from './routes/_authenticated/platform/audit-log'
+import { Route as AuthenticatedPlatformAttendanceRouteImport } from './routes/_authenticated/platform/attendance'
 import { Route as AuthenticatedPlatformAnalyticsRouteImport } from './routes/_authenticated/platform/analytics'
 import { Route as AuthenticatedPlatformAiRouteImport } from './routes/_authenticated/platform/ai'
 import { Route as AuthenticatedPlatformCompaniesIndexRouteImport } from './routes/_authenticated/platform/companies.index'
@@ -219,6 +221,11 @@ const AuthenticatedBreakPlanningRoute =
     path: '/break-planning',
     getParentRoute: () => AuthenticatedRouteRoute,
   } as any)
+const AuthenticatedAttendanceRoute = AuthenticatedAttendanceRouteImport.update({
+  id: '/attendance',
+  path: '/attendance',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
 const AuthenticatedAiAssistantRoute =
   AuthenticatedAiAssistantRouteImport.update({
     id: '/ai-assistant',
@@ -337,6 +344,12 @@ const AuthenticatedPlatformAuditLogRoute =
     path: '/audit-log',
     getParentRoute: () => AuthenticatedPlatformRouteRoute,
   } as any)
+const AuthenticatedPlatformAttendanceRoute =
+  AuthenticatedPlatformAttendanceRouteImport.update({
+    id: '/attendance',
+    path: '/attendance',
+    getParentRoute: () => AuthenticatedPlatformRouteRoute,
+  } as any)
 const AuthenticatedPlatformAnalyticsRoute =
   AuthenticatedPlatformAnalyticsRouteImport.update({
     id: '/analytics',
@@ -402,6 +415,7 @@ export interface FileRoutesByFullPath {
   '/auth': typeof AuthRoute
   '/platform': typeof AuthenticatedPlatformRouteRouteWithChildren
   '/ai-assistant': typeof AuthenticatedAiAssistantRoute
+  '/attendance': typeof AuthenticatedAttendanceRoute
   '/break-planning': typeof AuthenticatedBreakPlanningRoute
   '/break-settings': typeof AuthenticatedBreakSettingsRoute
   '/breaks': typeof AuthenticatedBreaksRoute
@@ -429,6 +443,7 @@ export interface FileRoutesByFullPath {
   '/api/pwa-manifest': typeof ApiPwaManifestRoute
   '/platform/ai': typeof AuthenticatedPlatformAiRoute
   '/platform/analytics': typeof AuthenticatedPlatformAnalyticsRoute
+  '/platform/attendance': typeof AuthenticatedPlatformAttendanceRoute
   '/platform/audit-log': typeof AuthenticatedPlatformAuditLogRoute
   '/platform/billing': typeof AuthenticatedPlatformBillingRoute
   '/platform/branches': typeof AuthenticatedPlatformBranchesRouteWithChildren
@@ -460,6 +475,7 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
   '/ai-assistant': typeof AuthenticatedAiAssistantRoute
+  '/attendance': typeof AuthenticatedAttendanceRoute
   '/break-planning': typeof AuthenticatedBreakPlanningRoute
   '/break-settings': typeof AuthenticatedBreakSettingsRoute
   '/breaks': typeof AuthenticatedBreaksRoute
@@ -487,6 +503,7 @@ export interface FileRoutesByTo {
   '/api/pwa-manifest': typeof ApiPwaManifestRoute
   '/platform/ai': typeof AuthenticatedPlatformAiRoute
   '/platform/analytics': typeof AuthenticatedPlatformAnalyticsRoute
+  '/platform/attendance': typeof AuthenticatedPlatformAttendanceRoute
   '/platform/audit-log': typeof AuthenticatedPlatformAuditLogRoute
   '/platform/billing': typeof AuthenticatedPlatformBillingRoute
   '/platform/branches': typeof AuthenticatedPlatformBranchesRouteWithChildren
@@ -520,6 +537,7 @@ export interface FileRoutesById {
   '/auth': typeof AuthRoute
   '/_authenticated/platform': typeof AuthenticatedPlatformRouteRouteWithChildren
   '/_authenticated/ai-assistant': typeof AuthenticatedAiAssistantRoute
+  '/_authenticated/attendance': typeof AuthenticatedAttendanceRoute
   '/_authenticated/break-planning': typeof AuthenticatedBreakPlanningRoute
   '/_authenticated/break-settings': typeof AuthenticatedBreakSettingsRoute
   '/_authenticated/breaks': typeof AuthenticatedBreaksRoute
@@ -547,6 +565,7 @@ export interface FileRoutesById {
   '/api/pwa-manifest': typeof ApiPwaManifestRoute
   '/_authenticated/platform/ai': typeof AuthenticatedPlatformAiRoute
   '/_authenticated/platform/analytics': typeof AuthenticatedPlatformAnalyticsRoute
+  '/_authenticated/platform/attendance': typeof AuthenticatedPlatformAttendanceRoute
   '/_authenticated/platform/audit-log': typeof AuthenticatedPlatformAuditLogRoute
   '/_authenticated/platform/billing': typeof AuthenticatedPlatformBillingRoute
   '/_authenticated/platform/branches': typeof AuthenticatedPlatformBranchesRouteWithChildren
@@ -581,6 +600,7 @@ export interface FileRouteTypes {
     | '/auth'
     | '/platform'
     | '/ai-assistant'
+    | '/attendance'
     | '/break-planning'
     | '/break-settings'
     | '/breaks'
@@ -608,6 +628,7 @@ export interface FileRouteTypes {
     | '/api/pwa-manifest'
     | '/platform/ai'
     | '/platform/analytics'
+    | '/platform/attendance'
     | '/platform/audit-log'
     | '/platform/billing'
     | '/platform/branches'
@@ -639,6 +660,7 @@ export interface FileRouteTypes {
     | '/'
     | '/auth'
     | '/ai-assistant'
+    | '/attendance'
     | '/break-planning'
     | '/break-settings'
     | '/breaks'
@@ -666,6 +688,7 @@ export interface FileRouteTypes {
     | '/api/pwa-manifest'
     | '/platform/ai'
     | '/platform/analytics'
+    | '/platform/attendance'
     | '/platform/audit-log'
     | '/platform/billing'
     | '/platform/branches'
@@ -698,6 +721,7 @@ export interface FileRouteTypes {
     | '/auth'
     | '/_authenticated/platform'
     | '/_authenticated/ai-assistant'
+    | '/_authenticated/attendance'
     | '/_authenticated/break-planning'
     | '/_authenticated/break-settings'
     | '/_authenticated/breaks'
@@ -725,6 +749,7 @@ export interface FileRouteTypes {
     | '/api/pwa-manifest'
     | '/_authenticated/platform/ai'
     | '/_authenticated/platform/analytics'
+    | '/_authenticated/platform/attendance'
     | '/_authenticated/platform/audit-log'
     | '/_authenticated/platform/billing'
     | '/_authenticated/platform/branches'
@@ -964,6 +989,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedBreakPlanningRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/_authenticated/attendance': {
+      id: '/_authenticated/attendance'
+      path: '/attendance'
+      fullPath: '/attendance'
+      preLoaderRoute: typeof AuthenticatedAttendanceRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
     '/_authenticated/ai-assistant': {
       id: '/_authenticated/ai-assistant'
       path: '/ai-assistant'
@@ -1104,6 +1136,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedPlatformAuditLogRouteImport
       parentRoute: typeof AuthenticatedPlatformRouteRoute
     }
+    '/_authenticated/platform/attendance': {
+      id: '/_authenticated/platform/attendance'
+      path: '/attendance'
+      fullPath: '/platform/attendance'
+      preLoaderRoute: typeof AuthenticatedPlatformAttendanceRouteImport
+      parentRoute: typeof AuthenticatedPlatformRouteRoute
+    }
     '/_authenticated/platform/analytics': {
       id: '/_authenticated/platform/analytics'
       path: '/analytics'
@@ -1228,6 +1267,7 @@ const AuthenticatedPlatformOwnersRouteWithChildren =
 interface AuthenticatedPlatformRouteRouteChildren {
   AuthenticatedPlatformAiRoute: typeof AuthenticatedPlatformAiRoute
   AuthenticatedPlatformAnalyticsRoute: typeof AuthenticatedPlatformAnalyticsRoute
+  AuthenticatedPlatformAttendanceRoute: typeof AuthenticatedPlatformAttendanceRoute
   AuthenticatedPlatformAuditLogRoute: typeof AuthenticatedPlatformAuditLogRoute
   AuthenticatedPlatformBillingRoute: typeof AuthenticatedPlatformBillingRoute
   AuthenticatedPlatformBranchesRoute: typeof AuthenticatedPlatformBranchesRouteWithChildren
@@ -1246,6 +1286,7 @@ const AuthenticatedPlatformRouteRouteChildren: AuthenticatedPlatformRouteRouteCh
   {
     AuthenticatedPlatformAiRoute: AuthenticatedPlatformAiRoute,
     AuthenticatedPlatformAnalyticsRoute: AuthenticatedPlatformAnalyticsRoute,
+    AuthenticatedPlatformAttendanceRoute: AuthenticatedPlatformAttendanceRoute,
     AuthenticatedPlatformAuditLogRoute: AuthenticatedPlatformAuditLogRoute,
     AuthenticatedPlatformBillingRoute: AuthenticatedPlatformBillingRoute,
     AuthenticatedPlatformBranchesRoute:
@@ -1291,6 +1332,7 @@ const AuthenticatedSystemRouteWithChildren =
 interface AuthenticatedRouteRouteChildren {
   AuthenticatedPlatformRouteRoute: typeof AuthenticatedPlatformRouteRouteWithChildren
   AuthenticatedAiAssistantRoute: typeof AuthenticatedAiAssistantRoute
+  AuthenticatedAttendanceRoute: typeof AuthenticatedAttendanceRoute
   AuthenticatedBreakPlanningRoute: typeof AuthenticatedBreakPlanningRoute
   AuthenticatedBreakSettingsRoute: typeof AuthenticatedBreakSettingsRoute
   AuthenticatedBreaksRoute: typeof AuthenticatedBreaksRoute
@@ -1320,6 +1362,7 @@ interface AuthenticatedRouteRouteChildren {
 const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedPlatformRouteRoute: AuthenticatedPlatformRouteRouteWithChildren,
   AuthenticatedAiAssistantRoute: AuthenticatedAiAssistantRoute,
+  AuthenticatedAttendanceRoute: AuthenticatedAttendanceRoute,
   AuthenticatedBreakPlanningRoute: AuthenticatedBreakPlanningRoute,
   AuthenticatedBreakSettingsRoute: AuthenticatedBreakSettingsRoute,
   AuthenticatedBreaksRoute: AuthenticatedBreaksRoute,

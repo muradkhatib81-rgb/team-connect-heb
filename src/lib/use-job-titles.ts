@@ -6,6 +6,7 @@ export interface JobTitleRow {
   name: string;
   excluded_from_headcount: boolean;
   can_request_break: boolean;
+  can_punch_attendance?: boolean;
   sort_order: number;
 }
 
@@ -15,10 +16,22 @@ export function useJobTitles() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("job_titles" as any)
-        .select("id, name, excluded_from_headcount, can_request_break, sort_order")
+        .select("id, name, excluded_from_headcount, can_request_break, can_punch_attendance, sort_order")
         .order("sort_order", { ascending: true })
         .order("name", { ascending: true });
-      if (error) throw error;
+      if (error) {
+        // Column may not exist until migration is applied — fall back without it
+        if (/can_punch_attendance|column/i.test(error.message)) {
+          const { data: rows, error: err2 } = await supabase
+            .from("job_titles" as any)
+            .select("id, name, excluded_from_headcount, can_request_break, sort_order")
+            .order("sort_order", { ascending: true })
+            .order("name", { ascending: true });
+          if (err2) throw err2;
+          return ((rows ?? []) as unknown) as JobTitleRow[];
+        }
+        throw error;
+      }
       return ((data ?? []) as unknown) as JobTitleRow[];
     },
   });

@@ -34,6 +34,7 @@ import {
   ChevronDown,
   Sparkles,
   AlertTriangle,
+  Fingerprint,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
@@ -70,6 +71,7 @@ import {
 import { fetchCustodyUserCaps } from "@/lib/custody-workflow";
 import { useAiAccess } from "@/lib/use-ai-access";
 import { bindPushToneListener } from "@/lib/alert-tone";
+import { getAttendanceCapabilities } from "@/lib/attendance.functions";
 
 interface NavItem {
   to: string;
@@ -125,6 +127,17 @@ export function AppShell({ children }: { children: ReactNode }) {
       };
     },
   });
+
+  const attendanceCapsFn = useServerFn(getAttendanceCapabilities);
+  const attendanceBranchId = activeBranchId ?? profile?.branch_id ?? null;
+  const attendanceCapsQ = useQuery({
+    enabled: !!attendanceBranchId,
+    queryKey: ["attendance-caps", attendanceBranchId],
+    staleTime: 60_000,
+    queryFn: () => attendanceCapsFn({ data: { branchId: attendanceBranchId! } }),
+  });
+  const showAttendanceNav =
+    !!attendanceCapsQ.data?.show_employee_card || !!attendanceCapsQ.data?.show_manager_card;
 
   // Unread messages count (announcements module removed)
   const commUnreadQ = useQuery({
@@ -327,6 +340,13 @@ export function AppShell({ children }: { children: ReactNode }) {
       section: branchSection,
     },
     {
+      to: "/attendance",
+      label: t("nav.attendance"),
+      icon: Fingerprint,
+      visible: showAttendanceNav,
+      section: branchSection,
+    },
+    {
       to: "/ai-assistant",
       label: t("nav.aiAssistant"),
       icon: Sparkles,
@@ -423,6 +443,13 @@ export function AppShell({ children }: { children: ReactNode }) {
       to: "/platform/control-log",
       label: t("nav.opsErrors"),
       icon: AlertTriangle,
+      visible: isPlatformOwner,
+      section: t("nav.platformSection"),
+    },
+    {
+      to: "/platform/attendance",
+      label: t("nav.attendance"),
+      icon: Fingerprint,
       visible: isPlatformOwner,
       section: t("nav.platformSection"),
     },

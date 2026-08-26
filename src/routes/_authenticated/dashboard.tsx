@@ -12,6 +12,7 @@ import {
   useDashboardCardAttention,
 } from "@/lib/use-dashboard-card-attention";
 import { OpsErrorsDashboardCard } from "@/components/ops-errors-dashboard-card";
+import { AttendanceDashboardCard } from "@/components/attendance-dashboard-card";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -369,6 +370,7 @@ function DashboardPage() {
           <BreakShortcutCard userId={profile.id} />
           <LeaveShortcutCard userId={profile.id} />
           <OpsErrorsDashboardCard />
+          <AttendanceDashboardCard />
           {isDeptHeadOnlyBreaks && <DeptHeadOnBreakSection />}
           {/* Branch-level journal — never for dept-head-only (own-dept section above). */}
           {canViewBreaks && !isDeptHeadOnlyBreaks && (
@@ -1351,6 +1353,7 @@ function EmployeeDashboard({ profile }: { profile: any }) {
       <BreakShortcutCard userId={profile.id} />
       <LeaveShortcutCard userId={profile.id} />
       <OpsErrorsDashboardCard />
+      <AttendanceDashboardCard />
       <EmployeeNotificationsCard userId={profile.id} />
       <EmployeeNewMessagesCard userId={profile.id} />
     </div>
