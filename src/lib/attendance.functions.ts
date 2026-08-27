@@ -257,16 +257,104 @@ export const listAttendanceJobTitlePunchSettings = createServerFn({ method: "GET
   .handler(async ({ context }) => {
     const { supabase, userId } = context as { supabase: any; userId: string };
     await assertPlatformOwner(supabase, userId);
-    const { data, error } = await supabase
+    // Admin client: browser client branch-scopes job_titles.
+    const { data, error } = await supabaseAdmin
       .from("job_titles")
-      .select("id, name, can_punch_attendance, sort_order")
+      .select("id, name, can_punch_attendance, sort_order, branch_id")
       .order("sort_order", { ascending: true })
       .order("name", { ascending: true });
     if (error) {
       if (/does not exist|column/i.test(error.message)) return [];
       throw new Error(error.message);
     }
-    return data ?? [];
+    const rows = data ?? [];
+    const branchIds = [...new Set(rows.map((r: any) => r.branch_id).filter(Boolean))];
+    let branchNames = new Map<string, string>();
+    if (branchIds.length > 0) {
+      const { data: branches } = await supabaseAdmin
+        .from("branches")
+        .select("id, name")
+        .in("id", branchIds);
+      branchNames = new Map((branches ?? []).map((b: any) => [b.id, b.name]));
+    }
+    return rows.map((r: any) => ({
+      ...r,
+      branch_name: r.branch_id ? (branchNames.get(r.branch_id) ?? null) : null,
+    }));
+  });
+
+const ATTENDANCE_PUNCH_CATEGORIES = [
+  "branch_manager",
+  "assistant_manager",
+  "hr_manager",
+  "warehouse_manager",
+  "department_manager",
+  "employee",
+] as const;
+
+export type AttendancePunchCategory = (typeof ATTENDANCE_PUNCH_CATEGORIES)[number];
+
+export const listAttendanceRolePunchSettings = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    const { supabase, userId } = context as { supabase: any; userId: string };
+    await assertPlatformOwner(supabase, userId);
+    const { data, error } = await supabase
+      .from("attendance_punch_category_settings")
+      .select("category, can_punch, updated_at")
+      .in("category", [...ATTENDANCE_PUNCH_CATEGORIES]);
+    if (error) {
+      // Fallback: older table or missing migration
+      if (/does not exist|relation/i.test(error.message)) {
+        const legacy = await supabase
+          .from("attendance_role_punch_settings")
+          .select("role, can_punch, updated_at");
+        const byRole = new Map((legacy.data ?? []).map((r: any) => [r.role, r]));
+        return ATTENDANCE_PUNCH_CATEGORIES.map((category) => ({
+          category,
+          can_punch: !!byRole.get(category)?.can_punch,
+          updated_at: (byRole.get(category)?.updated_at as string | null) ?? null,
+        }));
+      }
+      throw new Error(error.message);
+    }
+    const byCat = new Map((data ?? []).map((r: any) => [r.category, r]));
+    return ATTENDANCE_PUNCH_CATEGORIES.map((category) => ({
+      category,
+      can_punch: !!byCat.get(category)?.can_punch,
+      updated_at: (byCat.get(category)?.updated_at as string | null) ?? null,
+    }));
+  });
+
+export const setAttendanceRolePunch = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator(
+    z.object({
+      category: z.enum([
+        "branch_manager",
+        "assistant_manager",
+        "hr_manager",
+        "warehouse_manager",
+        "department_manager",
+        "employee",
+      ]),
+      can_punch: z.boolean(),
+    }),
+  )
+  .handler(async ({ data, context }) => {
+    const { supabase, userId } = context as { supabase: any; userId: string };
+    await assertPlatformOwner(supabase, userId);
+    const { error } = await supabase.from("attendance_punch_category_settings").upsert(
+      {
+        category: data.category,
+        can_punch: data.can_punch,
+        updated_at: new Date().toISOString(),
+        updated_by: userId,
+      },
+      { onConflict: "category" },
+    );
+    if (error) throw new Error(error.message);
+    return { ok: true };
   });
 
 export const setAttendanceJobTitlePunch = createServerFn({ method: "POST" })

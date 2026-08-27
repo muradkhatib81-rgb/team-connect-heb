@@ -25,13 +25,14 @@ import {
   deleteAttendanceFeatureScope,
   getBranchAttendanceGeo,
   listAttendanceFeatureScopes,
-  listAttendanceJobTitlePunchSettings,
+  listAttendanceRolePunchSettings,
   listAttendanceUserGrants,
   listBranchProfilesForAttendanceGrants,
-  setAttendanceJobTitlePunch,
+  setAttendanceRolePunch,
   updateBranchAttendanceGeo,
   upsertAttendanceFeatureScope,
   upsertAttendanceUserGrant,
+  type AttendancePunchCategory,
 } from "@/lib/attendance.functions";
 
 export const Route = createFileRoute("/_authenticated/platform/attendance")({
@@ -51,8 +52,8 @@ function PlatformAttendancePage() {
   const listProfilesFn = useServerFn(listBranchProfilesForAttendanceGrants);
   const getGeoFn = useServerFn(getBranchAttendanceGeo);
   const updateGeoFn = useServerFn(updateBranchAttendanceGeo);
-  const listTitlePunchFn = useServerFn(listAttendanceJobTitlePunchSettings);
-  const setTitlePunchFn = useServerFn(setAttendanceJobTitlePunch);
+  const listRolePunchFn = useServerFn(listAttendanceRolePunchSettings);
+  const setRolePunchFn = useServerFn(setAttendanceRolePunch);
 
   const [scopeType, setScopeType] = useState<"company" | "branch">("branch");
   const [scopeId, setScopeId] = useState("");
@@ -91,9 +92,9 @@ function PlatformAttendancePage() {
     enabled: !!geoBranchId,
     queryFn: () => getGeoFn({ data: { branchId: geoBranchId } }),
   });
-  const titlePunchQ = useQuery({
-    queryKey: ["attendance-job-title-punch"],
-    queryFn: () => listTitlePunchFn(),
+  const rolePunchQ = useQuery({
+    queryKey: ["attendance-role-punch"],
+    queryFn: () => listRolePunchFn(),
   });
 
   const operationalBranches = useMemo(
@@ -133,6 +134,7 @@ function PlatformAttendancePage() {
     onSuccess: () => {
       toast.success(t("attendance.scopeSaved"));
       void qc.invalidateQueries({ queryKey: ["attendance-scopes"] });
+      void qc.invalidateQueries({ queryKey: ["attendance-caps"] });
       setScopeId("");
     },
     onError: (e: Error) => toast.error(e.message),
@@ -143,6 +145,7 @@ function PlatformAttendancePage() {
     onSuccess: () => {
       toast.success(t("attendance.scopeRemoved"));
       void qc.invalidateQueries({ queryKey: ["attendance-scopes"] });
+      void qc.invalidateQueries({ queryKey: ["attendance-caps"] });
     },
     onError: (e: Error) => toast.error(e.message),
   });
@@ -161,6 +164,7 @@ function PlatformAttendancePage() {
     onSuccess: () => {
       toast.success(t("attendance.grantSaved"));
       void qc.invalidateQueries({ queryKey: ["attendance-grants"] });
+      void qc.invalidateQueries({ queryKey: ["attendance-caps"] });
     },
     onError: (e: Error) => toast.error(e.message),
   });
@@ -182,13 +186,12 @@ function PlatformAttendancePage() {
     onError: (e: Error) => toast.error(e.message),
   });
 
-  const titlePunchMut = useMutation({
-    mutationFn: (args: { jobTitleId: string; can_punch_attendance: boolean }) =>
-      setTitlePunchFn({ data: args }),
+  const rolePunchMut = useMutation({
+    mutationFn: (args: { category: AttendancePunchCategory; can_punch: boolean }) =>
+      setRolePunchFn({ data: args }),
     onSuccess: () => {
-      toast.success(t("attendance.titlePunchSaved"));
-      void qc.invalidateQueries({ queryKey: ["attendance-job-title-punch"] });
-      void qc.invalidateQueries({ queryKey: ["job-titles"] });
+      toast.success(t("attendance.rolePunchSaved"));
+      void qc.invalidateQueries({ queryKey: ["attendance-role-punch"] });
       void qc.invalidateQueries({ queryKey: ["attendance-caps"] });
     },
     onError: (e: Error) => toast.error(e.message),
@@ -222,33 +225,36 @@ function PlatformAttendancePage() {
         </TabsList>
 
         <TabsContent value="titles" className="mt-4 space-y-4">
-          <p className="text-sm text-muted-foreground">{t("attendance.titlesHint")}</p>
+          <p className="text-sm text-muted-foreground">{t("attendance.rolesHint")}</p>
           <Card className="overflow-hidden p-0">
-            {titlePunchQ.isLoading ? (
+            {rolePunchQ.isLoading ? (
               <div className="flex justify-center py-8">
                 <Loader2 className="size-5 animate-spin text-muted-foreground" />
               </div>
-            ) : (titlePunchQ.data ?? []).length === 0 ? (
-              <p className="p-4 text-sm text-muted-foreground">{t("attendance.noTitles")}</p>
             ) : (
               <ul className="divide-y">
-                {(titlePunchQ.data ?? []).map((row: any) => (
-                  <li key={row.id} className="flex items-center justify-between gap-3 px-4 py-3">
+                {(rolePunchQ.data ?? []).map((row) => (
+                  <li
+                    key={row.category}
+                    className="flex items-center justify-between gap-3 px-4 py-3"
+                  >
                     <div className="min-w-0">
-                      <p className="truncate font-medium">{row.name}</p>
+                      <p className="truncate font-medium">
+                        {t(`attendance.punchCategories.${row.category}`)}
+                      </p>
                       <p className="text-xs text-muted-foreground">
-                        {row.can_punch_attendance
+                        {row.can_punch
                           ? t("attendance.titlePunchOn")
                           : t("attendance.titlePunchOff")}
                       </p>
                     </div>
                     <Switch
-                      checked={!!row.can_punch_attendance}
-                      disabled={titlePunchMut.isPending}
+                      checked={!!row.can_punch}
+                      disabled={rolePunchMut.isPending}
                       onCheckedChange={(value) =>
-                        titlePunchMut.mutate({
-                          jobTitleId: row.id,
-                          can_punch_attendance: value,
+                        rolePunchMut.mutate({
+                          category: row.category as AttendancePunchCategory,
+                          can_punch: value,
                         })
                       }
                     />

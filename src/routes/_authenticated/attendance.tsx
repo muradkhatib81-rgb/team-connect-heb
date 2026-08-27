@@ -327,14 +327,29 @@ function AttendancePage() {
             </Select>
           </div>
 
+          {!capsQ.data.can_punch && capsQ.data.hide_reason ? (
+            <p className="text-sm text-amber-800 dark:text-amber-200">
+              {(() => {
+                const reasonKey = `attendance.hideReasons.${capsQ.data.hide_reason}`;
+                const reasonText = t(reasonKey);
+                return reasonText === reasonKey
+                  ? t("attendance.hideReasons.generic")
+                  : reasonText;
+              })()}
+            </p>
+          ) : null}
+
           <div className="flex flex-wrap gap-2">
-            <Button disabled={!!open || punchMut.isPending} onClick={() => punchMut.mutate("in")}>
+            <Button
+              disabled={!capsQ.data.can_punch || !!open || punchMut.isPending}
+              onClick={() => punchMut.mutate("in")}
+            >
               {punchMut.isPending ? <Loader2 className="size-4 animate-spin" /> : null}
               {t("attendance.clockIn")}
             </Button>
             <Button
               variant="secondary"
-              disabled={!open || punchMut.isPending}
+              disabled={!capsQ.data.can_punch || !open || punchMut.isPending}
               onClick={() => punchMut.mutate("out")}
             >
               {punchMut.isPending ? <Loader2 className="size-4 animate-spin" /> : null}
