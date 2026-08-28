@@ -13,6 +13,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { formatHeDate } from "@/lib/date-format";
+import { htmlLangAttribute } from "@/lib/app-locale";
 import { cn } from "@/lib/utils";
 
 // value/onChange use "YYYY-MM-DD" (local) for date and "HH:MM" for time, matching the
@@ -76,7 +77,7 @@ export function HebrewDateInput({
           type="button"
           variant="outline"
           dir={dir}
-          lang={i18n.language.split("-")[0]}
+          lang={htmlLangAttribute(i18n.language)}
           disabled={disabled}
           className={cn(
             "w-full justify-start font-normal",
@@ -142,7 +143,7 @@ export function HebrewTimeInput({
         value={hh || ""}
         onValueChange={(h) => setPart(h, mm || "00")}
       >
-        <SelectTrigger lang={i18n.language.split("-")[0]} className="w-[5rem] text-center">
+        <SelectTrigger lang={htmlLangAttribute(i18n.language)} className="w-[5rem] text-center">
           <SelectValue placeholder={t("libErrors.datetime.hour")} />
         </SelectTrigger>
         <SelectContent className="max-h-60">
@@ -156,7 +157,7 @@ export function HebrewTimeInput({
         value={mm || ""}
         onValueChange={(m) => setPart(hh || "00", m)}
       >
-        <SelectTrigger lang={i18n.language.split("-")[0]} className="w-[5rem] text-center">
+        <SelectTrigger lang={htmlLangAttribute(i18n.language)} className="w-[5rem] text-center">
           <SelectValue placeholder={t("libErrors.datetime.minute")} />
         </SelectTrigger>
         <SelectContent className="max-h-60">

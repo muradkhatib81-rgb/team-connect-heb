@@ -1,9 +1,33 @@
 import * as React from "react";
 
 import { cn } from "@/lib/utils";
+import { isNumericLikeInput, toWesternDigits } from "@/lib/app-locale";
+
+function normalizeNumericInputValue(target: HTMLInputElement): void {
+  if (!isNumericLikeInput(target)) return;
+  const normalized = toWesternDigits(target.value);
+  if (normalized !== target.value) {
+    const start = target.selectionStart;
+    const end = target.selectionEnd;
+    target.value = normalized;
+    if (start != null && end != null) {
+      target.setSelectionRange(start, end);
+    }
+  }
+}
 
 const Input = React.forwardRef<HTMLInputElement, React.ComponentProps<"input">>(
-  ({ className, type, ...props }, ref) => {
+  ({ className, type, onChange, onInput, ...props }, ref) => {
+    const handleInput = (e: React.FormEvent<HTMLInputElement>) => {
+      normalizeNumericInputValue(e.currentTarget);
+      onInput?.(e);
+    };
+
+    const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+      normalizeNumericInputValue(e.currentTarget);
+      onChange?.(e);
+    };
+
     return (
       <input
         type={type}
@@ -12,6 +36,8 @@ const Input = React.forwardRef<HTMLInputElement, React.ComponentProps<"input">>(
           className,
         )}
         ref={ref}
+        onInput={handleInput}
+        onChange={handleChange}
         {...props}
       />
     );

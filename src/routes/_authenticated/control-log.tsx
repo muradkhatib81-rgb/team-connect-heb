@@ -21,6 +21,7 @@ import { useActiveBranch } from "@/lib/use-active-branch";
 import { useAuth } from "@/lib/use-auth";
 import { supabase } from "@/integrations/supabase/client";
 import { opsErrorTypeLabel } from "@/lib/ops-error-type-label";
+import { intlLocaleForApp } from "@/lib/app-locale";
 import {
   createOpsErrorEntry,
   deleteOpsErrorEntry,
@@ -177,8 +178,7 @@ function OpsErrorsPage() {
     onError: (e: Error) => toast.error(e.message),
   });
 
-  const dateLocale =
-    i18n.language === "ar" ? "ar-SA" : i18n.language === "en" ? "en-US" : "he-IL";
+  const dateLocale = intlLocaleForApp(i18n.language);
 
   const typeLabel = (ty: {
     name_he: string;

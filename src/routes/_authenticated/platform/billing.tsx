@@ -44,6 +44,7 @@ import {
   mbToGbInput,
   mbToGbLabel,
 } from "@/lib/billing-storage";
+import { intlLocaleForApp } from "@/lib/app-locale";
 
 export const Route = createFileRoute("/_authenticated/platform/billing")({
   component: PlatformBillingPage,
@@ -61,13 +62,9 @@ const PLAN_TONES: Record<BillingPlan, string> = {
 const COMPANY_SCOPE = "__company__";
 const OVERVIEW_KEY = ["platform-billing-overview"] as const;
 
-function dateLocale(lang: string) {
-  return lang === "ar" ? "ar-SA" : lang === "en" ? "en-US" : "he-IL";
-}
-
 function PlatformBillingPage() {
   const { t, i18n } = useTranslation();
-  const locale = dateLocale(i18n.language);
+  const locale = intlLocaleForApp(i18n.language);
   const planLabel = (plan: BillingPlan) => t(`platformBilling.plans.${plan}`);
   const statusLabel = (status: string) =>
     t(`platformBilling.status.${status}`, { defaultValue: status });

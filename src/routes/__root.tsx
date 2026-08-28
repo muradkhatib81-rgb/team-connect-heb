@@ -10,6 +10,7 @@ import {
 import { useEffect, useState, type ReactNode } from "react";
 import { I18nextProvider, useTranslation } from "react-i18next";
 import i18n from "@/i18n";
+import { htmlLangAttribute } from "@/lib/app-locale";
 
 import appCss from "../styles.css?url";
 import { reportLovableError } from "../lib/lovable-error-reporting";
@@ -214,7 +215,7 @@ function RootShell({ children }: { children: ReactNode }) {
       const next = lng === "en" || lng === "ar" ? lng : "he";
       setLang(next);
       document.documentElement.dir = next === "en" ? "ltr" : "rtl";
-      document.documentElement.lang = next;
+      document.documentElement.lang = htmlLangAttribute(next);
       document.title = i18n.t("common.appName");
     };
     i18n.on("languageChanged", onChange);
@@ -229,7 +230,7 @@ function RootShell({ children }: { children: ReactNode }) {
   }, [pwaIconUrl]);
   const dir = lang === "en" ? "ltr" : "rtl";
   return (
-    <html lang={lang} dir={dir}>
+    <html lang={htmlLangAttribute(lang)} dir={dir}>
       <head>
         <HeadContent />
       </head>

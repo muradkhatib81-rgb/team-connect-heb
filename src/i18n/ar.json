@@ -22,7 +22,9 @@
     "idMustBeDigits": "رقم الهوية يجب أن يحتوي على أرقام فقط (5–15 رقم)",
     "wrongCredentials": "رقم الهوية أو كلمة المرور غير صحيحة",
     "loginSuccess": "تم تسجيل الدخول بنجاح",
-    "loginPageTitle": "تسجيل الدخول"
+    "loginPageTitle": "تسجيل الدخول",
+    "showPassword": "إظهار كلمة المرور",
+    "hidePassword": "إخفاء كلمة المرور"
   },
   "profile": {
     "title": "ملفي الشخصي",

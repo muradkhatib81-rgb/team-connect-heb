@@ -42,6 +42,7 @@ import {
 import type { BillingPlan } from "@/core/managers/billing-manager";
 import { useTranslation } from "react-i18next";
 import { aiErrorCode, translateAiError } from "@/lib/ai-errors";
+import { intlLocaleForApp } from "@/lib/app-locale";
 
 export const Route = createFileRoute("/_authenticated/platform/ai")({
   component: PlatformAiPage,
@@ -55,8 +56,7 @@ const ENTITLEMENTS_KEY = ["platform-ai-entitlements"] as const;
 
 function PlatformAiPage() {
   const { t, i18n } = useTranslation();
-  const dateLocale =
-    i18n.language === "ar" ? "ar-SA" : i18n.language === "en" ? "en-US" : "he-IL";
+  const dateLocale = intlLocaleForApp(i18n.language);
   const qc = useQueryClient();
   const { companies } = useCompanyContext();
   const [grantOpen, setGrantOpen] = useState(false);

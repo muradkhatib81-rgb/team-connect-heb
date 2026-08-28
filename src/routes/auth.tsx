@@ -17,8 +17,10 @@ import { toWhatsAppUrl } from "@/lib/whatsapp";
 import { WhatsAppIcon } from "@/components/whatsapp-icon";
 import { Store, Loader2 } from "lucide-react";
 import { LanguageSwitcher } from "@/components/language-switcher";
+import { PasswordInput, PasswordVisibilityToggle } from "@/components/ui/password-input";
 import { useTranslation } from "react-i18next";
 import i18n from "@/i18n";
+import { toWesternDigits } from "@/lib/app-locale";
 
 const searchSchema = z.object({ redirect: z.string().optional() });
 
@@ -50,6 +52,7 @@ function AuthPage() {
   const [loading, setLoading] = useState(false);
   const [checking, setChecking] = useState(true);
   const [hasUsers, setHasUsers] = useState<boolean | null>(null);
+  const [showPassword, setShowPassword] = useState(false);
 
   const whatsappQ = useQuery({
     queryKey: ["platform-settings-whatsapp-public"],
@@ -98,7 +101,7 @@ function AuthPage() {
   async function handleSignIn(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     const form = new FormData(e.currentTarget);
-    const idNumber = String(form.get("id_number") || "").trim();
+    const idNumber = toWesternDigits(String(form.get("id_number") || "")).trim();
     const password = String(form.get("password") || "");
     if (!idNumber || !password) {
       toast.error(t("auth.fillIdAndPassword"));
@@ -138,7 +141,7 @@ function AuthPage() {
     const form = new FormData(e.currentTarget);
     const firstName = String(form.get("first_name") || "").trim();
     const lastName = String(form.get("last_name") || "").trim();
-    const idNumber = String(form.get("id_number") || "").trim();
+    const idNumber = toWesternDigits(String(form.get("id_number") || "")).trim();
     const password = String(form.get("password") || "");
     if (!firstName || !lastName || !idNumber || !password) {
       toast.error(t("auth.fillAll"));
@@ -243,18 +246,26 @@ function AuthPage() {
                       maxLength={15}
                       required
                       dir="ltr"
+                      lang="en"
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="pw-up">{t("auth.password")}</Label>
-                    <Input
+                    <div className="flex items-center gap-1">
+                      <Label htmlFor="pw-up">{t("auth.password")}</Label>
+                      <PasswordVisibilityToggle
+                        visible={showPassword}
+                        onToggle={() => setShowPassword((v) => !v)}
+                      />
+                    </div>
+                    <PasswordInput
                       id="pw-up"
                       name="password"
-                      type="password"
+                      visible={showPassword}
                       autoComplete="new-password"
                       minLength={6}
                       required
                       dir="ltr"
+                      lang="en"
                     />
                   </div>
                   <Button type="submit" className="w-full" disabled={loading} size="lg">
@@ -276,17 +287,25 @@ function AuthPage() {
                     maxLength={15}
                     required
                     dir="ltr"
+                    lang="en"
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="pw-in">{t("auth.password")}</Label>
-                  <Input
+                  <div className="flex items-center gap-1">
+                    <Label htmlFor="pw-in">{t("auth.password")}</Label>
+                    <PasswordVisibilityToggle
+                      visible={showPassword}
+                      onToggle={() => setShowPassword((v) => !v)}
+                    />
+                  </div>
+                  <PasswordInput
                     id="pw-in"
                     name="password"
-                    type="password"
+                    visible={showPassword}
                     autoComplete="current-password"
                     required
                     dir="ltr"
+                    lang="en"
                   />
                 </div>
                 <Button type="submit" className="w-full" disabled={loading} size="lg">

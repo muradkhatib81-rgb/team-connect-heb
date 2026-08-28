@@ -8,6 +8,7 @@ import { fetchCustodyUserCaps } from "@/lib/custody-workflow";
 import { supportContactInstruction } from "@/lib/constants";
 import { CustodyLogPanel } from "@/components/custody-log-panel";
 import i18n from "@/i18n";
+import { intlLocaleForApp } from "@/lib/app-locale";
 import { useTranslation } from "react-i18next";
 
 export const Route = createFileRoute("/_authenticated/custody-log")({
@@ -58,8 +59,7 @@ function CustodyLogPage() {
     );
   }
 
-  const dateLocale =
-    i18n.language === "ar" ? "ar-IL" : i18n.language === "en" ? "en-IL" : "he-IL";
+  const dateLocale = intlLocaleForApp(i18n.language);
   const todayLabel = new Intl.DateTimeFormat(dateLocale, {
     timeZone: "Asia/Jerusalem",
     dateStyle: "full",

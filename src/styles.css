@@ -134,6 +134,8 @@
   html {
     direction: rtl;
     overscroll-behavior-y: contain;
+    font-variant-numeric: lining-nums;
+    font-feature-settings: "lnum" 1;
   }
 
   body {
@@ -142,6 +144,14 @@
     font-family: var(--font-sans);
     -webkit-font-smoothing: antialiased;
     text-rendering: optimizeLegibility;
+    font-variant-numeric: lining-nums;
+  }
+
+  input,
+  textarea,
+  select {
+    font-variant-numeric: lining-nums;
+    font-feature-settings: "lnum" 1;
   }
 
   h1, h2, h3, h4 {

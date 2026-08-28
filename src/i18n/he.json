@@ -22,7 +22,9 @@
     "idMustBeDigits": "מספר זהות חייב להכיל ספרות בלבד (5–15 ספרות)",
     "wrongCredentials": "מספר זהות או סיסמה שגויים",
     "loginSuccess": "התחברת בהצלחה",
-    "loginPageTitle": "התחברות"
+    "loginPageTitle": "התחברות",
+    "showPassword": "הצג סיסמה",
+    "hidePassword": "הסתר סיסמה"
   },
   "profile": {
     "title": "הפרופיל שלי",

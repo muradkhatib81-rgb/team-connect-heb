@@ -1,13 +1,11 @@
 // Date/time formatting helpers locked to Asia/Jerusalem; locale follows active app language.
 import i18n from "@/i18n";
+import { intlLocaleForApp } from "@/lib/app-locale";
 
 const TZ = "Asia/Jerusalem";
 
 function intlLocale(): string {
-  const lang = i18n.language?.split("-")[0];
-  if (lang === "ar") return "ar";
-  if (lang === "en") return "en";
-  return "he-IL";
+  return intlLocaleForApp(i18n.language);
 }
 
 export function formatHeDateTime(value: string | Date | null | undefined): string {

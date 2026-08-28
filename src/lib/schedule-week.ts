@@ -1,4 +1,5 @@
 import i18n from "@/i18n";
+import { intlLocaleForApp } from "@/lib/app-locale";
 import {
   DEFAULT_PERIOD_CONFIG,
   getSchedulePeriod,
@@ -37,8 +38,7 @@ export function getScheduleDayNames(): string[] {
 export type ScheduleShiftCode = "morning" | "evening" | "off";
 
 export function formatScheduleDayHe(iso: string) {
-  const lang = i18n.language?.split("-")[0];
-  const locale = lang === "ar" ? "ar" : lang === "en" ? "en" : "he-IL";
+  const locale = intlLocaleForApp(i18n.language);
   return new Intl.DateTimeFormat(locale, {
     timeZone: "Asia/Jerusalem",
     day: "2-digit",

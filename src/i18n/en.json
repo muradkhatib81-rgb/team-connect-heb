@@ -22,7 +22,9 @@
     "idMustBeDigits": "ID must contain digits only (5–15 digits)",
     "wrongCredentials": "Invalid ID number or password",
     "loginSuccess": "Logged in successfully",
-    "loginPageTitle": "Sign in"
+    "loginPageTitle": "Sign in",
+    "showPassword": "Show password",
+    "hidePassword": "Hide password"
   },
   "profile": {
     "title": "My Profile",

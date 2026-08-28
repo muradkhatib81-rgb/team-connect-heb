@@ -52,6 +52,7 @@ import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { useTranslation } from "react-i18next";
 import { getGuestLanguage, getSavedLanguage, saveLanguage } from "@/i18n";
+import { htmlLangAttribute } from "@/lib/app-locale";
 import { useServerFn } from "@tanstack/react-start";
 import { syncPreferredLanguage } from "@/lib/translate-content.functions";
 import { NotificationsBell } from "@/components/notifications-bell";
@@ -197,7 +198,7 @@ export function AppShell({ children }: { children: ReactNode }) {
     if (i18n.language !== lang) {
       void i18n.changeLanguage(lang);
       document.documentElement.dir = lang === "en" ? "ltr" : "rtl";
-      document.documentElement.lang = lang;
+      document.documentElement.lang = htmlLangAttribute(lang);
     }
     if (applyGuest) {
       appliedGuestForUser.current = profile.id;

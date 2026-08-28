@@ -1,6 +1,7 @@
 import { useTranslation } from "react-i18next";
 import { useServerFn } from "@tanstack/react-start";
 import { saveLanguage, type AppLanguage } from "@/i18n";
+import { htmlLangAttribute } from "@/lib/app-locale";
 import { syncPreferredLanguage } from "@/lib/translate-content.functions";
 import { Button } from "@/components/ui/button";
 import {
@@ -31,7 +32,7 @@ export function LanguageSwitcher({ userId }: LanguageSwitcherProps = {}) {
     saveLanguage(code, userId);
     saveLanguage(code);
     document.documentElement.dir = code === "en" ? "ltr" : "rtl";
-    document.documentElement.lang = code;
+    document.documentElement.lang = htmlLangAttribute(code);
     if (userId) {
       void syncLangFn({ data: { lang: code } }).catch(() => {});
     }

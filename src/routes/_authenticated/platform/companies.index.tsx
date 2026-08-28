@@ -12,6 +12,7 @@ import { useCompanyContext } from "@/platform";
 import { CompanySwitcher } from "@/components/platform/company-switcher";
 import { CompanyActionsMenu } from "@/components/platform/company-actions-menu";
 import { CompanyCreateDialog } from "@/components/platform/company-dialogs";
+import { intlLocaleForApp } from "@/lib/app-locale";
 
 export const Route = createFileRoute("/_authenticated/platform/companies/")({
   component: CompaniesPage,
@@ -50,8 +51,7 @@ function CompaniesPage() {
   const [openCreate, setOpenCreate] = useState(false);
   const [showArchived, setShowArchived] = useState(false);
 
-  const dateLocale =
-    i18n.language === "ar" ? "ar" : i18n.language === "en" ? "en-US" : "he-IL";
+  const dateLocale = intlLocaleForApp(i18n.language);
 
   const visibleCompanies = useMemo(
     () => companies.filter((c) => showArchived || !c.archivedAt),
