@@ -15,7 +15,8 @@ export function OnlinePresencePlatformSection() {
     <OnlinePresenceCard
       access={accessQ.data}
       loading={accessQ.isLoading}
-      className="max-w-sm"
+      className="max-w-md"
+      groupByLocation
       filterHint={t("onlinePresence.platformScopeHint")}
     />
   );

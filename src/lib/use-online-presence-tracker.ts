@@ -1,35 +1,79 @@
 import { useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { startOnlinePresenceTracking, type OnlinePresenceTrackInput } from "@/lib/online-presence-hub";
+import {
+  startOnlinePresenceTracking,
+  updateOnlinePresenceTrackInput,
+  type OnlinePresenceTrackInput,
+} from "@/lib/online-presence-hub";
 
 export function useOnlinePresenceTracker(input: OnlinePresenceTrackInput | null) {
   useEffect(() => {
     if (!input?.userId) return;
     return startOnlinePresenceTracking(input);
+  }, [input?.userId]);
+
+  useEffect(() => {
+    if (!input?.userId) return;
+    updateOnlinePresenceTrackInput(input);
   }, [
     input?.userId,
     input?.fullName,
     input?.branchId,
     input?.companyId,
+    input?.branchName,
+    input?.companyName,
     input?.role,
   ]);
 }
 
-/** Resolve company_id for the user's active branch (presence metadata). */
-export function useBranchCompanyId(branchId: string | null | undefined) {
+export type BranchPresenceContext = {
+  companyId: string | null;
+  branchName: string | null;
+  companyName: string | null;
+};
+
+/** Branch + company metadata for presence payloads (real branch id → platform company). */
+export function useBranchPresenceContext(branchId: string | null | undefined) {
   return useQuery({
     enabled: !!branchId,
-    queryKey: ["branch-company-id", branchId],
-    queryFn: async () => {
-      const { data, error } = await supabase
+    queryKey: ["branch-presence-context", branchId],
+    queryFn: async (): Promise<BranchPresenceContext> => {
+      const { data: branch, error: branchErr } = await supabase
         .from("branches")
-        .select("company_id")
+        .select("id, name")
         .eq("id", branchId!)
         .maybeSingle();
-      if (error) throw error;
-      return data?.company_id ?? null;
+      if (branchErr) throw branchErr;
+
+      const { data: assignment, error: assignErr } = await supabase
+        .from("company_branch_assignments" as never)
+        .select("company_id, companies(name)")
+        .eq("source_branch_id", branchId!)
+        .is("deleted_at", null)
+        .maybeSingle();
+      if (assignErr && !/company_branch_assignments|does not exist|PGRST/i.test(assignErr.message)) {
+        throw assignErr;
+      }
+
+      const row = assignment as { company_id: string; companies: { name: string } | null } | null;
+
+      return {
+        companyId: row?.company_id ?? null,
+        branchName: branch?.name ?? null,
+        companyName: row?.companies?.name ?? null,
+      };
     },
-    staleTime: 120_000,
+    staleTime: 60_000,
+    refetchOnWindowFocus: true,
   });
+}
+
+/** @deprecated Use useBranchPresenceContext */
+export function useBranchCompanyId(branchId: string | null | undefined) {
+  const q = useBranchPresenceContext(branchId);
+  return {
+    ...q,
+    data: q.data?.companyId ?? null,
+  };
 }
