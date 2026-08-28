@@ -12,6 +12,7 @@ import {
   useDashboardCardAttention,
 } from "@/lib/use-dashboard-card-attention";
 import { OpsErrorsDashboardCard } from "@/components/ops-errors-dashboard-card";
+import { OnlinePresenceDashboardSection } from "@/components/online-presence-dashboard-section";
 import { AttendanceDashboardCard } from "@/components/attendance-dashboard-card";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
@@ -352,6 +353,8 @@ function DashboardPage() {
           )}
         </div>
       </header>
+
+      <OnlinePresenceDashboardSection profile={profile} />
 
       <DashboardLeaveBanner profile={profile} />
 

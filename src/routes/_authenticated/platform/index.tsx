@@ -31,6 +31,7 @@ import {
 import { useCompanyContext } from "@/platform";
 import { branchService } from "@/modules/branches";
 import { useTranslation } from "react-i18next";
+import { OnlinePresencePlatformSection } from "@/components/online-presence-platform-section";
 
 export const Route = createFileRoute("/_authenticated/platform/")({
   component: PlatformDashboardPage,
@@ -153,6 +154,8 @@ function PlatformDashboardPage() {
           onClick={() => navigate({ to: "/platform/branches" })}
         />
       </div>
+
+      <OnlinePresencePlatformSection />
 
       {/* Quick actions */}
       <Card className="card-elevated p-4">

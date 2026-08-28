@@ -1881,6 +1881,19 @@
     "iconUpdated": "App icon updated",
     "iconUploadFailed": "Icon upload failed"
   },
+  "onlinePresence": {
+    "cardTitle": "Online now",
+    "noOneOnline": "No active users right now",
+    "loading": "Loading presence…",
+    "platformScopeHint": "Entire platform — by recent activity",
+    "grants": {
+      "title": "View online users",
+      "subtitle": "Enable or disable for assistant and branch managers — they see their branch only. (Separate from system permissions.)",
+      "toggleFor": "Toggle online view for {{name}}",
+      "saved": "Online view settings saved",
+      "noBranch": "User has no branch assigned — cannot enable"
+    }
+  },
   "platformHub": {
     "title": "Platform Management",
     "welcome": "Welcome, {{name}}",

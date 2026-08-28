@@ -72,6 +72,7 @@ import {
   RotateCcw,
 } from "lucide-react";
 import { toast } from "sonner";
+import { OnlinePresenceGrantsCard } from "@/components/online-presence-grants-card";
 import { useServerFn } from "@tanstack/react-start";
 import { setUserPermissions, resetUserPermissions, listBranchPermissionOverrides } from "@/lib/tasks.functions";
 import { changeUserRole } from "@/lib/employees.functions";
@@ -321,6 +322,10 @@ export function PermissionsPage() {
       (isPlatformOwner && r.role === "branch_manager"),
   );
 
+  const presenceGrantManagers = (query.data ?? []).filter((r) =>
+    ["branch_manager", "assistant_manager"].includes(r.role),
+  );
+
   const listOverridesFn = useServerFn(listBranchPermissionOverrides);
   const overridesQ = useQuery({
     enabled: allowed,
@@ -449,6 +454,10 @@ export function PermissionsPage() {
               </div>
             )}
           </section>
+        )}
+
+        {!!me?.roles.includes("system_admin") && allowed && (
+          <OnlinePresenceGrantsCard managers={presenceGrantManagers} />
         )}
       </div>
     </TooltipProvider>
