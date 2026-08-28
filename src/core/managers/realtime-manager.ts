@@ -189,6 +189,15 @@ export class RealtimeManager extends BaseManager {
       .sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime());
   }
 
+  /** Records a postgres_changes (or similar) event against an open channel — used by RealtimeBridge. */
+  recordActivity(name: string): void {
+    const record = this.records.get(name);
+    if (!record || record.closedAt) return;
+    record.channel.eventsPublished += 1;
+    record.channel.lastActivityAt = new Date();
+    record.updatedAt = new Date();
+  }
+
   /** @deprecated kept for backward compatibility — prefer `listChannels()`. */
   listChannelNames(): string[] {
     return [...this.records.keys()];

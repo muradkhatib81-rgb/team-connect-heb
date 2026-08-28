@@ -37,6 +37,7 @@ import {
 } from "@/components/ui/select";
 import { usePlatformContext } from "@/platform";
 import type { ChannelSnapshot, ChannelVisibility } from "@/core";
+import { isBridgeChannelName } from "@/lib/realtime-bridge-sync";
 
 export const Route = createFileRoute("/_authenticated/platform/realtime")({
   component: PlatformRealtimePage,
@@ -117,7 +118,12 @@ function PlatformRealtimePage() {
     onError: (e: Error) => toast.error(e.message ?? t("platformRealtime.toasts.failed")),
   });
 
-  const channels = channelsQuery.data ?? [];
+  const channels = [...(channelsQuery.data ?? [])].sort((a, b) => {
+    const aSystem = a.visibility === "system" || isBridgeChannelName(a.name);
+    const bSystem = b.visibility === "system" || isBridgeChannelName(b.name);
+    if (aSystem !== bSystem) return aSystem ? -1 : 1;
+    return b.updatedAt.getTime() - a.updatedAt.getTime();
+  });
   const openCount = channels.filter((c) => !c.closedAt).length;
 
   return (
@@ -156,7 +162,10 @@ function PlatformRealtimePage() {
           </div>
         ) : (
           <ul className="divide-y">
-            {channels.map((channel) => (
+            {channels.map((channel) => {
+              const isSystemBridge =
+                channel.visibility === "system" || isBridgeChannelName(channel.name);
+              return (
               <li key={channel.name} className="p-4 space-y-3">
                 <div className="flex flex-wrap items-start justify-between gap-2">
                   <div className="min-w-0 space-y-1">
@@ -181,6 +190,8 @@ function PlatformRealtimePage() {
                     )}
                   </div>
                   <div className="flex items-center gap-1.5 shrink-0">
+                    {!isSystemBridge && (
+                    <>
                     <Button
                       variant="ghost"
                       size="icon"
@@ -230,6 +241,8 @@ function PlatformRealtimePage() {
                     >
                       <Trash2 className="size-4" />
                     </Button>
+                    </>
+                    )}
                   </div>
                 </div>
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-center text-xs">
@@ -248,7 +261,8 @@ function PlatformRealtimePage() {
                   />
                 </div>
               </li>
-            ))}
+            );
+            })}
           </ul>
         )}
       </Card>

@@ -71,6 +71,12 @@ import {
 import { fetchCustodyUserCaps, invalidateCustodyQueries } from "@/lib/custody-workflow";
 import { invalidateShiftVisibleQueries } from "@/lib/shift-visible-rpc";
 import { notifyOwnBreakStatusTransition } from "@/lib/break-self-realtime";
+import {
+  bridgeChannelName,
+  createBridgeChannel,
+  syncBridgeChannelClose,
+  syncBridgeChannelOpen,
+} from "@/lib/realtime-bridge-sync";
 import { useAiAccess } from "@/lib/use-ai-access";
 import { bindPushToneListener } from "@/lib/alert-tone";
 import { getAttendanceCapabilities } from "@/lib/attendance.functions";
@@ -960,8 +966,11 @@ function RealtimeBridge({ uid }: { uid: string }) {
       }, 50);
     };
 
-    const channelBase = supabase
-      .channel(`global-realtime-${uid}-${activeBranchId ?? "all"}`)
+    const channelName = bridgeChannelName(uid, activeBranchId);
+    syncBridgeChannelOpen({ name: channelName, userId: uid, branchId: activeBranchId });
+    const { raw: rawBridgeChannel, channel: channelBase } = createBridgeChannel(channelName);
+
+    channelBase
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "user_roles" },
@@ -1295,7 +1304,8 @@ function RealtimeBridge({ uid }: { uid: string }) {
     return () => {
       if (scheduleBumpTimer) clearTimeout(scheduleBumpTimer);
       if (notifBumpTimer) clearTimeout(notifBumpTimer);
-      supabase.removeChannel(ch);
+      syncBridgeChannelClose(channelName);
+      void supabase.removeChannel(rawBridgeChannel);
     };
   }, [uid, qc, activeBranchId]);
   return null;

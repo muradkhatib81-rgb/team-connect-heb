@@ -2079,10 +2079,10 @@
   },
   "platformRealtime": {
     "title": "إدارة Real-Time",
-    "subtitle": "قنوات Real-Time على مستوى المنصة — عبر مدير Realtime الحالي. بدون مزود Realtime خارجي.",
+    "subtitle": "جسر Supabase RealtimeBridge التشغيلي يُسجَّل هنا تلقائياً أثناء استخدام التطبيق. قنوات الاختبار اليدوية ما زالت متاحة للجلسة الحالية.",
     "openChannel": "فتح قناة",
     "channelsHeader": "قنوات ({{count}}) · مفتوحة: {{open}}",
-    "noChannels": "لا توجد قنوات بعد في الجلسة الحالية. يمكن فتح قناة جديدة من الزر أعلاه.",
+    "noChannels": "لا توجد قنوات في هذه الجلسة بعد. يظهر RealtimeBridge تلقائياً عند تفعيل shell التطبيق، أو افتح قناة اختبار يدوية من الزر أعلاه.",
     "visibility": {
       "public": "عام",
       "private": "خاص",

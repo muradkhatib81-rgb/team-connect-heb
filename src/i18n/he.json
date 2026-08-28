@@ -2079,10 +2079,10 @@
   },
   "platformRealtime": {
     "title": "ניהול Real-Time",
-    "subtitle": "ערוצי Real-Time בהיקף הפלטפורמה — דרך ה-Realtime Manager הקיים. ללא ספק Realtime חיצוני מחובר.",
+    "subtitle": "גשר Supabase RealtimeBridge התפעולי נרשם כאן אוטומטית בזמן שימוש באפליקציה. ערוצי בדיקה ידניים עדיין זמינים לסשן הנוכחי.",
     "openChannel": "פתיחת ערוץ",
     "channelsHeader": "ערוצים ({{count}}) · פתוחים: {{open}}",
-    "noChannels": "אין ערוצים עדיין בסשן הנוכחי. ניתן לפתוח ערוץ חדש מהכפתור מעלה.",
+    "noChannels": "אין ערוצים בסשן זה עדיין. RealtimeBridge יופיע אוטומטית כשמעטפת האפליקציה פעילה, או פתחו ערוץ בדיקה ידני למעלה.",
     "visibility": {
       "public": "ציבורי",
       "private": "פרטי",

@@ -2079,10 +2079,10 @@
   },
   "platformRealtime": {
     "title": "Real-Time Management",
-    "subtitle": "Platform-scoped Real-Time channels — via the existing Realtime Manager. No external Realtime provider connected.",
+    "subtitle": "The operational Supabase RealtimeBridge registers here automatically while you use the app. Manual test channels remain available for the current session.",
     "openChannel": "Open channel",
     "channelsHeader": "Channels ({{count}}) · open: {{open}}",
-    "noChannels": "No channels yet in the current session. Open a new channel using the button above.",
+    "noChannels": "No channels in this session yet. The RealtimeBridge appears automatically once the app shell is active, or open a manual test channel above.",
     "visibility": {
       "public": "Public",
       "private": "Private",
