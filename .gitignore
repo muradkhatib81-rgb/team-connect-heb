@@ -40,3 +40,10 @@ android/app/google-services.json
 *.njsproj
 *.sln
 *.sw?
+
+# Local i18n temp scripts and build logs
+.tmp-*
+build-error.txt
+build2.txt
+build-check.txt
+supabase/.temp/
