@@ -1,11 +1,20 @@
-// Hebrew (RTL) date/time formatting helpers, locked to he-IL + Asia/Jerusalem.
+// Date/time formatting helpers locked to Asia/Jerusalem; locale follows active app language.
+import i18n from "@/i18n";
+
 const TZ = "Asia/Jerusalem";
+
+function intlLocale(): string {
+  const lang = i18n.language?.split("-")[0];
+  if (lang === "ar") return "ar";
+  if (lang === "en") return "en";
+  return "he-IL";
+}
 
 export function formatHeDateTime(value: string | Date | null | undefined): string {
   if (!value) return "—";
   const d = typeof value === "string" ? new Date(value) : value;
   if (isNaN(d.getTime())) return "—";
-  return new Intl.DateTimeFormat("he-IL", {
+  return new Intl.DateTimeFormat(intlLocale(), {
     timeZone: TZ,
     dateStyle: "short",
     timeStyle: "short",
@@ -18,7 +27,7 @@ export function formatHeDate(value: string | Date | null | undefined): string {
   if (!value) return "—";
   const d = typeof value === "string" ? new Date(value) : value;
   if (isNaN(d.getTime())) return "—";
-  return new Intl.DateTimeFormat("he-IL", {
+  return new Intl.DateTimeFormat(intlLocale(), {
     timeZone: TZ,
     dateStyle: "short",
     numberingSystem: "latn",
@@ -31,7 +40,7 @@ export function formatHeTime(value: string | Date | null | undefined): string {
   if (!value) return "—";
   const d = typeof value === "string" ? new Date(value) : value;
   if (isNaN(d.getTime())) return "—";
-  return new Intl.DateTimeFormat("he-IL", {
+  return new Intl.DateTimeFormat(intlLocale(), {
     timeZone: TZ,
     hour: "2-digit",
     minute: "2-digit",

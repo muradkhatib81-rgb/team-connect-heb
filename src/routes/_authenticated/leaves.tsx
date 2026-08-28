@@ -8,7 +8,6 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/use-auth";
 import i18n from "@/i18n";
 import {
-  LEAVE_STATUS_LABEL,
   LEAVE_STATUS_TONE,
   listLeaveTypes,
   registerLeaveAttachment,

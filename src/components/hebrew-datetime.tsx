@@ -1,6 +1,6 @@
 import { useTranslation } from "react-i18next";
 import { useMemo, useState } from "react";
-import { he } from "date-fns/locale";
+import { he, ar, enUS } from "date-fns/locale";
 import { Calendar as CalendarIcon, Clock } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
@@ -31,6 +31,17 @@ function fromYmd(s: string): Date | undefined {
   return new Date(y, m - 1, d);
 }
 
+function calendarLocale(language: string) {
+  const lang = language.split("-")[0];
+  if (lang === "ar") return ar;
+  if (lang === "en") return enUS;
+  return he;
+}
+
+function uiDir(language: string): "rtl" | "ltr" {
+  return language.split("-")[0] === "en" ? "ltr" : "rtl";
+}
+
 export function HebrewDateInput({
   value,
   onChange,
@@ -50,36 +61,39 @@ export function HebrewDateInput({
   max?: string;
   disabled?: boolean;
 }) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const datePlaceholder = placeholder ?? t("libErrors.datetime.pickDate");
   const [open, setOpen] = useState(false);
   const selected = useMemo(() => fromYmd(value), [value]);
   const minDate = useMemo(() => fromYmd(min ?? ""), [min]);
   const maxDate = useMemo(() => fromYmd(max ?? ""), [max]);
+  const dir = uiDir(i18n.language);
+  const locale = calendarLocale(i18n.language);
   return (
     <Popover open={disabled ? false : open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
         <Button
           type="button"
           variant="outline"
-          dir="rtl"
-          lang="he"
+          dir={dir}
+          lang={i18n.language.split("-")[0]}
           disabled={disabled}
           className={cn(
-            "w-full justify-start text-right font-normal",
+            "w-full justify-start font-normal",
+            dir === "rtl" ? "text-right" : "text-left",
             !selected && "text-muted-foreground",
             className,
           )}
         >
-          <CalendarIcon className="ms-0 me-2 size-4 opacity-70" />
+          <CalendarIcon className={cn("size-4 opacity-70", dir === "rtl" ? "ms-0 me-2" : "me-0 ms-2")} />
           {selected ? formatHeDate(selected) : datePlaceholder}
         </Button>
       </PopoverTrigger>
-      <PopoverContent className="w-auto p-0" align="start" dir="rtl">
+      <PopoverContent className="w-auto p-0" align="start" dir={dir}>
         <Calendar
           mode="single"
-          locale={he}
-          dir="rtl"
+          locale={locale}
+          dir={dir}
           selected={selected}
           disabled={(day) => {
             const ymd = toLocalYmd(day);
@@ -114,7 +128,7 @@ export function HebrewTimeInput({
   minuteStep?: number;
   className?: string;
 }) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const [hh, mm] = (value || "").split(":");
   const hours = Array.from({ length: 24 }, (_, i) => String(i).padStart(2, "0"));
   const minutes = Array.from({ length: Math.floor(60 / minuteStep) }, (_, i) =>
@@ -128,7 +142,7 @@ export function HebrewTimeInput({
         value={hh || ""}
         onValueChange={(h) => setPart(h, mm || "00")}
       >
-        <SelectTrigger lang="he" className="w-[5rem] text-center">
+        <SelectTrigger lang={i18n.language.split("-")[0]} className="w-[5rem] text-center">
           <SelectValue placeholder={t("libErrors.datetime.hour")} />
         </SelectTrigger>
         <SelectContent className="max-h-60">
@@ -142,7 +156,7 @@ export function HebrewTimeInput({
         value={mm || ""}
         onValueChange={(m) => setPart(hh || "00", m)}
       >
-        <SelectTrigger lang="he" className="w-[5rem] text-center">
+        <SelectTrigger lang={i18n.language.split("-")[0]} className="w-[5rem] text-center">
           <SelectValue placeholder={t("libErrors.datetime.minute")} />
         </SelectTrigger>
         <SelectContent className="max-h-60">

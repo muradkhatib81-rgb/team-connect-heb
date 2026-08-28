@@ -48,7 +48,7 @@ export class OpenAiProvider implements AiProviderAdapter {
     return {
       providerCode: "openai",
       model,
-      text: json.choices?.[0]?.message?.content?.trim() || "לא התקבלה תשובה מהמודל.",
+      text: json.choices?.[0]?.message?.content?.trim() || "",
       inputTokens: json.usage?.prompt_tokens ?? 0,
       outputTokens: json.usage?.completion_tokens ?? 0,
       durationMs: Date.now() - started,

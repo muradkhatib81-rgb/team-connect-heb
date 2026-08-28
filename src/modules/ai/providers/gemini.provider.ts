@@ -191,7 +191,7 @@ export class GeminiProvider implements AiProviderAdapter {
     return {
       providerCode: "gemini",
       model,
-      text: text || "לא התקבלה תשובה מהמודל.",
+      text: text || "",
       inputTokens,
       outputTokens,
       durationMs: Date.now() - started,

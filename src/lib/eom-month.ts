@@ -45,8 +45,16 @@ export function buildRolling12MonthSlots(
   return slots;
 }
 
+export function getEomMonthNames(): string[] {
+  const months = i18n.t("libErrors.eom.months", { returnObjects: true });
+  return Array.isArray(months) ? months : [];
+}
+
+export function getEomMonthName(month: number): string {
+  const months = getEomMonthNames();
+  return months[month - 1] ?? String(month);
+}
+
 export function formatEomMonthLabel(year: number, month: number): string {
-  const months = i18n.t("libErrors.eom.months", { returnObjects: true }) as string[];
-  const monthName = Array.isArray(months) ? months[month - 1] ?? String(month) : String(month);
-  return `${monthName} ${year}`;
+  return `${getEomMonthName(month)} ${year}`;
 }

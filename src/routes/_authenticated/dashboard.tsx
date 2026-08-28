@@ -39,7 +39,6 @@ import { useAuth } from "@/lib/use-auth";
 import {
   ROLE_LABELS,
   getRoleLabel,
-  DEPARTMENT_LABELS,
   highestRole,
   isAdmin,
   isPlatformOwner,
@@ -73,7 +72,6 @@ import {
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
 import { useLeaveAccess } from "@/lib/leave-permissions";
-import { LEAVE_STATUS_LABEL } from "@/lib/leave.functions";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { EmployeeOfMonthSection } from "@/components/employee-of-month-section";
 import { DailySchedulePeriodCards } from "@/components/daily-schedule-period-cards";
@@ -97,7 +95,7 @@ import { LiveShiftCardsSection } from "@/components/live-shift-cards";
 import {
   BREAK_PENDING_APPROVAL_STATUSES,
   BREAK_PRE_ACTIVE_STATUSES,
-  BREAK_STATUS_LABEL,
+  getBreakStatusLabel,
   BREAK_STATUS_TONE,
   pickActiveBreak,
   pickPrimaryBreak,
@@ -1004,7 +1002,7 @@ function DeptHeadOnBreakSection() {
                 <SelectItem value="__all">{i18n.t("dashboard.allStatuses")}</SelectItem>
                 {statuses.map((s) => (
                   <SelectItem key={s} value={s}>
-                    {BREAK_STATUS_LABEL[s] ?? s}
+                    {getBreakStatusLabel(s)}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -1052,7 +1050,7 @@ function DeptHeadOnBreakSection() {
                       </Badge>
                     ) : (
                       <Badge variant={BREAK_STATUS_TONE[r.status] ?? "secondary"}>
-                        {BREAK_STATUS_LABEL[r.status] ?? r.status}
+                        {getBreakStatusLabel(r.status)}
                       </Badge>
                     );
                     return (
@@ -3005,7 +3003,7 @@ function DashboardUpcomingBreakCard({ row }: { row: DashboardBreakRow }) {
         <div className="flex-1 min-w-0 space-y-3">
           <div className="flex flex-wrap items-center gap-2">
             <h3 className="font-semibold">{i18n.t("dashboard.nextBreak")}</h3>
-            <Badge variant="secondary">{BREAK_STATUS_LABEL[row.status] ?? row.status}</Badge>
+            <Badge variant="secondary">{getBreakStatusLabel(row.status)}</Badge>
             <span className="text-sm text-muted-foreground">
               ☕ {row.setting_name} · {fmtMinutesCount(row.duration_minutes)}
             </span>
@@ -3760,7 +3758,6 @@ function OnBreakSection({ profile }: { profile: any }) {
         }).format(new Date(iso))
       : "—";
 
-  const STATUS_LABEL = BREAK_STATUS_LABEL;
   const STATUS_TONE = BREAK_STATUS_TONE;
 
 
@@ -4043,7 +4040,7 @@ function OnBreakSection({ profile }: { profile: any }) {
                     <SelectContent>
                       <SelectItem value="__all">{i18n.t("dashboard.allStatuses")}</SelectItem>
                       {statuses.map((s) => (
-                        <SelectItem key={s} value={s}>{STATUS_LABEL[s] ?? s}</SelectItem>
+                        <SelectItem key={s} value={s}>{getBreakStatusLabel(s)}</SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
@@ -4108,7 +4105,7 @@ function OnBreakSection({ profile }: { profile: any }) {
                             <Badge className="bg-red-600 text-white hover:bg-red-600">{i18n.t("dashboard.returnedLateIcon")}</Badge>
                           ) : (
                             <Badge variant={STATUS_TONE[r.status] ?? "secondary"}>
-                              {STATUS_LABEL[r.status] ?? r.status}
+                              {getBreakStatusLabel(r.status)}
                             </Badge>
                           );
                           const rowTone = isOnTime

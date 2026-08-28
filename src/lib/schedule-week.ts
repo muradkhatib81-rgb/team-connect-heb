@@ -37,7 +37,9 @@ export function getScheduleDayNames(): string[] {
 export type ScheduleShiftCode = "morning" | "evening" | "off";
 
 export function formatScheduleDayHe(iso: string) {
-  return new Intl.DateTimeFormat("he-IL", {
+  const lang = i18n.language?.split("-")[0];
+  const locale = lang === "ar" ? "ar" : lang === "en" ? "en" : "he-IL";
+  return new Intl.DateTimeFormat(locale, {
     timeZone: "Asia/Jerusalem",
     day: "2-digit",
     month: "2-digit",

@@ -12,8 +12,8 @@ import {
   DEFAULT_HIGHLIGHT_STYLE,
   FONT_SIZE_CLASS,
   PRIORITY_BADGE_CLASS,
-  PRIORITY_LABEL,
   RADIUS_CLASS,
+  getMorningBoardPriorityLabel,
   type MorningBoardItem,
   type MorningBoardStyle,
 } from "@/lib/morning-board-types";
@@ -234,7 +234,7 @@ function PriorityBadge({ priority }: { priority: MorningBoardItem["priority"] })
   if (priority === "normal") return null;
   return (
     <span className={`text-[11px] px-2 py-0.5 rounded-full font-medium ${PRIORITY_BADGE_CLASS[priority]}`}>
-      {PRIORITY_LABEL[priority]}
+      {getMorningBoardPriorityLabel(priority)}
     </span>
   );
 }

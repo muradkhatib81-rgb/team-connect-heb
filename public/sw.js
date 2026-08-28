@@ -22,13 +22,34 @@ self.addEventListener("activate", (event) => {
 
 self.addEventListener("fetch", () => {});
 
+const PUSH_FALLBACK_BY_LANG = {
+  he: { title: "מערכת ניהול עובדים", body: "יש עדכון חדש" },
+  ar: { title: "نظام إدارة الموظفين", body: "يوجد تحديث جديد" },
+  en: { title: "Employee Management System", body: "New update" },
+};
+
+function readAppLanguage() {
+  try {
+    const stored = localStorage.getItem("app_language");
+    if (stored === "he" || stored === "ar" || stored === "en") return stored;
+  } catch {
+    /* ignore */
+  }
+  return "he";
+}
+
+function pushFallback() {
+  return PUSH_FALLBACK_BY_LANG[readAppLanguage()] ?? PUSH_FALLBACK_BY_LANG.he;
+}
+
 function parsePushPayload(event) {
   if (!event.data) return null;
   try {
     return event.data.json();
   } catch {
     const text = event.data.text();
-    return text ? { title: "מערכת ניהול עובדים", body: text, url: "/dashboard" } : null;
+    const fb = pushFallback();
+    return text ? { title: fb.title, body: text, url: "/dashboard" } : null;
   }
 }
 
@@ -63,13 +84,14 @@ async function askOpenClientsToPlayTone(tone) {
 }
 
 self.addEventListener("push", (event) => {
+  const fb = pushFallback();
   const data = parsePushPayload(event) ?? {
-    title: "מערכת ניהול עובדים",
-    body: "יש עדכון חדש",
+    title: fb.title,
+    body: fb.body,
     url: "/dashboard",
   };
 
-  const title = data.title || "מערכת ניהול עובדים";
+  const title = data.title || fb.title;
   const body = data.body || "";
   const url = data.url || "/dashboard";
   const tag =

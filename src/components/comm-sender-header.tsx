@@ -1,4 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
+import { useTranslation } from "react-i18next";
 import { supabase } from "@/integrations/supabase/client";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { ROLE_LABELS, type AppRole } from "@/lib/constants";
@@ -13,9 +14,20 @@ interface SenderInfo {
   top_role: AppRole | null;
 }
 
-function formatDate(iso: string) {
+function intlLocale(language: string) {
+  const lang = language.split("-")[0];
+  if (lang === "ar") return "ar";
+  if (lang === "en") return "en";
+  return "he-IL";
+}
+
+function uiDir(language: string): "rtl" | "ltr" {
+  return language.split("-")[0] === "en" ? "ltr" : "rtl";
+}
+
+function formatDate(iso: string, language: string) {
   try {
-    return new Date(iso).toLocaleDateString("he-IL", {
+    return new Date(iso).toLocaleDateString(intlLocale(language), {
       day: "2-digit",
       month: "2-digit",
       year: "numeric",
@@ -24,9 +36,10 @@ function formatDate(iso: string) {
     return "—";
   }
 }
-function formatTime(iso: string) {
+
+function formatTime(iso: string, language: string) {
   try {
-    return new Date(iso).toLocaleTimeString("he-IL", {
+    return new Date(iso).toLocaleTimeString(intlLocale(language), {
       hour: "2-digit",
       minute: "2-digit",
     });
@@ -42,6 +55,7 @@ export function CommSenderHeader({
   senderId: string;
   sentAt: string;
 }) {
+  const { i18n } = useTranslation();
   const q = useQuery({
     queryKey: ["comm-sender", senderId],
     enabled: !!senderId,
@@ -69,7 +83,10 @@ export function CommSenderHeader({
       : "?";
 
   return (
-    <div className="flex items-start gap-3 rounded-lg border bg-muted/40 p-3" dir="rtl">
+    <div
+      className="flex items-start gap-3 rounded-lg border bg-muted/40 p-3"
+      dir={uiDir(i18n.language)}
+    >
       <Avatar className="size-12 shrink-0">
         {s?.avatar_url ? <AvatarImage src={s.avatar_url} alt={name} /> : null}
         <AvatarFallback>{initials}</AvatarFallback>
@@ -88,10 +105,10 @@ export function CommSenderHeader({
             <Building2 className="size-3.5" /> {s?.department_name ?? "—"}
           </span>
           <span className="inline-flex items-center gap-1">
-            <Calendar className="size-3.5" /> {formatDate(sentAt)}
+            <Calendar className="size-3.5" /> {formatDate(sentAt, i18n.language)}
           </span>
           <span className="inline-flex items-center gap-1">
-            <Clock className="size-3.5" /> {formatTime(sentAt)}
+            <Clock className="size-3.5" /> {formatTime(sentAt, i18n.language)}
           </span>
         </div>
       </div>

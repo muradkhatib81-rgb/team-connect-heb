@@ -10,7 +10,8 @@ import {
   buildRolling12MonthSlots,
   eomMonthKey,
   formatEomMonthLabel,
-  HEBREW_MONTHS,
+  getEomMonthNames,
+  getEomMonthName,
 } from "@/lib/eom-month";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -221,7 +222,7 @@ function EomManagePage() {
             <Select value={String(month)} onValueChange={(v) => setMonth(Number(v))}>
               <SelectTrigger className="w-40"><SelectValue /></SelectTrigger>
               <SelectContent>
-                {HEBREW_MONTHS.map((m, i) => (
+                {getEomMonthNames().map((m, i) => (
                   <SelectItem key={i} value={String(i + 1)}>{m}</SelectItem>
                 ))}
               </SelectContent>
@@ -245,7 +246,7 @@ function EomManagePage() {
         <h2 className="text-lg font-semibold mb-3">
           {listCount >= 2 ? t("employeeOfMonthPage.employeesOfMonth") : t("employeeOfMonthPage.employeeOfMonth")}
           <span className="text-sm font-normal text-muted-foreground mr-2">
-            {t("employeeOfMonthPage.monthYear", { month: HEBREW_MONTHS[month - 1], year })}
+            {t("employeeOfMonthPage.monthYear", { month: getEomMonthName(month), year })}
           </span>
         </h2>
         {monthQ.isLoading ? (

@@ -80,6 +80,10 @@ export const sendAiMessage = createServerFn({ method: "POST" })
       messages,
     });
 
+    if (!response.text.trim()) {
+      throw new Error(aiErrorCode("emptyResponse"));
+    }
+
     const minutes = estimateMinutes(response.durationMs, response.inputTokens, response.outputTokens);
 
     const { error: consumeErr } = await context.supabase.rpc("consume_ai_minutes", {
