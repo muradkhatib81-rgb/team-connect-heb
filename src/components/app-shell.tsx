@@ -958,7 +958,7 @@ function RealtimeBridge({ uid }: { uid: string }) {
       }, 50);
     };
 
-    const ch = supabase
+    const channelBase = supabase
       .channel(`global-realtime-${uid}-${activeBranchId ?? "all"}`)
       .on(
         "postgres_changes",
@@ -1019,6 +1019,7 @@ function RealtimeBridge({ uid }: { uid: string }) {
         qc.invalidateQueries({ queryKey: ["job-titles"] });
         qc.invalidateQueries({ queryKey: ["employees"] });
         qc.invalidateQueries({ queryKey: ["dashboard", "stats"] });
+        qc.invalidateQueries({ queryKey: ["can-request-break"] });
       })
       .on("postgres_changes", { event: "*", schema: "public", table: "task_assignees" }, () =>
         qc.invalidateQueries({ queryKey: ["tasks"] }),
@@ -1055,13 +1056,16 @@ function RealtimeBridge({ uid }: { uid: string }) {
       .on("postgres_changes", { event: "*", schema: "public", table: "break_requests" }, () => {
         qc.invalidateQueries({ queryKey: ["breaks"] });
         qc.invalidateQueries({ queryKey: ["breaks-admin"] });
+        qc.invalidateQueries({ queryKey: ["all-break-requests"] });
         qc.invalidateQueries({ queryKey: ["dashboard-breaks"] });
         qc.invalidateQueries({ queryKey: ["break-stats"] });
+        qc.invalidateQueries({ queryKey: ["employees-page-active-breaks"] });
         // Prefer specific keys — avoid prefix ["dashboard"] which also refetches admin headcount.
         qc.invalidateQueries({ queryKey: ["dashboard", "stats"] });
         qc.invalidateQueries({ queryKey: ["my-active-break"] });
         qc.invalidateQueries({ queryKey: ["my-break-shortcut"] });
         qc.invalidateQueries({ queryKey: ["my-breaks-today"] });
+        qc.invalidateQueries({ queryKey: ["my-break-requests"] });
         qc.invalidateQueries({ queryKey: ["dashboard-on-break"] });
         qc.invalidateQueries({ queryKey: ["dashboard-dept-on-break"] });
         qc.invalidateQueries({ queryKey: ["dashboard-pending-breaks"] });
@@ -1069,9 +1073,15 @@ function RealtimeBridge({ uid }: { uid: string }) {
         qc.invalidateQueries({ queryKey: ["dashboard-dept-daily-breaks"] });
         qc.invalidateQueries({ queryKey: ["dashboard-daily-breaks-count"] });
       })
-      .on("postgres_changes", { event: "*", schema: "public", table: "break_settings" }, () =>
-        qc.invalidateQueries({ queryKey: ["break-settings"] }),
-      )
+      .on("postgres_changes", { event: "*", schema: "public", table: "break_settings" }, () => {
+        qc.invalidateQueries({ queryKey: ["break-settings"] });
+        qc.invalidateQueries({ queryKey: ["break-settings-active"] });
+      })
+      .on("postgres_changes", { event: "*", schema: "public", table: "break_policy" }, () => {
+        qc.invalidateQueries({ queryKey: ["break-policy"] });
+        qc.invalidateQueries({ queryKey: ["break-policy-effective"] });
+        qc.invalidateQueries({ queryKey: ["can-request-break"] });
+      })
       .on("postgres_changes", { event: "*", schema: "public", table: "leave_requests" }, () => {
         qc.invalidateQueries({ queryKey: ["my-leave-requests"] });
         qc.invalidateQueries({ queryKey: ["leave-admin-requests"] });
@@ -1100,18 +1110,21 @@ function RealtimeBridge({ uid }: { uid: string }) {
       )
       .on("postgres_changes", { event: "*", schema: "public", table: "messages" }, () => {
         qc.invalidateQueries({ queryKey: ["communications"] });
+        qc.invalidateQueries({ queryKey: ["comm"] });
         qc.invalidateQueries({ queryKey: ["shell-comm-unread", uid] });
         qc.invalidateQueries({ queryKey: ["notif", "messages"] });
         qc.invalidateQueries({ queryKey: ["emp-dash-msgs"] });
       })
       .on("postgres_changes", { event: "*", schema: "public", table: "message_recipients" }, () => {
         qc.invalidateQueries({ queryKey: ["communications"] });
+        qc.invalidateQueries({ queryKey: ["comm"] });
         qc.invalidateQueries({ queryKey: ["shell-comm-unread", uid] });
         qc.invalidateQueries({ queryKey: ["notif", "messages"] });
         qc.invalidateQueries({ queryKey: ["emp-dash-msgs"] });
       })
       .on("postgres_changes", { event: "*", schema: "public", table: "message_targets" }, () => {
         qc.invalidateQueries({ queryKey: ["communications"] });
+        qc.invalidateQueries({ queryKey: ["comm"] });
         qc.invalidateQueries({ queryKey: ["emp-dash-msgs"] });
       })
       .on(
@@ -1134,10 +1147,27 @@ function RealtimeBridge({ uid }: { uid: string }) {
       .on("postgres_changes", { event: "*", schema: "public", table: "company_settings" }, () =>
         qc.invalidateQueries({ queryKey: ["company-settings"] }),
       )
-      .on("postgres_changes", { event: "*", schema: "public", table: "employee_of_month" }, () =>
-        qc.invalidateQueries({ queryKey: ["employee-of-month"] }),
-      )
-      .subscribe();
+      .on("postgres_changes", { event: "*", schema: "public", table: "employee_of_month" }, () => {
+        qc.invalidateQueries({ queryKey: ["employee-of-month"] });
+        qc.invalidateQueries({ queryKey: ["eom", "current"] });
+      });
+
+    const ch = activeBranchId
+      ? channelBase.on(
+          "postgres_changes",
+          {
+            event: "*",
+            schema: "public",
+            table: "morning_board_items",
+            filter: `branch_id=eq.${activeBranchId}`,
+          },
+          () => {
+            qc.invalidateQueries({ queryKey: ["morning-board", activeBranchId] });
+          },
+        )
+      : channelBase;
+
+    ch.subscribe();
     return () => {
       if (scheduleBumpTimer) clearTimeout(scheduleBumpTimer);
       if (notifBumpTimer) clearTimeout(notifBumpTimer);

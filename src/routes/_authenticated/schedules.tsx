@@ -868,51 +868,6 @@ function SchedulesPage() {
     },
   });
 
-  useEffect(() => {
-    if (!selectedDept || view !== "editor") return;
-    const ch = supabase
-      .channel(`schedules-dept-flags-${selectedDept}-${periodWeekStart}`)
-      .on("postgres_changes", { event: "*", schema: "public", table: "schedules" }, () => {
-        qc.invalidateQueries({ queryKey: ["dept-schedule-flags", selectedDept, periodWeekStart] });
-        qc.invalidateQueries({ queryKey: ["schedule", selectedDept, periodWeekStart] });
-        qc.invalidateQueries({ queryKey: ["schedules-branch-saved"] });
-      })
-      .on("postgres_changes", { event: "*", schema: "public", table: "schedule_shifts" }, () => {
-        qc.invalidateQueries({ queryKey: ["dept-schedule-flags", selectedDept, periodWeekStart] });
-        qc.invalidateQueries({ queryKey: ["schedule", selectedDept, periodWeekStart] });
-        qc.invalidateQueries({ queryKey: ["schedule-shifts"] });
-        qc.invalidateQueries({ queryKey: ["schedules-branch-saved"] });
-        qc.invalidateQueries({ queryKey: ["schedules-week-saved"] });
-      })
-      .subscribe();
-    return () => {
-      supabase.removeChannel(ch);
-    };
-  }, [selectedDept, periodWeekStart, view, qc]);
-
-  useEffect(() => {
-    if (!me?.id || isEmployee) return;
-    const ch = supabase
-      .channel(`schedules-branch-${me.id}`)
-      .on("postgres_changes", { event: "*", schema: "public", table: "schedules" }, () => {
-        qc.invalidateQueries({ queryKey: ["schedules-branch-saved"] });
-        qc.invalidateQueries({ queryKey: ["schedules-week-saved"] });
-        qc.invalidateQueries({ queryKey: ["branch-period-shifts"] });
-        qc.invalidateQueries({ queryKey: ["schedules-pending"] });
-        qc.invalidateQueries({ queryKey: ["schedules-approved"] });
-        qc.invalidateQueries({ queryKey: ["week-schedules"] });
-      })
-      .on("postgres_changes", { event: "*", schema: "public", table: "schedule_shifts" }, () => {
-        qc.invalidateQueries({ queryKey: ["schedules-branch-saved"] });
-        qc.invalidateQueries({ queryKey: ["schedules-week-saved"] });
-        qc.invalidateQueries({ queryKey: ["branch-period-shifts"] });
-      })
-      .subscribe();
-    return () => {
-      supabase.removeChannel(ch);
-    };
-  }, [me?.id, isEmployee, qc]);
-
   // Creator / Editor / Approver details for the visible schedule.
   const decisionPersonQ = useQuery({
     enabled: !!schedQ.data,

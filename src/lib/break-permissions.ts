@@ -1,5 +1,4 @@
-import { useEffect } from "react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/use-auth";
 
@@ -77,7 +76,6 @@ export const breakPolicyEffectiveQueryKey = (userId: string | null) =>
 export function useBreakRequiresApproval() {
   const { data: profile } = useAuth();
   const userId = profile?.id ?? null;
-  const queryClient = useQueryClient();
 
   const q = useQuery({
     enabled: !!userId,
@@ -90,27 +88,6 @@ export function useBreakRequiresApproval() {
     staleTime: 30_000,
     retry: false,
   });
-
-  useEffect(() => {
-    if (!userId) return;
-
-    const channel = supabase
-      .channel(`break-policy-effective-${userId}`)
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "break_policy" },
-        () => {
-          queryClient.invalidateQueries({
-            queryKey: breakPolicyEffectiveQueryKey(userId),
-          });
-        },
-      )
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, [queryClient, userId]);
 
   // Default to requiring approval until the policy loads (matches DB fallback).
   const requiresApproval = q.isLoading

@@ -165,27 +165,6 @@ function CommunicationsPage() {
     (branchAdmin || !!p.can_view_read_receipts || !!p.can_manage_communications);
   const canSeeSent = canSendMsg || canManage;
 
-  // Realtime subscriptions (messages only — announcements module removed)
-  useEffect(() => {
-    if (!userId) return;
-    const ch = supabase
-      .channel(`comms-${userId}`)
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "messages" },
-        () => qc.invalidateQueries({ queryKey: ["comm"] }),
-      )
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "message_recipients", filter: `user_id=eq.${userId}` },
-        () => qc.invalidateQueries({ queryKey: ["comm"] }),
-      )
-      .subscribe();
-    return () => {
-      supabase.removeChannel(ch);
-    };
-  }, [userId, qc]);
-
   const search = Route.useSearch();
   const navigate = useNavigate();
   const initialTab: "inbox" | "sent" | "archive" =

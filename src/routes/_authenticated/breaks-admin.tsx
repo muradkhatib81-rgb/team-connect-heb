@@ -112,31 +112,6 @@ function BreaksAdminPage() {
     },
   });
 
-  useEffect(() => {
-    if (!isBreaksManager) return;
-    const ch = supabase
-      .channel("breaks-admin-rt")
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "break_requests" },
-        () => {
-          qc.invalidateQueries({ queryKey: ["all-break-requests"] });
-          qc.invalidateQueries({ queryKey: ["dashboard-on-break"] });
-          qc.invalidateQueries({ queryKey: ["dashboard-pending-breaks"] });
-          qc.invalidateQueries({ queryKey: ["dashboard-daily-breaks"] });
-        },
-      )
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "break_settings" },
-        () => qc.invalidateQueries({ queryKey: ["break-settings-active"] }),
-      )
-      .subscribe();
-    return () => {
-      supabase.removeChannel(ch);
-    };
-  }, [qc, isBreaksManager]);
-
   if (!me) return null;
   if (!isBreaksManager) {
     return (

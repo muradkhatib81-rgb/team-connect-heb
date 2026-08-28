@@ -105,23 +105,6 @@ export function BreakPolicySettingsCard() {
     if (q.data) setForm(q.data);
   }, [q.data]);
 
-  useEffect(() => {
-    const ch = supabase
-      .channel("break-policy-rt")
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "break_policy" },
-        () => {
-          qc.invalidateQueries({ queryKey: ["break-policy"] });
-          qc.invalidateQueries({ queryKey: ["break-policy-effective"] });
-        },
-      )
-      .subscribe();
-    return () => {
-      supabase.removeChannel(ch);
-    };
-  }, [qc]);
-
   const saveMut = useMutation({
     mutationFn: async (v: PolicyRow) => {
       const payload = {

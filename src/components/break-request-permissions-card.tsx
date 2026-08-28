@@ -1,4 +1,3 @@
-import { useEffect } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Loader2, KeyRound } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
@@ -10,21 +9,8 @@ import { useTranslation } from "react-i18next";
 
 export function BreakRequestPermissionsCard() {
   const { t } = useTranslation();
+  const qc = useQueryClient();
   const titlesQ = useJobTitles();
-
-  useEffect(() => {
-    const ch = supabase
-      .channel("break-perm-job-titles")
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "job_titles" },
-        () => qc.invalidateQueries({ queryKey: ["job-titles"] }),
-      )
-      .subscribe();
-    return () => {
-      supabase.removeChannel(ch);
-    };
-  }, [qc]);
 
   const mut = useMutation({
     mutationFn: async ({ id, value }: { id: string; value: boolean }) => {

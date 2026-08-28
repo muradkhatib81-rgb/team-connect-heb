@@ -371,29 +371,6 @@ function EmployeesPage() {
   });
   const onBreakSet = useMemo(() => new Set(activeBreaksQ.data ?? []), [activeBreaksQ.data]);
 
-  // Realtime: refresh stats when profiles, roles, departments, or breaks change
-  useEffect(() => {
-    if (!allowed) return;
-    const ch = supabase
-      .channel("employees-page-realtime")
-      .on("postgres_changes", { event: "*", schema: "public", table: "profiles" }, () => {
-        qcPage.invalidateQueries({ queryKey: ["employees"] });
-      })
-      .on("postgres_changes", { event: "*", schema: "public", table: "user_roles" }, () => {
-        qcPage.invalidateQueries({ queryKey: ["all-roles"] });
-      })
-      .on("postgres_changes", { event: "*", schema: "public", table: "departments" }, () => {
-        qcPage.invalidateQueries({ queryKey: ["departments", "options"] });
-      })
-      .on("postgres_changes", { event: "*", schema: "public", table: "break_requests" }, () => {
-        qcPage.invalidateQueries({ queryKey: ["employees-page-active-breaks"] });
-      })
-      .subscribe();
-    return () => {
-      supabase.removeChannel(ch);
-    };
-  }, [allowed, qcPage]);
-
   const rolesMap = rolesQuery.data ?? {};
   const isManagerRole = (uid: string) => isOrgManagerRole(rolesMap[uid] ?? []);
 

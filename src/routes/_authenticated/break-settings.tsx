@@ -70,20 +70,6 @@ export function BreakSettingsPage() {
     },
   });
 
-  useEffect(() => {
-    const ch = supabase
-      .channel("break-settings-rt")
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "break_settings" },
-        () => qc.invalidateQueries({ queryKey: ["break-settings"] }),
-      )
-      .subscribe();
-    return () => {
-      supabase.removeChannel(ch);
-    };
-  }, [qc]);
-
   const [editing, setEditing] = useState<BreakRow | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<BreakRow | null>(null);

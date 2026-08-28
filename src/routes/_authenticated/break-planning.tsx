@@ -147,26 +147,6 @@ function BreakPlanningPage() {
     isActive: !!activeBreak,
   });
 
-  useEffect(() => {
-    if (!me?.id) return;
-    const ch = supabase
-      .channel(`break-planning-rt-${me.id}`)
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "break_requests", filter: `user_id=eq.${me.id}` },
-        () => {
-          qc.invalidateQueries({ queryKey: ["my-breaks-today"] });
-          qc.invalidateQueries({ queryKey: ["my-break-requests"] });
-          qc.invalidateQueries({ queryKey: ["my-active-break"] });
-          qc.invalidateQueries({ queryKey: ["my-break-shortcut"] });
-        },
-      )
-      .subscribe();
-    return () => {
-      supabase.removeChannel(ch);
-    };
-  }, [qc, me?.id]);
-
   const policyQ = useQuery({
     enabled: !!me?.id,
     queryKey: ["break-policy-effective", me?.id],

@@ -48,18 +48,6 @@ function JobTitlesPage() {
     if (profile && !isMainAdmin) navigate({ to: "/dashboard" });
   }, [profile, isMainAdmin, navigate]);
 
-  useEffect(() => {
-    const ch = supabase
-      .channel("job-titles-page")
-      .on("postgres_changes", { event: "*", schema: "public", table: "job_titles" }, () => {
-        qc.invalidateQueries({ queryKey: ["job-titles"] });
-      })
-      .subscribe();
-    return () => {
-      supabase.removeChannel(ch);
-    };
-  }, [qc]);
-
   const delMut = useMutation({
     mutationFn: async (id: string) => {
       const { error } = await supabase.from("job_titles" as any).delete().eq("id", id);

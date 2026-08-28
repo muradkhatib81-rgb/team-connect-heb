@@ -79,26 +79,6 @@ export function MorningBoard() {
     },
   });
 
-  useEffect(() => {
-    if (!activeBranchId) return;
-    const ch = supabase
-      .channel(`morning-board-${activeBranchId}`)
-      .on(
-        "postgres_changes",
-        {
-          event: "*",
-          schema: "public",
-          table: "morning_board_items",
-          filter: `branch_id=eq.${activeBranchId}`,
-        },
-        () => qc.invalidateQueries({ queryKey: ["morning-board", activeBranchId] }),
-      )
-      .subscribe();
-    return () => {
-      supabase.removeChannel(ch);
-    };
-  }, [activeBranchId, qc]);
-
   const [nowTick, setNowTick] = useState(() => Date.now());
 
   // Schedule a precise re-render at the next start_at / expires_at boundary
