@@ -1,5 +1,4 @@
-import { useEffect } from "react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -9,7 +8,6 @@ import { supabase } from "@/integrations/supabase/client";
 import i18n from "@/i18n";
 import { useCanManageEom } from "@/lib/use-eom-perm";
 import { useActiveBranch } from "@/lib/use-active-branch";
-import { branchScopedFilter } from "@/integrations/supabase/active-branch";
 
 type Row = {
   id: string;
@@ -35,50 +33,10 @@ async function signUrl(bucket: string, path: string | null): Promise<string | nu
 
 export function EmployeeOfMonthSection() {
   const canManage = useCanManageEom();
-  const qc = useQueryClient();
   const { activeBranchId } = useActiveBranch();
   const now = new Date();
   const year = now.getFullYear();
   const month = now.getMonth() + 1;
-
-  // Realtime updates scoped to the currently active branch. The Realtime
-  // WebSocket cannot carry per-request headers so we apply the branch
-  // filter directly on the postgres_changes subscription.
-  useEffect(() => {
-    const branchFilter = branchScopedFilter(activeBranchId);
-    const channel = supabase
-      .channel(`eom-realtime-${activeBranchId ?? "all"}`)
-      .on(
-        "postgres_changes",
-        {
-          event: "*",
-          schema: "public",
-          table: "employee_of_month",
-          ...(branchFilter ? { filter: branchFilter } : {}),
-        },
-        () =>
-          qc.invalidateQueries({
-            queryKey: ["eom", "current", activeBranchId, year, month],
-          }),
-      )
-      .on(
-        "postgres_changes",
-        {
-          event: "*",
-          schema: "public",
-          table: "profiles",
-          ...(branchFilter ? { filter: branchFilter } : {}),
-        },
-        () =>
-          qc.invalidateQueries({
-            queryKey: ["eom", "current", activeBranchId, year, month],
-          }),
-      )
-      .subscribe();
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, [qc, activeBranchId, year, month]);
 
   // Include activeBranchId in the queryKey so switching branches refetches
   // immediately. `supabase.from(...)` is already branch-scoped by the

@@ -68,7 +68,9 @@ import {
   hasBranchActionPermission,
   useCurrentPermissions,
 } from "@/lib/use-current-permissions";
-import { fetchCustodyUserCaps } from "@/lib/custody-workflow";
+import { fetchCustodyUserCaps, invalidateCustodyQueries } from "@/lib/custody-workflow";
+import { invalidateShiftVisibleQueries } from "@/lib/shift-visible-rpc";
+import { notifyOwnBreakStatusTransition } from "@/lib/break-self-realtime";
 import { useAiAccess } from "@/lib/use-ai-access";
 import { bindPushToneListener } from "@/lib/alert-tone";
 import { getAttendanceCapabilities } from "@/lib/attendance.functions";
@@ -1000,12 +1002,18 @@ function RealtimeBridge({ uid }: { uid: string }) {
         { event: "*", schema: "public", table: "profiles" },
         (payload: any) => {
           const affected = payload?.new?.id ?? payload?.old?.id;
-          if (!affected || affected === uid) qc.invalidateQueries({ queryKey: ["auth", "me"] });
+          if (!affected || affected === uid) {
+            qc.invalidateQueries({ queryKey: ["auth", "me"] });
+            qc.invalidateQueries({ queryKey: ["route-guard", "is-active", uid] });
+            invalidateShiftVisibleQueries(qc, uid, activeBranchId);
+          }
           qc.invalidateQueries({ queryKey: ["employees"] });
           qc.invalidateQueries({ queryKey: ["departments"] });
           qc.invalidateQueries({ queryKey: ["dashboard", "stats"] });
           qc.invalidateQueries({ queryKey: ["dashboard-shift-cards"] });
           qc.invalidateQueries({ queryKey: ["dept-employees"] });
+          qc.invalidateQueries({ queryKey: ["dept-employees-for-manager"] });
+          qc.invalidateQueries({ queryKey: ["eom", "current"] });
         },
       )
       .on("postgres_changes", { event: "*", schema: "public", table: "departments" }, () => {
@@ -1014,6 +1022,8 @@ function RealtimeBridge({ uid }: { uid: string }) {
         qc.invalidateQueries({ queryKey: ["dashboard", "stats"] });
         qc.invalidateQueries({ queryKey: ["dashboard", "department-managers"] });
         qc.invalidateQueries({ queryKey: ["departments-list"] });
+        qc.invalidateQueries({ queryKey: ["dept-employees-for-manager"] });
+        qc.invalidateQueries({ queryKey: ["other-dept-managers"] });
       })
       .on("postgres_changes", { event: "*", schema: "public", table: "job_titles" }, () => {
         qc.invalidateQueries({ queryKey: ["job-titles"] });
@@ -1027,9 +1037,10 @@ function RealtimeBridge({ uid }: { uid: string }) {
       .on("postgres_changes", { event: "*", schema: "public", table: "task_departments" }, () =>
         qc.invalidateQueries({ queryKey: ["tasks"] }),
       )
-      .on("postgres_changes", { event: "*", schema: "public", table: "task_comments" }, () =>
-        qc.invalidateQueries({ queryKey: ["task-activity"] }),
-      )
+      .on("postgres_changes", { event: "*", schema: "public", table: "task_comments" }, () => {
+        qc.invalidateQueries({ queryKey: ["task-activity"] });
+        qc.invalidateQueries({ queryKey: ["task-comments"] });
+      })
       .on("postgres_changes", { event: "*", schema: "public", table: "task_activity_log" }, () =>
         qc.invalidateQueries({ queryKey: ["task-activity"] }),
       )
@@ -1045,34 +1056,57 @@ function RealtimeBridge({ uid }: { uid: string }) {
       )
       .on("postgres_changes", { event: "*", schema: "public", table: "schedules" }, () => {
         bumpScheduleQueries();
+        invalidateShiftVisibleQueries(qc, uid, activeBranchId);
       })
       .on("postgres_changes", { event: "*", schema: "public", table: "schedule_shifts" }, () => {
         bumpScheduleQueries();
+        if (activeBranchId) {
+          invalidateShiftVisibleQueries(qc, uid, activeBranchId);
+        }
       })
       .on("postgres_changes", { event: "*", schema: "public", table: "shift_definitions" }, () => {
         qc.invalidateQueries({ queryKey: ["shift-definitions"] });
         qc.invalidateQueries({ queryKey: ["shift-definitions-active"] });
       })
-      .on("postgres_changes", { event: "*", schema: "public", table: "break_requests" }, () => {
-        qc.invalidateQueries({ queryKey: ["breaks"] });
-        qc.invalidateQueries({ queryKey: ["breaks-admin"] });
-        qc.invalidateQueries({ queryKey: ["all-break-requests"] });
-        qc.invalidateQueries({ queryKey: ["dashboard-breaks"] });
-        qc.invalidateQueries({ queryKey: ["break-stats"] });
-        qc.invalidateQueries({ queryKey: ["employees-page-active-breaks"] });
-        // Prefer specific keys — avoid prefix ["dashboard"] which also refetches admin headcount.
-        qc.invalidateQueries({ queryKey: ["dashboard", "stats"] });
-        qc.invalidateQueries({ queryKey: ["my-active-break"] });
-        qc.invalidateQueries({ queryKey: ["my-break-shortcut"] });
-        qc.invalidateQueries({ queryKey: ["my-breaks-today"] });
-        qc.invalidateQueries({ queryKey: ["my-break-requests"] });
-        qc.invalidateQueries({ queryKey: ["dashboard-on-break"] });
-        qc.invalidateQueries({ queryKey: ["dashboard-dept-on-break"] });
-        qc.invalidateQueries({ queryKey: ["dashboard-pending-breaks"] });
-        qc.invalidateQueries({ queryKey: ["dashboard-daily-breaks"] });
-        qc.invalidateQueries({ queryKey: ["dashboard-dept-daily-breaks"] });
-        qc.invalidateQueries({ queryKey: ["dashboard-daily-breaks-count"] });
-      })
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "shift_definition_day_hours" },
+        () => {
+          qc.invalidateQueries({ queryKey: ["shift-definitions"] });
+          qc.invalidateQueries({ queryKey: ["shift-definitions-active"] });
+        },
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "break_requests" },
+        (payload: any) => {
+          qc.invalidateQueries({ queryKey: ["breaks"] });
+          qc.invalidateQueries({ queryKey: ["breaks-admin"] });
+          qc.invalidateQueries({ queryKey: ["all-break-requests"] });
+          qc.invalidateQueries({ queryKey: ["dashboard-breaks"] });
+          qc.invalidateQueries({ queryKey: ["break-stats"] });
+          qc.invalidateQueries({ queryKey: ["employees-page-active-breaks"] });
+          // Prefer specific keys — avoid prefix ["dashboard"] which also refetches admin headcount.
+          qc.invalidateQueries({ queryKey: ["dashboard", "stats"] });
+          qc.invalidateQueries({ queryKey: ["my-active-break"] });
+          qc.invalidateQueries({ queryKey: ["my-break-shortcut"] });
+          qc.invalidateQueries({ queryKey: ["my-breaks-today"] });
+          qc.invalidateQueries({ queryKey: ["my-break-requests"] });
+          qc.invalidateQueries({ queryKey: ["dashboard-on-break"] });
+          qc.invalidateQueries({ queryKey: ["dashboard-dept-on-break"] });
+          qc.invalidateQueries({ queryKey: ["dashboard-pending-breaks"] });
+          qc.invalidateQueries({ queryKey: ["dashboard-daily-breaks"] });
+          qc.invalidateQueries({ queryKey: ["dashboard-dept-daily-breaks"] });
+          qc.invalidateQueries({ queryKey: ["dashboard-daily-breaks-count"] });
+          const affected = payload?.new?.user_id ?? payload?.old?.user_id;
+          if (affected === uid) {
+            qc.invalidateQueries({ queryKey: ["my-open-break-nav", uid] });
+            if (payload?.eventType === "UPDATE") {
+              notifyOwnBreakStatusTransition(payload);
+            }
+          }
+        },
+      )
       .on("postgres_changes", { event: "*", schema: "public", table: "break_settings" }, () => {
         qc.invalidateQueries({ queryKey: ["break-settings"] });
         qc.invalidateQueries({ queryKey: ["break-settings-active"] });
@@ -1152,20 +1186,110 @@ function RealtimeBridge({ uid }: { uid: string }) {
         qc.invalidateQueries({ queryKey: ["eom", "current"] });
       });
 
-    const ch = activeBranchId
-      ? channelBase.on(
+    const bumpManagementOnShift = () => {
+      if (!activeBranchId) return;
+      qc.invalidateQueries({ queryKey: ["management-on-shift", activeBranchId] });
+      invalidateShiftVisibleQueries(qc, uid, activeBranchId);
+    };
+    const bumpCustodyForBranch = () => {
+      if (!activeBranchId) return;
+      invalidateCustodyQueries(qc, activeBranchId, uid);
+    };
+
+    let ch = channelBase;
+    if (activeBranchId) {
+      const branchFilter = `branch_id=eq.${activeBranchId}`;
+      ch = ch
+        .on(
           "postgres_changes",
           {
             event: "*",
             schema: "public",
             table: "morning_board_items",
-            filter: `branch_id=eq.${activeBranchId}`,
+            filter: branchFilter,
           },
           () => {
             qc.invalidateQueries({ queryKey: ["morning-board", activeBranchId] });
           },
         )
-      : channelBase;
+        .on(
+          "postgres_changes",
+          {
+            event: "INSERT",
+            schema: "public",
+            table: "management_on_shift",
+            filter: branchFilter,
+          },
+          bumpManagementOnShift,
+        )
+        .on(
+          "postgres_changes",
+          {
+            event: "UPDATE",
+            schema: "public",
+            table: "management_on_shift",
+            filter: branchFilter,
+          },
+          bumpManagementOnShift,
+        )
+        .on(
+          "postgres_changes",
+          { event: "DELETE", schema: "public", table: "management_on_shift" },
+          bumpManagementOnShift,
+        )
+        .on(
+          "postgres_changes",
+          {
+            event: "*",
+            schema: "public",
+            table: "custody_checkouts",
+            filter: branchFilter,
+          },
+          bumpCustodyForBranch,
+        )
+        .on(
+          "postgres_changes",
+          {
+            event: "*",
+            schema: "public",
+            table: "custody_item_types",
+            filter: branchFilter,
+          },
+          bumpCustodyForBranch,
+        )
+        .on(
+          "postgres_changes",
+          {
+            event: "*",
+            schema: "public",
+            table: "custody_branch_settings",
+            filter: branchFilter,
+          },
+          bumpCustodyForBranch,
+        )
+        .on(
+          "postgres_changes",
+          {
+            event: "INSERT",
+            schema: "public",
+            table: "custody_session_archive",
+            filter: branchFilter,
+          },
+          bumpCustodyForBranch,
+        )
+        .on(
+          "postgres_changes",
+          {
+            event: "*",
+            schema: "public",
+            table: "branch_banners",
+            filter: branchFilter,
+          },
+          () => {
+            qc.invalidateQueries({ queryKey: ["branch-banner", activeBranchId] });
+          },
+        );
+    }
 
     ch.subscribe();
     return () => {

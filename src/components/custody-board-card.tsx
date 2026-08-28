@@ -1,11 +1,10 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { useTranslation } from "react-i18next";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Loader2, Package, RotateCcw, Hand, Settings2 } from "lucide-react";
-import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/use-auth";
 import { useActiveBranch } from "@/lib/use-active-branch";
 import { toast } from "sonner";
@@ -20,8 +19,6 @@ import {
   invalidateCustodyQueries,
   returnCustodyItem,
 } from "@/lib/custody-workflow";
-import { invalidateShiftVisibleQueries } from "@/lib/shift-visible-rpc";
-import { onManagementOnShiftChanges } from "@/lib/management-on-shift-realtime";
 import { announceCustodyChange } from "@/lib/management-on-shift.functions";
 import { CustodySettingsPanel } from "@/components/custody-settings-panel";
 import {
@@ -66,45 +63,6 @@ export function CustodyBoardCard() {
     queryKey: custodyQueryKey(scopedBranchId),
     queryFn: () => fetchCustodyBoard(scopedBranchId!),
   });
-
-  useEffect(() => {
-    if (!profile || !scopedBranchId) return;
-    const ch = onManagementOnShiftChanges(
-      supabase
-        .channel(`custody-${profile.id}-${scopedBranchId}`)
-        .on(
-          "postgres_changes",
-          {
-            event: "*",
-            schema: "public",
-            table: "custody_checkouts",
-            filter: `branch_id=eq.${scopedBranchId}`,
-          },
-          () => invalidateCustodyQueries(qc, scopedBranchId, profile.id),
-        )
-        .on(
-          "postgres_changes",
-          {
-            event: "*",
-            schema: "public",
-            table: "custody_item_types",
-            filter: `branch_id=eq.${scopedBranchId}`,
-          },
-          () => invalidateCustodyQueries(qc, scopedBranchId, profile.id),
-        ),
-      scopedBranchId,
-      () => invalidateShiftVisibleQueries(qc, profile.id, scopedBranchId),
-    )
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "schedule_shifts" },
-        () => invalidateShiftVisibleQueries(qc, profile.id, scopedBranchId),
-      )
-      .subscribe();
-    return () => {
-      supabase.removeChannel(ch);
-    };
-  }, [profile?.id, scopedBranchId, qc]);
 
   const checkoutMut = useMutation({
     mutationFn: async ({ itemTypeId, itemName }: { itemTypeId: string; itemName: string }) => {

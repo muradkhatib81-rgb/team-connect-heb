@@ -845,29 +845,6 @@ function EditDialog({
     },
   });
 
-  useEffect(() => {
-    const ch = supabase
-      .channel(`dept-edit-${dept.id}`)
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "profiles" },
-        () => {
-          qc.invalidateQueries({ queryKey: ["dept-employees-for-manager", dept.id] });
-        },
-      )
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "departments" },
-        () => {
-          qc.invalidateQueries({ queryKey: ["other-dept-managers", dept.id] });
-        },
-      )
-      .subscribe();
-    return () => {
-      supabase.removeChannel(ch);
-    };
-  }, [dept.id, qc]);
-
   const mutation = useMutation({
     mutationFn: async () => {
       const conflictDept =

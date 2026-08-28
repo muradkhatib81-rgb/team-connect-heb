@@ -42,8 +42,6 @@ import {
   upsertCustodyBranchSettings,
   upsertCustodyItemType,
 } from "@/lib/custody-workflow";
-import { supabase } from "@/integrations/supabase/client";
-
 type Props = {
   branchId: string;
   userId: string;
@@ -71,35 +69,6 @@ export function CustodySettingsPanel({ branchId, userId, compact }: Props) {
     queryKey: [...custodySettingsQueryKey(branchId), "branch"],
     queryFn: () => fetchCustodyBranchSettings(branchId),
   });
-
-  useEffect(() => {
-    const ch = supabase
-      .channel(`custody-settings-${branchId}`)
-      .on(
-        "postgres_changes",
-        {
-          event: "*",
-          schema: "public",
-          table: "custody_item_types",
-          filter: `branch_id=eq.${branchId}`,
-        },
-        () => qc.invalidateQueries({ queryKey: custodySettingsQueryKey(branchId) }),
-      )
-      .on(
-        "postgres_changes",
-        {
-          event: "*",
-          schema: "public",
-          table: "custody_branch_settings",
-          filter: `branch_id=eq.${branchId}`,
-        },
-        () => qc.invalidateQueries({ queryKey: custodySettingsQueryKey(branchId) }),
-      )
-      .subscribe();
-    return () => {
-      supabase.removeChannel(ch);
-    };
-  }, [branchId, qc]);
 
   const [editRow, setEditRow] = useState<CustodyItemTypeRow | null>(null);
   const [createOpen, setCreateOpen] = useState(false);

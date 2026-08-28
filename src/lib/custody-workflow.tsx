@@ -1,6 +1,4 @@
-import { useEffect } from "react";
 import type { QueryClient } from "@tanstack/react-query";
-import { useQueryClient } from "@tanstack/react-query";
 import i18n from "@/i18n";
 import { supabase } from "@/integrations/supabase/client";
 import { isPlatformOwner, type AppRole } from "@/lib/constants";
@@ -10,7 +8,6 @@ import {
   invalidateShiftVisibleQueries,
   shiftVisibleQueryKey,
 } from "@/lib/shift-visible-rpc";
-import { onManagementOnShiftChanges } from "@/lib/management-on-shift-realtime";
 
 export type CustodyItemType = {
   id: string;
@@ -447,47 +444,6 @@ export function invalidateCustodyQueries(qc: QueryClient, branchId: string | nul
   if (userId) {
     invalidateShiftVisibleQueries(qc, userId, branchId);
   }
-}
-
-/** Supabase Realtime — instant refresh when checkouts / returns change. */
-export function useCustodyRealtime(
-  branchId: string | null,
-  userId: string | undefined,
-  enabled: boolean,
-) {
-  const qc = useQueryClient();
-  useEffect(() => {
-    if (!enabled || !branchId || !userId) return;
-    const ch = onManagementOnShiftChanges(
-      supabase
-        .channel(`custody-realtime-${userId}-${branchId}`)
-        .on(
-          "postgres_changes",
-          {
-            event: "*",
-            schema: "public",
-            table: "custody_checkouts",
-            filter: `branch_id=eq.${branchId}`,
-          },
-          () => invalidateCustodyQueries(qc, branchId, userId),
-        )
-        .on(
-          "postgres_changes",
-          {
-            event: "INSERT",
-            schema: "public",
-            table: "custody_session_archive",
-            filter: `branch_id=eq.${branchId}`,
-          },
-          () => invalidateCustodyQueries(qc, branchId, userId),
-        ),
-      branchId,
-      () => invalidateShiftVisibleQueries(qc, userId, branchId),
-    ).subscribe();
-    return () => {
-      supabase.removeChannel(ch);
-    };
-  }, [branchId, userId, enabled, qc]);
 }
 
 /** 24-hour time (HH:mm) in Jerusalem. */

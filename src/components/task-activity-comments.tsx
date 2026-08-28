@@ -1,9 +1,8 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { useTranslation } from "react-i18next";
 import { listTaskActivity, listTaskComments, addTaskComment } from "@/lib/tasks.functions";
-import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { formatHeDateTime } from "@/lib/date-format";
@@ -59,25 +58,6 @@ export function TaskActivityComments({ taskId }: { taskId: string }) {
     commentBilingualItems,
     (comments.data?.length ?? 0) > 0,
   );
-
-  useEffect(() => {
-    const ch = supabase
-      .channel(`task-feed-${taskId}`)
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "task_activity_log", filter: `task_id=eq.${taskId}` },
-        () => qc.invalidateQueries({ queryKey: activityKey }),
-      )
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "task_comments", filter: `task_id=eq.${taskId}` },
-        () => qc.invalidateQueries({ queryKey: commentsKey }),
-      )
-      .subscribe();
-    return () => {
-      supabase.removeChannel(ch);
-    };
-  }, [taskId]);
 
   const [body, setBody] = useState("");
   const add = useMutation({

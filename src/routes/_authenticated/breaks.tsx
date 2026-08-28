@@ -1,6 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/use-auth";
 import { Card } from "@/components/ui/card";
@@ -137,89 +137,6 @@ function BreaksPage() {
       return (data ?? []) as BreakRequest[];
     },
   });
-
-  // Realtime — refresh own requests and active break settings.
-  // Also: toast the employee when one of their own requests transitions to 'active'
-  // (i.e. their break just started). Server-time driven — nothing local decides start.
-  useEffect(() => {
-    if (!me?.id) return;
-    const ch = supabase
-      .channel("break-requests-self-rt")
-      .on(
-        "postgres_changes",
-        { event: "INSERT", schema: "public", table: "break_requests", filter: `user_id=eq.${me.id}` },
-        () => qc.invalidateQueries({ queryKey: ["my-break-requests"] }),
-      )
-      .on(
-        "postgres_changes",
-        { event: "UPDATE", schema: "public", table: "break_requests", filter: `user_id=eq.${me.id}` },
-        (payload: any) => {
-          const prev = payload.old?.status;
-          const next = payload.new?.status;
-          const actorName =
-            (payload.new?.ended_by_manager_name as string | null)?.trim() ||
-            (payload.new?.cancelled_by_name as string | null)?.trim() ||
-            i18n.t("breaks.manager");
-          const atRaw =
-            (payload.new?.completed_at as string | null) ||
-            (payload.new?.cancelled_at as string | null) ||
-            (payload.new?.rejected_at as string | null);
-          const when = atRaw
-            ? new Intl.DateTimeFormat("he-IL", {
-                timeZone: "Asia/Jerusalem",
-                day: "2-digit",
-                month: "2-digit",
-                year: "numeric",
-                hour: "2-digit",
-                minute: "2-digit",
-                hour12: false,
-                numberingSystem: "latn",
-              }).format(new Date(atRaw))
-            : "";
-          const whenPart = when ? ` · ${when}` : "";
-
-          if (prev !== "active" && next === "active") {
-            toast.success(i18n.t("breaks.breakStarted"));
-          } else if (prev !== "completed" && next === "completed") {
-            toast(i18n.t("breaks.breakEnded"));
-          } else if (prev !== "rejected" && next === "rejected") {
-            toast.error(`${i18n.t("breaks.breakRejected").replace("{name}", actorName)}${whenPart}`);
-          } else if (prev !== "ended_by_manager" && next === "ended_by_manager") {
-            toast(`${i18n.t("breaks.breakEndedByMgr").replace("{name}", actorName)}${whenPart}`);
-          } else if (prev !== "cancelled_by_manager" && next === "cancelled_by_manager") {
-            toast(`${i18n.t("breaks.breakCancelledByMgr").replace("{name}", actorName)}${whenPart}`);
-          }
-          qc.invalidateQueries({ queryKey: ["my-break-requests"] });
-        },
-      )
-      .on(
-        "postgres_changes",
-        { event: "DELETE", schema: "public", table: "break_requests", filter: `user_id=eq.${me.id}` },
-        () => qc.invalidateQueries({ queryKey: ["my-break-requests"] }),
-      )
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "break_settings" },
-        () => qc.invalidateQueries({ queryKey: ["break-settings-active"] }),
-      )
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "job_titles" },
-        () => qc.invalidateQueries({ queryKey: ["can-request-break"] }),
-      )
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "break_policy" },
-        () => {
-          qc.invalidateQueries({ queryKey: ["can-request-break"] });
-          qc.invalidateQueries({ queryKey: ["break-policy-effective"] });
-        },
-      )
-      .subscribe();
-    return () => {
-      supabase.removeChannel(ch);
-    };
-  }, [qc, me?.id]);
 
   const policyQ = useQuery({
     enabled: !!me?.id,

@@ -1,6 +1,5 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect } from "react";
-import { useQueryClient } from "@tanstack/react-query";
 import { LogOut, UserX } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -22,25 +21,6 @@ function InactiveAccountPage() {
   const { t } = useTranslation();
   const { data: profile } = useAuth();
   const navigate = useNavigate();
-  const qc = useQueryClient();
-
-  useEffect(() => {
-    if (!profile?.id) return;
-    const ch = supabase
-      .channel(`inactive-profile-${profile.id}`)
-      .on(
-        "postgres_changes",
-        { event: "UPDATE", schema: "public", table: "profiles", filter: `id=eq.${profile.id}` },
-        () => {
-          qc.invalidateQueries({ queryKey: ["auth", "me"] });
-          qc.invalidateQueries({ queryKey: ["route-guard", "is-active", profile.id] });
-        },
-      )
-      .subscribe();
-    return () => {
-      supabase.removeChannel(ch);
-    };
-  }, [profile?.id, qc]);
 
   useEffect(() => {
     if (profile?.is_active) {

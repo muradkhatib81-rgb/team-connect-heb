@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from "react";
+import { useMemo } from "react";
 import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { Card } from "@/components/ui/card";
@@ -16,7 +16,6 @@ import {
   shiftVisibleQueryKey,
 } from "@/lib/shift-visible-rpc";
 import { custodyQueryKey } from "@/lib/custody-workflow";
-import { onManagementOnShiftChanges } from "@/lib/management-on-shift-realtime";
 import { announceManagementOnShiftChange } from "@/lib/management-on-shift.functions";
 import { employeeNameInitial, formatEmployeeName } from "@/lib/employee-name";
 
@@ -85,20 +84,6 @@ export function ManagementOnShiftCard() {
       }));
     },
   });
-
-  useEffect(() => {
-    if (!profile || !scopedBranchId) return;
-    const invalidate = () =>
-      qc.invalidateQueries({ queryKey: ["management-on-shift", scopedBranchId] });
-    const ch = onManagementOnShiftChanges(
-      supabase.channel(`mos-${profile.id}-${scopedBranchId}`),
-      scopedBranchId,
-      invalidate,
-    ).subscribe();
-    return () => {
-      supabase.removeChannel(ch);
-    };
-  }, [profile?.id, scopedBranchId, qc]);
 
   const myRow = useMemo(
     () => q.data?.find((r) => r.user_id === profile?.id),

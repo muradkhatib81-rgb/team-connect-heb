@@ -1,11 +1,9 @@
-import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useEffect } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { getActiveBranchScope } from "@/integrations/supabase/branch-scope";
 import { useActiveBranch } from "@/lib/use-active-branch";
 import { BRANCH_NAME } from "@/lib/constants";
 import { mergeCompanyRowWithPeriodExtra } from "@/lib/schedule-period-settings";
-import { retainSharedRealtimeChannel } from "@/lib/realtime-shared-channel";
 
 export type ScheduleType = "weekly" | "monthly" | "custom";
 
@@ -91,7 +89,6 @@ async function fetchCompanySettings(opts: {
 }
 
 export function useCompanySettings(opts?: { allowUnscoped?: boolean }) {
-  const qc = useQueryClient();
   const { activeBranchId } = useActiveBranch();
   const allowUnscoped = opts?.allowUnscoped ?? false;
   const query = useQuery({
@@ -100,18 +97,6 @@ export function useCompanySettings(opts?: { allowUnscoped?: boolean }) {
     staleTime: 1000 * 60,
     initialData: DEFAULTS,
   });
-
-  useEffect(() => {
-    return retainSharedRealtimeChannel(`company-settings-rt-${activeBranchId ?? "none"}`, (channel) =>
-      channel.on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "company_settings" },
-        () => {
-          qc.invalidateQueries({ queryKey: ["company-settings"] });
-        },
-      ),
-    );
-  }, [qc, activeBranchId]);
 
   return query;
 }

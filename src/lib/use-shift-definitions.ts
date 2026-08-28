@@ -1,8 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
-import { useCallback, useEffect, useMemo } from "react";
+import { useCallback, useMemo } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { useQueryClient } from "@tanstack/react-query";
-import { retainSharedRealtimeChannel } from "@/lib/realtime-shared-channel";
 import {
   buildDayHoursIndex,
   resolveShiftDefinitionTimes,
@@ -25,7 +23,6 @@ export type ShiftDefDayHours = ShiftDayHoursRow;
 
 /** Live list of shift definitions. Pass {activeOnly:true} to filter. */
 export function useShiftDefinitions(opts: { activeOnly?: boolean } = {}) {
-  const qc = useQueryClient();
   const query = useQuery({
     queryKey: ["shift-definitions"],
     queryFn: async () => {
@@ -47,22 +44,6 @@ export function useShiftDefinitions(opts: { activeOnly?: boolean } = {}) {
     },
     staleTime: 30_000,
   });
-
-  useEffect(() => {
-    return retainSharedRealtimeChannel("shift-definitions-rt", (channel) =>
-      channel
-        .on(
-          "postgres_changes",
-          { event: "*", schema: "public", table: "shift_definitions" },
-          () => qc.invalidateQueries({ queryKey: ["shift-definitions"] }),
-        )
-        .on(
-          "postgres_changes",
-          { event: "*", schema: "public", table: "shift_definition_day_hours" },
-          () => qc.invalidateQueries({ queryKey: ["shift-definitions"] }),
-        ),
-    );
-  }, [qc]);
 
   const all = query.data?.defs ?? [];
   const dayHours = query.data?.dayHours ?? [];

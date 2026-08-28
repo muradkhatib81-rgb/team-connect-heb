@@ -1,10 +1,7 @@
-import { useEffect } from "react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/use-auth";
 import { useActiveBranch } from "@/lib/use-active-branch";
-import { retainSharedRealtimeChannel } from "@/lib/realtime-shared-channel";
-import { onManagementOnShiftChanges } from "@/lib/management-on-shift-realtime";
 import {
   fetchShiftSelfServiceVisible,
   shiftVisibleQueryKey,
@@ -27,7 +24,6 @@ const OPEN_BREAK_NAV_STATUSES = new Set([
  */
 export function useShiftSelfServiceVisible() {
   const { data: profile } = useAuth();
-  const qc = useQueryClient();
   const { activeBranchId } = useActiveBranch();
   const scopedBranchId = activeBranchId ?? profile?.branch_id ?? null;
   const userId = profile?.id ?? null;
@@ -40,50 +36,6 @@ export function useShiftSelfServiceVisible() {
     staleTime: 30_000,
     retry: false,
   });
-
-  useEffect(() => {
-    if (!userId || !scopedBranchId) return;
-    const invalidate = () =>
-      qc.invalidateQueries({ queryKey: shiftVisibleQueryKey(userId, scopedBranchId) });
-    return retainSharedRealtimeChannel(`shift-self-service-visible-${userId}`, (channel) => {
-      const withMos = onManagementOnShiftChanges(channel, scopedBranchId, invalidate);
-      return withMos
-        .on(
-          "postgres_changes",
-          { event: "*", schema: "public", table: "schedule_shifts" },
-          invalidate,
-        )
-        .on("postgres_changes", { event: "*", schema: "public", table: "schedules" }, invalidate)
-        .on(
-          "postgres_changes",
-          {
-            event: "*",
-            schema: "public",
-            table: "profiles",
-            filter: `id=eq.${userId}`,
-          },
-          invalidate,
-        );
-    });
-  }, [userId, scopedBranchId, qc]);
-
-  useEffect(() => {
-    if (!userId) return;
-    const invalidateOpen = () =>
-      qc.invalidateQueries({ queryKey: ["my-open-break-nav", userId] });
-    return retainSharedRealtimeChannel(`open-break-nav-rt-${userId}`, (channel) =>
-      channel.on(
-        "postgres_changes",
-        {
-          event: "*",
-          schema: "public",
-          table: "break_requests",
-          filter: `user_id=eq.${userId}`,
-        },
-        invalidateOpen,
-      ),
-    );
-  }, [userId, qc]);
 
   return {
     isVisible: !!profile && !onLeave && visibleQ.data === true,

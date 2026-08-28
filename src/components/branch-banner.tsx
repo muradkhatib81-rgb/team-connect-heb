@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
@@ -78,26 +78,7 @@ export function BranchBanner() {
     },
   });
 
-  // Realtime: keep banner in sync when someone else updates it.
-  useEffect(() => {
-    if (!activeBranchId) return;
-    const channel = supabase
-      .channel(`branch-banner-${activeBranchId}`)
-      .on(
-        "postgres_changes",
-        {
-          event: "*",
-          schema: "public",
-          table: "branch_banners",
-          filter: `branch_id=eq.${activeBranchId}`,
-        },
-        () => qc.invalidateQueries({ queryKey: ["branch-banner", activeBranchId] }),
-      )
-      .subscribe();
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, [activeBranchId, qc]);
+  // Realtime: RealtimeBridge invalidates ["branch-banner", activeBranchId].
 
   const uploadMut = useMutation({
     mutationFn: async (file: File) => {
