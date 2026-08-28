@@ -21,7 +21,7 @@ import { useCanManageMorningBoard } from "@/lib/use-morning-board-perm";
 import { ImageLightbox } from "@/components/image-lightbox";
 
 /**
- * Branch-specific Morning Board banner.
+ * Branch-specific Main Board banner.
  *
  * - Displays a single image per branch at full width, preserving aspect ratio.
  * - Reusable shape: `branch_banners` schema already carries optional title,

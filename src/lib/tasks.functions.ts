@@ -1176,7 +1176,7 @@ export const PERMISSION_KEYS = [
   "can_manage_users",
   // Employee Recognition
   "can_manage_employee_of_month",
-  // Morning Board
+  // Main Board
   "can_manage_morning_board",
   // Equipment management (מערכת ניהול ציוד)
   "can_create_custody",

@@ -256,7 +256,7 @@
     "returnFromBreak": "Return from Break",
     "confirmReturn": "Return employee from break now?",
     "breakEnded": "Break ended",
-    "morningBoard": "Morning Board",
+    "mainBoard": "Main Board",
     "manageContent": "Manage Content",
     "noBoardContent": "No content has been set for this branch board yet.",
     "pinned": "Pinned",
@@ -275,7 +275,20 @@
     "eomTitlePlural": "🏆 Employees of the Month",
     "eomNotSelected": "No employee of the month has been selected yet.",
     "eomClickManage": "Click \"Manage\" to choose.",
-    "months": ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"],
+    "months": [
+      "January",
+      "February",
+      "March",
+      "April",
+      "May",
+      "June",
+      "July",
+      "August",
+      "September",
+      "October",
+      "November",
+      "December"
+    ],
     "todayShifts": "Today's Shifts",
     "dayShifts": "Shifts for {{date}}",
     "employeesByDayShifts": "Employee count by day",
@@ -327,8 +340,24 @@
     "statusPending": "Pending Approval",
     "statusApproved": "Approved",
     "statusRejected": "Rejected",
-    "dayShort": ["Sa", "Su", "Mo", "Tu", "We", "Th", "Fr"],
-    "dayFull": ["Saturday", "Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday"],
+    "dayShort": [
+      "Sa",
+      "Su",
+      "Mo",
+      "Tu",
+      "We",
+      "Th",
+      "Fr"
+    ],
+    "dayFull": [
+      "Saturday",
+      "Sunday",
+      "Monday",
+      "Tuesday",
+      "Wednesday",
+      "Thursday",
+      "Friday"
+    ],
     "noSchedule": "No schedule exists for this week in this department.",
     "publishedScheduleExists": "A published schedule already exists for this department in this period.",
     "publishedScheduleExistsHint": "You cannot create a new schedule for a period that was already published. Open the existing schedule from Approved Schedules.",
@@ -749,7 +778,7 @@
     "badgeUnread": "Unread"
   },
   "nav": {
-    "dashboard": "Dashboard",
+    "dashboard": "Main Board",
     "tasks": "Tasks",
     "schedules": "Work Schedules",
     "communications": "Communications",
@@ -1241,5 +1270,277 @@
       "stripeNotConfigured": "Stripe is not configured.",
       "noStripeCustomer": "No Stripe customer for this company. Start a payment first."
     }
+  },
+  "permissions": {
+    "title": "Permission Management",
+    "subtitle": "Assign system roles and detailed permissions for each employee",
+    "noAccessTitle": "No permission",
+    "noAccessDesc": "Only the system owner can manage permissions.",
+    "roleUpdated": "Role updated",
+    "noName": "No name",
+    "cannotEditSelf": "You cannot edit yourself",
+    "activeOverridesTitle": "Active extra permissions",
+    "activeOverridesDesc": "Employees with equipment, schedule, or task permissions (or legacy permissions) that don't match their role — can be removed here.",
+    "staleRole": "Legacy permissions",
+    "custodyOverride": "Active equipment permissions",
+    "scheduleOverride": "Active schedule permissions",
+    "taskOverride": "Active task permissions",
+    "detailedTitle": "Detailed manager permissions",
+    "detailedDescOwner": "Grant or remove action permissions for branch managers and assistant managers. Branch managers receive no automatic permissions — only what is granted here.",
+    "detailedDescBm": "Grant or remove action permissions for assistant managers in the branch. Changes are saved and take effect immediately.",
+    "noManagersOwner": "No branch managers or assistant managers to configure.",
+    "noManagersBm": "No assistant managers to configure.",
+    "permsReset": "Permissions reset",
+    "resetCustody": "Remove equipment permissions",
+    "resetSchedules": "Remove schedule permissions",
+    "resetTasks": "Remove task permissions",
+    "resetDefault": "Reset to default",
+    "resetAll": "Remove all permissions",
+    "infoAria": "Info",
+    "permsUpdated": "Permissions updated",
+    "searchPlaceholder": "Search permission…",
+    "noSearchResults": "No matching permissions found.",
+    "copyButton": "Copy permissions from existing role",
+    "copyTitle": "Copy permissions",
+    "copyDesc": "Choose who to copy from and who to paste to. Only permissions are copied — not users, employees, departments, or other data.",
+    "copyFrom": "Copy permissions from",
+    "copyTo": "Paste permissions to",
+    "selectUser": "Select user",
+    "continue": "Continue",
+    "copyConfirmTitle": "Confirm copy",
+    "copyConfirmDesc": "This will replace all permissions of {{to}} with those of {{from}}. Continue?",
+    "copyConfirmAction": "Confirm and copy",
+    "copySuccess": "Permissions copied successfully",
+    "copyError": "Copy failed",
+    "categories": {
+      "employees": "Employees",
+      "schedules": "Work Schedules",
+      "leave": "Leave",
+      "breaks": "Breaks",
+      "tasks": "Tasks",
+      "messages": "Communications",
+      "reports": "Reports",
+      "recognition": "Employee Recognition",
+      "morning_board": "Main Board",
+      "custody": "Equipment Management",
+      "system": "System"
+    },
+    "perms": {
+      "can_view_all_employees": {
+        "label": "View all employees",
+        "description": "Allows viewing all company employees without editing them."
+      },
+      "can_view_employee_details": {
+        "label": "View employee details",
+        "description": "Allows opening an employee card and viewing their personal details."
+      },
+      "can_add_employee": {
+        "label": "Add employee",
+        "description": "Allows creating new employee accounts in the system."
+      },
+      "can_edit_employee": {
+        "label": "Edit employee",
+        "description": "Allows changing details of an existing employee (name, department, phone, etc.)."
+      },
+      "can_delete_employee": {
+        "label": "Delete employee",
+        "description": "Allows removing employees from the system including all their data."
+      },
+      "can_reset_employee_password": {
+        "label": "Reset employee password",
+        "description": "Allows creating a temporary password for an employee who lost access."
+      },
+      "can_manage_departments": {
+        "label": "Manage departments",
+        "description": "Allows creating, editing, and deleting departments in the organization."
+      },
+      "can_export_employees": {
+        "label": "Export employee list",
+        "description": "Allows downloading the employee list to an external file."
+      },
+      "can_view_schedule": {
+        "label": "View work schedules",
+        "description": "Allows viewing department work schedules."
+      },
+      "can_create_schedule": {
+        "label": "Create work schedule",
+        "description": "Allows creating a new weekly work schedule."
+      },
+      "can_edit_schedule": {
+        "label": "Edit work schedule",
+        "description": "Allows changing an existing work schedule before approval."
+      },
+      "can_approve_schedule": {
+        "label": "Approve work schedule",
+        "description": "Allows approving a work schedule submitted by a department head."
+      },
+      "can_publish_schedule": {
+        "label": "Publish work schedule",
+        "description": "Allows approving and publishing a work schedule directly to employees."
+      },
+      "can_manage_schedule": {
+        "label": "Shift settings",
+        "description": "Allows managing shift types, hours per day, and schedule period. Default: system owner only — can be granted to assistant or branch manager."
+      },
+      "can_view_leave": {
+        "label": "View leave requests",
+        "description": "Allows opening leave management and viewing requests in the branch."
+      },
+      "can_approve_leave": {
+        "label": "Approve leave",
+        "description": "Allows approving a leave request at management level."
+      },
+      "can_reject_leave": {
+        "label": "Reject leave",
+        "description": "Allows rejecting a leave request at management level."
+      },
+      "can_edit_leave_balance": {
+        "label": "Edit leave balance",
+        "description": "Allows updating balances and monthly accrual rate for an employee. Not automatic for manager/assistant — only when granted by platform owner."
+      },
+      "can_view_breaks": {
+        "label": "View employees on break",
+        "description": "Allows seeing which employees are currently on break."
+      },
+      "can_manage_breaks": {
+        "label": "Manage breaks",
+        "description": "Allows creating, editing, and deleting break requests."
+      },
+      "can_view_tasks": {
+        "label": "View tasks",
+        "description": "Allows viewing all tasks in the system."
+      },
+      "can_create_tasks": {
+        "label": "Create tasks",
+        "description": "Allows creating new tasks and assigning employees."
+      },
+      "can_edit_tasks": {
+        "label": "Edit tasks",
+        "description": "Allows updating details of an existing task."
+      },
+      "can_delete_tasks": {
+        "label": "Delete tasks",
+        "description": "Allows deleting tasks from the system."
+      },
+      "can_approve_tasks": {
+        "label": "Approve tasks (when creator is department head)",
+        "description": "Allows approving completion of a task created by a department head."
+      },
+      "can_view_messages": {
+        "label": "View messages",
+        "description": "Allows opening the communications center and reading received messages."
+      },
+      "can_send_messages": {
+        "label": "Send messages",
+        "description": "Base permission to send messages from within the system."
+      },
+      "can_send_message_employee": {
+        "label": "Send message to employee",
+        "description": "Allows sending a personal message to a single employee."
+      },
+      "can_send_message_department": {
+        "label": "Send message to department",
+        "description": "Allows sending a message to all employees in a department."
+      },
+      "can_send_message_all": {
+        "label": "Send message to all employees",
+        "description": "Allows sending a message to all company employees."
+      },
+      "can_manage_communications": {
+        "label": "Manage communications center",
+        "description": "Allows editing and deleting others' messages, and viewing the activity log."
+      },
+      "can_delete_communications": {
+        "label": "Delete messages",
+        "description": "Allows deleting messages (including permanent deletion)."
+      },
+      "can_view_read_receipts": {
+        "label": "View read receipts",
+        "description": "Allows seeing who read messages and who has not yet."
+      },
+      "can_view_reports": {
+        "label": "View reports",
+        "description": "Allows viewing management reports in the system."
+      },
+      "can_export_reports": {
+        "label": "Export reports",
+        "description": "Allows downloading reports to an external file."
+      },
+      "can_manage_employee_of_month": {
+        "label": "🏆 Manage Employee of the Month",
+        "description": "Allows selecting outstanding employees for the month, updating selection reason, uploading photos, and deleting records."
+      },
+      "can_manage_morning_board": {
+        "label": "📢 Manage Main Board content",
+        "description": "Allows adding, editing, ordering, and deleting Main Board items for the branch — images, videos, and announcements. Can only be granted to branch manager or assistant."
+      },
+      "can_create_custody": {
+        "label": "Add equipment",
+        "description": "Allows adding new equipment items (e.g. Equipment 1, Equipment 2). Can be granted to branch or assistant manager."
+      },
+      "can_edit_custody": {
+        "label": "Edit equipment",
+        "description": "Allows changing name, order, and reminders of existing equipment items."
+      },
+      "can_delete_custody": {
+        "label": "Disable/delete equipment",
+        "description": "Allows disabling an unused equipment item."
+      },
+      "can_return_custody": {
+        "label": "Return equipment on behalf of employee",
+        "description": "Allows returning equipment taken by another employee. Branch manager can always — this permission is mainly for assistant manager."
+      },
+      "can_receive_custody_alerts": {
+        "label": "Receive equipment alerts",
+        "description": "Receives an alert when an employee ends a shift but still holds equipment, or before midnight."
+      },
+      "can_configure_custody": {
+        "label": "Equipment system settings",
+        "description": "Allows updating reminder times, daily log reset, and midnight alerts."
+      },
+      "can_view_custody_daily_log": {
+        "label": "View daily log",
+        "description": "Allows viewing the daily equipment usage log (resets per branch settings)."
+      },
+      "can_run_custody_monthly_report": {
+        "label": "Monthly equipment report",
+        "description": "Allows generating a monthly report and archiving equipment data."
+      },
+      "can_manage_permissions": {
+        "label": "Manage permissions",
+        "description": "Allows setting which permissions each user has."
+      },
+      "can_manage_company_settings": {
+        "label": "Manage company settings",
+        "description": "Allows updating company name, logo, colors, and contact details."
+      },
+      "can_view_activity_log": {
+        "label": "View activity log",
+        "description": "Allows viewing the history of actions in the system."
+      },
+      "can_manage_users": {
+        "label": "Manage users",
+        "description": "Allows managing user accounts and their roles."
+      }
+    }
+  },
+  "platformCompanies": {
+    "title": "Companies",
+    "subtitle": "Manage tenant companies operating on the platform",
+    "newCompany": "New company",
+    "showArchived": "Show archived companies ({{count}})",
+    "emptyNone": "No companies on the platform yet. Create one using the button above.",
+    "emptyFilter": "No companies match the current filter.",
+    "colName": "Company name",
+    "colId": "ID",
+    "colCreated": "Created",
+    "colStatus": "Status",
+    "statusActive": "Active",
+    "statusInactive": "Inactive",
+    "statusSuspended": "Suspended",
+    "activeOnPlatform": "Active on platform",
+    "archived": "Archived",
+    "makeActive": "Set as active",
+    "selectActiveCompany": "Select active company"
   }
 }

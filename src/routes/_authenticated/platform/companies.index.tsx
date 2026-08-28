@@ -1,6 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
 import { Archive, Building2, Loader2, Plus, ShieldAlert, Star } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -16,18 +17,19 @@ export const Route = createFileRoute("/_authenticated/platform/companies/")({
   component: CompaniesPage,
 });
 
-const STATUS_LABELS: Record<Company["status"], string> = {
-  active: "פעילה",
-  inactive: "לא פעילה",
-  suspended: "מושהית",
-};
-
 function StatusBadge({ company }: { company: Company }) {
+  const { t } = useTranslation();
+  const labels: Record<Company["status"], string> = {
+    active: t("platformCompanies.statusActive"),
+    inactive: t("platformCompanies.statusInactive"),
+    suspended: t("platformCompanies.statusSuspended"),
+  };
+
   if (company.status === "active") {
     return (
       <Badge className="gap-1 bg-emerald-100 text-emerald-800 hover:bg-emerald-100 dark:bg-emerald-950/30 dark:text-emerald-400">
         <Star className="size-3" />
-        פעילה
+        {labels.active}
       </Badge>
     );
   }
@@ -37,15 +39,19 @@ function StatusBadge({ company }: { company: Company }) {
       className="gap-1 border-amber-300 text-amber-800 dark:border-amber-800 dark:text-amber-400"
     >
       <ShieldAlert className="size-3" />
-      {STATUS_LABELS[company.status]}
+      {labels[company.status]}
     </Badge>
   );
 }
 
 function CompaniesPage() {
+  const { t, i18n } = useTranslation();
   const { companies, activeCompanyId, setActiveCompanyId, isLoading } = useCompanyContext();
   const [openCreate, setOpenCreate] = useState(false);
   const [showArchived, setShowArchived] = useState(false);
+
+  const dateLocale =
+    i18n.language === "ar" ? "ar" : i18n.language === "en" ? "en-US" : "he-IL";
 
   const visibleCompanies = useMemo(
     () => companies.filter((c) => showArchived || !c.archivedAt),
@@ -61,17 +67,15 @@ function CompaniesPage() {
             <Building2 className="size-6" />
           </div>
           <div className="min-w-0">
-            <h1 className="truncate text-2xl sm:text-3xl font-bold">חברות</h1>
-            <p className="text-sm text-muted-foreground mt-1">
-              ניהול החברות (Tenants) הפועלות על גבי הפלטפורמה
-            </p>
+            <h1 className="truncate text-2xl sm:text-3xl font-bold">{t("platformCompanies.title")}</h1>
+            <p className="text-sm text-muted-foreground mt-1">{t("platformCompanies.subtitle")}</p>
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <CompanySwitcher />
           <Button onClick={() => setOpenCreate(true)} className="gap-2">
             <Plus className="size-4" />
-            חברה חדשה
+            {t("platformCompanies.newCompany")}
           </Button>
         </div>
       </header>
@@ -83,7 +87,7 @@ function CompaniesPage() {
             className="text-sm text-muted-foreground gap-2 flex items-center"
           >
             <Archive className="size-3.5" />
-            הצג חברות בארכיון ({archivedCount})
+            {t("platformCompanies.showArchived", { count: archivedCount })}
           </Label>
           <Switch
             id="show-archived-companies"
@@ -101,18 +105,18 @@ function CompaniesPage() {
         ) : visibleCompanies.length === 0 ? (
           <div className="p-8 text-sm text-muted-foreground text-center">
             {companies.length === 0
-              ? "אין עדיין חברות בפלטפורמה. ניתן ליצור חברה חדשה מהכפתור מעלה."
-              : "אין חברות להצגה עם הסינון הנוכחי."}
+              ? t("platformCompanies.emptyNone")
+              : t("platformCompanies.emptyFilter")}
           </div>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead className="text-xs text-muted-foreground bg-muted/40">
                 <tr>
-                  <th className="text-right p-3 font-medium">שם החברה</th>
-                  <th className="text-right p-3 font-medium hidden md:table-cell">מזהה</th>
-                  <th className="text-right p-3 font-medium hidden lg:table-cell">נוצרה</th>
-                  <th className="text-right p-3 font-medium">סטטוס</th>
+                  <th className="text-right p-3 font-medium">{t("platformCompanies.colName")}</th>
+                  <th className="text-right p-3 font-medium hidden md:table-cell">{t("platformCompanies.colId")}</th>
+                  <th className="text-right p-3 font-medium hidden lg:table-cell">{t("platformCompanies.colCreated")}</th>
+                  <th className="text-right p-3 font-medium">{t("platformCompanies.colStatus")}</th>
                   <th className="p-3 w-10" />
                 </tr>
               </thead>
@@ -149,21 +153,21 @@ function CompaniesPage() {
                       {company.id.slice(0, 8)}…
                     </td>
                     <td className="p-3 hidden lg:table-cell text-xs text-muted-foreground tabular-nums">
-                      {company.createdAt.toLocaleDateString("he-IL")}
+                      {company.createdAt.toLocaleDateString(dateLocale)}
                     </td>
                     <td className="p-3">
                       <div className="flex flex-wrap items-center gap-1.5">
                         {company.id === activeCompanyId && (
                           <Badge className="gap-1 bg-primary/10 text-primary hover:bg-primary/10">
                             <Star className="size-3" />
-                            פעילה בפלטפורמה
+                            {t("platformCompanies.activeOnPlatform")}
                           </Badge>
                         )}
                         <StatusBadge company={company} />
                         {company.archivedAt && (
                           <Badge variant="secondary" className="gap-1">
                             <Archive className="size-3" />
-                            בארכיון
+                            {t("platformCompanies.archived")}
                           </Badge>
                         )}
                       </div>
@@ -175,7 +179,7 @@ function CompaniesPage() {
                             variant="ghost"
                             size="icon"
                             className="size-8"
-                            title="הפוך לפעילה"
+                            title={t("platformCompanies.makeActive")}
                             onClick={() => setActiveCompanyId(company.id)}
                           >
                             <Star className="size-4" />

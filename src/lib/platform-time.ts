@@ -8,7 +8,7 @@
  * containment for values that may cross midnight.
  *
  * Every time-based module (Weekly Schedule, Employee Schedule, Main Dashboard,
- * Morning Board, Notifications, Breaks, future attendance / payroll) should
+ * Main Board, Notifications, Breaks, future attendance / payroll) should
  * consume these helpers so behavior stays identical for every viewer.
  */
 import { useEffect, useRef, useState } from "react";

@@ -3,10 +3,11 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/use-auth";
 import {
-  ROLE_LABELS,
+  getRoleLabel,
   ROLE_OPTIONS,
   type AppRole,
 } from "@/lib/constants";
+import { useTranslation } from "react-i18next";
 import { isNonEmployeeIdentity } from "@/lib/employee-identity";
 import { Card } from "@/components/ui/card";
 import {
@@ -66,7 +67,6 @@ import {
   BarChart3,
   Cog,
   Trophy,
-  Sun,
   Megaphone,
   Package,
   RotateCcw,
@@ -92,149 +92,116 @@ interface Row {
   role: AppRole;
 }
 
-type PermDef = { key: string; label: string; description: string };
-type Category = {
+type CategoryDef = {
   id: string;
-  title: string;
   icon: typeof Users;
-  perms: PermDef[];
+  keys: string[];
 };
 
-const CATEGORIES: Category[] = [
+const CATEGORY_DEFS: CategoryDef[] = [
   {
     id: "employees",
-    title: "עובדים",
     icon: Users,
-    perms: [
-      { key: "can_view_all_employees", label: "צפייה בכל העובדים", description: "מאפשר למשתמש לצפות בכל עובדי החברה ללא אפשרות לערוך אותם." },
-      { key: "can_view_employee_details", label: "צפייה בפרטי עובד", description: "מאפשר לפתוח כרטיס עובד ולראות את הפרטים האישיים שלו." },
-      { key: "can_add_employee", label: "הוספת עובד", description: "מאפשר ליצור משתמשי עובדים חדשים במערכת." },
-      { key: "can_edit_employee", label: "עריכת עובד", description: "מאפשר לשנות פרטים של עובד קיים (שם, מחלקה, טלפון וכו')." },
-      { key: "can_delete_employee", label: "מחיקת עובד", description: "מאפשר להסיר עובדים מהמערכת כולל כל הנתונים שלהם." },
-      { key: "can_reset_employee_password", label: "איפוס סיסמת עובד", description: "מאפשר ליצור סיסמה זמנית לעובד שאיבד גישה." },
-      { key: "can_manage_departments", label: "ניהול מחלקות", description: "מאפשר יצירה, עריכה ומחיקה של מחלקות בארגון." },
-      { key: "can_export_employees", label: "ייצוא רשימת עובדים", description: "מאפשר להוריד רשימת עובדים לקובץ חיצוני." },
+    keys: [
+      "can_view_all_employees",
+      "can_view_employee_details",
+      "can_add_employee",
+      "can_edit_employee",
+      "can_delete_employee",
+      "can_reset_employee_password",
+      "can_manage_departments",
+      "can_export_employees",
     ],
   },
   {
     id: "schedules",
-    title: "סידורי עבודה",
     icon: Calendar,
-    perms: [
-      { key: "can_view_schedule", label: "צפייה בסידורי עבודה", description: "מאפשר לראות סידורי עבודה של מחלקות." },
-      { key: "can_create_schedule", label: "יצירת סידור עבודה", description: "מאפשר ליצור סידור עבודה שבועי חדש." },
-      { key: "can_edit_schedule", label: "עריכת סידור עבודה", description: "מאפשר לשנות סידור עבודה קיים לפני אישורו." },
-      { key: "can_approve_schedule", label: "אישור סידור עבודה", description: "מאפשר לאשר סידור עבודה ששלח אחראי מחלקה." },
-      { key: "can_publish_schedule", label: "פרסום סידור עבודה", description: "מאפשר לאשר ולפרסם סידור עבודה ישירות לעובדים." },
-      {
-        key: "can_manage_schedule",
-        label: "הגדרות משמרות",
-        description:
-          "מאפשר לנהל סוגי משמרות, שעות לפי יום ותקופת הסידור. ברירת מחדל: רק בעל המערכת — ניתן להעניק לסגן מנהל או מנהל סניף.",
-      },
+    keys: [
+      "can_view_schedule",
+      "can_create_schedule",
+      "can_edit_schedule",
+      "can_approve_schedule",
+      "can_publish_schedule",
+      "can_manage_schedule",
     ],
   },
   {
     id: "leave",
-    title: "חופשות",
     icon: Palmtree,
-    perms: [
-      { key: "can_view_leave", label: "צפייה בבקשות חופשה", description: "מאפשר לפתוח את ניהול החופשות ולראות בקשות בסניף." },
-      { key: "can_approve_leave", label: "אישור חופשות", description: "מאפשר לאשר בקשת חופשה בשלב ההנהלה." },
-      { key: "can_reject_leave", label: "דחיית חופשות", description: "מאפשר לדחות בקשת חופשה בשלב ההנהלה." },
-      { key: "can_edit_leave_balance", label: "עריכת יתרת חופשה", description: "מאפשר לעדכן יתרות ושיעור צבירה חודשית לעובד. לא אוטומטי למנהל/סגן — רק בהענקת הרשאה מבעל הפלטפורמה." },
-    ],
+    keys: ["can_view_leave", "can_approve_leave", "can_reject_leave", "can_edit_leave_balance"],
   },
   {
     id: "breaks",
-    title: "הפסקות",
     icon: Coffee,
-    perms: [
-      { key: "can_view_breaks", label: "צפייה בעובדים בהפסקה", description: "מאפשר לראות אילו עובדים נמצאים בהפסקה כרגע." },
-      { key: "can_manage_breaks", label: "ניהול הפסקות", description: "מאפשר יצירה, עריכה ומחיקה של בקשות הפסקה." },
-    ],
+    keys: ["can_view_breaks", "can_manage_breaks"],
   },
   {
     id: "tasks",
-    title: "משימות",
     icon: ListChecks,
-    perms: [
-      { key: "can_view_tasks", label: "צפייה במשימות", description: "מאפשר לראות את כל המשימות במערכת." },
-      { key: "can_create_tasks", label: "יצירת משימות", description: "מאפשר להקים משימות חדשות ולשבץ אליהן עובדים." },
-      { key: "can_edit_tasks", label: "עריכת משימות", description: "מאפשר לעדכן פרטי משימה קיימת." },
-      { key: "can_delete_tasks", label: "מחיקת משימות", description: "מאפשר למחוק משימות מהמערכת." },
-      { key: "can_approve_tasks", label: "אישור משימות (כשהיוצר הוא אחראי מחלקה)", description: "מאפשר לאשר השלמת משימה שיצר אחראי מחלקה." },
+    keys: [
+      "can_view_tasks",
+      "can_create_tasks",
+      "can_edit_tasks",
+      "can_delete_tasks",
+      "can_approve_tasks",
     ],
   },
   {
     id: "messages",
-    title: "מרכז תקשורת",
     icon: MessageSquare,
-    perms: [
-      { key: "can_view_messages", label: "צפייה בהודעות", description: "מאפשר לפתוח את מרכז התקשורת ולקרוא הודעות שהתקבלו." },
-      { key: "can_send_messages", label: "שליחת הודעות", description: "הרשאת בסיס לשליחת הודעות מתוך המערכת." },
-      { key: "can_send_message_employee", label: "שליחת הודעה לעובד", description: "מאפשר לשלוח הודעה אישית לעובד בודד." },
-      { key: "can_send_message_department", label: "שליחת הודעה למחלקה", description: "מאפשר לשלוח הודעה לכל עובדי מחלקה." },
-      { key: "can_send_message_all", label: "שליחת הודעה לכל העובדים", description: "מאפשר לשלוח הודעה לכל עובדי החברה." },
-      { key: "can_manage_communications", label: "ניהול מרכז התקשורת", description: "מאפשר לערוך ולמחוק הודעות של אחרים, וצפייה בלוג הפעילות." },
-      { key: "can_delete_communications", label: "מחיקת הודעות", description: "מאפשר למחוק הודעות (כולל מחיקה לצמיתות)." },
-      { key: "can_view_read_receipts", label: "צפייה באישורי קריאה", description: "מאפשר לראות מי קרא הודעות ומי טרם קרא." },
+    keys: [
+      "can_view_messages",
+      "can_send_messages",
+      "can_send_message_employee",
+      "can_send_message_department",
+      "can_send_message_all",
+      "can_manage_communications",
+      "can_delete_communications",
+      "can_view_read_receipts",
     ],
   },
   {
     id: "reports",
-    title: "דוחות",
     icon: BarChart3,
-    perms: [
-      { key: "can_view_reports", label: "צפייה בדוחות", description: "מאפשר לצפות בדוחות הניהול של המערכת." },
-      { key: "can_export_reports", label: "ייצוא דוחות", description: "מאפשר להוריד דוחות לקובץ חיצוני." },
-    ],
+    keys: ["can_view_reports", "can_export_reports"],
   },
   {
     id: "recognition",
-    title: "הוקרת עובדים",
     icon: Trophy,
-    perms: [
-      { key: "can_manage_employee_of_month", label: "🏆 ניהול עובד החודש", description: "מאפשר לבחור עובדים מצטיינים לחודש, לעדכן סיבת בחירה, להעלות תמונות ולמחוק רשומות." },
-    ],
+    keys: ["can_manage_employee_of_month"],
   },
   {
     id: "morning_board",
-    title: "לוח ראשי",
     icon: Megaphone,
-    perms: [
-      { key: "can_manage_morning_board", label: "📢 ניהול תוכן לוח ראשי", description: "מאפשר להוסיף, לערוך, לסדר ולמחוק את פריטי הלוח הראשי של הסניף — תמונות, סרטונים והודעות. ניתן להעניק רק לאחראי סניף או סגן אחראי." },
-    ],
+    keys: ["can_manage_morning_board"],
   },
   {
     id: "custody",
-    title: "מערכת ניהול ציוד",
     icon: Package,
-    perms: [
-      { key: "can_create_custody", label: "הוספת ציוד", description: "מאפשר להוסיף פריטי ציוד חדשים (לדוגמה: ציוד 1, ציוד 2). ניתן להעניק למנהל סניף או סגן מנהל." },
-      { key: "can_edit_custody", label: "עריכת ציוד", description: "מאפשר לשנות שם, סדר ותזכורות של פריטי ציוד קיימים." },
-      { key: "can_delete_custody", label: "השבתת/מחיקת ציוד", description: "מאפשר להשבית פריט ציוד שלא בשימוש." },
-      { key: "can_return_custody", label: "החזרת ציוד בשם עובד", description: "מאפשר להחזיר ציוד שעובד אחר לקח. מנהל סניף תמיד יכול — הרשאה זו מיועדת בעיקר לסגן מנהל." },
-      { key: "can_receive_custody_alerts", label: "קבלת התראות ציוד", description: "מקבל התראה כשעובד סיים משמרת ועדיין מחזיק ציוד, או לפני חצות." },
-      { key: "can_configure_custody", label: "הגדרות מערכת ציוד", description: "מאפשר לעדכן זמני תזכורת, איפוס לוג יומי והתראות חצות." },
-      { key: "can_view_custody_daily_log", label: "צפייה בלוג יומי", description: "מאפשר לצפות בלוג השימוש היומי בציוד (מתאפס לפי הגדרות הסניף)." },
-      { key: "can_run_custody_monthly_report", label: "דוח חודשי ציוד", description: "מאפשר להפיק דוח חודשי ולארכב נתוני ציוד." },
+    keys: [
+      "can_create_custody",
+      "can_edit_custody",
+      "can_delete_custody",
+      "can_return_custody",
+      "can_receive_custody_alerts",
+      "can_configure_custody",
+      "can_view_custody_daily_log",
+      "can_run_custody_monthly_report",
     ],
   },
   {
     id: "system",
-    title: "מערכת",
     icon: Cog,
-    perms: [
-      { key: "can_manage_permissions", label: "ניהול הרשאות", description: "מאפשר לקבוע אילו הרשאות יש לכל משתמש." },
-      { key: "can_manage_company_settings", label: "ניהול הגדרות חברה", description: "מאפשר לעדכן שם חברה, לוגו, צבעים ופרטי קשר." },
-      { key: "can_view_activity_log", label: "צפייה בלוג פעילות", description: "מאפשר לצפות בהיסטוריית הפעולות במערכת." },
-      { key: "can_manage_users", label: "ניהול משתמשים", description: "מאפשר ניהול חשבונות משתמשים ותפקידיהם." },
+    keys: [
+      "can_manage_permissions",
+      "can_manage_company_settings",
+      "can_view_activity_log",
+      "can_manage_users",
     ],
   },
 ];
 
-const ALL_PERM_KEYS = CATEGORIES.flatMap((c) => c.perms.map((p) => p.key));
+const ALL_PERM_KEYS = CATEGORY_DEFS.flatMap((c) => c.keys);
 
 const DEFAULT_MANAGER_PERMS: Record<string, boolean> = {
   can_view_dashboard: true,
@@ -251,6 +218,7 @@ function buildEmptyPerms(): Record<string, boolean> {
 }
 
 export function PermissionsPage() {
+  const { t } = useTranslation();
   const qc = useQueryClient();
   const { data: me } = useAuth();
   const isMainAdmin = !!me?.roles.includes("main_admin");
@@ -326,7 +294,7 @@ export function PermissionsPage() {
       await changeRoleFn({ data: { user_id: userId, role } });
     },
     onSuccess: () => {
-      toast.success("ההרשאה עודכנה");
+      toast.success(t("permissions.roleUpdated"));
       qc.invalidateQueries({ queryKey: ["permissions-list"] });
       qc.invalidateQueries({ queryKey: ["all-roles"] });
       qc.invalidateQueries({ queryKey: ["auth", "me"] });
@@ -334,14 +302,14 @@ export function PermissionsPage() {
       qc.invalidateQueries({ queryKey: ["departments"] });
       qc.invalidateQueries({ queryKey: ["employees"] });
     },
-    onError: (e: any) => toast.error(e?.message ?? "שגיאה"),
+    onError: (e: any) => toast.error(e?.message ?? t("common.error")),
   });
 
   if (!allowed) {
     return (
       <Card className="card-elevated p-8 text-center">
-        <h2 className="text-lg font-semibold">אין הרשאה</h2>
-        <p className="text-sm text-muted-foreground mt-2">רק בעל המערכת יכול לנהל הרשאות.</p>
+        <h2 className="text-lg font-semibold">{t("permissions.noAccessTitle")}</h2>
+        <p className="text-sm text-muted-foreground mt-2">{t("permissions.noAccessDesc")}</p>
       </Card>
     );
   }
@@ -377,8 +345,8 @@ export function PermissionsPage() {
             <ShieldCheck className="size-5" />
           </div>
           <div>
-            <h1 className="text-2xl sm:text-3xl font-bold">ניהול הרשאות</h1>
-            <p className="text-sm text-muted-foreground mt-1">קביעת תפקיד מערכת והרשאות מפורטות לכל עובד</p>
+            <h1 className="text-2xl sm:text-3xl font-bold">{t("permissions.title")}</h1>
+            <p className="text-sm text-muted-foreground mt-1">{t("permissions.subtitle")}</p>
           </div>
         </header>
 
@@ -392,7 +360,7 @@ export function PermissionsPage() {
                   {row.full_name?.charAt(0) || "?"}
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className="font-medium truncate">{row.full_name || "ללא שם"}</p>
+                  <p className="font-medium truncate">{row.full_name || t("permissions.noName")}</p>
                   <p className="text-xs text-muted-foreground">{row.department_name}</p>
                 </div>
                 <div className="w-40 shrink-0">
@@ -404,12 +372,12 @@ export function PermissionsPage() {
                     <SelectTrigger><SelectValue /></SelectTrigger>
                     <SelectContent>
                       {roleOptions.map((r) => (
-                        <SelectItem key={r} value={r}>{ROLE_LABELS[r]}</SelectItem>
+                        <SelectItem key={r} value={r}>{getRoleLabel(r)}</SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
                   {row.id === me?.id ? (
-                    <p className="text-[10px] text-muted-foreground mt-1 text-center">אינך יכול לערוך את עצמך</p>
+                    <p className="text-[10px] text-muted-foreground mt-1 text-center">{t("permissions.cannotEditSelf")}</p>
                   ) : null}
                 </div>
                 { (row.role === "assistant_manager" ||
@@ -426,9 +394,9 @@ export function PermissionsPage() {
         {overrideRows.length > 0 && (
           <section className="space-y-3">
             <div>
-              <h2 className="text-xl font-bold">הרשאות נוספות פעילות</h2>
+              <h2 className="text-xl font-bold">{t("permissions.activeOverridesTitle")}</h2>
               <p className="text-sm text-muted-foreground mt-1">
-                עובדים עם הרשאות ציוד, סידור או משימות (או הרשאות ישנות) שלא תואמות את תפקידם — ניתן להסיר מכאן.
+                {t("permissions.activeOverridesDesc")}
               </p>
             </div>
             <div className="grid gap-3">
@@ -437,11 +405,11 @@ export function PermissionsPage() {
                   <div className="flex-1 min-w-0">
                     <p className="font-semibold truncate">{row.full_name}</p>
                     <p className="text-xs text-muted-foreground">
-                      {ROLE_LABELS[row.role as AppRole] ?? row.role}
-                      {row.staleRole ? " · הרשאות ישנות" : ""}
-                      {row.hasCustodyOverride ? " · הרשאות ציוד פעילות" : ""}
-                      {row.hasScheduleOverride ? " · הרשאות סידור פעילות" : ""}
-                      {row.hasTaskOverride ? " · הרשאות משימות פעילות" : ""}
+                      {getRoleLabel(row.role as AppRole) ?? row.role}
+                      {row.staleRole ? ` · ${t("permissions.staleRole")}` : ""}
+                      {row.hasCustodyOverride ? ` · ${t("permissions.custodyOverride")}` : ""}
+                      {row.hasScheduleOverride ? ` · ${t("permissions.scheduleOverride")}` : ""}
+                      {row.hasTaskOverride ? ` · ${t("permissions.taskOverride")}` : ""}
                     </p>
                   </div>
                   <ResetPermissionsButtons userId={row.id} compact />
@@ -458,11 +426,11 @@ export function PermissionsPage() {
                 <Settings2 className="size-5" />
               </div>
               <div className="flex-1">
-                <h2 className="text-xl font-bold">הרשאות מפורטות למנהלים</h2>
+                <h2 className="text-xl font-bold">{t("permissions.detailedTitle")}</h2>
                 <p className="text-sm text-muted-foreground mt-1">
                   {isPlatformOwner
-                    ? "הענקה/הסרה של הרשאות פעולה למנהלי סניף ולסגני מנהל. מנהל סניף אינו מקבל הרשאות אוטומטית — רק מה שמוענק כאן."
-                    : "הענקה/הסרה של הרשאות פעולה לסגני מנהל בסניף. השינוי נשמר ונכנס לתוקף מיד."}
+                    ? t("permissions.detailedDescOwner")
+                    : t("permissions.detailedDescBm")}
                 </p>
               </div>
               {managers.length >= 2 && <CopyPermsButton managers={managers} />}
@@ -470,8 +438,8 @@ export function PermissionsPage() {
             {managers.length === 0 ? (
               <Card className="card-elevated p-6 text-sm text-muted-foreground text-center">
                 {isPlatformOwner
-                  ? "אין מנהלי סניף או סגני מנהל להגדרה."
-                  : "אין סגני מנהל להגדרה."}
+                  ? t("permissions.noManagersOwner")
+                  : t("permissions.noManagersBm")}
               </Card>
             ) : (
               <div className="grid gap-3">
@@ -496,6 +464,7 @@ function ResetPermissionsButtons({
   onDone?: () => void;
   compact?: boolean;
 }) {
+  const { t } = useTranslation();
   const qc = useQueryClient();
   const resetFn = useServerFn(resetUserPermissions);
   const mut = useMutation({
@@ -503,7 +472,7 @@ function ResetPermissionsButtons({
       mode: "role_default" | "clear_all" | "schedules_only" | "tasks_only" | "custody_only",
     ) => resetFn({ data: { user_id: userId, mode } }),
     onSuccess: () => {
-      toast.success("ההרשאות אופסו");
+      toast.success(t("permissions.permsReset"));
       qc.invalidateQueries({ queryKey: ["user-perms", userId] });
       qc.invalidateQueries({ queryKey: ["permission-overrides"] });
       qc.invalidateQueries({ queryKey: ["task-perm"] });
@@ -512,7 +481,7 @@ function ResetPermissionsButtons({
       qc.invalidateQueries({ queryKey: ["current-user-permissions", userId] });
       onDone?.();
     },
-    onError: (e: any) => toast.error(e?.message ?? "שגיאה"),
+    onError: (e: any) => toast.error(e?.message ?? t("common.error")),
   });
 
   return (
@@ -526,7 +495,7 @@ function ResetPermissionsButtons({
         onClick={() => mut.mutate("custody_only")}
       >
         <RotateCcw className="size-3.5 ml-1" />
-        הסרת הרשאות ציוד
+        {t("permissions.resetCustody")}
       </Button>
       <Button
         type="button"
@@ -537,7 +506,7 @@ function ResetPermissionsButtons({
         onClick={() => mut.mutate("schedules_only")}
       >
         <RotateCcw className="size-3.5 ml-1" />
-        הסרת הרשאות סידור
+        {t("permissions.resetSchedules")}
       </Button>
       <Button
         type="button"
@@ -548,7 +517,7 @@ function ResetPermissionsButtons({
         onClick={() => mut.mutate("tasks_only")}
       >
         <RotateCcw className="size-3.5 ml-1" />
-        הסרת הרשאות משימות
+        {t("permissions.resetTasks")}
       </Button>
       <Button
         type="button"
@@ -559,7 +528,7 @@ function ResetPermissionsButtons({
         onClick={() => mut.mutate("role_default")}
       >
         <RotateCcw className="size-3.5 ml-1" />
-        איפוס לברירת מחדל
+        {t("permissions.resetDefault")}
       </Button>
       <Button
         type="button"
@@ -569,24 +538,25 @@ function ResetPermissionsButtons({
         disabled={mut.isPending}
         onClick={() => mut.mutate("clear_all")}
       >
-        הסרת כל ההרשאות
+        {t("permissions.resetAll")}
       </Button>
     </div>
   );
 }
 
-function PermLabel({ def }: { def: PermDef }) {
+function PermLabel({ permKey }: { permKey: string }) {
+  const { t } = useTranslation();
   return (
     <div className="flex items-center gap-1.5 min-w-0">
-      <span className="text-sm truncate">{def.label}</span>
+      <span className="text-sm truncate">{t(`permissions.perms.${permKey}.label`)}</span>
       <Tooltip>
         <TooltipTrigger asChild>
-          <button type="button" className="text-muted-foreground hover:text-foreground shrink-0" aria-label="מידע">
+          <button type="button" className="text-muted-foreground hover:text-foreground shrink-0" aria-label={t("permissions.infoAria")}>
             <Info className="size-3.5" />
           </button>
         </TooltipTrigger>
         <TooltipContent side="top" className="max-w-xs text-right leading-relaxed">
-          {def.description}
+          {t(`permissions.perms.${permKey}.description`)}
         </TooltipContent>
       </Tooltip>
     </div>
@@ -602,6 +572,7 @@ function ManagerPermsCard({
   name: string;
   role: AppRole;
 }) {
+  const { t, i18n } = useTranslation();
   const qc = useQueryClient();
   const save = useServerFn(setUserPermissions);
   const [search, setSearch] = useState("");
@@ -639,7 +610,7 @@ function ManagerPermsCard({
     mutationFn: (next: Record<string, boolean>) =>
       save({ data: { user_id: userId, perms: next as any } }),
     onSuccess: () => {
-      toast.success("ההרשאות עודכנו");
+      toast.success(t("permissions.permsUpdated"));
       qc.invalidateQueries({ queryKey: ["user-perms", userId] });
       qc.invalidateQueries({ queryKey: ["task-perm"] });
       qc.invalidateQueries({ queryKey: ["custody-caps"] });
@@ -647,7 +618,7 @@ function ManagerPermsCard({
       qc.invalidateQueries({ queryKey: ["permission-overrides"] });
     },
     onError: (e: any) => {
-      toast.error(e?.message ?? "שגיאה");
+      toast.error(e?.message ?? t("common.error"));
       // Revert optimistic state on failure so the toggle reflects reality.
       qc.invalidateQueries({ queryKey: ["user-perms", userId] });
     },
@@ -660,26 +631,24 @@ function ManagerPermsCard({
   }
 
   const term = search.trim().toLowerCase();
-  const filtered: Category[] = useMemo(() => {
-    if (!term) return CATEGORIES;
-    return CATEGORIES
-      .map((c) => ({
-        ...c,
-        perms: c.perms.filter(
-          (p) =>
-            p.label.toLowerCase().includes(term) ||
-            p.description.toLowerCase().includes(term),
-        ),
-      }))
-      .filter((c) => c.perms.length > 0);
-  }, [term]);
+  const filtered: CategoryDef[] = useMemo(() => {
+    if (!term) return CATEGORY_DEFS;
+    return CATEGORY_DEFS.map((c) => ({
+      ...c,
+      keys: c.keys.filter((key) => {
+        const label = t(`permissions.perms.${key}.label`).toLowerCase();
+        const description = t(`permissions.perms.${key}.description`).toLowerCase();
+        return label.includes(term) || description.includes(term);
+      }),
+    })).filter((c) => c.keys.length > 0);
+  }, [term, t, i18n.language]);
 
   return (
     <Card className="card-elevated p-4">
       <div className="flex items-center justify-between gap-3 mb-3 flex-wrap">
         <div>
           <p className="font-semibold">{name}</p>
-          <p className="text-xs text-muted-foreground">{ROLE_LABELS[role]}</p>
+          <p className="text-xs text-muted-foreground">{getRoleLabel(role)}</p>
         </div>
         {mut.isPending && <Loader2 className="size-4 animate-spin text-primary" />}
       </div>
@@ -691,43 +660,43 @@ function ManagerPermsCard({
         <Input
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          placeholder="חיפוש הרשאה…"
+          placeholder={t("permissions.searchPlaceholder")}
           className="pr-9"
         />
       </div>
 
       {filtered.length === 0 ? (
-        <p className="text-sm text-muted-foreground text-center py-6">לא נמצאו הרשאות מתאימות.</p>
+        <p className="text-sm text-muted-foreground text-center py-6">{t("permissions.noSearchResults")}</p>
       ) : (
         <Accordion type="multiple" defaultValue={term ? filtered.map((c) => c.id) : []} className="w-full">
           {filtered.map((cat) => {
             const Icon = cat.icon;
-            const onCount = cat.perms.filter((p) => state[p.key]).length;
+            const onCount = cat.keys.filter((key) => state[key]).length;
             return (
               <AccordionItem key={cat.id} value={cat.id}>
                 <AccordionTrigger className="py-3">
                   <div className="flex items-center gap-2 flex-1">
                     <Icon className="size-4 text-primary" />
-                    <span className="font-medium">{cat.title}</span>
+                    <span className="font-medium">{t(`permissions.categories.${cat.id}`)}</span>
                     <span className="text-xs text-muted-foreground ms-auto me-2">
-                      {onCount}/{cat.perms.length}
+                      {onCount}/{cat.keys.length}
                     </span>
                   </div>
                 </AccordionTrigger>
                 <AccordionContent>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
-                    {cat.perms.map((p) => (
+                    {cat.keys.map((key) => (
                       <div
-                        key={p.key}
+                        key={key}
                         className="flex items-center justify-between gap-2 px-3 py-2 rounded-md border bg-card"
                       >
-                        <Label htmlFor={`${userId}-${p.key}`} className="cursor-pointer flex-1 min-w-0">
-                          <PermLabel def={p} />
+                        <Label htmlFor={`${userId}-${key}`} className="cursor-pointer flex-1 min-w-0">
+                          <PermLabel permKey={key} />
                         </Label>
                         <Switch
-                          id={`${userId}-${p.key}`}
-                          checked={!!state[p.key]}
-                          onCheckedChange={(v) => toggle(p.key, v)}
+                          id={`${userId}-${key}`}
+                          checked={!!state[key]}
+                          onCheckedChange={(v) => toggle(key, v)}
                         />
                       </div>
                     ))}
@@ -743,6 +712,7 @@ function ManagerPermsCard({
 }
 
 function CopyPermsButton({ managers }: { managers: Row[] }) {
+  const { t } = useTranslation();
   const qc = useQueryClient();
   const save = useServerFn(setUserPermissions);
   const [open, setOpen] = useState(false);
@@ -771,7 +741,7 @@ function CopyPermsButton({ managers }: { managers: Row[] }) {
         next.can_approve_tasks = true;
       }
       await save({ data: { user_id: toId, perms: next as any } });
-      toast.success("ההרשאות הועתקו בהצלחה");
+      toast.success(t("permissions.copySuccess"));
       qc.invalidateQueries({ queryKey: ["user-perms", toId] });
       qc.invalidateQueries({ queryKey: ["task-perm"] });
       qc.invalidateQueries({ queryKey: ["current-user-permissions", toId] });
@@ -780,7 +750,7 @@ function CopyPermsButton({ managers }: { managers: Row[] }) {
       setFromId("");
       setToId("");
     } catch (e: any) {
-      toast.error(e?.message ?? "שגיאה בהעתקה");
+      toast.error(e?.message ?? t("permissions.copyError"));
     } finally {
       setBusy(false);
     }
@@ -792,41 +762,41 @@ function CopyPermsButton({ managers }: { managers: Row[] }) {
     <>
       <Button variant="outline" size="sm" onClick={() => setOpen(true)} className="gap-2">
         <Copy className="size-4" />
-        העתק הרשאות מתפקיד קיים
+        {t("permissions.copyButton")}
       </Button>
 
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>העתקת הרשאות</DialogTitle>
+            <DialogTitle>{t("permissions.copyTitle")}</DialogTitle>
             <DialogDescription>
-              בחר ממי להעתיק ולמי להדביק. רק הרשאות יועתקו — לא משתמשים, עובדים, מחלקות או נתונים אחרים.
+              {t("permissions.copyDesc")}
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
             <div className="space-y-2">
-              <Label>העתק הרשאות מתוך</Label>
+              <Label>{t("permissions.copyFrom")}</Label>
               <Select value={fromId} onValueChange={setFromId}>
-                <SelectTrigger><SelectValue placeholder="בחירת משתמש" /></SelectTrigger>
+                <SelectTrigger><SelectValue placeholder={t("permissions.selectUser")} /></SelectTrigger>
                 <SelectContent>
                   {managers.map((m) => (
                     <SelectItem key={m.id} value={m.id}>
-                      {m.full_name} ({ROLE_LABELS[m.role]})
+                      {m.full_name} ({getRoleLabel(m.role)})
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
             </div>
             <div className="space-y-2">
-              <Label>הדבק הרשאות אל</Label>
+              <Label>{t("permissions.copyTo")}</Label>
               <Select value={toId} onValueChange={setToId}>
-                <SelectTrigger><SelectValue placeholder="בחירת משתמש" /></SelectTrigger>
+                <SelectTrigger><SelectValue placeholder={t("permissions.selectUser")} /></SelectTrigger>
                 <SelectContent>
                   {managers
                     .filter((m) => m.id !== fromId)
                     .map((m) => (
                       <SelectItem key={m.id} value={m.id}>
-                        {m.full_name} ({ROLE_LABELS[m.role]})
+                        {m.full_name} ({getRoleLabel(m.role)})
                       </SelectItem>
                     ))}
                 </SelectContent>
@@ -834,9 +804,9 @@ function CopyPermsButton({ managers }: { managers: Row[] }) {
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setOpen(false)}>ביטול</Button>
+            <Button variant="outline" onClick={() => setOpen(false)}>{t("common.cancel")}</Button>
             <Button onClick={() => setConfirm(true)} disabled={!fromId || !toId || fromId === toId}>
-              המשך
+              {t("permissions.continue")}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -845,15 +815,15 @@ function CopyPermsButton({ managers }: { managers: Row[] }) {
       <AlertDialog open={confirm} onOpenChange={setConfirm}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>אישור העתקה</AlertDialogTitle>
+            <AlertDialogTitle>{t("permissions.copyConfirmTitle")}</AlertDialogTitle>
             <AlertDialogDescription>
-              פעולה זו תחליף את כל ההרשאות של <strong>{toLabel(toId)}</strong> בהרשאות של <strong>{toLabel(fromId)}</strong>. האם להמשיך?
+              {t("permissions.copyConfirmDesc", { to: toLabel(toId), from: toLabel(fromId) })}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel disabled={busy}>ביטול</AlertDialogCancel>
+            <AlertDialogCancel disabled={busy}>{t("common.cancel")}</AlertDialogCancel>
             <AlertDialogAction onClick={doCopy} disabled={busy}>
-              {busy ? <Loader2 className="size-4 animate-spin" /> : "אישור והעתקה"}
+              {busy ? <Loader2 className="size-4 animate-spin" /> : t("permissions.copyConfirmAction")}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

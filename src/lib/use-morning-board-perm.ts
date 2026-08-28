@@ -4,8 +4,8 @@ import { useAuth } from "@/lib/use-auth";
 import { usePlatformOwnerStatus } from "@/lib/platform-owners.hooks";
 
 /**
- * Whether the current user can manage (add/edit/delete/reorder) Morning
- * Board content for a given branch.
+ * Whether the current user can manage (add/edit/delete/reorder) Main Board
+ * content for a given branch.
  *
  * Mirrors the DB rule (can_manage_morning_board_for_branch):
  *  - Platform Owner (main_admin / system_admin) → any branch

@@ -37,7 +37,7 @@ function isVisibleNow(row: MorningBoardItem, now = Date.now()) {
 }
 
 /**
- * Morning Board — branch-scoped real-time communication center.
+ * Main Board — branch-scoped real-time communication center.
  *
  * Supports images, videos, audio, plain announcements and highlighted
  * announcements. Pinned items are always rendered first, then by display order.
@@ -169,12 +169,12 @@ export function MorningBoard() {
   if (visible.length === 0 && !canManage) return null;
 
   return (
-    <section aria-label={`${i18n.t("dashboard.morningBoard")} ${activeBranch?.name ?? ""}`} className="space-y-3">
+    <section aria-label={`${i18n.t("dashboard.mainBoard")} ${activeBranch?.name ?? ""}`} className="space-y-3">
       {canManage && (
         <div className="flex items-center justify-between">
           <h2 className="text-lg font-semibold flex items-center gap-2">
             <Megaphone className="size-5 text-primary" />
-            {i18n.t("dashboard.morningBoard")}
+            {i18n.t("dashboard.mainBoard")}
           </h2>
           <Button size="sm" variant="outline" onClick={() => setManagerOpen(true)}>
             <Settings2 className="size-4" />
@@ -291,7 +291,7 @@ function MorningBoardItemView({
           type="button"
           onClick={() => onImageClick(url)}
           className="block w-full cursor-zoom-in focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-          aria-label={row.title ?? i18n.t("dashboard.morningBoard")}
+          aria-label={row.title ?? i18n.t("dashboard.mainBoard")}
         >
           <img src={url} alt={row.title ?? ""} className="block w-full h-auto object-contain" draggable={false} />
         </button>
