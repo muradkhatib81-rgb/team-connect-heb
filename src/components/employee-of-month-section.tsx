@@ -27,11 +27,6 @@ type Profile = {
   departments: { name: string } | null;
 };
 
-const HEBREW_MONTHS = [
-  "ינואר", "פברואר", "מרץ", "אפריל", "מאי", "יוני",
-  "יולי", "אוגוסט", "ספטמבר", "אוקטובר", "נובמבר", "דצמבר",
-];
-
 async function signUrl(bucket: string, path: string | null): Promise<string | null> {
   if (!path) return null;
   const { data } = await supabase.storage.from(bucket).createSignedUrl(path, 60 * 60);
@@ -143,7 +138,7 @@ export function EmployeeOfMonthSection() {
   const count = list.length;
   const title = count >= 2 ? i18n.t("dashboard.eomTitlePlural") : i18n.t("dashboard.eomTitle");
   const months = i18n.t("dashboard.months", { returnObjects: true }) as string[];
-  const monthLabel = `${months[month - 1] ?? HEBREW_MONTHS[month - 1]} ${year}`;
+  const monthLabel = `${months[month - 1] ?? ""} ${year}`;
 
   return (
     <section>

@@ -2,6 +2,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { requireBranchContext } from "@/integrations/supabase/active-branch.server";
 import { z } from "zod";
 import { isEmployeeOnLeaveOnDate } from "@/lib/employee-leave";
+import i18n from "@/i18n";
 import {
   canEditScheduleTimes,
   resolveScheduleManagerCaps,
@@ -372,7 +373,7 @@ async function notifyScheduleDepartment(
     userIds: recipientIds,
     message,
     scheduleId,
-    title: "עדכון סידור עבודה",
+    title: i18n.t("serverErrors.schedules.updateTitle"),
     eventKey,
     excludeUserId,
     skipPushEndpoints,
@@ -776,7 +777,7 @@ export const getScheduleShiftsForViewer = createServerFn({ method: "POST" })
       .maybeSingle();
     if (schedErr) throw new Error(schedErr.message);
     if (!sched || !(await isScheduleVisibleToCaps(sched, caps, context.userId, context.supabase))) {
-      throw new Error("אין הרשאה לצפות בסידור");
+      throw new Error(i18n.t("serverErrors.schedules.noViewPermission"));
     }
     const { data: shifts, error } = await supabaseAdmin
       .from("schedule_shifts")
@@ -797,10 +798,10 @@ export const createOrGetSchedule = createServerFn({ method: "POST" })
   .inputValidator((d: unknown) => upsertSchema.parse(d))
   .handler(async ({ data, context }) => {
     const caps = await getCaps(context.supabase, context.userId);
-    if (!caps.canCreate) throw new Error("אין הרשאה ליצור סידור עבודה");
+    if (!caps.canCreate) throw new Error(i18n.t("serverErrors.schedules.noCreatePermission"));
     if (caps.isDeptHeadOnly) {
       if (data.department_id !== caps.departmentId) {
-        throw new Error("ניתן ליצור סידור רק עבור המחלקה שלך");
+        throw new Error(i18n.t("serverErrors.schedules.createOnlyOwnDept"));
       }
     }
     const periodConfig = await fetchBranchPeriodConfig(context.supabase, context.branchId);
@@ -815,7 +816,7 @@ export const createOrGetSchedule = createServerFn({ method: "POST" })
       const currentPeriod = getReferencePeriodStart(todayHe, periodConfig);
       const nextPeriod = shiftPeriodStart(currentPeriod, periodConfig, 1);
       if (start !== currentPeriod && start !== nextPeriod) {
-        throw new Error("ניתן ליצור סידור רק לתקופה הנוכחית או לתקופה הבאה");
+        throw new Error(i18n.t("serverErrors.schedules.createOnlyCurrentNext"));
       }
     }
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
@@ -835,7 +836,7 @@ export const createOrGetSchedule = createServerFn({ method: "POST" })
       if (await isScheduleVisibleToCaps(publishedSched, caps, context.userId, context.supabase)) {
         return publishedSched;
       }
-      throw new Error("כבר קיים סידור מפורסם למחלקה זו בתקופה זו");
+      throw new Error(i18n.t("serverErrors.schedules.publishedExists"));
     }
     const savedSched = periodSchedules.find((row) =>
       isSavedScheduleAwaitingPublish(row as { status: string; published_at: string | null }),
@@ -858,7 +859,7 @@ export const createOrGetSchedule = createServerFn({ method: "POST" })
           context.userId,
         )
       ) {
-        throw new Error("כבר קיים סידור עבודה שמור למחלקה זו — ממתין לפרסום");
+        throw new Error(i18n.t("serverErrors.schedules.draftAwaitingPublish"));
       }
       if (
         caps.isDeptHeadOnly &&
@@ -872,23 +873,23 @@ export const createOrGetSchedule = createServerFn({ method: "POST" })
           context.userId,
         )
       ) {
-        throw new Error("הסידור נשלח לאישור ההנהלה וממתין לתשובה");
+        throw new Error(i18n.t("serverErrors.schedules.pendingAdminApproval"));
       }
-      throw new Error("כבר קיים סידור עבודה שמור למחלקה זו — ממתין לפרסום");
+      throw new Error(i18n.t("serverErrors.schedules.draftAwaitingPublish"));
     }
     const existingRow = pickPrimaryDepartmentSchedule(periodSchedules);
     if (existingRow) {
       if (await isScheduleVisibleToCaps(existingRow, caps, context.userId, context.supabase)) {
         return existingRow;
       }
-      throw new Error("כבר קיים סידור עבודה לשבוע זה במחלקה זו");
+      throw new Error(i18n.t("serverErrors.schedules.weekExists"));
     }
     const departmentEmployees = await getDepartmentScheduleEmployees(
       context.supabase,
       data.department_id,
     );
     if (schedulableDepartmentEmployees(departmentEmployees).length === 0) {
-      throw new Error("אין עובדים פעילים במחלקה זו שניתן לשבץ בסידור עבודה");
+      throw new Error(i18n.t("serverErrors.schedules.noActiveEmployees"));
     }
     const { data: settings } = await context.supabase
       .from("company_settings")
@@ -920,7 +921,7 @@ export const createOrGetSchedule = createServerFn({ method: "POST" })
 // ---------- SAVE shifts (bulk) ----------
 const timeStr = z
   .string()
-  .regex(/^\d{2}:\d{2}(:\d{2})?$/, "פורמט שעה לא תקין")
+  .regex(/^\d{2}:\d{2}(:\d{2})?$/, i18n.t("serverErrors.common.invalidTimeFormat"))
   .nullable()
   .optional();
 
@@ -958,7 +959,7 @@ export const saveScheduleShifts = createServerFn({ method: "POST" })
       .select("*")
       .eq("id", data.schedule_id)
       .single();
-    if (se || !sched) throw new Error("סידור לא נמצא");
+    if (se || !sched) throw new Error(i18n.t("serverErrors.schedules.notFound"));
     const caps = await getCaps(context.supabase, context.userId);
     await enforceSupersededPublishedSchedulePolicy(
       context.supabase,
@@ -975,11 +976,11 @@ export const saveScheduleShifts = createServerFn({ method: "POST" })
     const isApproved = sched.status === "approved";
     const isPendingApproval = sched.status === "pending_approval";
     if (isApproved && sched.published_at && caps.isDeptHeadOnly) {
-      throw new Error("אין הרשאה לערוך סידור מפורסם");
+      throw new Error(i18n.t("serverErrors.schedules.noEditPublished"));
     }
     if (isApproved) {
       if (!caps.isMainAdmin && !caps.canPublishDirect && !caps.canEdit && !caps.canCreate) {
-        throw new Error("אין הרשאה לערוך סידור מאושר");
+        throw new Error(i18n.t("serverErrors.schedules.noEditApproved"));
       }
     } else if (isPendingApproval) {
       if (
@@ -989,12 +990,12 @@ export const saveScheduleShifts = createServerFn({ method: "POST" })
         !caps.canEdit &&
         !caps.canCreate
       ) {
-        throw new Error("אין הרשאה לערוך סידור הממתין לאישור");
+        throw new Error(i18n.t("serverErrors.schedules.noEditPending"));
       }
     } else if (!["draft", "rejected"].includes(sched.status)) {
-      throw new Error("לא ניתן לערוך סידור בסטטוס זה");
+      throw new Error(i18n.t("serverErrors.schedules.cannotEditStatus"));
     } else if (!caps.canEdit && !(caps.canCreate && sched.created_by === context.userId)) {
-      throw new Error("אין הרשאה לעריכת סידור עבודה");
+      throw new Error(i18n.t("serverErrors.schedules.noEditPermission"));
     }
 
     // Validate shift codes against active shift_definitions
@@ -1005,7 +1006,7 @@ export const saveScheduleShifts = createServerFn({ method: "POST" })
       const validCodes = new Set((defs ?? []).filter((d: any) => d.is_active).map((d: any) => d.code));
       for (const s of data.shifts) {
         if (!validCodes.has(s.shift)) {
-          throw new Error(`קוד משמרת לא תקין או לא פעיל: ${s.shift}`);
+          throw new Error(i18n.t("serverErrors.schedules.invalidShiftCode", { shift: s.shift }));
         }
       }
     }
@@ -1199,7 +1200,7 @@ export const saveScheduleShifts = createServerFn({ method: "POST" })
         context.supabase,
         data.schedule_id,
         sched.department_id,
-        `סידור העבודה השבועי עודכן (${when}). נא לעיין בשינויים.`,
+        i18n.t("serverErrors.schedules.scheduleUpdatedNotify", { when }),
         context.userId,
         "schedule_update",
         data.actor_push_endpoint ? [data.actor_push_endpoint] : undefined,
@@ -1218,8 +1219,8 @@ export const submitSchedule = createServerFn({ method: "POST" })
       .select("*")
       .eq("id", data.schedule_id)
       .single();
-    if (!sched) throw new Error("סידור לא נמצא");
-    if (!["draft", "rejected"].includes(sched.status)) throw new Error("לא ניתן לשלוח שוב");
+    if (!sched) throw new Error(i18n.t("serverErrors.schedules.notFound"));
+    if (!["draft", "rejected"].includes(sched.status)) throw new Error(i18n.t("serverErrors.schedules.cannotResubmit"));
 
     // Validate
     const [{ data: shifts }, deptEmployees] = await Promise.all([
@@ -1269,16 +1270,16 @@ export const submitSchedule = createServerFn({ method: "POST" })
     for (const [empId, dayMap] of map) {
       if (!schedulableIds.has(empId)) continue;
       const emp = schedulable.find((e: any) => e.id === empId);
-      const name = emp?.full_name ?? "עובד";
+      const name = emp?.full_name ?? i18n.t("common.employee");
       for (const [day, list] of dayMap) {
-        if (list.length > 1) errors.push(`${name}: יותר ממשמרת אחת בתאריך ${day}`);
+        if (list.length > 1) errors.push(i18n.t("serverErrors.schedules.multipleShiftsSameDay", { name, day }));
         if (list.includes("off") && list.some((s) => s !== "off"))
-          errors.push(`${name}: חופש ומשמרת באותו יום (${day})`);
+          errors.push(i18n.t("serverErrors.schedules.leaveAndShiftSameDay", { name, day }));
       }
     }
 
     if (errors.length) {
-      const err: any = new Error("הסידור לא תקין: " + errors.slice(0, 5).join(" · "));
+      const err: any = new Error(i18n.t("serverErrors.schedules.invalidSchedulePrefix") + errors.slice(0, 5).join(" · "));
       err.details = errors;
       throw err;
     }
@@ -1319,7 +1320,7 @@ export const submitSchedule = createServerFn({ method: "POST" })
         context.supabase,
         data.schedule_id,
         sched.department_id,
-        "סידור העבודה השבועי פורסם. נא לעיין בסידור המעודכן.",
+        i18n.t("serverErrors.schedules.publishedNotify"),
         context.userId,
         "schedule_publish",
       );
@@ -1357,16 +1358,16 @@ export const approveSchedule = createServerFn({ method: "POST" })
   .inputValidator((d: unknown) => z.object({ schedule_id: z.string().uuid() }).parse(d))
   .handler(async ({ data, context }) => {
     const caps = await getCaps(context.supabase, context.userId);
-    if (!caps.canApprove) throw new Error("אין הרשאה לאשר סידור");
+    if (!caps.canApprove) throw new Error(i18n.t("serverErrors.schedules.noApprovePermission"));
     const { data: sched } = await context.supabase
       .from("schedules")
       .select("*")
       .eq("id", data.schedule_id)
       .single();
-    if (!sched) throw new Error("לא נמצא");
+    if (!sched) throw new Error(i18n.t("serverErrors.common.notFound"));
     if (sched.created_by === context.userId)
-      throw new Error("יוצר הסידור אינו יכול לאשר אותו בעצמו");
-    if (sched.status !== "pending_approval") throw new Error("הסידור אינו ממתין לאישור");
+      throw new Error(i18n.t("serverErrors.schedules.creatorCannotApproveSelf"));
+    if (sched.status !== "pending_approval") throw new Error(i18n.t("serverErrors.schedules.notPendingApproval"));
 
     const now = new Date().toISOString();
     // Auto-publish on approval when the approver also has publish permission
@@ -1409,7 +1410,7 @@ export const approveSchedule = createServerFn({ method: "POST" })
         context.supabase,
         data.schedule_id,
         sched.department_id,
-        "סידור העבודה השבועי פורסם. נא לעיין בסידור המעודכן.",
+        i18n.t("serverErrors.schedules.publishedNotify"),
         context.userId,
         "schedule_publish",
       );
@@ -1424,14 +1425,14 @@ export const publishSchedule = createServerFn({ method: "POST" })
   .inputValidator((d: unknown) => z.object({ schedule_id: z.string().uuid() }).parse(d))
   .handler(async ({ data, context }) => {
     const caps = await getCaps(context.supabase, context.userId);
-    if (!caps.canPublishDirect) throw new Error("אין הרשאה לפרסם סידור");
+    if (!caps.canPublishDirect) throw new Error(i18n.t("serverErrors.schedules.noPublishDirect"));
     const { data: sched } = await context.supabase
       .from("schedules")
       .select("*")
       .eq("id", data.schedule_id)
       .single();
-    if (!sched) throw new Error("לא נמצא");
-    if (sched.status !== "approved") throw new Error("ניתן לפרסם רק סידור מאושר");
+    if (!sched) throw new Error(i18n.t("serverErrors.common.notFound"));
+    if (sched.status !== "approved") throw new Error(i18n.t("serverErrors.schedules.publishOnlyApproved"));
 
     const now = new Date().toISOString();
     const { error } = await context.supabase
@@ -1457,7 +1458,7 @@ export const publishSchedule = createServerFn({ method: "POST" })
       context.supabase,
       data.schedule_id,
       sched.department_id,
-      "סידור העבודה השבועי פורסם. נא לעיין בסידור המעודכן.",
+      i18n.t("serverErrors.schedules.publishedNotify"),
       context.userId,
       "schedule_publish",
     );
@@ -1474,7 +1475,7 @@ async function notifySchedulePublished(
     supabase,
     scheduleId,
     departmentId,
-    "סידור העבודה השבועי פורסם. נא לעיין בסידור המעודכן.",
+    i18n.t("serverErrors.schedules.publishedNotify"),
     excludeUserId,
     "schedule_publish",
   );
@@ -1504,8 +1505,8 @@ async function publishOneUnpublishedSchedule(
   }
 
   if (sched.status === "pending_approval") {
-    if (!caps.canApprove) throw new Error("אין הרשאה לאשר סידור");
-    if (sched.created_by === userId) throw new Error("יוצר הסידור אינו יכול לאשר אותו בעצמו");
+    if (!caps.canApprove) throw new Error(i18n.t("serverErrors.schedules.noApprovePermission"));
+    if (sched.created_by === userId) throw new Error(i18n.t("serverErrors.schedules.creatorCannotApproveSelf"));
     const { error } = await supabase
       .from("schedules")
       .update({
@@ -1528,7 +1529,7 @@ async function publishOneUnpublishedSchedule(
   }
 
   if (!["draft", "rejected"].includes(sched.status)) {
-    throw new Error("לא ניתן לפרסם סידור בסטטוס זה");
+    throw new Error(i18n.t("serverErrors.schedules.cannotPublishStatus"));
   }
 
   // Draft / rejected → validate shifts then publish in one step (same as submitSchedule + canPublishDirect).
@@ -1572,11 +1573,11 @@ async function publishOneUnpublishedSchedule(
   for (const [empId, dayMap] of map) {
     if (!schedulableIds.has(empId)) continue;
     const emp = schedulable.find((e: any) => e.id === empId);
-    const name = emp?.full_name ?? "עובד";
+    const name = emp?.full_name ?? i18n.t("common.employee");
     for (const [day, list] of dayMap) {
-      if (list.length > 1) errors.push(`${name}: יותר ממשמרת אחת בתאריך ${day}`);
+      if (list.length > 1) errors.push(i18n.t("serverErrors.schedules.multipleShiftsSameDay", { name, day }));
       if (list.includes("off") && list.some((s) => s !== "off"))
-        errors.push(`${name}: חופש ומשמרת באותו יום (${day})`);
+        errors.push(i18n.t("serverErrors.schedules.leaveAndShiftSameDay", { name, day }));
     }
   }
   if (errors.length) {
@@ -1614,7 +1615,7 @@ export const publishAllWeekSchedules = createServerFn({ method: "POST" })
   .inputValidator((d: unknown) => z.object({ week_start: z.string() }).parse(d))
   .handler(async ({ data, context }) => {
     const caps = await getCaps(context.supabase, context.userId);
-    if (!caps.canPublishDirect) throw new Error("אין הרשאה לפרסם סידורי עבודה");
+    if (!caps.canPublishDirect) throw new Error(i18n.t("serverErrors.schedules.noPublishAll"));
 
     const periodConfig = await fetchBranchPeriodConfig(context.supabase, context.branchId);
     const { start, end } = weekStartOf(data.week_start, periodConfig);
@@ -1661,7 +1662,7 @@ export const publishAllWeekSchedules = createServerFn({ method: "POST" })
           .select("name")
           .eq("id", sched.department_id)
           .maybeSingle();
-        errors.push(`${dept?.name ?? sched.department_id}: ${e?.message ?? "שגיאה"}`);
+        errors.push(i18n.t("serverErrors.schedules.deptPublishError", { dept: dept?.name ?? sched.department_id, message: e?.message ?? i18n.t("serverErrors.common.genericError") }));
       }
     }
 
@@ -1675,12 +1676,12 @@ export const publishAllWeekSchedules = createServerFn({ method: "POST" })
 export const rejectSchedule = createServerFn({ method: "POST" })
   .middleware([requireBranchContext])
   .inputValidator((d: unknown) =>
-    z.object({ schedule_id: z.string().uuid(), note: z.string().trim().min(1, "נדרשת הערה") }).parse(d),
+    z.object({ schedule_id: z.string().uuid(), note: z.string().trim().min(1, i18n.t("serverErrors.common.noteRequired")) }).parse(d),
   )
   .handler(async ({ data, context }) => {
     const caps = await getCaps(context.supabase, context.userId);
     if (!caps.canApprove && !caps.canPublishDirect && !caps.isMainAdmin) {
-      throw new Error("אין הרשאה לדחות סידור עבודה");
+      throw new Error(i18n.t("serverErrors.schedules.noRejectPermission"));
     }
     const { data: sched, error: selErr } = await context.supabase
       .from("schedules")
@@ -1688,11 +1689,11 @@ export const rejectSchedule = createServerFn({ method: "POST" })
       .eq("id", data.schedule_id)
       .maybeSingle();
     if (selErr) throw new Error(selErr.message);
-    if (!sched) throw new Error("סידור לא נמצא");
+    if (!sched) throw new Error(i18n.t("serverErrors.schedules.notFound"));
     if (sched.status !== "pending_approval")
-      throw new Error("ניתן לדחות רק סידור הממתין לאישור");
+      throw new Error(i18n.t("serverErrors.schedules.rejectOnlyPending"));
     if (sched.created_by === context.userId)
-      throw new Error("יוצר הסידור אינו יכול לדחות בעצמו");
+      throw new Error(i18n.t("serverErrors.schedules.creatorCannotRejectSelf"));
 
     const nowIso = new Date().toISOString();
     const { error: updErr } = await context.supabase
@@ -1726,7 +1727,7 @@ export const rejectSchedule = createServerFn({ method: "POST" })
       context.supabase,
       data.schedule_id,
       sched.department_id,
-      `סידור העבודה נדחה: ${data.note}`,
+      i18n.t("serverErrors.schedules.rejectedNotify", { note: data.note }),
       context.userId,
       "schedule_reject",
     );
@@ -1748,10 +1749,10 @@ export const setEmployeeScheduleExclusion = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     const caps = await getCaps(context.supabase, context.userId);
     if (!canEditScheduleTimes(caps)) {
-      throw new Error("אין הרשאה");
+      throw new Error(i18n.t("serverErrors.common.noPermission"));
     }
     if (data.user_id === context.userId) {
-      throw new Error("לא ניתן להחריג את עצמך מהסידור");
+      throw new Error(i18n.t("serverErrors.common.cannotExcludeSelf"));
     }
 
     const { data: profile, error: pErr } = await context.supabase
@@ -1759,9 +1760,9 @@ export const setEmployeeScheduleExclusion = createServerFn({ method: "POST" })
       .select("id, department_id, branch_id")
       .eq("id", data.user_id)
       .maybeSingle();
-    if (pErr || !profile) throw new Error("עובד לא נמצא");
+    if (pErr || !profile) throw new Error(i18n.t("serverErrors.common.employeeNotFound"));
     if (context.branchId && profile.branch_id !== context.branchId) {
-      throw new Error("עובד לא נמצא בסניף הפעיל");
+      throw new Error(i18n.t("serverErrors.common.employeeNotInBranch"));
     }
 
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
@@ -1792,9 +1793,9 @@ export const copyPreviousWeek = createServerFn({ method: "POST" })
       .select("*")
       .eq("id", data.schedule_id)
       .single();
-    if (!sched) throw new Error("לא נמצא");
+    if (!sched) throw new Error(i18n.t("serverErrors.common.notFound"));
     if (!["draft", "rejected"].includes(sched.status))
-      throw new Error("ניתן להעתיק רק לטיוטה");
+      throw new Error(i18n.t("serverErrors.schedules.copyOnlyDraft"));
     const prevStart = new Date(sched.week_start + "T00:00:00Z");
     prevStart.setUTCDate(prevStart.getUTCDate() - 7);
     const prevStartStr = prevStart.toISOString().slice(0, 10);
@@ -1804,7 +1805,7 @@ export const copyPreviousWeek = createServerFn({ method: "POST" })
       .eq("department_id", sched.department_id)
       .eq("week_start", prevStartStr)
       .maybeSingle();
-    if (!prev) throw new Error("לא קיים סידור בשבוע הקודם");
+    if (!prev) throw new Error(i18n.t("serverErrors.schedules.noPrevWeekSchedule"));
     const { data: prevShifts } = await context.supabase
       .from("schedule_shifts")
       .select("employee_id, day_date, shift, note")
@@ -1850,7 +1851,7 @@ export const deleteSchedule = createServerFn({ method: "POST" })
       .select("id, department_id, week_start, status, published_at")
       .eq("id", data.schedule_id)
       .maybeSingle();
-    if (!sched) throw new Error("סידור לא נמצא");
+    if (!sched) throw new Error(i18n.t("serverErrors.schedules.notFound"));
 
     await enforceSupersededPublishedSchedulePolicy(
       context.supabase,
@@ -1880,7 +1881,7 @@ export const deleteSchedule = createServerFn({ method: "POST" })
         caps.canEdit);
 
     if (!canManageDelete && !isOwnDeptMgrDraft) {
-      throw new Error("אין הרשאה למחוק את סידור העבודה");
+      throw new Error(i18n.t("serverErrors.schedules.noDeletePermission"));
     }
 
     // Cascade: shifts, audit, notifications, then schedule
@@ -1915,7 +1916,7 @@ export const getUnpublishedWeekSummary = createServerFn({ method: "POST" })
       caps.canCreate ||
       caps.canApprove ||
       caps.canPublishDirect;
-    if (!allowed) throw new Error("אין הרשאה לצפות בסיכום הסידורים");
+    if (!allowed) throw new Error(i18n.t("serverErrors.schedules.noSummaryPermission"));
 
     const periodConfig = await fetchBranchPeriodConfig(context.supabase, context.branchId);
     const { start } = weekStartOf(data.week_start, periodConfig);
@@ -2023,7 +2024,7 @@ export const getBranchPeriodScheduleShifts = createServerFn({ method: "POST" })
         caps.canPublishDirect
       )
     ) {
-      throw new Error("אין הרשאה לצפות בסיכום משמרות");
+      throw new Error(i18n.t("serverErrors.schedules.noShiftSummaryPermission"));
     }
 
     const periodConfig = await fetchBranchPeriodConfig(context.supabase, context.branchId);
@@ -2141,7 +2142,7 @@ export const getWeekDepartmentStates = createServerFn({ method: "POST" })
         caps.canPublishDirect
       )
     ) {
-      throw new Error("אין הרשאה");
+      throw new Error(i18n.t("serverErrors.common.noPermission"));
     }
     const periodConfig = await fetchBranchPeriodConfig(context.supabase, context.branchId);
     const { start, end } = weekStartOf(data.week_start, periodConfig);
@@ -2234,7 +2235,7 @@ export const getBranchSavedSchedulesAwaitingPublish = createServerFn({ method: "
         caps.canPublishDirect
       )
     ) {
-      throw new Error("אין הרשאה");
+      throw new Error(i18n.t("serverErrors.common.noPermission"));
     }
 
     const periodConfig = await fetchBranchPeriodConfig(context.supabase, context.branchId);
@@ -2333,7 +2334,7 @@ export const getDepartmentWeekScheduleFlags = createServerFn({ method: "POST" })
       canView = !!managed;
     }
 
-    if (!canView) throw new Error("אין הרשאה");
+    if (!canView) throw new Error(i18n.t("serverErrors.common.noPermission"));
 
     const periodSchedules = await findAllDepartmentSchedulesForPeriod(
       supabaseAdmin,
@@ -2608,7 +2609,7 @@ export const getDashboardPublishedPeriods = createServerFn({ method: "POST" })
           context.supabase,
         ).catch(() => false);
       }
-      if (!allowed) throw new Error("אין הרשאה");
+      if (!allowed) throw new Error(i18n.t("serverErrors.common.noPermission"));
 
       const { data: dept, error } = await supabaseAdmin
         .from("departments")
@@ -2619,7 +2620,7 @@ export const getDashboardPublishedPeriods = createServerFn({ method: "POST" })
       if (error) throw new Error(error.message);
       departments = dept ? [{ id: dept.id }] : [];
     } else {
-      if (!branchLevelViewer) throw new Error("אין הרשאה");
+      if (!branchLevelViewer) throw new Error(i18n.t("serverErrors.common.noPermission"));
       let deptQ = supabaseAdmin
         .from("departments")
         .select("id")
@@ -2750,7 +2751,7 @@ export const getDailyScheduleOverview = createServerFn({ method: "POST" })
           context.supabase,
         ).catch(() => false);
       }
-      if (!allowed) throw new Error("אין הרשאה");
+      if (!allowed) throw new Error(i18n.t("serverErrors.common.noPermission"));
 
       const { data: dept, error } = await supabaseAdmin
         .from("departments")
@@ -2762,7 +2763,7 @@ export const getDailyScheduleOverview = createServerFn({ method: "POST" })
       departments = dept ? [{ id: dept.id, name: dept.name }] : [];
     } else {
       if (!isBranchLevelScheduleViewer(caps)) {
-        throw new Error("אין הרשאה");
+        throw new Error(i18n.t("serverErrors.common.noPermission"));
       }
       let deptQ = supabaseAdmin
         .from("departments")

@@ -51,6 +51,7 @@ export const ROLE_OPTIONS: AppRole[] = [
   "employee",
 ];
 
+/** @deprecated Use getDepartmentLabel — kept for backward compatibility */
 export const DEPARTMENT_LABELS: Record<Department, string> = {
   dairy: "חלב",
   meat: "בשר",
@@ -61,6 +62,22 @@ export const DEPARTMENT_LABELS: Record<Department, string> = {
   pricing: "מחירים",
   general: "כללי",
 };
+
+const DEPARTMENT_I18N_KEY: Record<Department, string> = {
+  dairy: "departments.dairy",
+  meat: "departments.meat",
+  produce: "departments.produce",
+  cashiers: "departments.cashiers",
+  warehouse: "departments.warehouse",
+  cleaning: "departments.cleaning",
+  pricing: "departments.pricing",
+  general: "departments.general",
+};
+
+export function getDepartmentLabel(dept: Department | string): string {
+  const key = DEPARTMENT_I18N_KEY[dept as Department];
+  return key ? i18n.t(key) : String(dept);
+}
 
 export const DEPARTMENT_OPTIONS: Department[] = [
   "dairy",
@@ -96,8 +113,8 @@ export function isBranchOrCompanyManagementRole(roles: readonly string[]): boole
 /** Contact instruction for help / missing-access messages, by viewer role. */
 export function supportContactInstruction(roles: readonly string[]): string {
   return isBranchOrCompanyManagementRole(roles)
-    ? "פנה/י לבעל המערכת"
-    : "פנה/י להנהלה";
+    ? i18n.t("common.contactPlatform")
+    : i18n.t("common.contactManagement");
 }
 
 export function canManageUsers(roles: AppRole[]): boolean {
@@ -125,7 +142,12 @@ export function isPlatformOwner(roles: AppRole[]): boolean {
   return roles.some((r) => r === "system_admin" || r === "main_admin");
 }
 
+/** @deprecated Use getAppName() — kept for compat */
 export const APP_NAME = "מערכת ניהול עובדים";
+
+export function getAppName(): string {
+  return i18n.t("common.appName");
+}
 // Legacy fallback: kept as empty string so no company/branch brand is hardcoded.
 // The active branch name is shown dynamically instead (see BranchSubtitle).
 export const BRANCH_NAME = "";

@@ -1,5 +1,6 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useTranslation } from "react-i18next";
 import { Loader2, Settings2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/use-auth";
@@ -46,31 +47,45 @@ const DEFAULTS: PolicyRow = {
   dispatcher_scope: "self",
 };
 
-const REQUEST_OPTS: { v: RequestScope; l: string }[] = [
-  { v: "employees", l: "עובדים בלבד" },
-  { v: "dept_managers", l: "אחראי מחלקה בלבד" },
-  { v: "employees_dept_managers", l: "עובדים + אחראי מחלקה" },
-  { v: "employees_dept_assistant", l: "עובדים + אחראי מחלקה + סגן מנהל" },
-  { v: "all", l: "כל המשתמשים (כולל מנהל סניף)" },
+const REQUEST_SCOPE_VALUES: RequestScope[] = [
+  "employees",
+  "dept_managers",
+  "employees_dept_managers",
+  "employees_dept_assistant",
+  "all",
 ];
-const APPROVER_OPTS: { v: ApproverScope; l: string }[] = [
-  { v: "branch_manager", l: "מנהל סניף בלבד" },
-  { v: "assistant_manager", l: "סגן מנהל בלבד" },
-  { v: "both", l: "מנהל סניף או סגן מנהל" },
-  { v: "permission_based", l: "לפי הרשאות שהוגדרו" },
+const APPROVER_SCOPE_VALUES: ApproverScope[] = [
+  "branch_manager",
+  "assistant_manager",
+  "both",
+  "permission_based",
 ];
-const DISPATCH_OPTS: { v: DispatcherScope; l: string }[] = [
-  { v: "self", l: "העובד בלבד" },
-  { v: "dept_manager", l: "אחראי מחלקה" },
-  { v: "assistant_manager", l: "סגן מנהל" },
-  { v: "branch_manager", l: "מנהל סניף" },
-  { v: "permission_based", l: "לפי הרשאות" },
+const DISPATCHER_SCOPE_VALUES: DispatcherScope[] = [
+  "self",
+  "dept_manager",
+  "assistant_manager",
+  "branch_manager",
+  "permission_based",
 ];
 
 export function BreakPolicySettingsCard() {
+  const { t } = useTranslation();
   const qc = useQueryClient();
   const { data: me } = useAuth();
   const isMainAdmin = !!me?.roles.includes("main_admin");
+
+  const requestOpts = useMemo(
+    () => REQUEST_SCOPE_VALUES.map((v) => ({ v, l: t(`breakPolicy.requestScope.${v}`) })),
+    [t],
+  );
+  const approverOpts = useMemo(
+    () => APPROVER_SCOPE_VALUES.map((v) => ({ v, l: t(`breakPolicy.approverScope.${v}`) })),
+    [t],
+  );
+  const dispatchOpts = useMemo(
+    () => DISPATCHER_SCOPE_VALUES.map((v) => ({ v, l: t(`breakPolicy.dispatcherScope.${v}`) })),
+    [t],
+  );
 
   const q = useQuery({
     queryKey: ["break-policy"],
@@ -128,19 +143,19 @@ export function BreakPolicySettingsCard() {
       }
     },
     onSuccess: () => {
-      toast.success("ההגדרות נשמרו והוחלו על המערכת");
+      toast.success(t("breakPolicy.saved"));
       qc.invalidateQueries({ queryKey: ["break-policy"] });
       qc.invalidateQueries({ queryKey: ["break-policy-effective"] });
       qc.invalidateQueries({ queryKey: ["can-request-break"] });
       qc.invalidateQueries({ queryKey: ["dashboard-pending-breaks"] });
     },
-    onError: (e: any) => toast.error(e?.message ?? "שגיאה בשמירה"),
+    onError: (e: any) => toast.error(e?.message ?? t("breakPolicy.saveError")),
   });
 
   if (!isMainAdmin) {
     return (
       <Card className="p-6 text-center text-sm text-muted-foreground">
-        רק בעל המערכת יכול לגשת להגדרות המערכת של ההפסקות.
+        {t("breakPolicy.noPermission")}
       </Card>
     );
   }
@@ -152,10 +167,9 @@ export function BreakPolicySettingsCard() {
           <Settings2 className="size-5" />
         </div>
         <div>
-          <h2 className="text-lg font-semibold">הגדרות מערכת</h2>
+          <h2 className="text-lg font-semibold">{t("breakPolicy.title")}</h2>
           <p className="text-sm text-muted-foreground mt-1">
-            מדיניות ההפסקות של המערכת. ההגדרות חלות מיידית על כל המשתמשים ונאכפות
-            הן בממשק והן בשרת.
+            {t("breakPolicy.subtitle")}
           </p>
         </div>
       </header>
@@ -167,14 +181,14 @@ export function BreakPolicySettingsCard() {
       ) : (
         <div className="grid gap-5">
           <div className="space-y-1.5">
-            <Label>מי רשאי לבקש הפסקה?</Label>
+            <Label>{t("breakPolicy.whoCanRequest")}</Label>
             <Select
               value={form.request_scope}
               onValueChange={(v) => setForm({ ...form, request_scope: v as RequestScope })}
             >
               <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
-                {REQUEST_OPTS.map((o) => (
+                {requestOpts.map((o) => (
                   <SelectItem key={o.v} value={o.v}>{o.l}</SelectItem>
                 ))}
               </SelectContent>
@@ -183,9 +197,9 @@ export function BreakPolicySettingsCard() {
 
           <div className="flex items-center justify-between rounded-lg border p-3">
             <div>
-              <div className="font-medium">בקשת הפסקה דורשת אישור</div>
+              <div className="font-medium">{t("breakPolicy.requiresApproval")}</div>
               <div className="text-xs text-muted-foreground">
-                כאשר מבוטל, ההפסקה מתחילה מיד ללא אישור.
+                {t("breakPolicy.requiresApprovalHint")}
               </div>
             </div>
             <Switch
@@ -195,7 +209,7 @@ export function BreakPolicySettingsCard() {
           </div>
 
           <div className="space-y-1.5">
-            <Label>מי מאשר בקשות הפסקה?</Label>
+            <Label>{t("breakPolicy.whoApproves")}</Label>
             <Select
               value={form.approver_scope}
               onValueChange={(v) => setForm({ ...form, approver_scope: v as ApproverScope })}
@@ -203,7 +217,7 @@ export function BreakPolicySettingsCard() {
             >
               <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
-                {APPROVER_OPTS.map((o) => (
+                {approverOpts.map((o) => (
                   <SelectItem key={o.v} value={o.v}>{o.l}</SelectItem>
                 ))}
               </SelectContent>
@@ -211,14 +225,14 @@ export function BreakPolicySettingsCard() {
           </div>
 
           <div className="space-y-1.5">
-            <Label>מי רשאי להוציא עובד להפסקה?</Label>
+            <Label>{t("breakPolicy.whoCanDispatch")}</Label>
             <Select
               value={form.dispatcher_scope}
               onValueChange={(v) => setForm({ ...form, dispatcher_scope: v as DispatcherScope })}
             >
               <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
-                {DISPATCH_OPTS.map((o) => (
+                {dispatchOpts.map((o) => (
                   <SelectItem key={o.v} value={o.v}>{o.l}</SelectItem>
                 ))}
               </SelectContent>
@@ -232,7 +246,7 @@ export function BreakPolicySettingsCard() {
               disabled={saveMut.isPending}
             >
               {saveMut.isPending && <Loader2 className="size-4 animate-spin" />}
-              שמירה
+              {t("breakPolicy.save")}
             </Button>
           </div>
         </div>

@@ -5,6 +5,7 @@ import { supabaseAdmin } from "@/integrations/supabase/client.server";
 import { FCM_KEY_MARKER, fcmEndpointForToken } from "@/lib/fcm-endpoints";
 import { dispatchPushNotification } from "@/lib/push-dispatch.server";
 import { getVapidPublicKey } from "@/lib/web-push.server";
+import i18n from "@/i18n";
 
 export type PushTestResult =
   | { ok: true; sent: number; failed: number }
@@ -174,8 +175,8 @@ export const sendTestPush = createServerFn({ method: "POST" })
 
       const result = await dispatchPushNotification({
         userIds: [context.userId],
-        title: "בדיקת התראות",
-        message: "ההתראות פועלות כראוי ✓",
+        title: i18n.t("libErrors.push.testTitle"),
+        message: i18n.t("libErrors.push.testMessage"),
         url: "/profile",
         tag: `push-test-${Date.now()}`,
       });

@@ -11,10 +11,10 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Languages } from "lucide-react";
 
-const LANGUAGES: { code: AppLanguage; label: string; flag: string }[] = [
-  { code: "he", label: "עברית", flag: "🇮🇱" },
-  { code: "ar", label: "العربية", flag: "🇸🇦" },
-  { code: "en", label: "English", flag: "🇬🇧" },
+const LANGUAGES: { code: AppLanguage; labelKey: string; flag: string }[] = [
+  { code: "he", labelKey: "contentTranslation.lang.he", flag: "🇮🇱" },
+  { code: "ar", labelKey: "contentTranslation.lang.ar", flag: "🇸🇦" },
+  { code: "en", labelKey: "contentTranslation.lang.en", flag: "🇬🇧" },
 ];
 
 interface LanguageSwitcherProps {
@@ -22,7 +22,7 @@ interface LanguageSwitcherProps {
 }
 
 export function LanguageSwitcher({ userId }: LanguageSwitcherProps = {}) {
-  const { i18n } = useTranslation();
+  const { i18n, t } = useTranslation();
   const syncLangFn = useServerFn(syncPreferredLanguage);
   const current = LANGUAGES.find((l) => l.code === i18n.language) ?? LANGUAGES[0]!;
 
@@ -42,7 +42,7 @@ export function LanguageSwitcher({ userId }: LanguageSwitcherProps = {}) {
       <DropdownMenuTrigger asChild>
         <Button variant="ghost" size="sm" className="gap-1.5 px-2 h-8 text-xs">
           <Languages className="size-3.5" />
-          <span>{current.label}</span>
+          <span>{t(current.labelKey)}</span>
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="min-w-[130px]">
@@ -52,7 +52,7 @@ export function LanguageSwitcher({ userId }: LanguageSwitcherProps = {}) {
             onClick={() => handleChange(lang.code)}
             className={i18n.language === lang.code ? "font-semibold bg-muted" : ""}
           >
-            {lang.label}
+            {t(lang.labelKey)}
           </DropdownMenuItem>
         ))}
       </DropdownMenuContent>

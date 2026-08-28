@@ -53,6 +53,7 @@ import {
   MessageSquare,
 } from "lucide-react";
 import { toast } from "sonner";
+import { useTranslation } from "react-i18next";
 import {
   createOrGetSchedule,
   saveScheduleShifts,
@@ -229,7 +230,7 @@ function SchedulePersonMetaRow({
   label,
   person,
   className = "text-muted-foreground",
-  fallback = "לא ידוע",
+  fallback = i18n.t("schedules.unknown"),
 }: {
   label: string;
   person: SchedulePersonMeta;
@@ -271,6 +272,7 @@ function buildDaysBetween(startIso: string, endIso: string): string[] {
 }
 
 function SchedulesPage() {
+  const { t } = useTranslation();
   const { data: me, isLoading: meLoading } = useAuth();
   const qc = useQueryClient();
   const search = Route.useSearch();
@@ -862,7 +864,7 @@ function SchedulesPage() {
       const { data } = await (supabase as any).rpc("get_profiles_basic_info", {
         user_ids: [blockedCreatorId],
       });
-      return (data?.[0]?.full_name as string | undefined) ?? "לא ידוע";
+      return (data?.[0]?.full_name as string | undefined) ?? t("schedules.unknown");
     },
   });
 
@@ -954,9 +956,9 @@ function SchedulesPage() {
         const p = profMap.get(uid);
         return {
           id: uid,
-          full_name: p?.full_name ?? "לא ידוע",
+          full_name: p?.full_name ?? t("schedules.unknown"),
           job_title: p?.job_title ?? null,
-          role_label: p?.role_label ?? "לא ידוע",
+          role_label: p?.role_label ?? t("schedules.unknown"),
           at,
         };
       };
@@ -1373,7 +1375,7 @@ function SchedulesPage() {
       qc.invalidateQueries({ queryKey: ["dept-schedule-flags"] });
       qc.invalidateQueries({ queryKey: ["branch-period-shifts"] });
     },
-    onError: (e: any) => toast.error(e?.message ?? "שגיאה"),
+    onError: (e: any) => toast.error(e?.message ?? t("common.error")),
   });
 
   const saveMut = useMutation({
@@ -1395,7 +1397,7 @@ function SchedulesPage() {
       qc.invalidateQueries({ queryKey: ["branch-period-shifts"] });
     },
 
-    onError: (e: any) => toast.error(e?.message ?? "שגיאה"),
+    onError: (e: any) => toast.error(e?.message ?? t("common.error")),
   });
 
   const submitMut = useMutation({
@@ -1420,7 +1422,7 @@ function SchedulesPage() {
       qc.invalidateQueries({ queryKey: ["daily-schedule-overview"] });
       qc.invalidateQueries({ queryKey: ["dept-schedule-flags"] });
     },
-    onError: (e: any) => toast.error(e?.message ?? "שגיאה"),
+    onError: (e: any) => toast.error(e?.message ?? t("common.error")),
   });
 
 
@@ -1448,7 +1450,7 @@ function SchedulesPage() {
       qc.invalidateQueries({ queryKey: ["daily-schedule-overview"] });
       qc.invalidateQueries({ queryKey: ["dept-schedule-flags"] });
     },
-    onError: (e: any) => toast.error(e?.message ?? "שגיאה"),
+    onError: (e: any) => toast.error(e?.message ?? t("common.error")),
   });
 
   const publishMut = useMutation({
@@ -1472,7 +1474,7 @@ function SchedulesPage() {
       qc.invalidateQueries({ queryKey: ["daily-schedule-overview"] });
       qc.invalidateQueries({ queryKey: ["dept-schedule-flags"] });
     },
-    onError: (e: any) => toast.error(e?.message ?? "שגיאה"),
+    onError: (e: any) => toast.error(e?.message ?? t("common.error")),
   });
 
   const [publishAllOpen, setPublishAllOpen] = useState(false);
@@ -1493,12 +1495,12 @@ function SchedulesPage() {
     onSuccess: (res: any) => {
       setPublishAllOpen(false);
       if (res?.published > 0) {
-        toast.success(`פורסמו ${res.published} סידורי עבודה`);
+        toast.success(t("schedulesPage.toastPublishedCount", { count: res.published }));
       } else {
-        toast.info("אין סידורים לפרסום");
+        toast.info(t("schedulesPage.toastNoSchedulesToPublish"));
       }
       if (res?.errors?.length) {
-        toast.warning(`לא פורסמו ${res.errors.length} סידורים`);
+        toast.warning(t("schedulesPage.toastPublishErrors", { count: res.errors.length }));
       }
       qc.invalidateQueries({ queryKey: ["schedule"] });
       qc.invalidateQueries({ queryKey: ["schedules-pending"] });
@@ -1513,14 +1515,14 @@ function SchedulesPage() {
       qc.invalidateQueries({ queryKey: ["daily-schedule-overview"] });
       qc.invalidateQueries({ queryKey: ["dept-schedule-flags"] });
     },
-    onError: (e: any) => toast.error(e?.message ?? "שגיאה בפרסום"),
+    onError: (e: any) => toast.error(e?.message ?? t("schedulesPage.toastPublishError")),
   });
 
   const [copyOpen, setCopyOpen] = useState(false);
   const copyMut = useMutation({
     mutationFn: () => copyFn({ data: { schedule_id: visible!.id } }),
     onSuccess: (r) => {
-      toast.success(`הועתקו ${r.count} שיבוצים מהשבוע הקודם`);
+      toast.success(t("schedulesPage.toastCopiedCount", { count: r.count }));
       setCopyOpen(false);
       qc.invalidateQueries({ queryKey: ["schedule", selectedDept, weekStart] });
       qc.invalidateQueries({ queryKey: ["schedule-shifts", visible?.id] });
@@ -1531,7 +1533,7 @@ function SchedulesPage() {
     },
 
     onError: (e: any) => {
-      toast.error(e?.message ?? "שגיאה");
+      toast.error(e?.message ?? t("common.error"));
       setCopyOpen(false);
     },
   });
@@ -1547,7 +1549,7 @@ function SchedulesPage() {
       }),
     onSuccess: (_data, vars) => {
       toast.success(
-        vars.excluded ? "העובד הוגדר כלא נכלל בסידור" : "העובד נכלל שוב בסידור",
+        vars.excluded ? t("schedulesPage.toastExcluded") : t("schedulesPage.toastIncluded"),
       );
       qc.invalidateQueries({ queryKey: ["dept-employees", selectedDept] });
       if (visible?.id) {
@@ -1566,7 +1568,7 @@ function SchedulesPage() {
         });
       }
     },
-    onError: (e: any) => toast.error(e?.message ?? "שגיאה בעדכון"),
+    onError: (e: any) => toast.error(e?.message ?? t("schedulesPage.toastUpdateError")),
   });
 
   const deleteFn = useServerFn(deleteSchedule);
@@ -1585,7 +1587,7 @@ function SchedulesPage() {
     },
 
     onError: (e: any) => {
-      toast.error(e?.message ?? "שגיאה");
+      toast.error(e?.message ?? t("common.error"));
       setDeleteOpen(false);
     },
   });
@@ -2275,11 +2277,11 @@ function SchedulesPage() {
             <table className="w-full text-sm">
               <thead className="bg-muted/50">
                 <tr>
-                  <th className="text-right p-3">מחלקה</th>
-                  <th className="text-right p-3">טווח תאריכים</th>
-                  <th className="text-right p-3">נוצר ע״י</th>
-                  <th className="text-right p-3">נשלח</th>
-                  <th className="text-right p-3">סטטוס</th>
+                  <th className="text-right p-3">{t("schedules.colDepartment")}</th>
+                  <th className="text-right p-3">{t("schedules.colDateRange")}</th>
+                  <th className="text-right p-3">{t("schedules.colCreatedBy")}</th>
+                  <th className="text-right p-3">{t("schedulesPage.colSubmitted")}</th>
+                  <th className="text-right p-3">{t("schedules.colStatus")}</th>
                   <th className="text-right p-3" />
                 </tr>
               </thead>
@@ -2322,7 +2324,7 @@ function SchedulesPage() {
                         variant="outline"
                         onClick={() => openScheduleFromPending(p)}
                       >
-                        פתח לאישור
+                        {t("schedules.openApproval")}
                       </Button>
                     </td>
                   </tr>
@@ -2485,14 +2487,14 @@ function SchedulesPage() {
                   size="sm"
                   onClick={() => navigateWeek(deptHeadWeekWindow.current)}
                 >
-                  השבוע הזה
+                  {t("schedulesPage.thisWeek")}
                 </Button>
                 <Button
                   variant={periodWeekStart === deptHeadWeekWindow.next ? "default" : "outline"}
                   size="sm"
                   onClick={() => navigateWeek(deptHeadWeekWindow.next)}
                 >
-                  השבוע הבא
+                  {t("schedulesPage.nextWeekBtn")}
                 </Button>
               </>
             ) : (
@@ -2501,7 +2503,7 @@ function SchedulesPage() {
                   variant="outline"
                   size="icon"
                   onClick={() => navigateWeek(shiftPeriodStart(weekStart, periodConfig, -1))}
-                  aria-label="שבוע קודם"
+                  aria-label={t("schedules.prevWeek")}
                 >
                   <ChevronRight className="size-4" />
                 </Button>
@@ -2510,13 +2512,13 @@ function SchedulesPage() {
                   size="sm"
                   onClick={() => navigateWeek(getCurrentPeriodStart(periodConfig))}
                 >
-                  השבוע
+                  {t("schedulesPage.currentWeek")}
                 </Button>
                 <Button
                   variant="outline"
                   size="icon"
                   onClick={() => navigateWeek(shiftPeriodStart(weekStart, periodConfig, 1))}
-                  aria-label="שבוע הבא"
+                  aria-label={t("schedules.nextWeek")}
                 >
                   <ChevronLeft className="size-4" />
                 </Button>
@@ -2547,7 +2549,7 @@ function SchedulesPage() {
               </PopoverTrigger>
               <PopoverContent align="start" className="w-80 p-0" dir="rtl">
                 <div className="p-3 border-b">
-                  <p className="text-xs text-muted-foreground">מחלקה נוכחית</p>
+                  <p className="text-xs text-muted-foreground">{t("schedulesPage.currentDept")}</p>
                   <p className="font-medium">{deptsQ.data?.find((d) => d.id === selectedDept)?.name ?? "—"}</p>
                   {savedDeptSet.has(selectedDept ?? "") && (
                     <Badge variant="secondary" className="mt-1 text-xs">
@@ -2556,10 +2558,10 @@ function SchedulesPage() {
                   )}
                 </div>
                 <div className="p-2">
-                  <p className="text-xs text-muted-foreground px-2 py-1">מחלקות ללא סידור לשבוע זה</p>
+                  <p className="text-xs text-muted-foreground px-2 py-1">{t("schedulesPage.deptsWithoutSchedule")}</p>
                   {switchableDepts.length === 0 ? (
                     <p className="text-sm text-muted-foreground px-2 py-3 text-center">
-                      אין מחלקות פנויות ליצירת סידור חדש.
+                      {t("schedulesPage.noDeptsAvailable")}
                     </p>
                   ) : (
                     <ul className="max-h-40 overflow-auto">
@@ -2582,7 +2584,7 @@ function SchedulesPage() {
                 </div>
                 {deptsWithSavedSchedule.length > 0 && (
                   <div className="p-2 border-t">
-                    <p className="text-xs text-muted-foreground px-2 py-1">סידורים שמורים לשבוע זה</p>
+                    <p className="text-xs text-muted-foreground px-2 py-1">{t("schedulesPage.savedSchedulesThisWeek")}</p>
                     <ul className="max-h-40 overflow-auto">
                       {deptsWithSavedSchedule.map((d) => (
                         <li key={d.id}>
@@ -2778,7 +2780,7 @@ function SchedulesPage() {
               </p>
               {deptWeekFlagsQ.data?.pendingApproval?.submitted_at && (
                 <p>
-                  נשלח בתאריך:{" "}
+                  {t("schedulesPage.submittedAt")}{" "}
                   <span className="font-medium" dir="ltr">
                     {formatHeDateTime(deptWeekFlagsQ.data.pendingApproval.submitted_at)}
                   </span>
@@ -2797,11 +2799,11 @@ function SchedulesPage() {
               </p>
               <p>{i18n.t("schedules.savedScheduleExistsHint")}</p>
               <p>
-                נשמר על־ידי:{" "}
+                {t("schedulesPage.savedBy")}{" "}
                 <span className="font-medium">
                   {blockedCreatorQ.isLoading
-                    ? "נטען..."
-                    : (blockedCreatorQ.data ?? "לא ידוע")}
+                    ? t("schedules.loading")
+                    : (blockedCreatorQ.data ?? t("schedules.unknown"))}
                 </span>
               </p>
               <Button
@@ -2845,7 +2847,7 @@ function SchedulesPage() {
               : deptWeekFlagsQ.data?.hasSavedAwaitingPublish) && (
             <Button onClick={() => createMut.mutate()} disabled={createMut.isPending}>
               {createMut.isPending && <Loader2 className="size-4 animate-spin" />}
-              צור טיוטה
+              {t("schedulesPage.createDraft")}
             </Button>
           )}
         </Card>
@@ -2896,28 +2898,28 @@ function SchedulesPage() {
                 <AlertTriangle className="size-5 text-primary mt-0.5 shrink-0" />
                 <div className="space-y-1.5 text-sm">
                   <p className="font-semibold text-base">
-                    כבר קיים סידור עבודה שמור למחלקה זו
+                    {t("schedulesPage.draftExistsTitle")}
                   </p>
                   <p>
-                    נשמר על־ידי:{" "}
+                    {t("schedulesPage.savedBy")}{" "}
                     <span className="font-medium">
-                      {decisionPersonQ.data?.creator?.full_name ?? "לא ידוע"}
+                      {decisionPersonQ.data?.creator?.full_name ?? t("schedules.unknown")}
                     </span>
                   </p>
                   <p>
-                    נשמר בתאריך:{" "}
+                    {t("schedulesPage.savedAt")}{" "}
                     <span className="font-medium" dir="ltr">
-                      {blockedSavedAt ? formatHeDateTime(blockedSavedAt) : "לא ידוע"}
+                      {blockedSavedAt ? formatHeDateTime(blockedSavedAt) : t("schedules.unknown")}
                     </span>
                   </p>
                   <p>
-                    סטטוס:{" "}
+                    {t("schedulesPage.statusLabel")}{" "}
                     <span className="font-medium">
                       {getStatusLabel(visible.status)}
                     </span>
                   </p>
                   <p className="text-muted-foreground">
-                    רק יוצר הטיוטה או בעל הרשאה מתאימה יכול לערוך או לפרסם אותה.
+                    {t("schedulesPage.draftLockedHint")}
                   </p>
                 </div>
               </div>
@@ -2957,10 +2959,10 @@ function SchedulesPage() {
                   <div className="text-xs text-muted-foreground mt-1 space-y-0.5">
                     <p>
                       {visible.status === "rejected"
-                        ? "❌ נדחה על ידי: "
+                        ? t("schedulesPage.rejectedBy")
                         : decisionPersonQ.data?.editedBeforeApproval
-                          ? "✏️ נערך ואושר על ידי: "
-                          : "✅ אושר על ידי: "}
+                          ? t("schedulesPage.editedApprovedBy")
+                          : t("schedulesPage.approvedByActor")}
                       <span className="font-medium text-foreground">
                         👤 {decisionPersonQ.data?.full_name ?? "—"}
                       </span>
@@ -2972,7 +2974,7 @@ function SchedulesPage() {
                       )}
                     </p>
                     <p>
-                      📅🕒 תאריך ושעה:{" "}
+                      {t("schedulesPage.dateTimeLabel")}{" "}
                       <span className="font-medium text-foreground">
                         {decisionPersonQ.data?.at ? formatHeDateTime(decisionPersonQ.data.at) : "—"}
                       </span>
@@ -2980,7 +2982,7 @@ function SchedulesPage() {
                   </div>
                   {visible.status === "rejected" && visible.rejection_note && (
                     <p className="text-sm mt-2 p-2 rounded bg-background/60 border border-destructive/20">
-                      <span className="font-semibold">סיבת דחייה: </span>
+                      <span className="font-semibold">{t("schedulesPage.rejectionReason")} </span>
                       {visible.rejection_note}
                     </p>
                   )}
@@ -2997,14 +2999,21 @@ function SchedulesPage() {
                 <div>
                   <h3 className="font-semibold flex items-center gap-2">
                     <CalendarDays className="size-4" />
-                    סיכום סידור — {visible.status === "approved" ? "מאושר וממתין לפרסום" : visible.status === "pending_approval" ? "ממתין לאישור" : "טיוטה"}
+                    {t("schedulesPage.summaryTitle")}{" "}
+                    {visible.status === "approved"
+                      ? t("schedulesPage.summaryApprovedPending")
+                      : visible.status === "pending_approval"
+                        ? t("schedulesPage.summaryPendingApproval")
+                        : t("schedulesPage.summaryDraft")}
                   </h3>
                   <p className="text-xs text-muted-foreground mt-0.5">
                     {visible.status === "approved"
-                      ? "בדוק את סיכום העובדים לפי יום ומשמרת לפני הפרסום. הסידור עדיין מוסתר מעובדים ואחראי מחלקות."
+                      ? t("schedulesPage.summaryHintApproved")
                       : visible.status === "pending_approval"
-                        ? "בדוק את הסיכום לפני האישור. עובדים ואחראי מחלקות לא רואים את הסידור עד לפרסום."
-                        : canPublishDirect ? "הסידור שמור כטיוטה ומוסתר מעובדים ואחראי מחלקות. לחץ \"פרסם סידור עבודה\" כדי לאשר ולפרסם אותו בלחיצה אחת." : "הסידור שמור כטיוטה ומוסתר מעובדים ואחראי מחלקות. לחץ \"שלח לאישור\" בסיום."}
+                        ? t("schedulesPage.summaryHintPending")
+                        : canPublishDirect
+                          ? t("schedulesPage.summaryHintDraftPublish")
+                          : t("schedulesPage.summaryHintDraftSubmit")}
                   </p>
                 </div>
               </div>
@@ -3012,7 +3021,7 @@ function SchedulesPage() {
                 {dailyShiftSummary.map((day) => (
                   <div key={day.day} className="rounded-lg border bg-background/60 p-3">
                     <div className="flex items-center justify-between gap-2 mb-2">
-                      <p className="font-semibold text-sm">יום {day.label}</p>
+                      <p className="font-semibold text-sm">{t("schedulesPage.dayLabel", { label: day.label })}</p>
                       <p className="text-xs font-medium text-destructive tabular-nums">{formatHeDate(day.day)}</p>
                     </div>
                     <div className="flex flex-wrap gap-2">
@@ -3030,13 +3039,13 @@ function SchedulesPage() {
                           }
                           className="px-3 py-1.5 rounded-md text-sm font-medium border text-start cursor-pointer hover:opacity-90 hover:ring-1 hover:ring-primary/40 transition"
                           style={shiftStyle(s.code)}
-                          title="לחץ להצגת השמות"
+                          title={t("schedulesPage.clickToShowNames")}
                         >
                           <span
                             className="inline-block size-2 rounded-full me-2 align-middle"
                             style={{ backgroundColor: s.color }}
                           />
-                          {s.name}: <strong>{s.count}</strong> עובדים
+                          {s.name}: <strong>{s.count}</strong> {t("schedulesPage.employeesLabel")}
                         </button>
                       ))}
                     </div>
@@ -3051,7 +3060,7 @@ function SchedulesPage() {
             {editable && canEditScheduleTimes && (visible.status === "approved" || visible.status === "pending_approval") && (
               <Button onClick={() => saveMut.mutate()} disabled={saveMut.isPending} size="sm">
                 {saveMut.isPending ? <Loader2 className="size-4 animate-spin" /> : <Save className="size-4" />}
-                שמור שינויים
+                {t("schedulesPage.saveChanges")}
               </Button>
             )}
             {canShowDraftPublishOrSubmit && (
@@ -3059,7 +3068,7 @@ function SchedulesPage() {
                 {canSaveScheduleDraft && (
                   <Button onClick={() => saveMut.mutate()} disabled={saveMut.isPending} size="sm">
                     {saveMut.isPending ? <Loader2 className="size-4 animate-spin" /> : <Save className="size-4" />}
-                    שמור טיוטה
+                    {t("schedulesPage.saveDraftBtn")}
                   </Button>
                 )}
                 <Button
@@ -3078,7 +3087,7 @@ function SchedulesPage() {
                   variant="outline"
                 >
                   <Copy className="size-4" />
-                  העתק מהשבוע הקודם
+                  {t("schedulesPage.copyFromPrevWeek")}
                 </Button>
               </>
             )}
@@ -3102,7 +3111,7 @@ function SchedulesPage() {
                 variant="default"
               >
                 {publishMut.isPending ? <Loader2 className="size-4 animate-spin" /> : <Send className="size-4" />}
-                פרסם סידור עבודה
+                {t("schedulesPage.publishScheduleBtn")}
               </Button>
             )}
             {canDelete && (
@@ -3112,7 +3121,7 @@ function SchedulesPage() {
                 variant="destructive"
               >
                 <Trash2 className="size-4" />
-                מחק סידור
+                {t("schedulesPage.deleteScheduleBtn")}
               </Button>
             )}
           </div>
@@ -3123,7 +3132,7 @@ function SchedulesPage() {
               <thead className="bg-muted/50">
                 <tr>
                   <th className="text-right p-3 sticky right-0 bg-muted/50 z-10 min-w-[160px]">
-                    עובד
+                    {t("schedulesPage.employeeCol")}
                   </th>
                   {days.map((d, dayIdx) => {
                     const dayCounts = dailyShiftSummary[dayIdx]?.counts ?? [];
@@ -3147,7 +3156,7 @@ function SchedulesPage() {
                                 }
                                 className="px-1.5 py-0.5 rounded text-[10px] font-medium border leading-none cursor-pointer hover:opacity-80 hover:ring-1 hover:ring-primary/40 transition"
                                 style={shiftStyle(s.code)}
-                                title={`${s.name}: ${s.count} — לחץ להצגת השמות`}
+                                title={t("schedulesPage.shiftEmployeesTitle", { name: s.name, count: s.count })}
                               >
                                 {s.name} ({s.count})
                               </button>
@@ -3163,7 +3172,7 @@ function SchedulesPage() {
                 {(empsQ.data ?? []).length === 0 && (
                   <tr>
                     <td colSpan={8} className="p-6 text-center text-muted-foreground">
-                      אין עובדים פעילים במחלקה זו.
+                      {t("schedulesPage.noActiveEmployees")}
                     </td>
                   </tr>
                 )}
@@ -3184,12 +3193,12 @@ function SchedulesPage() {
                         <span className="min-w-0 truncate">{emp.full_name}</span>
                         {emp.excluded_from_schedule && (
                           <Badge variant="outline" className="text-[10px] shrink-0 rounded-full">
-                            לא בסידור
+                            {t("schedulesPage.notInSchedule")}
                           </Badge>
                         )}
                         {emp.on_leave && days.some((d) => isEmployeeOnLeaveOnDate(emp, d)) && (
                           <Badge variant="secondary" className="text-[10px] shrink-0 rounded-full">
-                            בחופש
+                            {t("schedulesPage.onLeaveBadge")}
                           </Badge>
                         )}
                         {canToggleScheduleExclusion && emp.id !== me?.id && (
@@ -3201,13 +3210,13 @@ function SchedulesPage() {
                             disabled={exclusionMut.isPending}
                             title={
                               emp.excluded_from_schedule
-                                ? "כלול בסידור עבודה"
-                                : "לא נכלל בסידור עבודה"
+                                ? t("schedules.includedInSchedule")
+                                : t("schedules.excludedFromSchedule")
                             }
                             aria-label={
                               emp.excluded_from_schedule
-                                ? "כלול בסידור עבודה"
-                                : "לא נכלל בסידור עבודה"
+                                ? t("schedules.includedInSchedule")
+                                : t("schedules.excludedFromSchedule")
                             }
                             onClick={() =>
                               exclusionMut.mutate({
@@ -3295,7 +3304,7 @@ function SchedulesPage() {
                                       {isTimeModified && (
                                         <RefreshCw
                                           className="size-3 shrink-0 text-orange-600"
-                                          aria-label="שעות עודכנו לאחר פרסום"
+                                          aria-label={t("schedulesPage.timesUpdatedAria")}
                                         />
                                       )}
                                     </div>
@@ -3312,7 +3321,7 @@ function SchedulesPage() {
                               {isShiftModified && (
                                 <RefreshCw
                                   className="size-3 text-orange-600 absolute -top-1 -left-1 bg-background rounded-full p-0.5 box-content border border-orange-500"
-                                  aria-label="משמרת עודכנה לאחר פרסום"
+                                  aria-label={t("schedulesPage.shiftUpdatedAria")}
                                 />
                               )}
                             </div>
@@ -3349,7 +3358,7 @@ function SchedulesPage() {
                                           className="inline-block size-2 rounded-full me-2 align-middle"
                                           style={{ backgroundColor: s.color }}
                                         />
-                                        חופש רגיל
+                                        {t("schedulesPage.regularLeave")}
                                       </SelectItem>,
                                     ];
                                   }
@@ -3374,7 +3383,7 @@ function SchedulesPage() {
                                     }`}
                                   >
                                     <Time24Input
-                                      aria-label="שעת התחלה"
+                                      aria-label={t("schedulesPage.startTimeAria")}
                                       value={effStart ?? ""}
                                       onChange={(v) => setCellTime(emp.id, day, "start", v)}
                                       className="h-7 w-full min-w-0 rounded-md border border-input bg-background px-1 text-[11px] focus:outline-none focus:ring-1 focus:ring-ring"
@@ -3383,7 +3392,7 @@ function SchedulesPage() {
                                       <>
                                         <span className="text-[10px] text-muted-foreground">–</span>
                                         <Time24Input
-                                          aria-label="שעת סיום"
+                                          aria-label={t("schedulesPage.endTimeAria")}
                                           value={effEnd ?? ""}
                                           onChange={(v) => setCellTime(emp.id, day, "end", v)}
                                           className="h-7 w-full min-w-0 rounded-md border border-input bg-background px-1 text-[11px] focus:outline-none focus:ring-1 focus:ring-ring"
@@ -3394,7 +3403,7 @@ function SchedulesPage() {
                                   {isTimeModified && (
                                     <RefreshCw
                                       className="size-3 shrink-0 text-orange-600"
-                                      aria-label="שעות עודכנו לאחר פרסום"
+                                      aria-label={t("schedulesPage.timesUpdatedAria")}
                                     />
                                   )}
                                 </div>
@@ -3416,7 +3425,7 @@ function SchedulesPage() {
                             {isShiftModified && (
                               <RefreshCw
                                 className="size-3 text-orange-600 absolute -top-1 -left-1 bg-background rounded-full p-0.5 box-content border border-orange-500"
-                                aria-label="משמרת עודכנה לאחר פרסום"
+                                aria-label={t("schedulesPage.shiftUpdatedAria")}
                               />
                             )}
                           </div>
@@ -3441,14 +3450,14 @@ function SchedulesPage() {
       <AlertDialog open={copyOpen} onOpenChange={setCopyOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>להעתיק מהשבוע הקודם?</AlertDialogTitle>
+            <AlertDialogTitle>{t("schedulesPage.copyPrevWeekTitle")}</AlertDialogTitle>
             <AlertDialogDescription>
-              כל השיבוצים הנוכחיים בטיוטה יוחלפו בשיבוצי השבוע הקודם.
+              {t("schedulesPage.copyPrevWeekDesc")}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>ביטול</AlertDialogCancel>
-            <AlertDialogAction onClick={() => copyMut.mutate()}>העתק</AlertDialogAction>
+            <AlertDialogCancel>{t("common.cancel")}</AlertDialogCancel>
+            <AlertDialogAction onClick={() => copyMut.mutate()}>{t("schedulesPage.copyBtn")}</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
@@ -3456,7 +3465,7 @@ function SchedulesPage() {
       <AlertDialog open={publishAllOpen} onOpenChange={setPublishAllOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>פרסום כל סידורי העבודה</AlertDialogTitle>
+            <AlertDialogTitle>{t("schedulesPage.publishAllTitle")}</AlertDialogTitle>
             <AlertDialogDescription>
               {i18n.t("schedules.publishPeriodBanner", {
                 start: formatHeDate(publishPeriodWeekStart),
@@ -3469,7 +3478,7 @@ function SchedulesPage() {
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>ביטול</AlertDialogCancel>
+            <AlertDialogCancel>{t("common.cancel")}</AlertDialogCancel>
             <AlertDialogAction
               onClick={(e) => {
                 e.preventDefault();
@@ -3486,13 +3495,13 @@ function SchedulesPage() {
       <AlertDialog open={deleteOpen} onOpenChange={setDeleteOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>האם אתה בטוח שברצונך למחוק את סידור העבודה?</AlertDialogTitle>
+            <AlertDialogTitle>{t("schedulesPage.deleteConfirmTitle")}</AlertDialogTitle>
             <AlertDialogDescription>
-              פעולה זו תמחק את כל השיבוצים, ההיסטוריה וההתראות של הסידור לצמיתות. לאחר המחיקה ניתן יהיה ליצור סידור חדש לאותה מחלקה ולאותו שבוע.
+              {t("schedulesPage.deleteConfirmDesc")}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>ביטול</AlertDialogCancel>
+            <AlertDialogCancel>{t("common.cancel")}</AlertDialogCancel>
             <AlertDialogAction
               onClick={(e) => {
                 e.preventDefault();
@@ -3501,7 +3510,7 @@ function SchedulesPage() {
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
               {deleteMut.isPending && <Loader2 className="size-4 animate-spin ml-2" />}
-              מחק
+              {t("common.delete")}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -3512,12 +3521,18 @@ function SchedulesPage() {
           <DialogHeader>
             <DialogTitle>
               {summaryShiftPick
-                ? `יום ${summaryShiftPick.dayLabel} · ${summaryShiftPick.shiftName}`
-                : "עובדים במשמרת"}
+                ? t("schedulesPage.shiftDialogTitle", {
+                    dayLabel: summaryShiftPick.dayLabel,
+                    shiftName: summaryShiftPick.shiftName,
+                  })
+                : t("schedulesPage.shiftDialogFallback")}
             </DialogTitle>
             {summaryShiftPick && (
               <DialogDescription>
-                {formatHeDate(summaryShiftPick.day)} · {summaryShiftPick.members.length} עובדים
+                {t("schedulesPage.shiftDialogSubtitle", {
+                  date: formatHeDate(summaryShiftPick.day),
+                  count: summaryShiftPick.members.length,
+                })}
               </DialogDescription>
             )}
           </DialogHeader>
@@ -3527,7 +3542,7 @@ function SchedulesPage() {
             </div>
           ) : (summaryMembersQ.data ?? []).length === 0 ? (
             <p className="text-sm text-muted-foreground py-4 text-center">
-              אין עובדים משובצים במשמרת זו.
+              {t("schedulesPage.noEmployeesInShift")}
             </p>
           ) : (
             <ul className="divide-y max-h-[50vh] overflow-auto">
@@ -3541,7 +3556,7 @@ function SchedulesPage() {
           )}
           <DialogFooter>
             <Button type="button" variant="outline" onClick={() => setSummaryShiftPick(null)}>
-              סגור
+              {t("common.close")}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -3561,6 +3576,7 @@ function ScheduleShiftNote({
   modified?: boolean;
   onChange?: (value: string) => void;
 }) {
+  const { t } = useTranslation();
   const trimmed = note?.trim() ?? "";
   const modifiedRing = modified ? "ring-2 ring-orange-500 rounded px-0.5" : "";
   if (!editable && !trimmed) return null;
@@ -3581,7 +3597,7 @@ function ScheduleShiftNote({
           <button
             type="button"
             className="mt-0.5 flex justify-center w-full text-muted-foreground hover:text-foreground"
-            aria-label="הוסף הערה"
+            aria-label={t("schedulesPage.addNoteAria")}
           >
             <MessageSquare className="size-3" />
           </button>
@@ -3591,7 +3607,7 @@ function ScheduleShiftNote({
             maxLength={SCHEDULE_NOTE_MAX}
             value=""
             onChange={(e) => onChange?.(e.target.value.slice(0, SCHEDULE_NOTE_MAX))}
-            placeholder={`הערה (עד ${SCHEDULE_NOTE_MAX})`}
+            placeholder={t("schedulesPage.notePlaceholder", { max: SCHEDULE_NOTE_MAX })}
             className="h-8 text-xs"
           />
         </PopoverContent>
@@ -3614,7 +3630,7 @@ function ScheduleShiftNote({
           maxLength={SCHEDULE_NOTE_MAX}
           value={trimmed}
           onChange={(e) => onChange?.(e.target.value.slice(0, SCHEDULE_NOTE_MAX))}
-          placeholder={`הערה (עד ${SCHEDULE_NOTE_MAX})`}
+          placeholder={t("schedulesPage.notePlaceholder", { max: SCHEDULE_NOTE_MAX })}
           className="h-8 text-xs"
         />
       </PopoverContent>

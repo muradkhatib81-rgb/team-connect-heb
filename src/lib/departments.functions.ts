@@ -1,5 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
 import { requireBranchContext } from "@/integrations/supabase/active-branch.server";
+import i18n from "@/i18n";
 import { z } from "zod";
 
 async function assertCanManageDepartments(supabase: any, userId: string) {
@@ -7,7 +8,7 @@ async function assertCanManageDepartments(supabase: any, userId: string) {
     supabase.from("user_roles").select("role").eq("user_id", userId),
     supabase.from("user_task_permissions").select("can_manage_departments").eq("user_id", userId).maybeSingle(),
   ]);
-  if (error) throw new Error("שגיאת הרשאות");
+  if (error) throw new Error(i18n.t("serverErrors.common.permissionError"));
   const roles = (rolesRows ?? []).map((r: any) => r.role);
   if (
     !roles.includes("main_admin") &&
@@ -15,14 +16,14 @@ async function assertCanManageDepartments(supabase: any, userId: string) {
     !roles.includes("branch_manager") &&
     !(roles.includes("assistant_manager") && !!(perm as any)?.can_manage_departments)
   ) {
-    throw new Error("אין הרשאה לניהול מחלקות");
+    throw new Error(i18n.t("serverErrors.common.noDepartmentsPermission"));
   }
 }
 
 /** Active Branch from Platform → Company → Branch (X-Active-Branch / requireBranchContext). */
 function assertActiveBranch(branchId: string | null | undefined): asserts branchId is string {
   if (!branchId) {
-    throw new Error("יש לבחור סניף פעיל לפני שינוי מחלקה");
+    throw new Error(i18n.t("serverErrors.common.selectBranchBeforeDept"));
   }
 }
 
@@ -74,7 +75,7 @@ export const createDepartment = createServerFn({ method: "POST" })
       lastErr = error;
       if (error.code !== "23505") break;
     }
-    throw new Error(lastErr?.message ?? "שגיאה ביצירת מחלקה");
+    throw new Error(lastErr?.message ?? i18n.t("serverErrors.common.deptCreateError"));
   });
 
 const updateSchema = z.object({
@@ -124,7 +125,7 @@ export const deleteDepartment = createServerFn({ method: "POST" })
       .select("id", { count: "exact", head: true })
       .eq("department_id", data.id);
     if (cErr) throw new Error(cErr.message);
-    if ((count ?? 0) > 0) throw new Error("לא ניתן למחוק מחלקה עם עובדים משויכים");
+    if ((count ?? 0) > 0) throw new Error(i18n.t("serverErrors.common.cannotDeleteDeptWithEmployees"));
     const { error } = await context.supabase.from("departments").delete().eq("id", data.id);
     if (error) throw new Error(error.message);
     return { ok: true };

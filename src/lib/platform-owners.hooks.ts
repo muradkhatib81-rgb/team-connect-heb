@@ -1,6 +1,7 @@
 import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
+import i18n from "@/i18n";
 import {
   listPlatformOwners,
   listPlatformOwnerAuditLog,
@@ -54,8 +55,6 @@ export function usePlatformAuditQuery() {
     queryFn: () => fn() as Promise<PlatformAuditRow[]>,
   });
 }
-
-import i18n from "@/i18n";
 
 const PLATFORM_EVENT_I18N: Record<string, string> = {
   "owner.created": "platformOwners.events.created",

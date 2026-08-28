@@ -1,4 +1,5 @@
 import { useEffect, useState, useCallback } from "react";
+import { useTranslation } from "react-i18next";
 import { createPortal } from "react-dom";
 import { X, ChevronRight, ChevronLeft, ZoomIn, ZoomOut, RotateCcw } from "lucide-react";
 
@@ -14,6 +15,7 @@ interface Props {
 }
 
 export function ImageLightbox({ images, initialIndex, onClose }: Props) {
+  const { t } = useTranslation();
   const [index, setIndex] = useState(initialIndex);
   const [scale, setScale] = useState(1);
   const [translate, setTranslate] = useState({ x: 0, y: 0 });
@@ -63,21 +65,21 @@ export function ImageLightbox({ images, initialIndex, onClose }: Props) {
           <button
             className="bg-white/10 hover:bg-white/20 text-white p-2 rounded-full"
             onClick={() => setScale((s) => Math.min(5, s + 0.25))}
-            aria-label="הגדל"
+            aria-label={t("imageLightbox.zoomIn")}
           >
             <ZoomIn className="size-5" />
           </button>
           <button
             className="bg-white/10 hover:bg-white/20 text-white p-2 rounded-full"
             onClick={() => setScale((s) => Math.max(1, s - 0.25))}
-            aria-label="הקטן"
+            aria-label={t("imageLightbox.zoomOut")}
           >
             <ZoomOut className="size-5" />
           </button>
           <button
             className="bg-white/10 hover:bg-white/20 text-white p-2 rounded-full"
             onClick={reset}
-            aria-label="איפוס"
+            aria-label={t("imageLightbox.reset")}
           >
             <RotateCcw className="size-5" />
           </button>
@@ -91,7 +93,7 @@ export function ImageLightbox({ images, initialIndex, onClose }: Props) {
             e.stopPropagation();
             onClose();
           }}
-          aria-label="סגור"
+          aria-label={t("common.close")}
         >
           <X className="size-5" />
         </button>
@@ -105,7 +107,7 @@ export function ImageLightbox({ images, initialIndex, onClose }: Props) {
               e.stopPropagation();
               prev();
             }}
-            aria-label="הקודם"
+            aria-label={t("imageLightbox.previous")}
           >
             <ChevronRight className="size-6" />
           </button>
@@ -115,7 +117,7 @@ export function ImageLightbox({ images, initialIndex, onClose }: Props) {
               e.stopPropagation();
               next();
             }}
-            aria-label="הבא"
+            aria-label={t("imageLightbox.next")}
           >
             <ChevronLeft className="size-6" />
           </button>

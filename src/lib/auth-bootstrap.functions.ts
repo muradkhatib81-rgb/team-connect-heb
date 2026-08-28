@@ -7,15 +7,16 @@
  */
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
+import i18n from "@/i18n";
 
 const EMPLOYEE_EMAIL_DOMAIN = "employees.ramilevy.local";
 const idEmail = (idNumber: string) => `${idNumber.trim()}@${EMPLOYEE_EMAIL_DOMAIN}`;
 const ID_REGEX = /^\d{5,15}$/;
 
 const bootstrapInput = z.object({
-  first_name: z.string().trim().min(1, "יש למלא שם פרטי").max(50),
-  last_name: z.string().trim().min(1, "יש למלא שם משפחה").max(50),
-  id_number: z.string().regex(ID_REGEX, "מספר זהות חייב להכיל ספרות בלבד (5–15 ספרות)"),
+  first_name: z.string().trim().min(1, i18n.t("libErrors.validation.firstNameRequired")).max(50),
+  last_name: z.string().trim().min(1, i18n.t("libErrors.validation.lastNameRequired")).max(50),
+  id_number: z.string().regex(ID_REGEX, i18n.t("libErrors.validation.idNumberDigits")),
   password: z.string().min(6).max(72),
 });
 
@@ -26,10 +27,10 @@ export const bootstrapPlatformOwner = createServerFn({ method: "POST" })
 
     const { data: hasAdmin, error: adminCheckErr } = await supabaseAdmin.rpc("has_main_admin");
     if (adminCheckErr) {
-      throw new Error(adminCheckErr.message || "לא ניתן לבדוק אם קיים בעל מערכת");
+      throw new Error(adminCheckErr.message || i18n.t("libErrors.platformOwners.cannotCheckOwner"));
     }
     if (hasAdmin) {
-      throw new Error("כבר קיים בעל מערכת במערכת");
+      throw new Error(i18n.t("libErrors.platformOwners.ownerExists"));
     }
 
     const email = idEmail(data.id_number);
@@ -48,9 +49,9 @@ export const bootstrapPlatformOwner = createServerFn({ method: "POST" })
     if (createErr || !created?.user) {
       const msg = createErr?.message?.toLowerCase() ?? "";
       if (msg.includes("already") || msg.includes("registered") || msg.includes("exists") || msg.includes("duplicate")) {
-        throw new Error("כבר קיים משתמש עם מספר זהות זה");
+        throw new Error(i18n.t("libErrors.platformOwners.idExists"));
       }
-      throw new Error(createErr?.message || "יצירת בעל המערכת נכשלה");
+      throw new Error(createErr?.message || i18n.t("libErrors.platformOwners.bootstrapCreateFailed"));
     }
 
     return { ok: true };

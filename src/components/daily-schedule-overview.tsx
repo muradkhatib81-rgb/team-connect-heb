@@ -239,7 +239,7 @@ function buildDepartmentEmployeeRows(args: {
 
     const stub: DeptEmployee = emp ?? {
       id: raw.employee_id,
-      full_name: "עובד/ת",
+      full_name: i18n.t("dashboard.employeeFallback"),
       on_leave: false,
       leave_start_date: null,
       leave_end_date: null,
@@ -778,7 +778,7 @@ export function DailyScheduleOverview({
                                   {emp.isModified && (
                                     <RefreshCw
                                       className="size-3 text-orange-600 shrink-0"
-                                      aria-label="משמרת עודכנה לאחר פרסום"
+                                      aria-label={i18n.t("dashboard.shiftUpdatedAfterPublish")}
                                     />
                                   )}
                                   {!compact && emp.note && (
@@ -805,7 +805,7 @@ export function DailyScheduleOverview({
                                     {emp.isTimeModified && (
                                       <RefreshCw
                                         className="size-3 text-orange-600 shrink-0"
-                                        aria-label="שעות עודכנו"
+                                        aria-label={i18n.t("dashboard.hoursUpdated")}
                                       />
                                     )}
                                   </span>

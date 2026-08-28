@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import type { QueryClient } from "@tanstack/react-query";
 import { combineToIso } from "@/lib/date-format";
 import { supabase } from "@/integrations/supabase/client";
+import i18n from "@/i18n";
 
 /** Explicit break request statuses — never infer from timestamps alone. */
 export type BreakRequestStatus =
@@ -18,6 +19,7 @@ export type BreakRequestStatus =
   | "cancelled_by_manager"
   | "pending";
 
+/** @deprecated Use getBreakStatusLabel() for display */
 export const BREAK_STATUS_LABEL: Record<string, string> = {
   scheduled: "נקבעה",
   pending_approval: "ממתינה לאישור",
@@ -32,6 +34,12 @@ export const BREAK_STATUS_LABEL: Record<string, string> = {
   cancelled_by_employee: "בוטל ע״י עובד",
   cancelled_by_manager: "בוטל ע״י מנהל",
 };
+
+export function getBreakStatusLabel(status: string): string {
+  const key = `breaks.status.${status}`;
+  const translated = i18n.t(key);
+  return translated !== key ? translated : status;
+}
 
 export const BREAK_STATUS_TONE: Record<
   string,
@@ -151,7 +159,7 @@ export function isoFromLocalTime(timeStr: string, baseDate?: Date): string {
     day: "2-digit",
   }).format(ref);
   const iso = combineToIso(dateStr, timeStr);
-  if (!iso) throw new Error(`שעה לא תקינה: ${timeStr}`);
+  if (!iso) throw new Error(i18n.t("breaks.invalidTime", { time: timeStr }));
   return iso;
 }
 

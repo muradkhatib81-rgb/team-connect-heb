@@ -1,5 +1,6 @@
 import { useRef, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 import {
   Loader2,
@@ -46,8 +47,6 @@ import {
   IMAGE_ACCEPT,
   IMAGE_MAX_BYTES,
   MORNING_BOARD_BUCKET as BUCKET,
-  PRIORITY_LABEL,
-  TYPE_LABEL,
   VIDEO_ACCEPT,
   VIDEO_MAX_BYTES,
   type MorningBoardItem,
@@ -56,6 +55,21 @@ import {
   type MorningBoardStyle,
 } from "@/lib/morning-board-types";
 import { formatHeDateTime } from "@/lib/date-format";
+
+function getMorningBoardTypeLabel(type: MorningBoardItemType): string {
+  return i18n.t(`morningBoardManager.typeLabels.${type}`);
+}
+
+function getMorningBoardPriorityLabel(priority: MorningBoardPriority): string {
+  return i18n.t(`morningBoardManager.priorityLabels.${priority}`);
+}
+
+function mediaHint(type: MorningBoardItemType): string {
+  if (type === "image") return i18n.t("morningBoardManager.mediaHintImage");
+  if (type === "video") return i18n.t("morningBoardManager.mediaHintVideo");
+  if (type === "audio") return i18n.t("morningBoardManager.mediaHintAudio");
+  return "";
+}
 
 type EditorState =
   | { mode: "add"; type: MorningBoardItemType }
@@ -71,6 +85,7 @@ export function MorningBoardManager({
   onClose: () => void;
   branchId: string;
 }) {
+  const { t } = useTranslation();
   const qc = useQueryClient();
   const [editor, setEditor] = useState<EditorState>(null);
 
@@ -117,7 +132,7 @@ export function MorningBoardManager({
       );
     },
     onSuccess: invalidate,
-    onError: (e: any) => toast.error(e?.message ?? "שגיאה בסידור"),
+    onError: (e: any) => toast.error(e?.message ?? t("morningBoardManager.errReorder")),
   });
 
   const pinMut = useMutation({
@@ -129,7 +144,7 @@ export function MorningBoardManager({
       if (error) throw error;
     },
     onSuccess: invalidate,
-    onError: (e: any) => toast.error(e?.message ?? "שגיאה בעדכון נעיצה"),
+    onError: (e: any) => toast.error(e?.message ?? t("morningBoardManager.errPin")),
   });
 
   const deleteMut = useMutation({
@@ -144,10 +159,10 @@ export function MorningBoardManager({
       if (error) throw error;
     },
     onSuccess: () => {
-      toast.success("הפריט נמחק");
+      toast.success(t("morningBoardManager.itemDeleted"));
       invalidate();
     },
-    onError: (e: any) => toast.error(e?.message ?? "שגיאה במחיקה"),
+    onError: (e: any) => toast.error(e?.message ?? t("morningBoardManager.errDelete")),
   });
 
   return (
@@ -158,26 +173,26 @@ export function MorningBoardManager({
         </DialogHeader>
 
         <div className="flex items-center gap-2 flex-wrap">
-          <span className="text-sm text-muted-foreground me-2">➕ הוסף:</span>
+          <span className="text-sm text-muted-foreground me-2">{t("morningBoardManager.addLabel")}</span>
           <Button size="sm" variant="outline" onClick={() => setEditor({ mode: "add", type: "image" })}>
             <ImagePlus className="size-4" />
-            תמונה
+            {t("morningBoardManager.typeImage")}
           </Button>
           <Button size="sm" variant="outline" onClick={() => setEditor({ mode: "add", type: "video" })}>
             <Video className="size-4" />
-            סרטון
+            {t("morningBoardManager.typeVideo")}
           </Button>
           <Button size="sm" variant="outline" onClick={() => setEditor({ mode: "add", type: "audio" })}>
             <Music className="size-4" />
-            שמע
+            {t("morningBoardManager.typeAudio")}
           </Button>
           <Button size="sm" variant="outline" onClick={() => setEditor({ mode: "add", type: "announcement" })}>
             <Megaphone className="size-4" />
-            הודעה
+            {t("morningBoardManager.typeAnnouncement")}
           </Button>
           <Button size="sm" variant="outline" onClick={() => setEditor({ mode: "add", type: "highlight" })}>
             <Siren className="size-4" />
-            הודעה מודגשת
+            {t("morningBoardManager.typeHighlight")}
           </Button>
         </div>
 
@@ -187,7 +202,7 @@ export function MorningBoardManager({
           </div>
         ) : rows.length === 0 ? (
           <Card className="p-6 text-center text-sm text-muted-foreground">
-            עדיין לא נוסף תוכן ללוח הראשי.
+            {t("morningBoardManager.emptyBoard")}
           </Card>
         ) : (
           <div className="space-y-2">
@@ -202,7 +217,7 @@ export function MorningBoardManager({
                 onEdit={() => setEditor({ mode: "edit", row: r })}
                 onPin={() => pinMut.mutate({ id: r.id, pinned: !r.is_pinned })}
                 onDelete={() => {
-                  if (window.confirm("למחוק את הפריט?")) deleteMut.mutate(r);
+                  if (window.confirm(t("morningBoardManager.confirmDelete"))) deleteMut.mutate(r);
                 }}
                 busy={moveMut.isPending || deleteMut.isPending || pinMut.isPending}
               />
@@ -248,6 +263,7 @@ function ItemRow({
   onDelete: () => void;
   busy: boolean;
 }) {
+  const { t } = useTranslation();
   const now = Date.now();
   const scheduled = row.starts_at && new Date(row.starts_at).getTime() > now;
   const expired = row.expires_at && new Date(row.expires_at).getTime() <= now;
@@ -255,22 +271,22 @@ function ItemRow({
   return (
     <Card className="p-3 flex items-center gap-2">
       <div className="flex flex-col gap-1">
-        <Button size="icon" variant="ghost" className="size-7" onClick={onUp} disabled={!canUp || busy} aria-label="הזז למעלה">
+        <Button size="icon" variant="ghost" className="size-7" onClick={onUp} disabled={!canUp || busy} aria-label={t("morningBoardManager.moveUp")}>
           <ArrowUp className="size-4" />
         </Button>
-        <Button size="icon" variant="ghost" className="size-7" onClick={onDown} disabled={!canDown || busy} aria-label="הזז למטה">
+        <Button size="icon" variant="ghost" className="size-7" onClick={onDown} disabled={!canDown || busy} aria-label={t("morningBoardManager.moveDown")}>
           <ArrowDown className="size-4" />
         </Button>
       </div>
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2 flex-wrap">
-          <Badge variant="secondary" className="rounded-full">{TYPE_LABEL[row.item_type]}</Badge>
-          {row.is_pinned && <Badge className="rounded-full">📌 נעוץ</Badge>}
+          <Badge variant="secondary" className="rounded-full">{getMorningBoardTypeLabel(row.item_type)}</Badge>
+          {row.is_pinned && <Badge className="rounded-full">{t("morningBoardManager.pinned")}</Badge>}
           {row.priority !== "normal" && (
-            <Badge variant="outline" className="rounded-full">{PRIORITY_LABEL[row.priority]}</Badge>
+            <Badge variant="outline" className="rounded-full">{getMorningBoardPriorityLabel(row.priority)}</Badge>
           )}
-          {scheduled && <Badge variant="outline" className="rounded-full">מתוזמן</Badge>}
-          {expired && <Badge variant="destructive" className="rounded-full">פג תוקף</Badge>}
+          {scheduled && <Badge variant="outline" className="rounded-full">{t("morningBoardManager.scheduled")}</Badge>}
+          {expired && <Badge variant="destructive" className="rounded-full">{t("morningBoardManager.expired")}</Badge>}
         </div>
         <div className="font-medium truncate mt-1">{row.title || "—"}</div>
         {row.description && (
@@ -278,19 +294,19 @@ function ItemRow({
         )}
         {(row.starts_at || row.expires_at) && (
           <div className="text-[11px] text-muted-foreground mt-1">
-            {row.starts_at && <>מתחיל: {formatHeDateTime(row.starts_at)} · </>}
-            {row.expires_at && <>מסתיים: {formatHeDateTime(row.expires_at)}</>}
+            {row.starts_at && <>{t("morningBoardManager.startsAt")} {formatHeDateTime(row.starts_at)} · </>}
+            {row.expires_at && <>{t("morningBoardManager.endsAt")} {formatHeDateTime(row.expires_at)}</>}
           </div>
         )}
       </div>
       <div className="flex items-center gap-1">
-        <Button size="icon" variant="ghost" onClick={onPin} disabled={busy} aria-label={row.is_pinned ? "בטל נעיצה" : "נעוץ"}>
+        <Button size="icon" variant="ghost" onClick={onPin} disabled={busy} aria-label={row.is_pinned ? t("morningBoardManager.unpin") : t("morningBoardManager.pin")}>
           {row.is_pinned ? <PinOff className="size-4" /> : <Pin className="size-4" />}
         </Button>
-        <Button size="icon" variant="ghost" onClick={onEdit} disabled={busy} aria-label="עריכה">
+        <Button size="icon" variant="ghost" onClick={onEdit} disabled={busy} aria-label={t("morningBoardManager.edit")}>
           <Pencil className="size-4" />
         </Button>
-        <Button size="icon" variant="ghost" onClick={onDelete} disabled={busy} aria-label="מחיקה" className="text-destructive">
+        <Button size="icon" variant="ghost" onClick={onDelete} disabled={busy} aria-label={t("morningBoardManager.delete")} className="text-destructive">
           <Trash2 className="size-4" />
         </Button>
       </div>
@@ -324,13 +340,6 @@ function maxBytesForType(type: MorningBoardItemType): number {
   return 0;
 }
 
-function mediaHint(type: MorningBoardItemType): string {
-  if (type === "image") return "JPG / PNG / WEBP, עד 5MB";
-  if (type === "video") return "MP4 / WEBM, עד 100MB";
-  if (type === "audio") return "MP3 / WAV / M4A / OGG, עד 50MB";
-  return "";
-}
-
 function ItemEditorDialog({
   state,
   branchId,
@@ -344,6 +353,7 @@ function ItemEditorDialog({
   onClose: () => void;
   onSaved: () => void;
 }) {
+  const { t } = useTranslation();
   const { data: profile } = useAuth();
   const isEdit = state.mode === "edit";
   const row = isEdit ? state.row : null;
@@ -370,9 +380,9 @@ function ItemEditorDialog({
 
   const validateFile = (f: File): string | null => {
     const okTypes = accept.split(",").map((s) => s.trim());
-    if (!okTypes.includes(f.type)) return "פורמט הקובץ אינו נתמך.";
+    if (!okTypes.includes(f.type)) return t("morningBoardManager.errUnsupportedFormat");
     if (f.size > maxBytes) {
-      return `הקובץ גדול מדי. ${mediaHint(type)}.`;
+      return t("morningBoardManager.errFileTooLarge", { hint: mediaHint(type) });
     }
     return null;
   };
@@ -391,9 +401,9 @@ function ItemEditorDialog({
     try {
       setSaving(true);
       if ((type === "announcement" || type === "highlight") && !title.trim()) {
-        throw new Error("יש להזין כותרת להודעה");
+        throw new Error(t("morningBoardManager.errTitleRequired"));
       }
-      if (needsFile && !file) throw new Error("יש לבחור קובץ");
+      if (needsFile && !file) throw new Error(t("morningBoardManager.errFileRequired"));
       if (file) {
         const err = validateFile(file);
         if (err) throw new Error(err);
@@ -439,7 +449,7 @@ function ItemEditorDialog({
             throw e;
           }
         }
-        toast.success("הפריט נוסף");
+        toast.success(t("morningBoardManager.itemAdded"));
       } else {
         let newPath = row!.storage_path;
         if (file) {
@@ -458,11 +468,11 @@ function ItemEditorDialog({
         if (file && row!.storage_path && row!.storage_path !== newPath) {
           await supabase.storage.from(BUCKET).remove([row!.storage_path]).catch(() => {});
         }
-        toast.success("הפריט עודכן");
+        toast.success(t("morningBoardManager.itemUpdated"));
       }
       onSaved();
     } catch (e: any) {
-      toast.error(e?.message ?? "שגיאה בשמירה");
+      toast.error(e?.message ?? t("morningBoardManager.errSave"));
     } finally {
       setSaving(false);
     }
@@ -473,14 +483,14 @@ function ItemEditorDialog({
       <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>
-            {isEdit ? "עריכת פריט" : "הוספת פריט"} — {TYPE_LABEL[type]}
+            {isEdit ? t("morningBoardManager.editItem") : t("morningBoardManager.addItem")} — {getMorningBoardTypeLabel(type)}
           </DialogTitle>
         </DialogHeader>
 
         <div className="space-y-3">
           {isMedia && (
             <div>
-              <Label>קובץ {isEdit ? "(אופציונלי — החלפה)" : ""}</Label>
+              <Label>{t("morningBoardManager.fileLabel")} {isEdit ? t("morningBoardManager.fileOptionalReplace") : ""}</Label>
               <Input
                 ref={fileRef}
                 type="file"
@@ -492,12 +502,17 @@ function ItemEditorDialog({
           )}
 
           <div>
-            <Label>כותרת {type === "announcement" || type === "highlight" ? "*" : "(אופציונלי)"}</Label>
+            <Label>
+              {t("morningBoardManager.titleLabel")}{" "}
+              {type === "announcement" || type === "highlight"
+                ? t("morningBoardManager.required")
+                : t("morningBoardManager.optional")}
+            </Label>
             <Input value={title} onChange={(e) => setTitle(e.target.value)} maxLength={200} />
           </div>
 
           <div>
-            <Label>תיאור (אופציונלי)</Label>
+            <Label>{t("morningBoardManager.descriptionLabel")}</Label>
             <Textarea
               value={description}
               onChange={(e) => setDescription(e.target.value)}
@@ -508,12 +523,12 @@ function ItemEditorDialog({
 
           <div className="grid grid-cols-2 gap-2">
             <div>
-              <Label>עדיפות</Label>
+              <Label>{t("morningBoardManager.priorityLabel")}</Label>
               <Select value={priority} onValueChange={(v) => setPriority(v as MorningBoardPriority)}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  {(Object.keys(PRIORITY_LABEL) as MorningBoardPriority[]).map((p) => (
-                    <SelectItem key={p} value={p}>{PRIORITY_LABEL[p]}</SelectItem>
+                  {(Object.keys({ normal: 1, important: 1, urgent: 1, critical: 1 }) as MorningBoardPriority[]).map((p) => (
+                    <SelectItem key={p} value={p}>{getMorningBoardPriorityLabel(p)}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
@@ -526,24 +541,23 @@ function ItemEditorDialog({
                   onChange={(e) => setIsPinned(e.target.checked)}
                   className="size-4"
                 />
-                📌 נעץ בראש הלוח
+                {t("morningBoardManager.pinToTop")}
               </label>
             </div>
           </div>
 
           <div className="grid grid-cols-2 gap-2">
             <div>
-              <Label>תאריך ושעת התחלה (אופציונלי)</Label>
+              <Label>{t("morningBoardManager.startDateLabel")}</Label>
               <Input dir="ltr" type="datetime-local" value={startsAt} onChange={(e) => setStartsAt(e.target.value)} />
             </div>
             <div>
-              <Label>תאריך ושעת סיום (אופציונלי)</Label>
+              <Label>{t("morningBoardManager.endDateLabel")}</Label>
               <Input dir="ltr" type="datetime-local" value={expiresAt} onChange={(e) => setExpiresAt(e.target.value)} />
             </div>
           </div>
           <p className="text-[11px] text-muted-foreground">
-            ללא תאריך התחלה: מתפרסם מיד. ללא תאריך סיום: נשאר עד למחיקה ידנית.
-            עם הגעת תאריך הסיום הפריט מוסתר אוטומטית ונשמר לעריכה עתידית.
+            {t("morningBoardManager.scheduleHint")}
           </p>
 
           {type === "highlight" && <HighlightStyleEditor value={style} onChange={setStyle} />}
@@ -551,11 +565,11 @@ function ItemEditorDialog({
 
         <div className="flex justify-end gap-2 pt-2">
           <Button variant="outline" onClick={onClose} disabled={saving}>
-            ביטול
+            {t("common.cancel")}
           </Button>
           <Button onClick={handleSave} disabled={saving}>
             {saving ? <Loader2 className="size-4 animate-spin" /> : isEdit ? <Replace className="size-4" /> : <Plus className="size-4" />}
-            {isEdit ? "שמור שינויים" : "הוסף"}
+            {isEdit ? t("morningBoardManager.saveChanges") : t("morningBoardManager.add")}
           </Button>
         </div>
       </DialogContent>
@@ -598,98 +612,99 @@ function HighlightStyleEditor({
   value: MorningBoardStyle;
   onChange: (v: MorningBoardStyle) => void;
 }) {
+  const { t } = useTranslation();
   const v: MorningBoardStyle = { ...DEFAULT_HIGHLIGHT_STYLE, ...value };
   const set = (patch: Partial<MorningBoardStyle>) => onChange({ ...v, ...patch });
 
   return (
     <div className="border rounded-lg p-3 space-y-3 bg-muted/30">
-      <div className="font-semibold text-sm">עיצוב הודעה מודגשת</div>
+      <div className="font-semibold text-sm">{t("morningBoardManager.highlightStyleTitle")}</div>
       <div className="grid grid-cols-2 gap-2">
-        <ColorField label="צבע מסגרת" value={v.borderColor} fallback="#dc2626" onChange={(c) => set({ borderColor: c })} />
-        <ColorField label="צבע רקע" value={v.backgroundColor} fallback="#fef2f2" onChange={(c) => set({ backgroundColor: c })} />
-        <ColorField label="צבע כותרת" value={v.titleColor} fallback="#991b1b" onChange={(c) => set({ titleColor: c })} />
-        <ColorField label="צבע טקסט" value={v.textColor} fallback="#450a0a" onChange={(c) => set({ textColor: c })} />
+        <ColorField label={t("morningBoardManager.borderColor")} value={v.borderColor} fallback="#dc2626" onChange={(c) => set({ borderColor: c })} />
+        <ColorField label={t("morningBoardManager.backgroundColor")} value={v.backgroundColor} fallback="#fef2f2" onChange={(c) => set({ backgroundColor: c })} />
+        <ColorField label={t("morningBoardManager.titleColor")} value={v.titleColor} fallback="#991b1b" onChange={(c) => set({ titleColor: c })} />
+        <ColorField label={t("morningBoardManager.textColor")} value={v.textColor} fallback="#450a0a" onChange={(c) => set({ textColor: c })} />
       </div>
 
       <div className="grid grid-cols-2 gap-2">
         <div>
-          <Label>עובי מסגרת</Label>
+          <Label>{t("morningBoardManager.borderWidth")}</Label>
           <Select value={String(v.borderWidth ?? 2)} onValueChange={(x) => set({ borderWidth: Number(x) as 1 | 2 | 3 | 4 })}>
             <SelectTrigger><SelectValue /></SelectTrigger>
             <SelectContent>
-              <SelectItem value="1">דק</SelectItem>
-              <SelectItem value="2">בינוני</SelectItem>
-              <SelectItem value="3">עבה</SelectItem>
-              <SelectItem value="4">עבה מאוד</SelectItem>
+              <SelectItem value="1">{t("morningBoardManager.sizeThin")}</SelectItem>
+              <SelectItem value="2">{t("morningBoardManager.sizeMedium")}</SelectItem>
+              <SelectItem value="3">{t("morningBoardManager.sizeThick")}</SelectItem>
+              <SelectItem value="4">{t("morningBoardManager.sizeVeryThick")}</SelectItem>
             </SelectContent>
           </Select>
         </div>
         <div>
-          <Label>עיגול פינות</Label>
+          <Label>{t("morningBoardManager.borderRadius")}</Label>
           <Select value={v.radius ?? "lg"} onValueChange={(x) => set({ radius: x as MorningBoardStyle["radius"] })}>
             <SelectTrigger><SelectValue /></SelectTrigger>
             <SelectContent>
-              <SelectItem value="sm">קטן</SelectItem>
-              <SelectItem value="md">בינוני</SelectItem>
-              <SelectItem value="lg">גדול</SelectItem>
-              <SelectItem value="xl">גדול מאוד</SelectItem>
+              <SelectItem value="sm">{t("morningBoardManager.sizeSmall")}</SelectItem>
+              <SelectItem value="md">{t("morningBoardManager.sizeMedium")}</SelectItem>
+              <SelectItem value="lg">{t("morningBoardManager.sizeLarge")}</SelectItem>
+              <SelectItem value="xl">{t("morningBoardManager.sizeVeryLarge")}</SelectItem>
             </SelectContent>
           </Select>
         </div>
         <div>
-          <Label>גודל טקסט</Label>
+          <Label>{t("morningBoardManager.fontSize")}</Label>
           <Select value={v.fontSize ?? "lg"} onValueChange={(x) => set({ fontSize: x as MorningBoardStyle["fontSize"] })}>
             <SelectTrigger><SelectValue /></SelectTrigger>
             <SelectContent>
-              <SelectItem value="sm">קטן</SelectItem>
-              <SelectItem value="md">בינוני</SelectItem>
-              <SelectItem value="lg">גדול</SelectItem>
-              <SelectItem value="xl">גדול מאוד</SelectItem>
+              <SelectItem value="sm">{t("morningBoardManager.sizeSmall")}</SelectItem>
+              <SelectItem value="md">{t("morningBoardManager.sizeMedium")}</SelectItem>
+              <SelectItem value="lg">{t("morningBoardManager.sizeLarge")}</SelectItem>
+              <SelectItem value="xl">{t("morningBoardManager.sizeVeryLarge")}</SelectItem>
             </SelectContent>
           </Select>
         </div>
         <div>
-          <Label>עובי טקסט</Label>
+          <Label>{t("morningBoardManager.fontWeight")}</Label>
           <Select value={v.fontWeight ?? "bold"} onValueChange={(x) => set({ fontWeight: x as MorningBoardStyle["fontWeight"] })}>
             <SelectTrigger><SelectValue /></SelectTrigger>
             <SelectContent>
-              <SelectItem value="regular">רגיל</SelectItem>
-              <SelectItem value="bold">מודגש</SelectItem>
+              <SelectItem value="regular">{t("morningBoardManager.weightRegular")}</SelectItem>
+              <SelectItem value="bold">{t("morningBoardManager.weightBold")}</SelectItem>
             </SelectContent>
           </Select>
         </div>
         <div>
-          <Label>יישור</Label>
+          <Label>{t("morningBoardManager.align")}</Label>
           <Select value={v.align ?? "right"} onValueChange={(x) => set({ align: x as MorningBoardStyle["align"] })}>
             <SelectTrigger><SelectValue /></SelectTrigger>
             <SelectContent>
-              <SelectItem value="right">ימין</SelectItem>
-              <SelectItem value="center">מרכז</SelectItem>
+              <SelectItem value="right">{t("morningBoardManager.alignRight")}</SelectItem>
+              <SelectItem value="center">{t("morningBoardManager.alignCenter")}</SelectItem>
             </SelectContent>
           </Select>
         </div>
         <div>
-          <Label>אפקט תשומת לב</Label>
+          <Label>{t("morningBoardManager.attention")}</Label>
           <Select value={v.attention ?? "pulse-title"} onValueChange={(x) => set({ attention: x as MorningBoardStyle["attention"] })}>
             <SelectTrigger><SelectValue /></SelectTrigger>
             <SelectContent>
-              <SelectItem value="none">ללא</SelectItem>
-              <SelectItem value="glow">מסגרת זוהרת</SelectItem>
-              <SelectItem value="pulse-title">פעימה עדינה בכותרת</SelectItem>
-              <SelectItem value="icon">אייקון בולט</SelectItem>
+              <SelectItem value="none">{t("morningBoardManager.attentionNone")}</SelectItem>
+              <SelectItem value="glow">{t("morningBoardManager.attentionGlow")}</SelectItem>
+              <SelectItem value="pulse-title">{t("morningBoardManager.attentionPulse")}</SelectItem>
+              <SelectItem value="icon">{t("morningBoardManager.attentionIcon")}</SelectItem>
             </SelectContent>
           </Select>
         </div>
         <div>
-          <Label>אייקון</Label>
+          <Label>{t("morningBoardManager.icon")}</Label>
           <Select value={v.icon ?? "🚨"} onValueChange={(x) => set({ icon: x as MorningBoardStyle["icon"] })}>
             <SelectTrigger><SelectValue /></SelectTrigger>
             <SelectContent>
-              <SelectItem value="none">ללא</SelectItem>
-              <SelectItem value="🚨">🚨 חירום</SelectItem>
-              <SelectItem value="⚠️">⚠️ אזהרה</SelectItem>
-              <SelectItem value="📢">📢 הכרזה</SelectItem>
-              <SelectItem value="ℹ️">ℹ️ מידע</SelectItem>
+              <SelectItem value="none">{t("morningBoardManager.attentionNone")}</SelectItem>
+              <SelectItem value="🚨">{t("morningBoardManager.iconEmergency")}</SelectItem>
+              <SelectItem value="⚠️">{t("morningBoardManager.iconWarning")}</SelectItem>
+              <SelectItem value="📢">{t("morningBoardManager.iconAnnouncement")}</SelectItem>
+              <SelectItem value="ℹ️">{t("morningBoardManager.iconInfo")}</SelectItem>
             </SelectContent>
           </Select>
         </div>

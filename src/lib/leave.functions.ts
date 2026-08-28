@@ -1,5 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
+import i18n from "@/i18n";
 import { requireBranchContext } from "@/integrations/supabase/active-branch.server";
 
 const sb = (supabase: any) => supabase as any;
@@ -48,6 +49,7 @@ export type LeaveRequestRow = {
   }[];
 };
 
+/** @deprecated Use getLeaveStatusLabel */
 export const LEAVE_STATUS_LABEL: Record<LeaveRequestRow["status"], string> = {
   pending_dept: "ממתין לאחראי מחלקה",
   pending_admin: "ממתין להנהלה",
@@ -55,6 +57,18 @@ export const LEAVE_STATUS_LABEL: Record<LeaveRequestRow["status"], string> = {
   rejected: "נדחה",
   cancelled: "בוטל",
 };
+
+const LEAVE_STATUS_I18N: Record<LeaveRequestRow["status"], string> = {
+  pending_dept: "leaves.statusPendingDept",
+  pending_admin: "leaves.statusPendingAdmin",
+  approved: "leaves.statusApproved",
+  rejected: "leaves.statusRejected",
+  cancelled: "leaves.statusCancelled",
+};
+
+export function getLeaveStatusLabel(status: LeaveRequestRow["status"]): string {
+  return i18n.t(LEAVE_STATUS_I18N[status]);
+}
 
 export const LEAVE_STATUS_TONE: Record<LeaveRequestRow["status"], string> = {
   pending_dept: "bg-amber-100 text-amber-900",
@@ -68,7 +82,7 @@ export const LEAVE_STATUS_TONE: Record<LeaveRequestRow["status"], string> = {
 export const ensureLeaveTypes = createServerFn({ method: "POST" })
   .middleware([requireBranchContext])
   .handler(async ({ context }) => {
-    if (!context.branchId) throw new Error("יש לבחור סניף פעיל");
+    if (!context.branchId) throw new Error(i18n.t("serverErrors.common.selectBranch"));
     const { error } = await sb(context.supabase).rpc("ensure_leave_types_for_branch", {
       _branch_id: context.branchId,
     });
@@ -79,7 +93,7 @@ export const ensureLeaveTypes = createServerFn({ method: "POST" })
 export const listLeaveTypes = createServerFn({ method: "GET" })
   .middleware([requireBranchContext])
   .handler(async ({ context }) => {
-    if (!context.branchId) throw new Error("יש לבחור סניף פעיל");
+    if (!context.branchId) throw new Error(i18n.t("serverErrors.common.selectBranch"));
     await sb(context.supabase).rpc("ensure_leave_types_for_branch", {
       _branch_id: context.branchId,
     });
@@ -252,7 +266,7 @@ export const registerLeaveAttachment = createServerFn({ method: "POST" })
   .middleware([requireBranchContext])
   .inputValidator((data: unknown) => attachMetaSchema.parse(data))
   .handler(async ({ data, context }) => {
-    if (!context.branchId) throw new Error("יש לבחור סניף פעיל");
+    if (!context.branchId) throw new Error(i18n.t("serverErrors.common.selectBranch"));
     const { data: req, error: rErr } = await sb(context.supabase)
       .from("leave_requests")
       .select("id, user_id, branch_id")
@@ -260,7 +274,7 @@ export const registerLeaveAttachment = createServerFn({ method: "POST" })
       .maybeSingle();
     if (rErr) throw new Error(rErr.message);
     if (!req || req.user_id !== context.userId) {
-      throw new Error("ניתן לצרף קבצים רק לבקשה שלך");
+      throw new Error(i18n.t("libErrors.leaves.attachOwnOnly"));
     }
     const { error } = await sb(context.supabase).from("leave_request_attachments").insert({
       request_id: data.request_id,
@@ -288,7 +302,7 @@ export const getLeaveAttachmentSignedUrl = createServerFn({ method: "POST" })
       .eq("id", data.attachment_id)
       .maybeSingle();
     if (aErr) throw new Error(aErr.message);
-    if (!att?.storage_path) throw new Error("המסמך לא נמצא");
+    if (!att?.storage_path) throw new Error(i18n.t("libErrors.leaves.docNotFound"));
 
     const reqUser = (att as any).leave_requests?.user_id as string | undefined;
     const isOwner =
@@ -303,7 +317,7 @@ export const getLeaveAttachmentSignedUrl = createServerFn({ method: "POST" })
         _perm: "approve",
       });
       if (!canView && !canApprove) {
-        throw new Error("אין הרשאה לצפות במסמך");
+        throw new Error(i18n.t("libErrors.leaves.noDocView"));
       }
     }
 
@@ -312,7 +326,7 @@ export const getLeaveAttachmentSignedUrl = createServerFn({ method: "POST" })
       .from("leave-attachments")
       .createSignedUrl(att.storage_path, 60 * 30);
     if (sErr || !signed?.signedUrl) {
-      throw new Error(sErr?.message ?? "לא ניתן לפתוח את המסמך");
+      throw new Error(sErr?.message ?? i18n.t("libErrors.leaves.cannotOpenDoc"));
     }
     return { url: signed.signedUrl };
   });

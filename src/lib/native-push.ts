@@ -11,6 +11,7 @@ import {
   NATIVE_PUSH_OPT_OUT_KEY,
 } from "@/lib/fcm-endpoints";
 import { isNativeApp, nativePlatform } from "@/lib/native-app";
+import i18n from "@/i18n";
 
 export type NativePushToken = {
   value: string;
@@ -88,7 +89,7 @@ async function ensureListeners(): Promise<void> {
     console.warn("[native-push] registration error", err);
   });
   await PushNotifications.addListener("pushNotificationReceived", (notification) => {
-    const title = notification.title || "מערכת ניהול עובדים";
+    const title = notification.title || i18n.t("common.appName");
     const body = notification.body || "";
     const data = (notification.data ?? {}) as { url?: string; tone?: string };
     playAlertTone(resolveAlertTone(data.tone));

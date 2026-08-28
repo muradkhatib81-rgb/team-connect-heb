@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
+import { useTranslation } from "react-i18next";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Loader2, Package, RotateCcw, Hand, Settings2 } from "lucide-react";
@@ -32,6 +33,7 @@ import {
 import { Link } from "@tanstack/react-router";
 
 export function CustodyBoardCard() {
+  const { t } = useTranslation();
   const [settingsOpen, setSettingsOpen] = useState(false);
   const { data: profile } = useAuth();
   const qc = useQueryClient();
@@ -106,16 +108,16 @@ export function CustodyBoardCard() {
 
   const checkoutMut = useMutation({
     mutationFn: async ({ itemTypeId, itemName }: { itemTypeId: string; itemName: string }) => {
-      if (!scopedBranchId) throw new Error("לא נמצא סניף");
+      if (!scopedBranchId) throw new Error(t("custody.noBranch"));
       await checkoutCustodyItem(itemTypeId, scopedBranchId);
       return itemName;
     },
     onSuccess: (itemName) => {
-      toast.success("הציוד נלקח בהצלחה");
+      toast.success(t("custody.checkoutSuccess"));
       announceCustody("take", itemName);
       invalidateCustodyQueries(qc, scopedBranchId, profile?.id);
     },
-    onError: (e: Error) => toast.error(e.message ?? "שגיאה בלקיחת ציוד"),
+    onError: (e: Error) => toast.error(e.message ?? t("custody.checkoutError")),
   });
 
   const returnMut = useMutation({
@@ -126,16 +128,16 @@ export function CustodyBoardCard() {
       checkoutId: string;
       itemName: string;
     }) => {
-      if (!scopedBranchId) throw new Error("לא נמצא סניף");
+      if (!scopedBranchId) throw new Error(t("custody.noBranch"));
       await returnCustodyItem(checkoutId, scopedBranchId);
       return itemName;
     },
     onSuccess: (itemName) => {
-      toast.success("הציוד הוחזר");
+      toast.success(t("custody.returnSuccess"));
       announceCustody("return", itemName);
       invalidateCustodyQueries(qc, scopedBranchId, profile?.id);
     },
-    onError: (e: Error) => toast.error(e.message ?? "שגיאה בהחזרת ציוד"),
+    onError: (e: Error) => toast.error(e.message ?? t("custody.returnError")),
   });
 
   const myActiveIds = useMemo(() => {
@@ -168,9 +170,9 @@ export function CustodyBoardCard() {
             <Package className="size-5" />
           </div>
           <div>
-            <h2 className="text-base font-bold leading-tight">📦 מערכת ניהול ציוד</h2>
+            <h2 className="text-base font-bold leading-tight">{t("custody.boardTitle")}</h2>
             <p className="text-xs text-muted-foreground">
-              לחץ על ציוד פנוי (ירוק) ללקיחה — אדום = בשימוש
+              {t("custody.boardHint")}
             </p>
           </div>
         </div>
@@ -184,10 +186,10 @@ export function CustodyBoardCard() {
               onClick={() => setSettingsOpen(true)}
             >
               <Settings2 className="size-4" />
-              הגדרות
+              {t("custody.settings")}
             </Button>
             <Button type="button" variant="ghost" size="sm" asChild>
-              <Link to="/custody-settings">מסך מלא</Link>
+              <Link to="/custody-settings">{t("custody.fullScreen")}</Link>
             </Button>
           </div>
         )}
@@ -197,7 +199,7 @@ export function CustodyBoardCard() {
         <Dialog open={settingsOpen} onOpenChange={setSettingsOpen}>
           <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto">
             <DialogHeader>
-              <DialogTitle>הגדרות מערכת ניהול ציוד</DialogTitle>
+              <DialogTitle>{t("custody.settingsPanelTitle")}</DialogTitle>
             </DialogHeader>
             <CustodySettingsPanel branchId={scopedBranchId} userId={profile.id} compact />
           </DialogContent>
@@ -210,10 +212,10 @@ export function CustodyBoardCard() {
         </div>
       ) : slots.length === 0 ? (
         <div className="text-center py-6 space-y-2">
-          <p className="text-sm text-muted-foreground">אין ציוד מוגדר לסניף זה</p>
+          <p className="text-sm text-muted-foreground">{t("custody.noEquipment")}</p>
           {caps?.canCreate && (
             <Button type="button" size="sm" variant="secondary" onClick={() => setSettingsOpen(true)}>
-              הגדר ציוד ראשון
+              {t("custody.setupFirst")}
             </Button>
           )}
         </div>
@@ -264,19 +266,19 @@ export function CustodyBoardCard() {
                       <div className="text-muted-foreground">{slot.checkout.department_name}</div>
                     )}
                     <div className="text-muted-foreground">
-                      מ-{custodyTimeHM(slot.checkout.checked_out_at)}
+                      {t("custody.fromTime", { time: custodyTimeHM(slot.checkout.checked_out_at) })}
                     </div>
                     {canReturn && (
                       <div className="flex items-center gap-1 mt-2 text-primary font-medium">
                         {isMine ? (
                           <>
                             <RotateCcw className="size-3.5" />
-                            החזר
+                            {t("custody.return")}
                           </>
                         ) : (
                           <>
                             <Hand className="size-3.5" />
-                            החזר (מנהל)
+                            {t("custody.returnManager")}
                           </>
                         )}
                       </div>
@@ -285,7 +287,7 @@ export function CustodyBoardCard() {
                 ) : (
                   <div className="text-xs text-emerald-700 dark:text-emerald-300 flex items-center justify-center gap-1 shrink-0">
                     <Hand className="size-3.5" />
-                    פנוי — לחץ ללקיחה
+                    {t("custody.availableTap")}
                   </div>
                 )}
               </button>
@@ -296,7 +298,7 @@ export function CustodyBoardCard() {
 
       {myActiveIds.size > 0 && (
         <p className="text-xs text-muted-foreground mt-4">
-          מחזיק/ה {myActiveIds.size} פריט/י ציוד — יש להחזיר בסיום
+          {t("custody.holdingItems", { count: myActiveIds.size })}
         </p>
       )}
     </Card>

@@ -1,4 +1,4 @@
-import { detectSystemLanguage } from "@/i18n";
+import i18n, { detectSystemLanguage } from "@/i18n";
 import { supabase } from "@/integrations/supabase/client";
 import {
   DEFAULT_PWA_ICON_192,
@@ -122,10 +122,10 @@ export async function resizeImageToPng(file: File, size: number): Promise<Blob> 
 /** Upload PWA icon (platform owner). Returns public URL with cache-buster. */
 export async function uploadPlatformPwaIcon(file: File): Promise<string> {
   if (!file.type.startsWith("image/")) {
-    throw new Error("יש להעלות קובץ תמונה");
+    throw new Error(i18n.t("libErrors.pwa.imageRequired"));
   }
   if (file.size > 5 * 1024 * 1024) {
-    throw new Error("גודל הקובץ מוגבל ל־5MB");
+    throw new Error(i18n.t("libErrors.pwa.fileTooLarge"));
   }
 
   const png = await resizeImageToPng(file, 512);

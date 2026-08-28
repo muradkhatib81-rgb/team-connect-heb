@@ -8,13 +8,18 @@ import { APP_NAME, supportContactInstruction } from "@/lib/constants";
 import { useAuth } from "@/lib/use-auth";
 import { supabase } from "@/integrations/supabase/client";
 import { clearIdleSessionState } from "@/lib/use-idle-logout";
+import i18n from "@/i18n";
+import { useTranslation } from "react-i18next";
 
 export const Route = createFileRoute("/_authenticated/inactive")({
-  head: () => ({ meta: [{ title: `חשבון לא פעיל | ${APP_NAME}` }] }),
+  head: () => ({
+    meta: [{ title: `${i18n.t("inactivePage.metaTitle")} | ${APP_NAME}` }],
+  }),
   component: InactiveAccountPage,
 });
 
 function InactiveAccountPage() {
+  const { t } = useTranslation();
   const { data: profile } = useAuth();
   const navigate = useNavigate();
   const qc = useQueryClient();
@@ -56,9 +61,11 @@ function InactiveAccountPage() {
           <UserX className="size-8 text-destructive" />
         </div>
         <div className="space-y-2">
-          <h1 className="text-xl font-semibold text-destructive">החשבון אינו פעיל</h1>
+          <h1 className="text-xl font-semibold text-destructive">{t("inactivePage.title")}</h1>
           <p className="text-sm text-destructive/90 leading-relaxed">
-            אינך פעיל/ה כרגע במערכת. אנא {supportContactInstruction(profile?.roles ?? [])}.
+            {t("inactivePage.message", {
+              contact: supportContactInstruction(profile?.roles ?? []),
+            })}
           </p>
         </div>
         {profile?.full_name && (
@@ -66,7 +73,7 @@ function InactiveAccountPage() {
         )}
         <Button variant="outline" className="w-full gap-2" onClick={() => void signOut()}>
           <LogOut className="size-4" />
-          התנתקות
+          {t("common.logout")}
         </Button>
       </Card>
     </div>

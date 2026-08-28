@@ -1,3 +1,4 @@
+import i18n from "@/i18n";
 export const HEBREW_MONTHS = [
   "ינואר",
   "פברואר",
@@ -45,5 +46,7 @@ export function buildRolling12MonthSlots(
 }
 
 export function formatEomMonthLabel(year: number, month: number): string {
-  return `${HEBREW_MONTHS[month - 1] ?? month} ${year}`;
+  const months = i18n.t("libErrors.eom.months", { returnObjects: true }) as string[];
+  const monthName = Array.isArray(months) ? months[month - 1] ?? String(month) : String(month);
+  return `${monthName} ${year}`;
 }

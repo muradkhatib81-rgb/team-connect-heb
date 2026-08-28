@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
+import { useTranslation } from "react-i18next";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -21,6 +22,8 @@ import {
   fetchCustodyDailyLog,
   fetchCustodyUserCaps,
   fmtCustodyDuration,
+  getCustodyLogBadgeLabel,
+  getCustodyStatusLabel,
   invalidateCustodyQueries,
   returnCustodyItem,
 } from "@/lib/custody-workflow";
@@ -28,6 +31,7 @@ import { announceCustodyChange } from "@/lib/management-on-shift.functions";
 
 /** Daily equipment log table + filters (shared by page route). */
 export function CustodyLogPanel({ branchId }: { branchId: string }) {
+  const { t } = useTranslation();
   const [search, setSearch] = useState("");
   const [empFilter, setEmpFilter] = useState("__all");
   const [itemFilter, setItemFilter] = useState("__all");
@@ -63,11 +67,11 @@ export function CustodyLogPanel({ branchId }: { branchId: string }) {
       return itemName;
     },
     onSuccess: (itemName) => {
-      toast.success("הציוד הוחזר");
+      toast.success(t("custody.returnSuccess"));
       void announceCustodyFn({ data: { action: "return", itemName } }).catch(() => {});
       invalidateCustodyQueries(qc, branchId, profile?.id);
     },
-    onError: (e: Error) => toast.error(e.message ?? "שגיאה בהחזרת ציוד"),
+    onError: (e: Error) => toast.error(e.message ?? t("custody.returnError")),
   });
 
   const log = logQ.data ?? [];
@@ -110,16 +114,16 @@ export function CustodyLogPanel({ branchId }: { branchId: string }) {
     <div className="flex min-h-0 flex-col gap-3">
       <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
         <Input
-          placeholder="🔎 חיפוש..."
+          placeholder={t("custody.searchPlaceholder")}
           value={search}
           onChange={(e) => setSearch(e.target.value)}
         />
         <Select value={empFilter} onValueChange={setEmpFilter}>
           <SelectTrigger>
-            <SelectValue placeholder="עובד" />
+            <SelectValue placeholder={t("custody.filterEmployee")} />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="__all">כל העובדים</SelectItem>
+            <SelectItem value="__all">{t("custody.allEmployees")}</SelectItem>
             {employees.map((name) => (
               <SelectItem key={name} value={name}>
                 {name}
@@ -129,10 +133,10 @@ export function CustodyLogPanel({ branchId }: { branchId: string }) {
         </Select>
         <Select value={itemFilter} onValueChange={setItemFilter}>
           <SelectTrigger>
-            <SelectValue placeholder="ציוד" />
+            <SelectValue placeholder={t("custody.filterEquipment")} />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="__all">כל הציוד</SelectItem>
+            <SelectItem value="__all">{t("custody.allEquipment")}</SelectItem>
             {items.map((name) => (
               <SelectItem key={name} value={name}>
                 {name}
@@ -142,12 +146,12 @@ export function CustodyLogPanel({ branchId }: { branchId: string }) {
         </Select>
         <Select value={statusFilter} onValueChange={setStatusFilter}>
           <SelectTrigger>
-            <SelectValue placeholder="סטטוס" />
+            <SelectValue placeholder={t("custody.filterStatus")} />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="__all">כל הסטטוסים</SelectItem>
-            <SelectItem value="active">בשימוש</SelectItem>
-            <SelectItem value="returned">הוחזר</SelectItem>
+            <SelectItem value="__all">{t("custody.allStatuses")}</SelectItem>
+            <SelectItem value="active">{getCustodyStatusLabel("active")}</SelectItem>
+            <SelectItem value="returned">{getCustodyStatusLabel("returned")}</SelectItem>
           </SelectContent>
         </Select>
       </div>
@@ -160,21 +164,21 @@ export function CustodyLogPanel({ branchId }: { branchId: string }) {
         ) : filtered.length === 0 ? (
           <p className="p-8 text-center text-sm text-muted-foreground">
             {log.length === 0
-              ? "אין רשומות ציוד להיום."
-              : "לא נמצאו רשומות התואמות את הסינון."}
+              ? t("custody.noRecordsToday")
+              : t("custody.noFilterMatch")}
           </p>
         ) : (
           <table className="w-full text-xs sm:text-sm">
             <thead className="sticky top-0 bg-muted/40">
               <tr>
-                <th className="p-2 text-right">👤 עובד</th>
-                <th className="p-2 text-right">🏬 מחלקה</th>
-                <th className="p-2 text-right">📦 ציוד</th>
-                <th className="p-2 text-right">🕒 לקיחה</th>
-                <th className="p-2 text-right">🕒 החזרה</th>
-                <th className="p-2 text-right">⏱️ משך</th>
-                <th className="p-2 text-right">📌 סטטוס</th>
-                {canReturnOthers && <th className="p-2 text-right">⚙️ פעולות</th>}
+                <th className="p-2 text-right">{t("custody.colEmployee")}</th>
+                <th className="p-2 text-right">{t("custody.colDepartment")}</th>
+                <th className="p-2 text-right">{t("custody.colEquipment")}</th>
+                <th className="p-2 text-right">{t("custody.colCheckout")}</th>
+                <th className="p-2 text-right">{t("custody.colReturn")}</th>
+                <th className="p-2 text-right">{t("custody.colDuration")}</th>
+                <th className="p-2 text-right">{t("custody.colStatus")}</th>
+                {canReturnOthers && <th className="p-2 text-right">{t("custody.colActions")}</th>}
               </tr>
             </thead>
             <tbody>
@@ -195,19 +199,19 @@ export function CustodyLogPanel({ branchId }: { branchId: string }) {
                   <td className="p-2">
                     {r.status === "active" ? (
                       <Badge className="bg-amber-500 text-white hover:bg-amber-500">
-                        🟡 בשימוש
+                        {getCustodyLogBadgeLabel("active")}
                       </Badge>
                     ) : r.spansMidnight ? (
                       <Badge variant="outline" className="border-orange-400 text-orange-700">
-                        🌙 חצה חצות
+                        {getCustodyLogBadgeLabel("spansMidnight")}
                       </Badge>
                     ) : r.returnType === "manager" ? (
                       <Badge className="bg-blue-600 text-white hover:bg-blue-600">
-                        🔵 החזרת מנהל
+                        {getCustodyLogBadgeLabel("managerReturn")}
                       </Badge>
                     ) : (
                       <Badge className="bg-green-600 text-white hover:bg-green-600">
-                        🟢 הוחזר
+                        {getCustodyLogBadgeLabel("returned")}
                       </Badge>
                     )}
                   </td>
@@ -225,7 +229,7 @@ export function CustodyLogPanel({ branchId }: { branchId: string }) {
                           }
                         >
                           <RotateCcw className="size-3.5" />
-                          החזר
+                          {t("custody.return")}
                         </Button>
                       ) : (
                         "—"

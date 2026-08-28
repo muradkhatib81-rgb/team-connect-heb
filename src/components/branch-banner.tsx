@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
+import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 import {
   Loader2,
@@ -54,6 +55,7 @@ async function signUrl(path: string | null): Promise<string | null> {
 }
 
 export function BranchBanner() {
+  const { t } = useTranslation();
   const { activeBranchId, activeBranch } = useActiveBranch();
   const canManage = useCanManageMorningBoard(activeBranchId);
   const qc = useQueryClient();
@@ -99,12 +101,12 @@ export function BranchBanner() {
 
   const uploadMut = useMutation({
     mutationFn: async (file: File) => {
-      if (!activeBranchId) throw new Error("אין סניף פעיל");
+      if (!activeBranchId) throw new Error(t("branchBanner.noActiveBranch"));
       if (!["image/jpeg", "image/png", "image/webp"].includes(file.type)) {
-        throw new Error("פורמט לא נתמך. יש להעלות JPG, PNG או WEBP.");
+        throw new Error(t("branchBanner.unsupportedFormat"));
       }
       if (file.size > MAX_BYTES) {
-        throw new Error("הקובץ גדול מדי. גודל מרבי 5MB.");
+        throw new Error(t("branchBanner.fileTooLarge"));
       }
 
       // Remove previous object (if any) so we don't accumulate storage.
@@ -135,15 +137,15 @@ export function BranchBanner() {
       }
     },
     onSuccess: () => {
-      toast.success("התמונה עודכנה");
+      toast.success(t("branchBanner.imageUpdated"));
       qc.invalidateQueries({ queryKey: ["branch-banner", activeBranchId] });
     },
-    onError: (e: any) => toast.error(e?.message ?? "שגיאה בהעלאה"),
+    onError: (e: any) => toast.error(e?.message ?? t("branchBanner.uploadError")),
   });
 
   const removeMut = useMutation({
     mutationFn: async () => {
-      if (!activeBranchId) throw new Error("אין סניף פעיל");
+      if (!activeBranchId) throw new Error(t("branchBanner.noActiveBranch"));
       const path = q.data?.row?.image_path ?? null;
       const { error } = await supabase
         .from("branch_banners")
@@ -155,10 +157,10 @@ export function BranchBanner() {
       }
     },
     onSuccess: () => {
-      toast.success("התמונה הוסרה");
+      toast.success(t("branchBanner.imageRemoved"));
       qc.invalidateQueries({ queryKey: ["branch-banner", activeBranchId] });
     },
-    onError: (e: any) => toast.error(e?.message ?? "שגיאה במחיקה"),
+    onError: (e: any) => toast.error(e?.message ?? t("branchBanner.deleteError")),
   });
 
   const onPick = () => fileRef.current?.click();
@@ -171,6 +173,7 @@ export function BranchBanner() {
   const busy = uploadMut.isPending || removeMut.isPending;
   const url = q.data?.url ?? null;
   const hasImage = !!url;
+  const branchName = activeBranch?.name ?? "";
 
   // Read-only viewer with no image: render nothing.
   if (!activeBranchId) return null;
@@ -179,7 +182,7 @@ export function BranchBanner() {
 
   return (
     <section
-      aria-label={`באנר ${activeBranch?.name ?? ""}`}
+      aria-label={t("branchBanner.sectionLabel", { name: branchName })}
       className="relative overflow-hidden rounded-xl border border-border bg-muted/30"
     >
       {hasImage ? (
@@ -187,11 +190,11 @@ export function BranchBanner() {
           type="button"
           onClick={() => setLightbox(true)}
           className="block w-full cursor-zoom-in focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-          aria-label="הצג תמונה גדולה"
+          aria-label={t("branchBanner.viewLarge")}
         >
           <img
             src={url!}
-            alt={q.data?.row?.title ?? `${activeBranch?.name ?? ""} — באנר`}
+            alt={q.data?.row?.title ?? t("branchBanner.altBanner", { name: branchName })}
             className="block w-full h-auto object-contain"
             draggable={false}
           />
@@ -200,7 +203,7 @@ export function BranchBanner() {
         <div className="p-6 sm:p-8 flex flex-col items-center justify-center gap-3 text-center">
           <ImagePlus className="size-8 text-muted-foreground" aria-hidden />
           <p className="text-sm text-muted-foreground">
-            עדיין לא הועלתה תמונת באנר לסניף זה
+            {t("branchBanner.noImageYet")}
           </p>
           <Button size="sm" onClick={onPick} disabled={busy}>
             {uploadMut.isPending ? (
@@ -208,7 +211,7 @@ export function BranchBanner() {
             ) : (
               <ImagePlus className="size-4" />
             )}
-            העלה תמונה
+            {t("branchBanner.uploadImage")}
           </Button>
         </div>
       )}
@@ -221,7 +224,7 @@ export function BranchBanner() {
                 size="icon"
                 variant="secondary"
                 className="size-9 rounded-full shadow-md bg-background/90 backdrop-blur hover:bg-background"
-                aria-label="ניהול באנר"
+                aria-label={t("branchBanner.manageBanner")}
                 disabled={busy}
               >
                 {busy ? (
@@ -234,18 +237,18 @@ export function BranchBanner() {
             <DropdownMenuContent align="start">
               <DropdownMenuItem onClick={onPick}>
                 <Replace className="size-4" />
-                החלף תמונה
+                {t("branchBanner.replaceImage")}
               </DropdownMenuItem>
               <DropdownMenuItem
                 onClick={() => {
-                  if (window.confirm("להסיר את התמונה הנוכחית?")) {
+                  if (window.confirm(t("branchBanner.confirmRemove"))) {
                     removeMut.mutate();
                   }
                 }}
                 className="text-destructive focus:text-destructive"
               >
                 <Trash2 className="size-4" />
-                הסר תמונה
+                {t("branchBanner.removeImage")}
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>

@@ -1,4 +1,5 @@
 import { supabase } from "@/integrations/supabase/client";
+import i18n from "@/i18n";
 
 // ---------------- Types ----------------
 export type CommPriority = "low" | "normal" | "high" | "urgent";
@@ -89,11 +90,11 @@ async function logAudit(
 // ---------------- Send / Create ----------------
 export async function sendMessage(input: SendMessageInput) {
   const { data: u } = await supabase.auth.getUser();
-  if (!u.user) throw new Error("לא מחובר");
+  if (!u.user) throw new Error(i18n.t("libErrors.common.notAuthenticated"));
   const senderId = u.user.id;
 
   const recipientIds = await resolveTargetUserIds(input.targets, senderId);
-  if (recipientIds.length === 0) throw new Error("בחר לפחות נמען אחד (לא כולל אותך)");
+  if (recipientIds.length === 0) throw new Error(i18n.t("libErrors.communications.pickRecipient"));
 
   const { data: msg, error: msgErr } = await supabase
     .from("messages")
@@ -226,7 +227,7 @@ export interface EditMessageInput {
 
 export async function editMessage(messageId: string, input: EditMessageInput) {
   const { data: u } = await supabase.auth.getUser();
-  if (!u.user) throw new Error("לא מחובר");
+  if (!u.user) throw new Error(i18n.t("libErrors.common.notAuthenticated"));
   const userId = u.user.id;
 
   const { data: existing, error: exErr } = await supabase
@@ -252,7 +253,7 @@ export async function editMessage(messageId: string, input: EditMessageInput) {
 
   if (input.targets) {
     const newIds = await resolveTargetUserIds(input.targets, userId);
-    if (newIds.length === 0) throw new Error("בחר לפחות נמען אחד (לא כולל אותך)");
+    if (newIds.length === 0) throw new Error(i18n.t("libErrors.communications.pickRecipient"));
     // Replace target metadata
     await supabase.from("message_targets").delete().eq("message_id", messageId);
     const tgtRows: any[] = [];

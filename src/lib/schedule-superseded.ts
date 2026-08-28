@@ -1,3 +1,4 @@
+import i18n from "@/i18n";
 /** Published schedule history: only the dept's most recently published row is "current". */
 
 export type PublishedScheduleRow = {
@@ -49,11 +50,11 @@ export async function enforceSupersededPublishedSchedulePolicy(
 
   if (action === "delete") {
     if (!caps.isMainAdmin) {
-      throw new Error("אין הרשאה למחוק סידור עבודה ישן — רק בעל המערכת");
+      throw new Error(i18n.t("libErrors.schedules.supersededDeleteOnly"));
     }
     return;
   }
-  throw new Error("לא ניתן לערוך סידור עבודה ישן — צפייה בלבד");
+  throw new Error(i18n.t("libErrors.schedules.supersededViewOnly"));
 }
 
 /** Build dept → latest published schedule id from a published rows list. */

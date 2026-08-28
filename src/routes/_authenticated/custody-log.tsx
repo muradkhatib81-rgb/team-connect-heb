@@ -7,12 +7,15 @@ import { useQuery } from "@tanstack/react-query";
 import { fetchCustodyUserCaps } from "@/lib/custody-workflow";
 import { supportContactInstruction } from "@/lib/constants";
 import { CustodyLogPanel } from "@/components/custody-log-panel";
+import i18n from "@/i18n";
+import { useTranslation } from "react-i18next";
 
 export const Route = createFileRoute("/_authenticated/custody-log")({
   component: CustodyLogPage,
 });
 
 function CustodyLogPage() {
+  const { t } = useTranslation();
   const { data: me } = useAuth();
   const { activeBranchId } = useActiveBranch();
   const branchId = activeBranchId ?? me?.branch_id ?? null;
@@ -28,8 +31,8 @@ function CustodyLogPage() {
   if (!branchId) {
     return (
       <Card className="card-elevated p-8 text-center">
-        <h2 className="text-lg font-semibold">לא נמצא סניף</h2>
-        <p className="text-sm text-muted-foreground mt-2">יש לבחור סניף פעיל.</p>
+        <h2 className="text-lg font-semibold">{t("custody.noBranchTitle")}</h2>
+        <p className="text-sm text-muted-foreground mt-2">{t("custody.selectBranchHint")}</p>
       </Card>
     );
   }
@@ -45,15 +48,19 @@ function CustodyLogPage() {
   if (!capsQ.data?.canAccessCustodyLog) {
     return (
       <Card className="card-elevated p-8 text-center">
-        <h2 className="text-lg font-semibold">אין הרשאה</h2>
+        <h2 className="text-lg font-semibold">{t("custody.noPermissionTitle")}</h2>
         <p className="text-sm text-muted-foreground mt-2">
-          נדרשת הרשאה מ«מערכת ניהול ציוד». {supportContactInstruction(me.roles)}.
+          {t("custody.permissionRequired", {
+            contact: supportContactInstruction(me.roles),
+          })}
         </p>
       </Card>
     );
   }
 
-  const todayLabel = new Intl.DateTimeFormat("he-IL", {
+  const dateLocale =
+    i18n.language === "ar" ? "ar-IL" : i18n.language === "en" ? "en-IL" : "he-IL";
+  const todayLabel = new Intl.DateTimeFormat(dateLocale, {
     timeZone: "Asia/Jerusalem",
     dateStyle: "full",
     numberingSystem: "latn",
@@ -67,7 +74,7 @@ function CustodyLogPage() {
           <ClipboardList className="size-5" />
         </div>
         <div>
-          <h1 className="text-2xl font-bold">יומן ניהול ציוד</h1>
+          <h1 className="text-2xl font-bold">{t("custody.logTitle")}</h1>
           <p className="text-sm text-muted-foreground">{todayLabel}</p>
         </div>
       </header>

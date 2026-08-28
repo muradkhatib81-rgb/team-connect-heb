@@ -1,6 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useTranslation } from "react-i18next";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/use-auth";
 import { useCanManageEom } from "@/lib/use-eom-perm";
@@ -54,6 +55,7 @@ async function signUrl(bucket: string, path: string | null): Promise<string | nu
 }
 
 function EomManagePage() {
+  const { t } = useTranslation();
   const { data: me } = useAuth();
   const canManage = useCanManageEom();
   const { activeBranchId } = useActiveBranch();
@@ -179,16 +181,18 @@ function EomManagePage() {
       if (error) throw error;
     },
     onSuccess: () => {
-      toast.success("העובד הוסר מרשימת עובדי החודש");
+      toast.success(t("employeeOfMonthPage.removed"));
       qc.invalidateQueries({ queryKey: ["eom-manage"] });
       qc.invalidateQueries({ queryKey: ["eom-history"] });
       qc.invalidateQueries({ queryKey: ["eom", "current"] });
       setDeleting(null);
     },
-    onError: (e: any) => toast.error(e?.message ?? "שגיאה במחיקה"),
+    onError: (e: any) => toast.error(e?.message ?? t("employeeOfMonthPage.removeError")),
   });
 
   if (!me) return null;
+
+  const listCount = monthQ.data?.list.length ?? 0;
 
   return (
     <div className="space-y-6">
@@ -198,14 +202,14 @@ function EomManagePage() {
             <Trophy className="size-5" />
           </div>
           <div className="min-w-0">
-            <h1 className="truncate text-2xl sm:text-3xl font-bold">עובד החודש</h1>
-            <p className="text-sm text-muted-foreground mt-1">בחירת עובדים מצטיינים והצגתם בלוח הבקרה</p>
+            <h1 className="truncate text-2xl sm:text-3xl font-bold">{t("employeeOfMonthPage.title")}</h1>
+            <p className="text-sm text-muted-foreground mt-1">{t("employeeOfMonthPage.subtitle")}</p>
           </div>
         </div>
         {canManage && (
           <Button onClick={() => setAddOpen(true)} className="shrink-0 gap-2">
             <Plus className="size-4" />
-            הוספת עובד
+            {t("employeeOfMonthPage.addEmployee")}
           </Button>
         )}
       </header>
@@ -213,7 +217,7 @@ function EomManagePage() {
       <Card className="card-elevated p-4">
         <div className="flex flex-wrap items-end gap-3">
           <div className="space-y-1">
-            <Label>חודש</Label>
+            <Label>{t("employeeOfMonthPage.monthLabel")}</Label>
             <Select value={String(month)} onValueChange={(v) => setMonth(Number(v))}>
               <SelectTrigger className="w-40"><SelectValue /></SelectTrigger>
               <SelectContent>
@@ -224,7 +228,7 @@ function EomManagePage() {
             </Select>
           </div>
           <div className="space-y-1">
-            <Label>שנה</Label>
+            <Label>{t("employeeOfMonthPage.yearLabel")}</Label>
             <Select value={String(year)} onValueChange={(v) => setYear(Number(v))}>
               <SelectTrigger className="w-32"><SelectValue /></SelectTrigger>
               <SelectContent>
@@ -239,16 +243,16 @@ function EomManagePage() {
 
       <section>
         <h2 className="text-lg font-semibold mb-3">
-          {(monthQ.data?.list.length ?? 0) >= 2 ? "🏆 עובדי החודש" : "🏆 עובד החודש"}
+          {listCount >= 2 ? t("employeeOfMonthPage.employeesOfMonth") : t("employeeOfMonthPage.employeeOfMonth")}
           <span className="text-sm font-normal text-muted-foreground mr-2">
-            ({HEBREW_MONTHS[month - 1]} {year})
+            {t("employeeOfMonthPage.monthYear", { month: HEBREW_MONTHS[month - 1], year })}
           </span>
         </h2>
         {monthQ.isLoading ? (
           <div className="flex justify-center py-10"><Loader2 className="size-5 animate-spin text-primary" /></div>
-        ) : (monthQ.data?.list.length ?? 0) === 0 ? (
+        ) : listCount === 0 ? (
           <Card className="card-elevated p-6 text-sm text-muted-foreground text-center">
-            לא נבחרו עובדים לחודש זה.
+            {t("employeeOfMonthPage.noWinners")}
           </Card>
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -275,10 +279,10 @@ function EomManagePage() {
                   {canManage && (
                     <div className="flex gap-2 justify-center mt-4">
                       <Button size="sm" variant="outline" onClick={() => setEditing(r)} className="gap-1">
-                        <Pencil className="size-3.5" />ערוך
+                        <Pencil className="size-3.5" />{t("employeeOfMonthPage.edit")}
                       </Button>
                       <Button size="sm" variant="outline" onClick={() => setDeleting(r)} className="gap-1 text-destructive hover:text-destructive">
-                        <Trash2 className="size-3.5" />הסר
+                        <Trash2 className="size-3.5" />{t("employeeOfMonthPage.remove")}
                       </Button>
                     </div>
                   )}
@@ -293,16 +297,16 @@ function EomManagePage() {
         <section>
           <h2 className="text-lg font-semibold mb-1 flex items-center gap-2">
             <History className="size-5 text-primary" />
-            היסטוריית עובדי החודש
+            {t("employeeOfMonthPage.historyTitle")}
           </h2>
           <p className="text-sm text-muted-foreground mb-3">
-            12 חודשים אחרונים ·{" "}
-            {formatEomMonthLabel(rolling12Months[0].year, rolling12Months[0].month)}
-            {" – "}
-            {formatEomMonthLabel(
-              rolling12Months[rolling12Months.length - 1].year,
-              rolling12Months[rolling12Months.length - 1].month,
-            )}
+            {t("employeeOfMonthPage.historyRange", {
+              from: formatEomMonthLabel(rolling12Months[0].year, rolling12Months[0].month),
+              to: formatEomMonthLabel(
+                rolling12Months[rolling12Months.length - 1].year,
+                rolling12Months[rolling12Months.length - 1].month,
+              ),
+            })}
           </p>
           <Card className="card-elevated divide-y overflow-hidden">
             {historyQ.isLoading ? (
@@ -331,11 +335,11 @@ function EomManagePage() {
                         {formatEomMonthLabel(slot.year, slot.month)}
                       </button>
                       {isSelected && (
-                        <span className="text-xs text-primary font-medium">חודש נבחר</span>
+                        <span className="text-xs text-primary font-medium">{t("employeeOfMonthPage.selectedMonth")}</span>
                       )}
                     </div>
                     {slot.winners.length === 0 ? (
-                      <p className="text-sm text-muted-foreground">לא נבחר עובד לחודש זה.</p>
+                      <p className="text-sm text-muted-foreground">{t("employeeOfMonthPage.noWinnerForMonth")}</p>
                     ) : (
                       <div className="space-y-2">
                         {slot.winners.map((row) => {
@@ -393,18 +397,18 @@ function EomManagePage() {
       <AlertDialog open={!!deleting} onOpenChange={(o) => !o && setDeleting(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>הסרת עובד החודש</AlertDialogTitle>
+            <AlertDialogTitle>{t("employeeOfMonthPage.removeTitle")}</AlertDialogTitle>
             <AlertDialogDescription>
-              האם להסיר את העובד מרשימת עובדי החודש? לא ניתן לבטל פעולה זו.
+              {t("employeeOfMonthPage.removeDesc")}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>ביטול</AlertDialogCancel>
+            <AlertDialogCancel>{t("common.cancel")}</AlertDialogCancel>
             <AlertDialogAction
               onClick={() => deleting && deleteMut.mutate(deleting)}
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
-              הסר
+              {t("employeeOfMonthPage.remove")}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -431,6 +435,7 @@ function EomEditDialog({
   employees: EomEmployeeOption[];
   onClose: () => void;
 }) {
+  const { t } = useTranslation();
   const qc = useQueryClient();
   const { data: me } = useAuth();
   const [employeeId, setEmployeeId] = useState<string>(row?.employee_id ?? "");
@@ -472,7 +477,7 @@ function EomEditDialog({
   }
 
   async function handleSave() {
-    if (!employeeId) { toast.error("יש לבחור עובד"); return; }
+    if (!employeeId) { toast.error(t("employeeOfMonthPage.errSelectEmployee")); return; }
     setSaving(true);
     try {
       if (mode === "create") {
@@ -481,7 +486,7 @@ function EomEditDialog({
           .insert({ year, month, employee_id: employeeId, reason: reason.trim() || null, created_by: me?.id })
           .select("id").single();
         if (error) {
-          if ((error as any).code === "23505") throw new Error("העובד כבר נבחר לחודש זה");
+          if ((error as any).code === "23505") throw new Error(t("employeeOfMonthPage.errAlreadySelected"));
           throw error;
         }
         if (file) {
@@ -505,13 +510,13 @@ function EomEditDialog({
         const { error } = await supabase.from("employee_of_month").update(update).eq("id", row.id);
         if (error) throw error;
       }
-      toast.success(mode === "create" ? "העובד נוסף לרשימת עובדי החודש" : "העדכון נשמר");
+      toast.success(mode === "create" ? t("employeeOfMonthPage.added") : t("employeeOfMonthPage.updated"));
       qc.invalidateQueries({ queryKey: ["eom-manage"] });
       qc.invalidateQueries({ queryKey: ["eom-history"] });
       qc.invalidateQueries({ queryKey: ["eom", "current"] });
       onClose();
     } catch (e: any) {
-      toast.error(e?.message ?? "שגיאה בשמירה");
+      toast.error(e?.message ?? t("employeeOfMonthPage.saveError"));
     } finally {
       setSaving(false);
     }
@@ -521,16 +526,16 @@ function EomEditDialog({
     <Dialog open onOpenChange={(o) => !o && onClose()}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>{mode === "create" ? "הוספת עובד החודש" : "עריכת עובד החודש"}</DialogTitle>
+          <DialogTitle>{mode === "create" ? t("employeeOfMonthPage.createTitle") : t("employeeOfMonthPage.editTitle")}</DialogTitle>
         </DialogHeader>
         <div className="space-y-4">
           <div className="space-y-2">
-            <Label>עובד</Label>
+            <Label>{t("employeeOfMonthPage.employeeLabel")}</Label>
             {mode === "edit" ? (
               <div className="rounded-md border bg-muted/30 px-3 py-2 text-sm">
                 <div className="font-medium">{selectedEmployee?.full_name ?? "—"}</div>
                 <div className="text-xs text-muted-foreground mt-0.5">
-                  ת.ז. {selectedEmployee?.id_number || "—"}
+                  {t("employeeOfMonthPage.idNumberPrefix")} {selectedEmployee?.id_number || "—"}
                   {selectedEmployee?.departments?.name
                     ? ` · ${selectedEmployee.departments.name}`
                     : ""}
@@ -541,17 +546,17 @@ function EomEditDialog({
                 <Input
                   value={employeeSearch}
                   onChange={(e) => setEmployeeSearch(e.target.value)}
-                  placeholder="חיפוש לפי שם או מספר זהות…"
+                  placeholder={t("employeeOfMonthPage.searchPlaceholder")}
                   autoComplete="off"
                 />
                 <div className="max-h-56 space-y-1 overflow-y-auto rounded-md border p-1">
                   {pool.length === 0 ? (
                     <p className="p-3 text-sm text-muted-foreground text-center">
-                      כל העובדים כבר נבחרו לחודש זה
+                      {t("employeeOfMonthPage.allSelected")}
                     </p>
                   ) : filteredPool.length === 0 ? (
                     <p className="p-3 text-sm text-muted-foreground text-center">
-                      לא נמצאו עובדים התואמים לחיפוש
+                      {t("employeeOfMonthPage.noSearchResults")}
                     </p>
                   ) : (
                     filteredPool.map((e) => {
@@ -591,17 +596,17 @@ function EomEditDialog({
             )}
           </div>
           <div className="space-y-1">
-            <Label>סיבת הבחירה (אופציונלי)</Label>
+            <Label>{t("employeeOfMonthPage.reasonLabel")}</Label>
             <Textarea
               value={reason}
               onChange={(e) => setReason(e.target.value)}
-              placeholder="לדוגמה: שירות מצוין ללקוחות, יוזמה אישית, מקצועיות..."
+              placeholder={t("employeeOfMonthPage.reasonPlaceholder")}
               rows={3}
               maxLength={500}
             />
           </div>
           <div className="space-y-1">
-            <Label>תמונה לעובד החודש (אופציונלי)</Label>
+            <Label>{t("employeeOfMonthPage.imageLabel")}</Label>
             <div className="flex items-center gap-2">
               <Input
                 type="file"
@@ -611,20 +616,20 @@ function EomEditDialog({
               {mode === "edit" && row?.image_url && !file && !removeImage && (
                 <Button type="button" size="sm" variant="outline" onClick={() => setRemoveImage(true)} className="gap-1 shrink-0">
                   <ImageOff className="size-4" />
-                  הסר
+                  {t("common.remove")}
                 </Button>
               )}
             </div>
             <p className="text-xs text-muted-foreground">
-              אם לא תועלה תמונה, תוצג תמונת הפרופיל של העובד.
+              {t("employeeOfMonthPage.imageHint")}
             </p>
           </div>
         </div>
         <DialogFooter>
-          <Button variant="outline" onClick={onClose} disabled={saving}>ביטול</Button>
+          <Button variant="outline" onClick={onClose} disabled={saving}>{t("common.cancel")}</Button>
           <Button onClick={handleSave} disabled={saving} className="gap-2">
             {saving ? <Loader2 className="size-4 animate-spin" /> : <Upload className="size-4" />}
-            שמור
+            {t("common.save")}
           </Button>
         </DialogFooter>
       </DialogContent>

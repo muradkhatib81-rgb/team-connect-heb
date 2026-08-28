@@ -33,6 +33,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { toast } from "sonner";
+import { useTranslation } from "react-i18next";
 import {
   CalendarClock,
   Coffee,
@@ -44,8 +45,8 @@ import {
   ArrowRight,
 } from "lucide-react";
 import {
-  BREAK_STATUS_LABEL,
   BREAK_STATUS_TONE,
+  getBreakStatusLabel,
   BreakLiveTimer,
   breakStartIso,
   consumedBreakSettingIds,
@@ -92,6 +93,7 @@ interface DraftBreak {
 }
 
 function BreakPlanningPage() {
+  const { t } = useTranslation();
   const { data: me } = useAuth();
   const breakNav = useBreakSelfServiceNavVisible();
   const qc = useQueryClient();
@@ -129,7 +131,7 @@ function BreakPlanningPage() {
     },
   });
 
-  // Keep multi-row planning (הוסף שורה) out of employee self-service.
+  // Keep multi-row planning (add row) out of employee self-service.
   // New break requests should be submitted from /breaks.
   const isDeptHeadOnly =
     !!me?.roles.includes("department_manager") && !isAdmin(me.roles);
@@ -195,21 +197,23 @@ function BreakPlanningPage() {
 
   const submitDraftsMut = useMutation({
     mutationFn: async () => {
-      if (!drafts.length) throw new Error("יש להוסיף לפחות הפסקה אחת");
+      if (!drafts.length) throw new Error(t("breakPlanningPage.errAddOne"));
       const seen = new Set<string>();
       for (const d of drafts) {
-        if (!d.settingId) throw new Error("יש לבחור סוג הפסקה לכל שורה");
-        if (!d.timeStr) throw new Error("יש לבחור שעה לכל הפסקה");
+        if (!d.settingId) throw new Error(t("breakPlanningPage.errSelectTypeEach"));
+        if (!d.timeStr) throw new Error(t("breakPlanningPage.errSelectTimeEach"));
         if (seen.has(d.settingId)) {
-          throw new Error("לא ניתן לתכנן אותו סוג הפסקה פעמיים במשמרת");
+          throw new Error(t("breakPlanningPage.errDuplicateType"));
         }
         seen.add(d.settingId);
         if (consumedTypeIds.has(d.settingId)) {
           const setting = settingsQ.data?.find((s) => s.id === d.settingId);
-          throw new Error(`סוג ההפסקה "${setting?.name ?? ""}" כבר נוצל במשמרת זו`);
+          throw new Error(
+            t("breakPlanningPage.errTypeConsumed", { name: setting?.name ?? "" }),
+          );
         }
         const setting = settingsQ.data?.find((s) => s.id === d.settingId);
-        if (!setting) throw new Error("סוג הפסקה לא קיים");
+        if (!setting) throw new Error(t("breakPlanningPage.errTypeNotFound"));
         const requestedAt = isoFromLocalTime(d.timeStr);
         const { error } = await supabase.from("break_requests").insert({
           user_id: me!.id,
@@ -227,13 +231,13 @@ function BreakPlanningPage() {
     onSuccess: () => {
       toast.success(
         policyQ.data?.requires_approval
-          ? "כל בקשות ההפסקה נשלחו לאישור"
-          : "כל ההפסקות נקבעו בהצלחה",
+          ? t("breakPlanningPage.successSentApproval")
+          : t("breakPlanningPage.successScheduled"),
       );
       setDrafts([]);
       qc.invalidateQueries({ queryKey: ["my-breaks-today"] });
     },
-    onError: (e: any) => toast.error(e?.message ?? "שגיאה בשליחה"),
+    onError: (e: any) => toast.error(e?.message ?? t("breakPlanningPage.errSubmit")),
   });
 
   const cancelMut = useMutation({
@@ -242,11 +246,11 @@ function BreakPlanningPage() {
       if (error) throw error;
     },
     onSuccess: () => {
-      toast.success("ההפסקה בוטלה");
+      toast.success(t("breakPlanningPage.successCancelled"));
       setCancelTarget(null);
       qc.invalidateQueries({ queryKey: ["my-breaks-today"] });
     },
-    onError: (e: any) => toast.error(e?.message ?? "שגיאה בביטול"),
+    onError: (e: any) => toast.error(e?.message ?? t("breakPlanningPage.errCancel")),
   });
 
   const endMut = useMutation({
@@ -255,12 +259,12 @@ function BreakPlanningPage() {
       if (error) throw error;
     },
     onSuccess: () => {
-      toast.success("סומן: חזרת מההפסקה");
+      toast.success(t("breakPlanningPage.successEnded"));
       qc.invalidateQueries({ queryKey: ["my-breaks-today"] });
       qc.invalidateQueries({ queryKey: ["my-break-shortcut"] });
       qc.invalidateQueries({ queryKey: ["my-active-break"] });
     },
-    onError: (e: any) => toast.error(e?.message ?? "שגיאה"),
+    onError: (e: any) => toast.error(e?.message ?? t("common.error")),
   });
 
   if (!me) return null;
@@ -269,12 +273,12 @@ function BreakPlanningPage() {
     return (
       <Card className="card-elevated p-8 text-center space-y-3">
         <CalendarClock className="size-10 mx-auto text-muted-foreground" />
-        <h1 className="text-xl font-bold">תכנון הפסקות</h1>
+        <h1 className="text-xl font-bold">{t("breakPlanningPage.title")}</h1>
         <p className="text-sm text-muted-foreground">
-          תכנון הפסקות זמין רק במהלך משמרת שבסידור העבודה, ולא בזמן חופשה.
+          {t("breakPlanningPage.unavailableDesc")}
         </p>
         <Button variant="outline" asChild>
-          <Link to="/dashboard">חזרה ללוח הראשי</Link>
+          <Link to="/dashboard">{t("breakPlanningPage.backToDashboard")}</Link>
         </Button>
       </Card>
     );
@@ -287,19 +291,19 @@ function BreakPlanningPage() {
           <CalendarClock className="size-5" />
         </div>
         <div className="flex-1 min-w-0">
-          <h1 className="text-2xl sm:text-3xl font-bold">תכנון הפסקות</h1>
+          <h1 className="text-2xl sm:text-3xl font-bold">{t("breakPlanningPage.title")}</h1>
           <p className="text-sm text-muted-foreground mt-1">
             {canPlanBreaks
-              ? "תכנון כל ההפסקות למשמרת — ניתן להוסיף מספר הפסקות בבת אחת."
+              ? t("breakPlanningPage.subtitlePlan")
               : isDeptHeadOnly
-                ? "צפייה בהפסקות היום. בקשת הפסקה חדשה מתבצעת ממסך ההפסקה."
-                : "תכנון הפסקות למשמרת."}
+                ? t("breakPlanningPage.subtitleDeptHead")
+                : t("breakPlanningPage.subtitleDefault")}
           </p>
         </div>
         <Button variant="outline" size="sm" asChild>
           <Link to="/breaks" className="gap-1">
             <ArrowRight className="size-4" />
-            חזרה להפסקה
+            {t("breakPlanningPage.backToBreaks")}
           </Link>
         </Button>
       </header>
@@ -309,16 +313,16 @@ function BreakPlanningPage() {
           <div className="flex items-center gap-3 flex-wrap">
             <Coffee className="size-5 text-green-600" />
             <div className="flex-1">
-              <p className="font-medium">הפסקה פעילה כעת</p>
+              <p className="font-medium">{t("breakPlanningPage.activeBreakTitle")}</p>
               {activeBreak.ends_at && <BreakLiveTimer endsAt={activeBreak.ends_at} />}
             </div>
-            <Badge>פעילה</Badge>
+            <Badge>{getBreakStatusLabel("active")}</Badge>
             <Button
               size="sm"
               onClick={() => endMut.mutate(activeBreak.id)}
               disabled={endMut.isPending}
             >
-              {endMut.isPending ? <Loader2 className="size-4 animate-spin" /> : "סיום הפסקה"}
+              {endMut.isPending ? <Loader2 className="size-4 animate-spin" /> : t("breakPlanningPage.endBreak")}
             </Button>
           </div>
         </Card>
@@ -326,7 +330,7 @@ function BreakPlanningPage() {
 
       <Card className="card-elevated p-5 space-y-4">
         <div className="flex items-center justify-between gap-2">
-          <h2 className="font-semibold">הפסקות היום</h2>
+          <h2 className="font-semibold">{t("breakPlanningPage.todayBreaks")}</h2>
           <span className="text-xs text-muted-foreground">{today}</span>
         </div>
 
@@ -336,7 +340,7 @@ function BreakPlanningPage() {
           </div>
         ) : rows.length === 0 ? (
           <p className="text-sm text-muted-foreground text-center py-6">
-            אין הפסקות מתוכננות להיום.
+            {t("breakPlanningPage.noBreaksToday")}
           </p>
         ) : (
           <div className="divide-y divide-border rounded-lg border">
@@ -349,12 +353,12 @@ function BreakPlanningPage() {
                   <div className="flex-1 min-w-[140px]">
                     <p className="font-mono text-lg font-semibold">{fmtBreakTime(startIso)}</p>
                     <p className="text-sm text-muted-foreground">
-                      {dur} דקות · {setting?.name ?? "הפסקה"}
+                      {dur} {t("common.minutes")} · {setting?.name ?? t("breakPlanningPage.defaultBreak")}
                     </p>
                     {r.status === "active" && r.ends_at && <BreakLiveTimer endsAt={r.ends_at} />}
                   </div>
                   <Badge variant={BREAK_STATUS_TONE[r.status] ?? "secondary"}>
-                    {BREAK_STATUS_LABEL[r.status] ?? r.status}
+                    {getBreakStatusLabel(r.status)}
                   </Badge>
                   {isBreakEditable(r.status) && canEditOwnBreaks && (
                     <div className="flex gap-2">
@@ -381,15 +385,15 @@ function BreakPlanningPage() {
       {canPlanBreaks && (
       <Card className="card-elevated p-5 space-y-4">
         <div className="flex items-center justify-between">
-          <h2 className="font-semibold">הוספת הפסקות חדשות</h2>
+          <h2 className="font-semibold">{t("breakPlanningPage.addNewBreaks")}</h2>
           <Button size="sm" variant="outline" onClick={addDraft} className="gap-1">
-            <Plus className="size-4" /> הוסף שורה
+            <Plus className="size-4" /> {t("breakPlanningPage.addRow")}
           </Button>
         </div>
 
         {drafts.length === 0 ? (
           <p className="text-sm text-muted-foreground">
-            לחץ/י על &quot;הוסף שורה&quot; כדי לתכנן הפסקות נוספות למשמרת.
+            {t("breakPlanningPage.addRowHint")}
           </p>
         ) : (
           <div className="space-y-3">
@@ -403,7 +407,7 @@ function BreakPlanningPage() {
               return (
               <div key={d.key} className="grid sm:grid-cols-4 gap-3 items-end border rounded-lg p-3">
                 <div className="space-y-1.5">
-                  <Label>סוג הפסקה</Label>
+                  <Label>{t("breakPlanningPage.breakType")}</Label>
                   <Select
                     value={d.settingId}
                     onValueChange={(v) =>
@@ -413,19 +417,19 @@ function BreakPlanningPage() {
                     }
                   >
                     <SelectTrigger>
-                      <SelectValue placeholder="בחר/י" />
+                      <SelectValue placeholder={t("breakPlanningPage.selectPlaceholder")} />
                     </SelectTrigger>
                     <SelectContent>
                       {rowSettings.map((s) => (
                         <SelectItem key={s.id} value={s.id}>
-                          {s.name} · {s.duration_minutes} דק׳
+                          {s.name} · {s.duration_minutes} {t("common.minutesShort")}
                         </SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
                 </div>
                 <div className="space-y-1.5">
-                  <Label>שעה</Label>
+                  <Label>{t("breakPlanningPage.timeLabel")}</Label>
                   <Input
                     type="time"
                     value={d.timeStr}
@@ -437,7 +441,7 @@ function BreakPlanningPage() {
                   />
                 </div>
                 <div className="space-y-1.5 sm:col-span-2">
-                  <Label>הערה</Label>
+                  <Label>{t("breakPlanningPage.noteLabel")}</Label>
                   <Input
                     value={d.note}
                     onChange={(e) =>
@@ -445,7 +449,7 @@ function BreakPlanningPage() {
                         prev.map((x, i) => (i === idx ? { ...x, note: e.target.value } : x)),
                       )
                     }
-                    placeholder="אופציונלי"
+                    placeholder={t("breakPlanningPage.noteOptional")}
                   />
                 </div>
                 <Button
@@ -469,7 +473,7 @@ function BreakPlanningPage() {
               ) : (
                 <Send className="size-4" />
               )}
-              שלח {drafts.length} הפסקות
+              {t("breakPlanningPage.submitCount", { count: drafts.length })}
             </Button>
           </div>
         )}
@@ -487,18 +491,18 @@ function BreakPlanningPage() {
       <AlertDialog open={!!cancelTarget} onOpenChange={(o) => !o && setCancelTarget(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>ביטול הפסקה</AlertDialogTitle>
+            <AlertDialogTitle>{t("breakPlanningPage.cancelTitle")}</AlertDialogTitle>
             <AlertDialogDescription>
-              ההפסקה תסומן כ&quot;בוטל ע״י עובד&quot; ותישאר בהיסטוריה. לא ניתן לשחזר.
+              {t("breakPlanningPage.cancelDesc")}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>חזרה</AlertDialogCancel>
+            <AlertDialogCancel>{t("common.back")}</AlertDialogCancel>
             <AlertDialogAction
               onClick={() => cancelTarget && cancelMut.mutate(cancelTarget.id)}
               disabled={cancelMut.isPending}
             >
-              בטל הפסקה
+              {t("breakPlanningPage.cancelAction")}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -516,6 +520,7 @@ function EditBreakDialog({
   settings: BreakSetting[];
   onClose: () => void;
 }) {
+  const { t } = useTranslation();
   const qc = useQueryClient();
   const startIso = row.planned_start ?? row.requested_at;
   const [timeStr, setTimeStr] = useState(toLocalTime(startIso));
@@ -526,13 +531,13 @@ function EditBreakDialog({
       ...settings,
       {
         id: row.break_setting_id,
-        name: "סוג הפסקה נוכחי",
+        name: t("breakPlanningPage.currentBreakType"),
         duration_minutes: row.duration_minutes ?? row.planned_duration ?? 0,
         order_index: -1,
         is_active: false,
       },
     ];
-  }, [settings, row.break_setting_id, row.duration_minutes, row.planned_duration]);
+  }, [settings, row.break_setting_id, row.duration_minutes, row.planned_duration, t]);
 
   const saveMut = useMutation({
     mutationFn: async () => {
@@ -546,7 +551,7 @@ function EditBreakDialog({
       if (error) throw error;
     },
     onSuccess: () => {
-      toast.success("ההפסקה עודכנה");
+      toast.success(t("breakPlanningPage.successUpdated"));
       qc.invalidateQueries({ queryKey: ["my-breaks-today"] });
       qc.invalidateQueries({ queryKey: ["my-break-requests"] });
       qc.invalidateQueries({ queryKey: ["my-break-shortcut"] });
@@ -554,18 +559,18 @@ function EditBreakDialog({
       qc.invalidateQueries({ queryKey: ["dashboard-dept-daily-breaks"] });
       onClose();
     },
-    onError: (e: any) => toast.error(e?.message ?? "שגיאה בעדכון"),
+    onError: (e: any) => toast.error(e?.message ?? t("breakPlanningPage.errUpdate")),
   });
 
   return (
     <Dialog open onOpenChange={(o) => !o && onClose()}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>עריכת הפסקה</DialogTitle>
+          <DialogTitle>{t("breakPlanningPage.editTitle")}</DialogTitle>
         </DialogHeader>
         <div className="space-y-3">
           <div className="space-y-1.5">
-            <Label>סוג הפסקה</Label>
+            <Label>{t("breakPlanningPage.breakType")}</Label>
             <Select value={settingId} onValueChange={setSettingId}>
               <SelectTrigger>
                 <SelectValue />
@@ -573,21 +578,21 @@ function EditBreakDialog({
               <SelectContent>
                 {settingOptions.map((s) => (
                   <SelectItem key={s.id} value={s.id}>
-                    {s.name} · {s.duration_minutes} דק׳
+                    {s.name} · {s.duration_minutes} {t("common.minutesShort")}
                   </SelectItem>
                 ))}
               </SelectContent>
             </Select>
           </div>
           <div className="space-y-1.5">
-            <Label>שעה</Label>
+            <Label>{t("breakPlanningPage.timeLabel")}</Label>
             <Input type="time" value={timeStr} onChange={(e) => setTimeStr(e.target.value)} />
           </div>
         </div>
         <DialogFooter>
           <Button onClick={() => saveMut.mutate()} disabled={saveMut.isPending} className="gap-2">
             {saveMut.isPending && <Loader2 className="size-4 animate-spin" />}
-            שמור
+            {t("common.save")}
           </Button>
         </DialogFooter>
       </DialogContent>

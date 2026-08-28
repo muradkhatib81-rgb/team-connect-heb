@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -51,6 +52,7 @@ type Props = {
 };
 
 export function CustodySettingsPanel({ branchId, userId, compact }: Props) {
+  const { t } = useTranslation();
   const qc = useQueryClient();
 
   const capsQ = useQuery({
@@ -122,12 +124,12 @@ export function CustodySettingsPanel({ branchId, userId, compact }: Props) {
   const saveTypeMut = useMutation({
     mutationFn: upsertCustodyItemType,
     onSuccess: () => {
-      toast.success("נשמר");
+      toast.success(t("custody.saved"));
       setEditRow(null);
       setCreateOpen(false);
       invalidateCustodyQueries(qc, branchId, userId);
     },
-    onError: (e: Error) => toast.error(e.message ?? "שגיאה"),
+    onError: (e: Error) => toast.error(e.message ?? t("common.error")),
   });
 
   const reorderMut = useMutation({
@@ -147,7 +149,7 @@ export function CustodySettingsPanel({ branchId, userId, compact }: Props) {
       }
     },
     onSuccess: () => invalidateCustodyQueries(qc, branchId, userId),
-    onError: (e: Error) => toast.error(e.message ?? "שגיאה"),
+    onError: (e: Error) => toast.error(e.message ?? t("common.error")),
   });
 
   const deactivateMut = useMutation({
@@ -162,11 +164,11 @@ export function CustodySettingsPanel({ branchId, userId, compact }: Props) {
       });
     },
     onSuccess: () => {
-      toast.success("הציוד הושבת");
+      toast.success(t("custody.equipmentDeactivated"));
       setDeactivateTarget(null);
       invalidateCustodyQueries(qc, branchId, userId);
     },
-    onError: (e: Error) => toast.error(e.message ?? "שגיאה"),
+    onError: (e: Error) => toast.error(e.message ?? t("common.error")),
   });
 
   const saveBranchMut = useMutation({
@@ -178,10 +180,10 @@ export function CustodySettingsPanel({ branchId, userId, compact }: Props) {
         daily_log_reset_hours: branchForm.daily_log_reset_hours,
       }),
     onSuccess: () => {
-      toast.success("הגדרות הסניף נשמרו");
+      toast.success(t("custody.branchSettingsSaved"));
       qc.invalidateQueries({ queryKey: custodySettingsQueryKey(branchId) });
     },
-    onError: (e: Error) => toast.error(e.message ?? "שגיאה"),
+    onError: (e: Error) => toast.error(e.message ?? t("common.error")),
   });
 
   const caps = capsQ.data;
@@ -196,7 +198,7 @@ export function CustodySettingsPanel({ branchId, userId, compact }: Props) {
   if (!caps?.canOpenSettings) {
     return (
       <p className="text-sm text-muted-foreground text-center py-6">
-        אין הרשאה להגדרות מערכת ניהול ציוד
+        {t("custody.settingsNoPermission")}
       </p>
     );
   }
@@ -218,9 +220,9 @@ export function CustodySettingsPanel({ branchId, userId, compact }: Props) {
     <div className="space-y-8">
       {!compact && (
         <div>
-          <h2 className="text-lg font-bold">הגדרות מערכת ניהול ציוד</h2>
+          <h2 className="text-lg font-bold">{t("custody.settingsPanelTitle")}</h2>
           <p className="text-sm text-muted-foreground mt-1">
-            ניהול פריטי ציוד והתראות לסניף
+            {t("custody.settingsPanelSubtitle")}
           </p>
         </div>
       )}
@@ -229,9 +231,9 @@ export function CustodySettingsPanel({ branchId, userId, compact }: Props) {
         <section className="space-y-4">
           <div className="flex items-center justify-between gap-3 flex-wrap">
             <div>
-              <h3 className="font-semibold">פריטי ציוד</h3>
+              <h3 className="font-semibold">{t("custody.itemsTitle")}</h3>
               <p className="text-xs text-muted-foreground">
-                כל פריט = כפתור בלוח (לדוגמה: ציוד 1, ציוד 2)
+                {t("custody.itemsHint")}
               </p>
             </div>
             {caps.canCreate && (
@@ -244,7 +246,7 @@ export function CustodySettingsPanel({ branchId, userId, compact }: Props) {
                 }}
               >
                 <Plus className="size-4" />
-                הוסף ציוד
+                {t("custody.addEquipment")}
               </Button>
             )}
           </div>
@@ -256,8 +258,8 @@ export function CustodySettingsPanel({ branchId, userId, compact }: Props) {
           ) : activeRows.length === 0 ? (
             <p className="text-sm text-muted-foreground border rounded-lg p-4 text-center">
               {caps.canCreate
-                ? "עדיין לא הוגדר ציוד — לחץ «הוסף ציוד»"
-                : "לא הוגדר ציוד לסניף זה"}
+                ? t("custody.noEquipmentCreate")
+                : t("custody.noEquipmentBranch")}
             </p>
           ) : (
             <ul className="space-y-2">
@@ -270,7 +272,7 @@ export function CustodySettingsPanel({ branchId, userId, compact }: Props) {
                     <span className="font-medium truncate">{row.name}</span>
                     {row.employee_reminder_minutes != null && (
                       <span className="text-xs text-muted-foreground">
-                        תזכורת: {row.employee_reminder_minutes} דק׳
+                        {t("custody.reminderMins", { minutes: row.employee_reminder_minutes })}
                       </span>
                     )}
                   </div>
@@ -319,7 +321,7 @@ export function CustodySettingsPanel({ branchId, userId, compact }: Props) {
                         className="text-destructive"
                         onClick={() => setDeactivateTarget(row)}
                       >
-                        השבת
+                        {t("custody.deactivate")}
                       </Button>
                     )}
                   </div>
@@ -330,7 +332,7 @@ export function CustodySettingsPanel({ branchId, userId, compact }: Props) {
 
           {inactiveRows.length > 0 && (
             <div className="space-y-2">
-              <p className="text-xs text-muted-foreground font-medium">מושבתות</p>
+              <p className="text-xs text-muted-foreground font-medium">{t("custody.deactivated")}</p>
               {inactiveRows.map((row) => (
                 <div
                   key={row.id}
@@ -353,7 +355,7 @@ export function CustodySettingsPanel({ branchId, userId, compact }: Props) {
                         })
                       }
                     >
-                      הפעל מחדש
+                      {t("custody.reactivate")}
                     </Button>
                   )}
                 </div>
@@ -366,15 +368,15 @@ export function CustodySettingsPanel({ branchId, userId, compact }: Props) {
       {caps.canConfigure && (
         <section className="space-y-4 border-t pt-6">
           <div>
-            <h3 className="font-semibold">הגדרות סניף</h3>
+            <h3 className="font-semibold">{t("custody.branchSettingsTitle")}</h3>
             <p className="text-xs text-muted-foreground">
-              תזכורות, התראות לפני חצות, ואיפוס לוג יומי
+              {t("custody.branchSettingsHint")}
             </p>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <div className="space-y-2">
-              <Label htmlFor="custody-reminder">תזכורת לעובד (דק׳)</Label>
+              <Label htmlFor="custody-reminder">{t("custody.employeeReminderLabel")}</Label>
               <Input
                 id="custody-reminder"
                 type="number"
@@ -389,7 +391,7 @@ export function CustodySettingsPanel({ branchId, userId, compact }: Props) {
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="custody-midnight">התראה לפני חצות (דק׳)</Label>
+              <Label htmlFor="custody-midnight">{t("custody.midnightWarningLabel")}</Label>
               <Input
                 id="custody-midnight"
                 type="number"
@@ -404,7 +406,7 @@ export function CustodySettingsPanel({ branchId, userId, compact }: Props) {
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="custody-reset">איפוס לוג יומי (שעות)</Label>
+              <Label htmlFor="custody-reset">{t("custody.dailyResetLabel")}</Label>
               <Input
                 id="custody-reset"
                 type="number"
@@ -426,14 +428,14 @@ export function CustodySettingsPanel({ branchId, userId, compact }: Props) {
             className="gap-2"
           >
             {saveBranchMut.isPending && <Loader2 className="size-4 animate-spin" />}
-            שמור הגדרות סניף
+            {t("custody.saveBranchSettings")}
           </Button>
         </section>
       )}
 
       <ItemTypeDialog
         open={createOpen || !!editRow}
-        title={editRow ? "עריכת ציוד" : "ציוד חדש"}
+        title={editRow ? t("custody.editEquipment") : t("custody.newEquipment")}
         initial={
           editRow ?? {
             id: "",
@@ -466,17 +468,17 @@ export function CustodySettingsPanel({ branchId, userId, compact }: Props) {
       <AlertDialog open={!!deactivateTarget} onOpenChange={() => setDeactivateTarget(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>השבתת ציוד?</AlertDialogTitle>
+            <AlertDialogTitle>{t("custody.deactivateTitle")}</AlertDialogTitle>
             <AlertDialogDescription>
-              «{deactivateTarget?.name}» לא יוצג בלוח. ניתן להפעיל מחדש מאוחר יותר.
+              {t("custody.deactivateDesc", { name: deactivateTarget?.name })}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>ביטול</AlertDialogCancel>
+            <AlertDialogCancel>{t("common.cancel")}</AlertDialogCancel>
             <AlertDialogAction
               onClick={() => deactivateTarget && deactivateMut.mutate(deactivateTarget)}
             >
-              השבת
+              {t("custody.deactivate")}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -507,6 +509,7 @@ function ItemTypeDialog({
     employee_reminder_minutes: number;
   }) => void;
 }) {
+  const { t } = useTranslation();
   const [name, setName] = useState(initial.name);
   const [isActive, setIsActive] = useState(initial.is_active);
   const [useCustomReminder, setUseCustomReminder] = useState(
@@ -533,22 +536,22 @@ function ItemTypeDialog({
         </DialogHeader>
         <div className="space-y-4 py-2">
           <div className="space-y-2">
-            <Label htmlFor="custody-type-name">שם הציוד</Label>
+            <Label htmlFor="custody-type-name">{t("custody.equipmentNameLabel")}</Label>
             <Input
               id="custody-type-name"
-              placeholder="לדוגמה: ציוד 1, ציוד 2"
+              placeholder={t("custody.equipmentNamePlaceholder")}
               value={name}
               onChange={(e) => setName(e.target.value)}
             />
           </div>
           {!isCreate && (
             <div className="flex items-center justify-between gap-3">
-              <Label htmlFor="custody-type-active">פעיל</Label>
+              <Label htmlFor="custody-type-active">{t("custody.activeLabel")}</Label>
               <Switch id="custody-type-active" checked={isActive} onCheckedChange={setIsActive} />
             </div>
           )}
           <div className="flex items-center justify-between gap-3">
-            <Label htmlFor="custody-custom-reminder">תזכורת מותאמת (דק׳)</Label>
+            <Label htmlFor="custody-custom-reminder">{t("custody.customReminderLabel")}</Label>
             <Switch
               id="custody-custom-reminder"
               checked={useCustomReminder}
@@ -565,13 +568,13 @@ function ItemTypeDialog({
           )}
           {!useCustomReminder && (
             <Badge variant="secondary" className="text-xs">
-              ישתמש בהגדרת ברירת המחדל של הסניף
+              {t("custody.useBranchDefault")}
             </Badge>
           )}
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={onClose}>
-            ביטול
+            {t("common.cancel")}
           </Button>
           <Button
             disabled={busy || !name.trim()}
@@ -585,7 +588,7 @@ function ItemTypeDialog({
             }
           >
             {busy && <Loader2 className="size-4 animate-spin ml-2" />}
-            שמור
+            {t("common.save")}
           </Button>
         </DialogFooter>
       </DialogContent>

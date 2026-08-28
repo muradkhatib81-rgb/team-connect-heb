@@ -20,6 +20,7 @@ import {
 import { useActiveBranch } from "@/lib/use-active-branch";
 import { useAuth } from "@/lib/use-auth";
 import { supabase } from "@/integrations/supabase/client";
+import { opsErrorTypeLabel } from "@/lib/ops-error-type-label";
 import {
   createOpsErrorEntry,
   deleteOpsErrorEntry,
@@ -183,23 +184,21 @@ function OpsErrorsPage() {
     name_he: string;
     name_ar: string | null;
     name_en: string | null;
-  }) =>
-    i18n.language === "ar" && ty.name_ar
-      ? ty.name_ar
-      : i18n.language === "en" && ty.name_en
-        ? ty.name_en
-        : ty.name_he;
+  }) => opsErrorTypeLabel(ty, i18n.language);
 
   const entryTypeLabel = (e: {
     type_name_he?: string | null;
     type_name_ar?: string | null;
     type_name_en?: string | null;
   }) =>
-    i18n.language === "ar" && e.type_name_ar
-      ? e.type_name_ar
-      : i18n.language === "en" && e.type_name_en
-        ? e.type_name_en
-        : e.type_name_he ?? "—";
+    opsErrorTypeLabel(
+      {
+        name_he: e.type_name_he ?? "",
+        name_ar: e.type_name_ar ?? null,
+        name_en: e.type_name_en ?? null,
+      },
+      i18n.language,
+    );
 
   const monthOptions = useMemo(() => {
     const now = caps?.year_month;

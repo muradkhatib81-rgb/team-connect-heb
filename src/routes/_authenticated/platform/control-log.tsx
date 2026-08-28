@@ -31,15 +31,23 @@ import {
   upsertOpsErrorType,
   upsertOpsErrorUserGrant,
 } from "@/lib/ops-errors.functions";
+import {
+  localeKeyFromLanguage,
+  opsErrorTypeLabel,
+  opsErrorTypeNamesFromRow,
+  opsErrorTypePayloadFromNames,
+  type OpsErrorTypeLocale,
+} from "@/lib/ops-error-type-label";
 
 export const Route = createFileRoute("/_authenticated/platform/control-log")({
   component: PlatformOpsErrorsPage,
 });
 
 function PlatformOpsErrorsPage() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const qc = useQueryClient();
   const { companies } = useCompanyContext();
+  const activeLocale = localeKeyFromLanguage(i18n.language);
 
   const listTypesFn = useServerFn(listAllOpsErrorTypes);
   const upsertTypeFn = useServerFn(upsertOpsErrorType);
@@ -50,9 +58,12 @@ function PlatformOpsErrorsPage() {
   const upsertGrantFn = useServerFn(upsertOpsErrorUserGrant);
   const listProfilesFn = useServerFn(listBranchProfilesForErrorGrants);
 
-  const [typeNameHe, setTypeNameHe] = useState("");
-  const [typeNameAr, setTypeNameAr] = useState("");
-  const [typeNameEn, setTypeNameEn] = useState("");
+  const [typeNames, setTypeNames] = useState<Record<OpsErrorTypeLocale, string>>({
+    he: "",
+    ar: "",
+    en: "",
+  });
+  const [editingTypeId, setEditingTypeId] = useState<string | null>(null);
 
   const [scopeType, setScopeType] = useState<"company" | "branch">("branch");
   const [scopeId, setScopeId] = useState("");
@@ -120,20 +131,15 @@ function PlatformOpsErrorsPage() {
     return m;
   }, [profilesQ.data]);
 
+  const hasAnyTypeName =
+    !!typeNames.he.trim() || !!typeNames.ar.trim() || !!typeNames.en.trim();
+
   const saveTypeMut = useMutation({
-    mutationFn: () =>
-      upsertTypeFn({
-        data: {
-          name_he: typeNameHe,
-          name_ar: typeNameAr || null,
-          name_en: typeNameEn || null,
-        },
-      }),
+    mutationFn: () => upsertTypeFn({ data: opsErrorTypePayloadFromNames(typeNames, editingTypeId ?? undefined) }),
     onSuccess: () => {
       toast.success(t("opsErrors.typeSaved"));
-      setTypeNameHe("");
-      setTypeNameAr("");
-      setTypeNameEn("");
+      setTypeNames({ he: "", ar: "", en: "" });
+      setEditingTypeId(null);
       void qc.invalidateQueries({ queryKey: ["ops-error-types-all"] });
     },
     onError: (e: Error) => toast.error(e.message),
@@ -180,9 +186,21 @@ function PlatformOpsErrorsPage() {
   });
 
   const toggleTypeMut = useMutation({
-    mutationFn: (row: { id: string; is_active: boolean; name_he: string }) =>
+    mutationFn: (row: {
+      id: string;
+      is_active: boolean;
+      name_he: string;
+      name_ar: string | null;
+      name_en: string | null;
+    }) =>
       upsertTypeFn({
-        data: { id: row.id, name_he: row.name_he, is_active: !row.is_active },
+        data: {
+          id: row.id,
+          name_he: row.name_he,
+          name_ar: row.name_ar,
+          name_en: row.name_en,
+          is_active: !row.is_active,
+        },
       }),
     onSuccess: () => void qc.invalidateQueries({ queryKey: ["ops-error-types-all"] }),
     onError: (e: Error) => toast.error(e.message),
@@ -281,38 +299,60 @@ function PlatformOpsErrorsPage() {
 
         <TabsContent value="types" className="space-y-4 mt-4">
           <Card className="p-4 space-y-3">
-            <div className="grid gap-3 sm:grid-cols-3">
-              <div>
-                <Label>{t("opsErrors.nameHe")}</Label>
-                <Input value={typeNameHe} onChange={(e) => setTypeNameHe(e.target.value)} />
-              </div>
-              <div>
-                <Label>{t("opsErrors.nameAr")}</Label>
-                <Input value={typeNameAr} onChange={(e) => setTypeNameAr(e.target.value)} />
-              </div>
-              <div>
-                <Label>{t("opsErrors.nameEn")}</Label>
-                <Input value={typeNameEn} onChange={(e) => setTypeNameEn(e.target.value)} />
-              </div>
+            <div>
+              <Label>{t("opsErrors.typeName")}</Label>
+              <Input
+                value={typeNames[activeLocale]}
+                onChange={(e) =>
+                  setTypeNames((prev) => ({ ...prev, [activeLocale]: e.target.value }))
+                }
+              />
             </div>
+            <div className="flex flex-wrap gap-2">
             <Button
-              disabled={!typeNameHe.trim() || saveTypeMut.isPending}
+              disabled={!hasAnyTypeName || saveTypeMut.isPending}
               onClick={() => saveTypeMut.mutate()}
             >
-              <Plus className="size-4" />
-              {t("opsErrors.addType")}
-            </Button>
+                {saveTypeMut.isPending ? (
+                  <Loader2 className="size-4 animate-spin" />
+                ) : (
+                  <Plus className="size-4" />
+                )}
+                {editingTypeId ? t("opsErrors.saveType") : t("opsErrors.addType")}
+              </Button>
+              {editingTypeId && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => {
+                    setEditingTypeId(null);
+                    setTypeNames({ he: "", ar: "", en: "" });
+                  }}
+                >
+                  {t("common.cancel")}
+                </Button>
+              )}
+            </div>
           </Card>
           <div className="space-y-2">
             {(typesQ.data ?? []).map((row) => (
-              <Card key={row.id} className="p-3 flex items-center justify-between gap-2">
+              <Card
+                key={row.id}
+                className={`p-3 flex items-center justify-between gap-2 cursor-pointer transition-colors hover:bg-muted/40 ${
+                  editingTypeId === row.id ? "ring-2 ring-primary" : ""
+                }`}
+                onClick={() => {
+                  setEditingTypeId(row.id);
+                  setTypeNames(opsErrorTypeNamesFromRow(row));
+                }}
+              >
                 <div>
-                  <p className="font-medium text-sm">{row.name_he}</p>
-                  <p className="text-xs text-muted-foreground">
-                    {[row.name_ar, row.name_en].filter(Boolean).join(" · ")}
-                  </p>
+                  <p className="font-medium text-sm">{opsErrorTypeLabel(row, i18n.language)}</p>
                 </div>
-                <div className="flex items-center gap-2">
+                <div
+                  className="flex items-center gap-2"
+                  onClick={(e) => e.stopPropagation()}
+                >
                   <span className="text-xs text-muted-foreground">
                     {row.is_active ? t("opsErrors.active") : t("opsErrors.inactive")}
                   </span>

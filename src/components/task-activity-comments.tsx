@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
+import { useTranslation } from "react-i18next";
 import { listTaskActivity, listTaskComments, addTaskComment } from "@/lib/tasks.functions";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -11,29 +12,17 @@ import { toast } from "sonner";
 import { BilingualContent } from "@/components/bilingual-content";
 import { pickBilingualResult, useBilingualContentMap } from "@/lib/use-bilingual-content";
 
-const EVENT_LABELS: Record<string, string> = {
-  created: "המשימה נוצרה",
-  status_changed: "שינוי סטטוס",
-  assignees_changed: "עדכון מבצעים",
-  departments_changed: "עדכון מחלקות",
-  image_added: "הועלתה תמונה",
-  image_removed: "תמונה הוסרה",
-  comment_added: "הערה חדשה",
-  approved: "המשימה אושרה",
-  returned: "המשימה הוחזרה לביצוע",
-  closed: "המשימה נסגרה",
-};
-
-const STATUS_LABELS: Record<string, string> = {
-  new: "חדש",
-  in_progress: "בביצוע",
-  pending_approval: "ממתינה לאישור",
-  pending_closure: "ממתינה לסגירה",
-  completed: "הושלמה",
-  closed: "סגורה",
+const TASK_STATUS_KEYS: Record<string, string> = {
+  new: "tasks.statusNew",
+  in_progress: "tasks.statusInProgress",
+  pending_approval: "tasks.statusPendingApproval",
+  pending_closure: "tasks.statusPendingClosure",
+  completed: "tasks.statusCompleted",
+  closed: "tasks.statusClosed",
 };
 
 export function TaskActivityComments({ taskId }: { taskId: string }) {
+  const { t } = useTranslation();
   const qc = useQueryClient();
   const activityFn = useServerFn(listTaskActivity);
   const commentsFn = useServerFn(listTaskComments);
@@ -97,33 +86,48 @@ export function TaskActivityComments({ taskId }: { taskId: string }) {
       setBody("");
       qc.invalidateQueries({ queryKey: commentsKey });
     },
-    onError: (e: any) => toast.error(e?.message ?? "שגיאה"),
+    onError: (e: any) => toast.error(e?.message ?? t("common.error")),
   });
+
+  const eventLabel = (event: string) => {
+    const key = `taskActivity.events.${event}`;
+    const translated = t(key);
+    return translated !== key ? translated : event;
+  };
+
+  const statusLabel = (status: string) => {
+    const key = TASK_STATUS_KEYS[status];
+    return key ? t(key) : status;
+  };
 
   return (
     <div className="space-y-4">
       <section className="rounded-lg border bg-card">
         <header className="flex items-center gap-2 px-3 py-2 border-b text-sm font-medium">
-          <History className="size-4" /> היסטוריית פעילות
+          <History className="size-4" /> {t("taskActivity.activityTitle")}
         </header>
         <div className="max-h-56 overflow-y-auto p-3 space-y-2 text-sm">
           {activity.isLoading ? (
             <Loader2 className="size-4 animate-spin" />
           ) : !activity.data?.length ? (
-            <p className="text-muted-foreground text-xs">אין רישומים עדיין</p>
+            <p className="text-muted-foreground text-xs">{t("taskActivity.noActivity")}</p>
           ) : (
             activity.data.map((row: any) => {
-              const from = row.payload?.from ? STATUS_LABELS[row.payload.from] ?? row.payload.from : null;
-              const to = row.payload?.to ? STATUS_LABELS[row.payload.to] ?? row.payload.to : null;
+              const from = row.payload?.from ? statusLabel(row.payload.from) : null;
+              const to = row.payload?.to ? statusLabel(row.payload.to) : null;
               return (
                 <div key={row.id} className="flex gap-2 items-start">
                   <span className="text-xs text-muted-foreground whitespace-nowrap min-w-[110px]">
                     {formatHeDateTime(row.created_at)}
                   </span>
                   <span className="flex-1">
-                    {row.actor_name ? <b>{row.actor_name}</b> : <span className="text-muted-foreground">מערכת</span>}
+                    {row.actor_name ? (
+                      <b>{row.actor_name}</b>
+                    ) : (
+                      <span className="text-muted-foreground">{t("taskActivity.system")}</span>
+                    )}
                     {" — "}
-                    {EVENT_LABELS[row.event] ?? row.event}
+                    {eventLabel(row.event)}
                     {from && to ? `: ${from} → ${to}` : ""}
                     {row.payload?.note ? ` — "${row.payload.note}"` : ""}
                   </span>
@@ -136,13 +140,13 @@ export function TaskActivityComments({ taskId }: { taskId: string }) {
 
       <section className="rounded-lg border bg-card">
         <header className="flex items-center gap-2 px-3 py-2 border-b text-sm font-medium">
-          <MessageSquare className="size-4" /> הערות
+          <MessageSquare className="size-4" /> {t("taskActivity.commentsTitle")}
         </header>
         <div className="max-h-56 overflow-y-auto p-3 space-y-2 text-sm">
           {comments.isLoading ? (
             <Loader2 className="size-4 animate-spin" />
           ) : !comments.data?.length ? (
-            <p className="text-muted-foreground text-xs">אין הערות עדיין</p>
+            <p className="text-muted-foreground text-xs">{t("taskActivity.noComments")}</p>
           ) : (
             comments.data.map((c: any) => (
               <div key={c.id} className="rounded-md bg-muted/50 p-2">
@@ -166,7 +170,7 @@ export function TaskActivityComments({ taskId }: { taskId: string }) {
             value={body}
             onChange={(e) => setBody(e.target.value)}
             rows={2}
-            placeholder="כתוב הערה…"
+            placeholder={t("taskActivity.commentPlaceholder")}
           />
           <Button
             onClick={() => add.mutate()}
@@ -174,7 +178,7 @@ export function TaskActivityComments({ taskId }: { taskId: string }) {
             size="sm"
           >
             {add.isPending && <Loader2 className="size-4 animate-spin ml-2" />}
-            שלח
+            {t("taskActivity.send")}
           </Button>
         </div>
       </section>

@@ -6,9 +6,10 @@ import { useJobTitles, type JobTitleRow } from "@/lib/use-job-titles";
 import { Card } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
 import { toast } from "sonner";
+import { useTranslation } from "react-i18next";
 
 export function BreakRequestPermissionsCard() {
-  const qc = useQueryClient();
+  const { t } = useTranslation();
   const titlesQ = useJobTitles();
 
   useEffect(() => {
@@ -37,7 +38,7 @@ export function BreakRequestPermissionsCard() {
       qc.invalidateQueries({ queryKey: ["job-titles"] });
       qc.invalidateQueries({ queryKey: ["can-request-break"] });
     },
-    onError: (e: any) => toast.error(e?.message ?? "שגיאה בעדכון ההרשאה"),
+    onError: (e: any) => toast.error(e?.message ?? t("breakRequestPermissions.updateError")),
   });
 
   const titles = (titlesQ.data ?? []) as JobTitleRow[];
@@ -49,10 +50,9 @@ export function BreakRequestPermissionsCard() {
           <KeyRound className="size-5" />
         </div>
         <div>
-          <h2 className="text-lg font-semibold">הרשאות בקשת הפסקה</h2>
+          <h2 className="text-lg font-semibold">{t("breakRequestPermissions.title")}</h2>
           <p className="text-sm text-muted-foreground mt-1">
-            קביעה לכל תפקיד האם בעלי התפקיד רשאים לשלוח בקשת הפסקה. כאשר מבוטל,
-            כפתור "בקשת הפסקה" יוסתר עבורם והם לא יוכלו להגיש בקשה.
+            {t("breakRequestPermissions.description")}
           </p>
         </div>
       </header>
@@ -63,25 +63,27 @@ export function BreakRequestPermissionsCard() {
         </div>
       ) : titles.length === 0 ? (
         <div className="text-sm text-muted-foreground text-center py-8">
-          אין עדיין תפקידים במערכת.
+          {t("breakRequestPermissions.noJobTitles")}
         </div>
       ) : (
         <ul className="divide-y divide-border rounded-lg border border-border overflow-hidden">
-          {titles.map((t) => (
+          {titles.map((row) => (
             <li
-              key={t.id}
+              key={row.id}
               className="flex items-center justify-between gap-3 p-3 bg-card"
             >
               <div className="min-w-0">
-                <div className="font-medium truncate">{t.name}</div>
+                <div className="font-medium truncate">{row.name}</div>
                 <div className="text-xs text-muted-foreground">
-                  {t.can_request_break ? "רשאי לבקש הפסקה" : "לא רשאי לבקש הפסקה"}
+                  {row.can_request_break
+                    ? t("breakRequestPermissions.canRequest")
+                    : t("breakRequestPermissions.cannotRequest")}
                 </div>
               </div>
               <Switch
-                checked={!!t.can_request_break}
+                checked={!!row.can_request_break}
                 disabled={mut.isPending}
-                onCheckedChange={(value) => mut.mutate({ id: t.id, value })}
+                onCheckedChange={(value) => mut.mutate({ id: row.id, value })}
               />
             </li>
           ))}

@@ -96,7 +96,7 @@ export function NotificationsBell() {
       out.push({
         id: `m-${r.message_id}`,
         kind: "message",
-        title: r.message?.title ?? "הודעה",
+        title: r.message?.title ?? i18n.t("dashboard.defaultMessageTitle"),
         created_at: r.delivered_at ?? r.message?.created_at,
         read: false,
         to: "/communications",

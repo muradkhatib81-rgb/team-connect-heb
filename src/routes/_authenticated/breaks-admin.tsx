@@ -1,6 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo } from "react";
+import { useTranslation } from "react-i18next";
 import { Loader2, Coffee } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/use-auth";
@@ -35,6 +36,7 @@ interface BreakRequest {
 }
 
 function BreaksAdminPage() {
+  const { t } = useTranslation();
   const { data: me } = useAuth();
   const qc = useQueryClient();
   const isMainAdmin = !!me?.roles.includes("main_admin");
@@ -159,11 +161,11 @@ function BreaksAdminPage() {
           <Coffee className="size-5" />
         </div>
         <div>
-          <h1 className="text-2xl sm:text-3xl font-bold">ניהול הפסקות</h1>
+          <h1 className="text-2xl sm:text-3xl font-bold">{t("breaksAdminPage.title")}</h1>
           <p className="text-sm text-muted-foreground mt-1">
             {requiresApproval
-              ? "אישור בקשות, ניהול הגדרות הפסקות וצפייה במצב בזמן אמת."
-              : "ניהול הגדרות הפסקות וצפייה במצב בזמן אמת."}
+              ? t("breaksAdminPage.subtitleApproval")
+              : t("breaksAdminPage.subtitleNoApproval")}
           </p>
         </div>
       </header>
@@ -172,15 +174,17 @@ function BreaksAdminPage() {
         <TabsList>
           {requiresApproval && (
             <TabsTrigger value="approve">
-              אישור בקשות{pendingCount > 0 ? ` (${pendingCount})` : ""}
+              {pendingCount > 0
+                ? t("breaksAdminPage.tabApproveWithCount", { count: pendingCount })
+                : t("breaksAdminPage.tabApprove")}
             </TabsTrigger>
           )}
-          <TabsTrigger value="settings">הגדרות הפסקות</TabsTrigger>
+          <TabsTrigger value="settings">{t("breaksAdminPage.tabSettings")}</TabsTrigger>
           {(isMainAdmin || isBreaksManager) && (
-            <TabsTrigger value="permissions">הרשאות בקשת הפסקה</TabsTrigger>
+            <TabsTrigger value="permissions">{t("breaksAdminPage.tabPermissions")}</TabsTrigger>
           )}
           {isMainAdmin && (
-            <TabsTrigger value="system">הגדרות מערכת</TabsTrigger>
+            <TabsTrigger value="system">{t("breaksAdminPage.tabSystem")}</TabsTrigger>
           )}
         </TabsList>
 

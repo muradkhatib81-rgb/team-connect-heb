@@ -1,6 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useTranslation } from "react-i18next";
 import { supabase } from "@/integrations/supabase/client";
 import { getActiveBranchScope } from "@/integrations/supabase/branch-scope";
 import { useAuth } from "@/lib/use-auth";
@@ -15,14 +16,15 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { toast } from "sonner";
 import { Loader2, Upload, Trash2, Building2, CalendarRange } from "lucide-react";
 import { useCurrentPermissions } from "@/lib/use-current-permissions";
+import i18n from "@/i18n";
 
 export const Route = createFileRoute("/_authenticated/company-settings")({
   ssr: false,
-  head: () => ({ meta: [{ title: "הגדרות חברה" }] }),
+  head: () => ({ meta: [{ title: i18n.t("companySettingsPage.pageTitle") }] }),
   component: CompanySettingsPage,
 });
 
-const MAX_LOGO_BYTES = 500 * 1024; // 500 KB
+const MAX_LOGO_BYTES = 500 * 1024;
 
 function fileToDataUrl(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -34,6 +36,7 @@ function fileToDataUrl(file: File): Promise<string> {
 }
 
 export function CompanySettingsPage() {
+  const { t } = useTranslation();
   const { data: profile, isLoading: profileLoading } = useAuth();
   const { activeBranchId } = useActiveBranch();
   const { data: company, isLoading } = useCompanySettings();
@@ -59,7 +62,6 @@ export function CompanySettingsPage() {
       (profile.roles.includes("assistant_manager") &&
         permissionsQ.data?.can_manage_company_settings === true));
 
-  // Permission: can_manage_schedule (used to change schedule type)
   const manageSchedQ = useQuery({
     enabled: !!profile?.id && !isMainAdmin,
     queryKey: ["perm", "can_manage_schedule", profile?.id],
@@ -100,12 +102,10 @@ export function CompanySettingsPage() {
   const saveMut = useMutation({
     mutationFn: async () => {
       if (canManageSettings && !form.company_name.trim()) {
-        throw new Error("שם החברה הוא שדה חובה");
+        throw new Error(t("companySettingsPage.errCompanyNameRequired"));
       }
-      // Saves must be branch-scoped so we never overwrite another store's
-      // company_settings (or the legacy seed row) while Branch Mode is off.
       if (!getActiveBranchScope() && !activeBranchId) {
-        throw new Error("יש לבחור סניף פעיל לפני שמירת הגדרות החברה");
+        throw new Error(t("companySettingsPage.errSelectBranch"));
       }
       const payload: Record<string, unknown> = {};
       if (canManageSettings) {
@@ -122,9 +122,6 @@ export function CompanySettingsPage() {
         payload.schedule_type = form.schedule_type;
       }
 
-      // Always resolve the current active row id directly from the DB,
-      // so saves never create duplicate rows due to a stale client id.
-      // With an active branch, branch-scope filters this to that store.
       const { data: existing, error: fetchErr } = await supabase
         .from("company_settings" as any)
         .select("id")
@@ -149,26 +146,26 @@ export function CompanySettingsPage() {
       }
     },
     onSuccess: () => {
-      toast.success("הגדרות החברה נשמרו");
+      toast.success(t("companySettingsPage.saved"));
       qc.invalidateQueries({ queryKey: ["company-settings"] });
     },
-    onError: (e: any) => toast.error(e?.message ?? "שמירה נכשלה"),
+    onError: (e: any) => toast.error(e?.message ?? t("companySettingsPage.saveFailed")),
   });
 
   async function handleLogoFile(file: File) {
     if (!file.type.startsWith("image/")) {
-      toast.error("יש לבחור קובץ תמונה");
+      toast.error(t("companySettingsPage.errImageFile"));
       return;
     }
     if (file.size > MAX_LOGO_BYTES) {
-      toast.error("גודל הלוגו עד 500KB");
+      toast.error(t("companySettingsPage.errLogoSize"));
       return;
     }
     try {
       const dataUrl = await fileToDataUrl(file);
       setForm((f) => ({ ...f, logo_url: dataUrl }));
     } catch {
-      toast.error("טעינת הקובץ נכשלה");
+      toast.error(t("companySettingsPage.errFileLoad"));
     }
   }
 
@@ -186,15 +183,19 @@ export function CompanySettingsPage() {
         <div className="size-12 rounded-xl bg-destructive/10 flex items-center justify-center">
           <Building2 className="size-6 text-destructive" />
         </div>
-        <h1 className="text-xl font-bold">אין הרשאה</h1>
+        <h1 className="text-xl font-bold">{t("companySettingsPage.noPermissionTitle")}</h1>
         <p className="text-sm text-muted-foreground">
-          רק בעל המערכת יכול לגשת להגדרות החברה.
+          {t("companySettingsPage.noPermissionDesc")}
         </p>
       </div>
     );
   }
 
-  
+  const scheduleOptions = [
+    { v: "weekly" as const, label: t("companySettingsPage.scheduleWeekly") },
+    { v: "monthly" as const, label: t("companySettingsPage.scheduleMonthly") },
+    { v: "custom" as const, label: t("companySettingsPage.scheduleCustom") },
+  ];
 
   return (
     <div className="space-y-6">
@@ -203,9 +204,9 @@ export function CompanySettingsPage() {
           <Building2 className="size-5 text-primary-foreground" />
         </div>
         <div>
-          <h1 className="text-2xl font-bold">הגדרות חברה</h1>
+          <h1 className="text-2xl font-bold">{t("companySettingsPage.title")}</h1>
           <p className="text-sm text-muted-foreground">
-            ניהול שם החברה, לוגו ופרטי קשר. הנתונים מתעדכנים אוטומטית בכל המערכת.
+            {t("companySettingsPage.subtitle")}
           </p>
         </div>
       </div>
@@ -214,21 +215,17 @@ export function CompanySettingsPage() {
         <Card className="card-elevated p-6 space-y-4">
           <div className="flex items-center gap-2">
             <CalendarRange className="size-5 text-primary" />
-            <h2 className="text-lg font-semibold">📅 סוג סידור עבודה</h2>
+            <h2 className="text-lg font-semibold">{t("companySettingsPage.scheduleTypeTitle")}</h2>
           </div>
           <p className="text-xs text-muted-foreground">
-            ההגדרה משפיעה רק על סידורים חדשים. סידורים קיימים נשמרים ללא שינוי.
+            {t("companySettingsPage.scheduleTypeHint")}
           </p>
           <RadioGroup
             value={form.schedule_type}
             onValueChange={(v) => setForm((f) => ({ ...f, schedule_type: v as ScheduleType }))}
             className="grid sm:grid-cols-3 gap-2"
           >
-            {[
-              { v: "weekly", label: "שבועי" },
-              { v: "monthly", label: "חודשי" },
-              { v: "custom", label: "מותאם אישית (בקרוב)" },
-            ].map((opt) => (
+            {scheduleOptions.map((opt) => (
               <label
                 key={opt.v}
                 className="flex items-center gap-2 border rounded-lg px-3 py-2 cursor-pointer hover:bg-muted/40"
@@ -240,7 +237,7 @@ export function CompanySettingsPage() {
           </RadioGroup>
           <div className="flex justify-end">
             <Button onClick={() => saveMut.mutate()} disabled={saveMut.isPending} size="sm">
-              {saveMut.isPending ? <Loader2 className="size-4 animate-spin" /> : "שמירת סוג סידור"}
+              {saveMut.isPending ? <Loader2 className="size-4 animate-spin" /> : t("companySettingsPage.saveScheduleType")}
             </Button>
           </div>
         </Card>
@@ -249,12 +246,11 @@ export function CompanySettingsPage() {
       {!canManageSettings ? null : (
       <Card className="card-elevated p-6 space-y-5">
         <div className="space-y-2">
-          <Label>לוגו החברה</Label>
+          <Label>{t("companySettingsPage.companyLogo")}</Label>
           <div className="flex items-center gap-4">
             <div className="size-20 rounded-xl border bg-muted/40 flex items-center justify-center overflow-hidden shrink-0">
               {form.logo_url ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img src={form.logo_url} alt="לוגו" className="size-full object-contain" />
+                <img src={form.logo_url} alt={t("companySettingsPage.logoAlt")} className="size-full object-contain" />
               ) : (
                 <Building2 className="size-8 text-muted-foreground" />
               )}
@@ -273,7 +269,7 @@ export function CompanySettingsPage() {
               />
               <Button type="button" variant="outline" size="sm" onClick={() => fileRef.current?.click()}>
                 <Upload className="size-4 ml-1" />
-                העלאת לוגו
+                {t("companySettingsPage.uploadLogo")}
               </Button>
               {form.logo_url ? (
                 <Button
@@ -283,16 +279,16 @@ export function CompanySettingsPage() {
                   onClick={() => setForm((f) => ({ ...f, logo_url: "" }))}
                 >
                   <Trash2 className="size-4 ml-1" />
-                  הסר לוגו
+                  {t("companySettingsPage.removeLogo")}
                 </Button>
               ) : null}
-              <p className="text-xs text-muted-foreground">PNG/JPG עד 500KB. מומלץ ריבועי.</p>
+              <p className="text-xs text-muted-foreground">{t("companySettingsPage.logoHint")}</p>
             </div>
           </div>
         </div>
 
         <div className="space-y-2">
-          <Label htmlFor="company_name">שם החברה *</Label>
+          <Label htmlFor="company_name">{t("companySettingsPage.companyName")}</Label>
           <Input
             id="company_name"
             value={form.company_name}
@@ -303,7 +299,7 @@ export function CompanySettingsPage() {
         </div>
 
         <div className="space-y-2">
-          <Label htmlFor="address">כתובת החברה</Label>
+          <Label htmlFor="address">{t("companySettingsPage.companyAddress")}</Label>
           <Textarea
             id="address"
             value={form.address}
@@ -315,7 +311,7 @@ export function CompanySettingsPage() {
 
         <div className="grid sm:grid-cols-2 gap-4">
           <div className="space-y-2">
-            <Label htmlFor="phone">מספר טלפון</Label>
+            <Label htmlFor="phone">{t("companySettingsPage.phoneNumber")}</Label>
             <Input
               id="phone"
               dir="ltr"
@@ -325,7 +321,7 @@ export function CompanySettingsPage() {
             />
           </div>
           <div className="space-y-2">
-            <Label htmlFor="email">דוא"ל החברה</Label>
+            <Label htmlFor="email">{t("companySettingsPage.companyEmail")}</Label>
             <Input
               id="email"
               type="email"
@@ -338,7 +334,7 @@ export function CompanySettingsPage() {
         </div>
 
         <div className="space-y-2">
-          <Label htmlFor="primary_color">צבע ראשי (אופציונלי)</Label>
+          <Label htmlFor="primary_color">{t("companySettingsPage.primaryColor")}</Label>
           <div className="flex items-center gap-3">
             <Input
               id="primary_color"
@@ -362,7 +358,7 @@ export function CompanySettingsPage() {
                 size="sm"
                 onClick={() => setForm((f) => ({ ...f, primary_color: "" }))}
               >
-                נקה
+                {t("companySettingsPage.clear")}
               </Button>
             ) : null}
           </div>
@@ -370,7 +366,7 @@ export function CompanySettingsPage() {
 
         <div className="flex justify-end pt-2">
           <Button onClick={() => saveMut.mutate()} disabled={saveMut.isPending} size="lg">
-            {saveMut.isPending ? <Loader2 className="size-4 animate-spin" /> : "שמירת שינויים"}
+            {saveMut.isPending ? <Loader2 className="size-4 animate-spin" /> : t("companySettingsPage.saveChanges")}
           </Button>
         </div>
       </Card>

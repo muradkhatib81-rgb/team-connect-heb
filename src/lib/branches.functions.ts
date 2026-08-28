@@ -1,6 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { getRequest } from "@tanstack/react-start/server";
 import { createClient } from "@supabase/supabase-js";
+import i18n from "@/i18n";
 import { requireBranchContext } from "@/integrations/supabase/active-branch.server";
 import type { Database } from "@/integrations/supabase/types";
 import { z } from "zod";
@@ -13,7 +14,7 @@ async function assertSystemAdmin(supabase: any, userId: string) {
     .eq("user_id", userId)
     .in("role", ["system_admin", "main_admin"]);
   if (error || !data?.length) {
-    throw new Error("רק בעל המערכת הראשי יכול לבצע פעולה זו");
+    throw new Error(i18n.t("serverErrors.common.onlySystemAdmin"));
   }
 }
 
@@ -238,7 +239,7 @@ export const createBranch = createServerFn({ method: "POST" })
       .select("id")
       .eq("code", data.code)
       .maybeSingle();
-    if (existing) throw new Error("קוד סניף כבר קיים במערכת");
+    if (existing) throw new Error(i18n.t("serverErrors.common.branchCodeExists"));
 
     // Prefer a direct insert (RLS allows main_admin). The RPC
     // create_branch_with_departments requires system_admin only, which the
@@ -266,7 +267,7 @@ export const createBranch = createServerFn({ method: "POST" })
         .order("created_at", { ascending: true });
       if (srcErr) throw new Error(srcErr.message);
       if (!sourceDepts?.length) {
-        throw new Error("לסניף המקור אין מחלקות להעתקה");
+        throw new Error(i18n.t("serverErrors.common.noDeptsToCopy"));
       }
       const suffix = Math.random().toString(16).slice(2, 6);
       const rows = sourceDepts.map((d: { name: string; code: string; is_active: boolean }) => ({
@@ -307,7 +308,7 @@ export const updateBranch = createServerFn({ method: "POST" })
       .eq("code", data.code)
       .neq("id", data.id)
       .maybeSingle();
-    if (existing) throw new Error("קוד סניף כבר קיים במערכת");
+    if (existing) throw new Error(i18n.t("serverErrors.common.branchCodeExists"));
     const { error } = await context.supabase
       .from("branches")
       .update({
@@ -339,7 +340,7 @@ export const assignBranchManager = createServerFn({ method: "POST" })
         .eq("manager_id", data.manager_id)
         .neq("id", data.branch_id)
         .maybeSingle();
-      if (other) throw new Error(`העובד כבר משמש כמנהל סניף "${(other as any).name}"`);
+      if (other) throw new Error(i18n.t("serverErrors.common.employeeAlreadyBranchManager", { name: (other as any).name }));
     }
     const { error } = await context.supabase
       .from("branches")
@@ -423,7 +424,7 @@ export const getBranchDeleteBlockers = createServerFn({ method: "POST" })
         canDelete: false,
         onlyDepartments: false,
         isEmpty: false,
-        error: "אין לך הרשאה לבצע פעולה זו.",
+        error: i18n.t("serverErrors.common.noPermissionAction"),
       };
     }
     try {
@@ -439,7 +440,7 @@ export const getBranchDeleteBlockers = createServerFn({ method: "POST" })
           canDelete: false,
           onlyDepartments: false,
           isEmpty: false,
-          error: "אירעה שגיאה בבדיקת הנתונים המקושרים לסניף.",
+          error: i18n.t("serverErrors.common.linkedDataCheckError"),
         };
       }
       return { ok: true, ...normalizeBlockers(b) };
@@ -451,7 +452,7 @@ export const getBranchDeleteBlockers = createServerFn({ method: "POST" })
         canDelete: false,
         onlyDepartments: false,
         isEmpty: false,
-        error: "אירעה שגיאה בבדיקת הנתונים המקושרים לסניף.",
+        error: i18n.t("serverErrors.common.linkedDataCheckError"),
       };
     }
   });
@@ -475,14 +476,14 @@ export type BranchDeleteResult = {
 
 function buildBlockerMessage(c: BranchBlockerCounts): string {
   const lines = [
-    `• עובדים: ${c.employees}`,
-    `• סידורי עבודה: ${c.schedules}`,
-    `• דוחות: ${c.reports}`,
-    `• משימות: ${c.tasks}`,
-    `• הודעות: ${c.messages}`,
-    `• התראות: ${c.notifications}`,
+    i18n.t("serverErrors.common.branchDeleteLineEmployees", { count: c.employees }),
+    i18n.t("serverErrors.common.branchDeleteLineSchedules", { count: c.schedules }),
+    i18n.t("serverErrors.common.branchDeleteLineReports", { count: c.reports }),
+    i18n.t("serverErrors.common.branchDeleteLineTasks", { count: c.tasks }),
+    i18n.t("serverErrors.common.branchDeleteLineMessages", { count: c.messages }),
+    i18n.t("serverErrors.common.branchDeleteLineNotifications", { count: c.notifications }),
   ];
-  return `לא ניתן למחוק את הסניף. קיימים נתונים תפעוליים:\n${lines.join("\n")}`;
+  return i18n.t("serverErrors.common.cannotDeleteBranch", { lines: lines.join("\n") });
 }
 
 export const deleteBranch = createServerFn({ method: "POST" })
@@ -502,7 +503,7 @@ export const deleteBranch = createServerFn({ method: "POST" })
       await assertSystemAdmin(context.supabase, context.userId);
     } catch (err: any) {
       console.error("[deleteBranch] auth check failed:", err);
-      return { ...empty, message: "אין לך הרשאה למחוק סניפים." };
+      return { ...empty, message: i18n.t("serverErrors.common.noDeleteBranchesPermission") };
     }
     const supabase = context.supabase;
 
@@ -516,7 +517,7 @@ export const deleteBranch = createServerFn({ method: "POST" })
         console.error("[deleteBranch] blocker rpc error:", error);
         return {
           ...empty,
-          message: "אירעה שגיאה בבדיקת הנתונים המקושרים לסניף.",
+          message: i18n.t("serverErrors.common.linkedDataCheckError"),
         };
       }
       blockers = normalizeBlockers(b);
@@ -524,7 +525,7 @@ export const deleteBranch = createServerFn({ method: "POST" })
       console.error("[deleteBranch] blocker rpc threw:", err);
       return {
         ...empty,
-        message: "אירעה שגיאה בבדיקת הנתונים המקושרים לסניף.",
+        message: i18n.t("serverErrors.common.linkedDataCheckError"),
       };
     }
 
@@ -546,7 +547,7 @@ export const deleteBranch = createServerFn({ method: "POST" })
         deleted: false,
         departmentsDeleted: 0,
         ...blockers,
-        message: `הסניף מכיל ${blockers.departments} מחלקות. נדרש אישור למחיקת הסניף יחד עם המחלקות.`,
+        message: i18n.t("serverErrors.common.branchHasDepartments", { count: blockers.departments }),
       };
     }
 
@@ -561,7 +562,7 @@ export const deleteBranch = createServerFn({ method: "POST" })
         return {
           ...empty,
           ...blockers,
-          message: "אירעה שגיאה במחיקת הסניף. נסה שוב מאוחר יותר.",
+          message: i18n.t("serverErrors.common.branchDeleteError"),
         };
       }
       if (!res?.deleted) {
@@ -589,7 +590,7 @@ export const deleteBranch = createServerFn({ method: "POST" })
       return {
         ...empty,
         ...blockers,
-        message: "אירעה שגיאה במחיקת הסניף. נסה שוב מאוחר יותר.",
+        message: i18n.t("serverErrors.common.branchDeleteError"),
       };
     }
   });

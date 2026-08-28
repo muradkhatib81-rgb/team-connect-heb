@@ -7,6 +7,7 @@ import {
 } from "@/lib/platform-push-settings.functions";
 import { dispatchFcmToUsers } from "@/lib/fcm.server";
 import { dispatchWebPushToUsers, type WebPushPayload } from "@/lib/web-push.server";
+import i18n from "@/i18n";
 
 export type PushDispatchInput = {
   userIds: string[];
@@ -114,7 +115,7 @@ export async function dispatchPushNotification(
       : notificationPushUrl(body, { scheduleId: input.scheduleId, weekStart }));
 
   const payload: WebPushPayload = {
-    title: input.title ?? "מערכת ניהול עובדים",
+    title: input.title ?? i18n.t("common.appName"),
     body,
     url,
     tag:
@@ -178,7 +179,7 @@ export async function pushForScheduleNotification(opts: {
     message: opts.message,
     scheduleId: opts.scheduleId ?? null,
     weekStart: opts.weekStart ?? null,
-    title: "עדכון סידור עבודה",
+    title: i18n.t("libErrors.schedules.pushTitle"),
     tag: freshPushTag(opts.scheduleId ? `schedule-${opts.scheduleId}` : "schedule"),
     eventKey: opts.eventKey ?? "schedule_update",
   });

@@ -1,7 +1,8 @@
 import { ZodError } from "zod";
+import i18n from "@/i18n";
 
 /** Extract a user-visible message from TanStack server function / Supabase errors. */
-export function extractServerFnErrorMessage(error: unknown, fallback = "שגיאה בלתי צפויה"): string {
+export function extractServerFnErrorMessage(error: unknown, fallback = i18n.t("common.unexpectedError")): string {
   if (!error) return fallback;
   if (typeof error === "string") {
     const trimmed = error.trim();

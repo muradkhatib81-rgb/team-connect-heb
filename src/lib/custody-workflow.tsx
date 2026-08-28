@@ -1,6 +1,7 @@
 import { useEffect } from "react";
 import type { QueryClient } from "@tanstack/react-query";
 import { useQueryClient } from "@tanstack/react-query";
+import i18n from "@/i18n";
 import { supabase } from "@/integrations/supabase/client";
 import { isPlatformOwner, type AppRole } from "@/lib/constants";
 import { todayJerusalemDate } from "@/lib/break-workflow";
@@ -95,12 +96,32 @@ export function custodyDurationMinutes(checkedOutAt: string, nowMs = Date.now())
   return Math.max(0, Math.round((nowMs - new Date(checkedOutAt).getTime()) / 60000));
 }
 
+export function getCustodyStatusLabel(status: string): string {
+  const key = `custody.status.${status}`;
+  const translated = i18n.t(key);
+  return translated !== key ? translated : status;
+}
+
+export function getCustodyLogBadgeLabel(
+  variant: "active" | "spansMidnight" | "managerReturn" | "returned",
+): string {
+  const keyMap = {
+    active: "activeBadge",
+    spansMidnight: "spansMidnight",
+    managerReturn: "managerReturn",
+    returned: "returnedBadge",
+  } as const;
+  return getCustodyStatusLabel(keyMap[variant]);
+}
+
 export function fmtCustodyDuration(minutes: number | null) {
   if (minutes == null) return "—";
-  if (minutes < 60) return `${minutes} דק׳`;
+  if (minutes < 60) return `${minutes} ${i18n.t("common.minutesShort")}`;
   const h = Math.floor(minutes / 60);
   const m = minutes % 60;
-  return m > 0 ? `${h} שע׳ ${m} דק׳` : `${h} שע׳`;
+  return m > 0
+    ? i18n.t("custody.durationHoursMinutes", { hours: h, minutes: m })
+    : i18n.t("custody.durationHoursOnly", { hours: h });
 }
 
 export async function fetchCustodyUserCaps(userId: string): Promise<CustodyUserCaps> {
@@ -252,15 +273,17 @@ export async function fetchCustodyDailyLog(branchId: string): Promise<CustodyLog
   );
 }
 
-/** Suggested name for the next equipment item: ציוד 1, ציוד 2, … */
+/** Suggested name for the next equipment item: Equipment 1, Equipment 2, … */
 export function suggestNextEquipmentName(existing: ReadonlyArray<{ name: string }>): string {
   let max = 0;
-  const re = /^ציוד\s*(\d+)\s*$/i;
+  const prefix = i18n.t("custody.equipmentNamePrefix");
+  const escaped = prefix.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const re = new RegExp(`^(?:ציוד|${escaped})\\s*(\\d+)\\s*$`, "iu");
   for (const row of existing) {
     const m = row.name.trim().match(re);
     if (m) max = Math.max(max, parseInt(m[1], 10));
   }
-  return `ציוד ${max + 1}`;
+  return i18n.t("custody.equipmentNameDefault", { n: max + 1 });
 }
 
 export async function fetchCustodyItemTypes(branchId: string): Promise<CustodyItemTypeRow[]> {

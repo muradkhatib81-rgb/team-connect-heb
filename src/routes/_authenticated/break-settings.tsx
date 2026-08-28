@@ -1,6 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/use-auth";
 import { Card } from "@/components/ui/card";
@@ -51,6 +52,7 @@ interface BreakRow {
 }
 
 export function BreakSettingsPage() {
+  const { t } = useTranslation();
   const qc = useQueryClient();
   const { data: me } = useAuth();
   const { canManageBreaks: canManage, isLoading: managePermLoading } = useCanManageBreaks();
@@ -115,12 +117,12 @@ export function BreakSettingsPage() {
       }
     },
     onSuccess: () => {
-      toast.success("נשמר");
+      toast.success(t("breakSettingsPage.saved"));
       setEditing(null);
       setCreateOpen(false);
       qc.invalidateQueries({ queryKey: ["break-settings"] });
     },
-    onError: (e: any) => toast.error(e?.message ?? "שגיאה"),
+    onError: (e: any) => toast.error(e?.message ?? t("common.error")),
   });
 
   const deleteMut = useMutation({
@@ -129,11 +131,11 @@ export function BreakSettingsPage() {
       if (error) throw error;
     },
     onSuccess: () => {
-      toast.success("נמחק");
+      toast.success(t("breakSettingsPage.deleted"));
       setDeleteTarget(null);
       qc.invalidateQueries({ queryKey: ["break-settings"] });
     },
-    onError: (e: any) => toast.error(e?.message ?? "שגיאה"),
+    onError: (e: any) => toast.error(e?.message ?? t("common.error")),
   });
 
   const reorderMut = useMutation({
@@ -151,7 +153,7 @@ export function BreakSettingsPage() {
       }
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["break-settings"] }),
-    onError: (e: any) => toast.error(e?.message ?? "שגיאה"),
+    onError: (e: any) => toast.error(e?.message ?? t("common.error")),
   });
 
   function move(idx: number, dir: -1 | 1) {
@@ -167,9 +169,9 @@ export function BreakSettingsPage() {
   if (!managePermLoading && !canManage) {
     return (
       <Card className="card-elevated p-8 text-center">
-        <h2 className="text-lg font-semibold">אין הרשאה</h2>
+        <h2 className="text-lg font-semibold">{t("breakSettingsPage.noPermissionTitle")}</h2>
         <p className="text-sm text-muted-foreground mt-2">
-          אין הרשאה לגשת למסך זה. {supportContactInstruction(me.roles)}.
+          {t("breakSettingsPage.noPermissionDesc")} {supportContactInstruction(me.roles)}.
         </p>
       </Card>
     );
@@ -185,22 +187,21 @@ export function BreakSettingsPage() {
             <Coffee className="size-5" />
           </div>
           <div>
-            <h1 className="text-2xl sm:text-3xl font-bold">הגדרות הפסקות</h1>
+            <h1 className="text-2xl sm:text-3xl font-bold">{t("breakSettingsPage.title")}</h1>
             <p className="text-sm text-muted-foreground mt-1">
-              ניהול גמיש של סוגי ההפסקות במערכת. השינויים חלים מיד על כל
-              המשתמשים.
+              {t("breakSettingsPage.subtitle")}
             </p>
           </div>
         </div>
         <Dialog open={createOpen} onOpenChange={setCreateOpen}>
           <DialogTrigger asChild>
             <Button className="gap-2">
-              <Plus className="size-4" /> הפסקה חדשה
+              <Plus className="size-4" /> {t("breakSettingsPage.newBreak")}
             </Button>
           </DialogTrigger>
           <BreakDialog
             key={createOpen ? "create" : "create-closed"}
-            title="יצירת הפסקה"
+            title={t("breakSettingsPage.createTitle")}
             saving={saveMut.isPending}
             onSubmit={(v) => saveMut.mutate(v)}
           />
@@ -213,7 +214,7 @@ export function BreakSettingsPage() {
         </div>
       ) : rows.length === 0 ? (
         <Card className="card-elevated p-8 text-center text-sm text-muted-foreground">
-          עדיין לא הוגדרו הפסקות. לחצו על "הפסקה חדשה" כדי להתחיל.
+          {t("breakSettingsPage.emptyState")}
         </Card>
       ) : (
         <div className="grid gap-3">
@@ -228,14 +229,14 @@ export function BreakSettingsPage() {
               <div className="flex-1 min-w-0">
                 <p className="font-medium truncate">{r.name}</p>
                 <p className="text-xs text-muted-foreground">
-                  {r.duration_minutes} דקות
+                  {r.duration_minutes} {t("common.minutes")}
                 </p>
               </div>
               <div className="flex items-center gap-1 shrink-0">
                 <Button
                   variant="ghost"
                   size="icon"
-                  aria-label="העלאה למעלה"
+                  aria-label={t("breakSettingsPage.moveUp")}
                   disabled={idx === 0 || reorderMut.isPending}
                   onClick={() => move(idx, -1)}
                 >
@@ -244,7 +245,7 @@ export function BreakSettingsPage() {
                 <Button
                   variant="ghost"
                   size="icon"
-                  aria-label="הורדה למטה"
+                  aria-label={t("breakSettingsPage.moveDown")}
                   disabled={idx === rows.length - 1 || reorderMut.isPending}
                   onClick={() => move(idx, 1)}
                 >
@@ -253,7 +254,7 @@ export function BreakSettingsPage() {
                 <Button
                   variant="ghost"
                   size="icon"
-                  aria-label="עריכה"
+                  aria-label={t("common.edit")}
                   onClick={() => setEditing(r)}
                 >
                   <Pencil className="size-4" />
@@ -261,7 +262,7 @@ export function BreakSettingsPage() {
                 <Button
                   variant="ghost"
                   size="icon"
-                  aria-label="מחיקה"
+                  aria-label={t("common.delete")}
                   onClick={() => setDeleteTarget(r)}
                 >
                   <Trash2 className="size-4 text-destructive" />
@@ -276,7 +277,7 @@ export function BreakSettingsPage() {
         {editing && (
           <BreakDialog
             key={editing.id}
-            title="עריכת הפסקה"
+            title={t("breakSettingsPage.editTitle")}
             initial={editing}
             saving={saveMut.isPending}
             onSubmit={(v) =>
@@ -292,19 +293,18 @@ export function BreakSettingsPage() {
       >
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>מחיקת הפסקה</AlertDialogTitle>
+            <AlertDialogTitle>{t("breakSettingsPage.deleteTitle")}</AlertDialogTitle>
             <AlertDialogDescription>
-              האם למחוק את "{deleteTarget?.name}"? פעולה זו תחול מיד על כל
-              המשתמשים.
+              {t("breakSettingsPage.deleteDesc", { name: deleteTarget?.name ?? "" })}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>ביטול</AlertDialogCancel>
+            <AlertDialogCancel>{t("common.cancel")}</AlertDialogCancel>
             <AlertDialogAction
               onClick={() => deleteTarget && deleteMut.mutate(deleteTarget.id)}
               disabled={deleteMut.isPending}
             >
-              מחיקה
+              {t("common.delete")}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -324,6 +324,7 @@ function BreakDialog({
   saving: boolean;
   onSubmit: (v: { name: string; duration_minutes: number }) => void;
 }) {
+  const { t } = useTranslation();
   const [name, setName] = useState(initial?.name ?? "");
   const [duration, setDuration] = useState<string>(
     initial?.duration_minutes ? String(initial.duration_minutes) : "",
@@ -333,11 +334,11 @@ function BreakDialog({
     const n = name.trim();
     const d = Number(duration);
     if (!n) {
-      toast.error("יש להזין שם הפסקה");
+      toast.error(t("breakSettingsPage.errNameRequired"));
       return;
     }
     if (!Number.isFinite(d) || d <= 0 || d > 480) {
-      toast.error("משך ההפסקה חייב להיות בין 1 ל-480 דקות");
+      toast.error(t("breakSettingsPage.errDurationRange"));
       return;
     }
     onSubmit({ name: n, duration_minutes: Math.round(d) });
@@ -350,17 +351,17 @@ function BreakDialog({
       </DialogHeader>
       <div className="space-y-3">
         <div className="space-y-1.5">
-          <Label htmlFor="bk-name">שם ההפסקה</Label>
+          <Label htmlFor="bk-name">{t("breakSettingsPage.breakNameLabel")}</Label>
           <Input
             id="bk-name"
             value={name}
             onChange={(e) => setName(e.target.value)}
-            placeholder="לדוגמה: הפסקה ראשונה"
+            placeholder={t("breakSettingsPage.breakNamePlaceholder")}
             autoComplete="off"
           />
         </div>
         <div className="space-y-1.5">
-          <Label htmlFor="bk-dur">משך ההפסקה (בדקות)</Label>
+          <Label htmlFor="bk-dur">{t("breakSettingsPage.durationLabel")}</Label>
           <Input
             id="bk-dur"
             type="number"
@@ -368,13 +369,13 @@ function BreakDialog({
             max={480}
             value={duration}
             onChange={(e) => setDuration(e.target.value)}
-            placeholder="לדוגמה: 15"
+            placeholder={t("breakSettingsPage.durationPlaceholder")}
           />
         </div>
       </div>
       <DialogFooter>
         <Button onClick={submit} disabled={saving} className="gap-2">
-          {saving && <Loader2 className="size-4 animate-spin" />} שמירה
+          {saving && <Loader2 className="size-4 animate-spin" />} {t("common.save")}
         </Button>
       </DialogFooter>
     </DialogContent>

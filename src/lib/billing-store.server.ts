@@ -9,6 +9,7 @@ import type { BillingPlan } from "@/core/managers/billing-manager";
 import { applyCompanyAiGrantFromBillingPlan } from "@/lib/billing-ai-sync.server";
 import { applyCompanyStorageFromBillingPlan } from "@/lib/billing-storage.server";
 import { resolveEffectivePlan } from "@/lib/billing-entitlements.server";
+import i18n from "@/i18n";
 import {
   invoiceSubscriptionId,
   mapStripeSubscriptionStatus,
@@ -119,7 +120,7 @@ export async function upsertManualPlan(opts: {
 
 function billingDbError(message: string): string {
   if (/does not exist|relation/i.test(message)) {
-    return "טבלת החיוב עדיין לא הותקנה במסד. הריצו את המיגרציה 20260825120000_billing_stripe_foundation.sql";
+    return i18n.t("libErrors.billing.tableMissing");
   }
   return message;
 }

@@ -14,6 +14,7 @@ import {
 } from "@/lib/employee-leave";
 import { supabase } from "@/integrations/supabase/client";
 import { useTranslation } from "react-i18next";
+import i18n from "@/i18n";
 import { resolveLeaveAccess } from "@/lib/leave-permissions";
 import { PushNotificationsSettings } from "@/components/push-notifications-settings";
 
@@ -39,7 +40,7 @@ function ProfilePage() {
         .eq("user_id", me!.id);
       if (error) throw error;
       return (data ?? []).map((row: any) => ({
-        name: row.leave_types?.name ?? row.leave_types?.code ?? "חופשה",
+        name: row.leave_types?.name ?? row.leave_types?.code ?? i18n.t("leaves.defaultLeaveName"),
         available:
           (row.manual_balance ?? 0) +
           (row.accrued_days ?? 0) -

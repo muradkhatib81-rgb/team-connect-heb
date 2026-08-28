@@ -1,4 +1,5 @@
 import { Phone } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
 import { toTelUrl, toWhatsAppUrl } from "@/lib/whatsapp";
 import { WhatsAppIcon } from "@/components/whatsapp-icon";
@@ -21,6 +22,7 @@ export function ContactActions({
   className,
   compact = false,
 }: ContactActionsProps) {
+  const { t } = useTranslation();
   const tel = toTelUrl(phone);
   const wa = toWhatsAppUrl(phone);
   if (!tel && !wa) return null;
@@ -29,7 +31,7 @@ export function ContactActions({
     return (
       <div className={`flex items-center gap-1 ${className ?? ""}`}>
         {tel && (
-          <Button asChild variant="ghost" size="icon" className="size-8 shrink-0" aria-label="התקשרות">
+          <Button asChild variant="ghost" size="icon" className="size-8 shrink-0" aria-label={t("contactActions.call")}>
             <a href={tel}>
               <Phone className="size-4" />
             </a>
@@ -58,7 +60,7 @@ export function ContactActions({
         <Button asChild variant="outline" size={size} className="gap-1.5">
           <a href={tel}>
             <Phone className="size-4" />
-            {!compact && "התקשרות"}
+            {!compact && t("contactActions.call")}
           </a>
         </Button>
       )}

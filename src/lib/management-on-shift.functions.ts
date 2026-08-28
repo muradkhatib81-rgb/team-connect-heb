@@ -4,6 +4,7 @@ import { requireBranchContext } from "@/integrations/supabase/active-branch.serv
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
 import { formatEmployeeName } from "@/lib/employee-name";
 import { notifyBranchExceptActor } from "@/lib/push-dispatch.server";
+import i18n from "@/i18n";
 
 async function actorDisplayName(userId: string): Promise<string> {
   const { data: actor } = await supabaseAdmin
@@ -16,7 +17,7 @@ async function actorDisplayName(userId: string): Promise<string> {
     first_name: actor?.first_name,
     last_name: actor?.last_name,
   });
-  return !name || name === "—" ? "מנהל/ת" : name;
+  return !name || name === "—" ? i18n.t("libErrors.ops.managerFallback") : name;
 }
 
 /**
@@ -45,8 +46,8 @@ export const announceManagementOnShiftChange = createServerFn({ method: "POST" }
     const displayName = await actorDisplayName(context.userId);
     const message =
       data.action === "start"
-        ? `${displayName} נמצא/ת במשמרת`
-        : `${displayName} סיים/ה משמרת`;
+        ? i18n.t("libErrors.ops.mosStart", { name: displayName })
+        : i18n.t("libErrors.ops.mosEnd", { name: displayName });
 
     const recipients = await notifyBranchExceptActor({
       branchId,
@@ -82,8 +83,8 @@ export const announceCustodyChange = createServerFn({ method: "POST" })
     const item = data.itemName.trim();
     const message =
       data.action === "take"
-        ? `${displayName} לקח/ה ${item}`
-        : `${displayName} החזיר/ה ${item}`;
+        ? i18n.t("libErrors.ops.custodyTake", { name: displayName, item })
+        : i18n.t("libErrors.ops.custodyReturn", { name: displayName, item });
 
     const recipients = await notifyBranchExceptActor({
       branchId,

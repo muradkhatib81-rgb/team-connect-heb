@@ -1,6 +1,7 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/use-auth";
 import { useJobTitles, type JobTitleRow } from "@/lib/use-job-titles";
@@ -33,6 +34,7 @@ export const Route = createFileRoute("/_authenticated/job-titles")({
 });
 
 function JobTitlesPage() {
+  const { t } = useTranslation();
   const { data: profile } = useAuth();
   const navigate = useNavigate();
   const isMainAdmin = !!profile?.roles?.includes("main_admin");
@@ -46,7 +48,6 @@ function JobTitlesPage() {
     if (profile && !isMainAdmin) navigate({ to: "/dashboard" });
   }, [profile, isMainAdmin, navigate]);
 
-  // Realtime
   useEffect(() => {
     const ch = supabase
       .channel("job-titles-page")
@@ -65,11 +66,11 @@ function JobTitlesPage() {
       if (error) throw error;
     },
     onSuccess: () => {
-      toast.success("התפקיד נמחק");
+      toast.success(t("jobTitlesPage.deleted"));
       qc.invalidateQueries({ queryKey: ["job-titles"] });
       setDeleting(null);
     },
-    onError: (e: any) => toast.error(e?.message ?? "שגיאה במחיקה"),
+    onError: (e: any) => toast.error(e?.message ?? t("jobTitlesPage.deleteError")),
   });
 
   return (
@@ -78,15 +79,15 @@ function JobTitlesPage() {
         <div>
           <h1 className="text-2xl font-semibold flex items-center gap-2">
             <Briefcase className="size-6" />
-            ניהול תפקידים
+            {t("jobTitlesPage.title")}
           </h1>
           <p className="text-sm text-muted-foreground mt-1">
-            הוספה, עריכה ומחיקה של תפקידים, וקביעה האם תפקיד נכלל בסטטיסטיקות כוח האדם.
+            {t("jobTitlesPage.subtitle")}
           </p>
         </div>
         <Button onClick={() => setCreateOpen(true)} className="gap-1.5">
           <Plus className="size-4" />
-          תפקיד חדש
+          {t("jobTitlesPage.newJobTitle")}
         </Button>
       </div>
 
@@ -95,28 +96,28 @@ function JobTitlesPage() {
           <div className="p-8 flex justify-center"><Loader2 className="size-6 animate-spin" /></div>
         ) : (titlesQ.data ?? []).length === 0 ? (
           <div className="p-8 text-center text-sm text-muted-foreground">
-            אין עדיין תפקידים. לחצו על "תפקיד חדש" כדי להוסיף.
+            {t("jobTitlesPage.emptyState")}
           </div>
         ) : (
           <ul className="divide-y divide-border">
-            {(titlesQ.data ?? []).map((t) => (
-              <li key={t.id} className="flex items-center gap-3 p-4">
+            {(titlesQ.data ?? []).map((titleRow) => (
+              <li key={titleRow.id} className="flex items-center gap-3 p-4">
                 <Briefcase className="size-5 text-muted-foreground" />
                 <div className="flex-1 min-w-0">
-                  <div className="font-medium truncate">{t.name}</div>
+                  <div className="font-medium truncate">{titleRow.name}</div>
                   <div className="text-xs text-muted-foreground">
-                    {t.excluded_from_headcount
-                      ? "לא נכלל בסטטיסטיקות כוח האדם"
-                      : "נכלל בסטטיסטיקות כוח האדם"}
+                    {titleRow.excluded_from_headcount
+                      ? t("jobTitlesPage.excludedFromHeadcount")
+                      : t("jobTitlesPage.includedInHeadcount")}
                   </div>
                 </div>
-                <Button variant="outline" size="sm" onClick={() => setEditing(t)} className="gap-1.5">
+                <Button variant="outline" size="sm" onClick={() => setEditing(titleRow)} className="gap-1.5">
                   <Pencil className="size-3.5" />
-                  עריכה
+                  {t("common.edit")}
                 </Button>
-                <Button variant="ghost" size="sm" onClick={() => setDeleting(t)} className="gap-1.5 text-destructive">
+                <Button variant="ghost" size="sm" onClick={() => setDeleting(titleRow)} className="gap-1.5 text-destructive">
                   <Trash2 className="size-3.5" />
-                  מחיקה
+                  {t("common.delete")}
                 </Button>
               </li>
             ))}
@@ -131,18 +132,18 @@ function JobTitlesPage() {
         <AlertDialog open onOpenChange={(o) => !o && setDeleting(null)}>
           <AlertDialogContent>
             <AlertDialogHeader>
-              <AlertDialogTitle>מחיקת תפקיד</AlertDialogTitle>
+              <AlertDialogTitle>{t("jobTitlesPage.deleteTitle")}</AlertDialogTitle>
               <AlertDialogDescription>
-                האם למחוק את התפקיד "{deleting.name}"? עובדים ששויכו לתפקיד זה יחזרו להיכלל בסטטיסטיקות כוח האדם.
+                {t("jobTitlesPage.deleteDesc", { name: deleting.name })}
               </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
-              <AlertDialogCancel>ביטול</AlertDialogCancel>
+              <AlertDialogCancel>{t("common.cancel")}</AlertDialogCancel>
               <AlertDialogAction
                 onClick={() => delMut.mutate(deleting.id)}
                 className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
               >
-                מחק
+                {t("common.delete")}
               </AlertDialogAction>
             </AlertDialogFooter>
           </AlertDialogContent>
@@ -153,6 +154,7 @@ function JobTitlesPage() {
 }
 
 function EditDialog({ title, onClose }: { title?: JobTitleRow; onClose: () => void }) {
+  const { t } = useTranslation();
   const qc = useQueryClient();
   const [name, setName] = useState(title?.name ?? "");
   const [excluded, setExcluded] = useState(title?.excluded_from_headcount ?? false);
@@ -163,7 +165,7 @@ function EditDialog({ title, onClose }: { title?: JobTitleRow; onClose: () => vo
         name: name.trim(),
         excluded_from_headcount: excluded,
       };
-      if (!payload.name) throw new Error("יש להזין שם תפקיד");
+      if (!payload.name) throw new Error(t("jobTitlesPage.errNameRequired"));
       if (title) {
         const { error } = await supabase
           .from("job_titles" as any)
@@ -176,16 +178,16 @@ function EditDialog({ title, onClose }: { title?: JobTitleRow; onClose: () => vo
       }
     },
     onSuccess: () => {
-      toast.success(title ? "התפקיד עודכן" : "התפקיד נוצר");
+      toast.success(title ? t("jobTitlesPage.updated") : t("jobTitlesPage.created"));
       qc.invalidateQueries({ queryKey: ["job-titles"] });
       onClose();
     },
     onError: (e: any) => {
       const msg = String(e?.message ?? "");
       if (msg.includes("duplicate") || msg.includes("unique")) {
-        toast.error("כבר קיים תפקיד עם שם זה");
+        toast.error(t("jobTitlesPage.duplicateName"));
       } else {
-        toast.error(msg || "שגיאה בשמירה");
+        toast.error(msg || t("jobTitlesPage.saveError"));
       }
     },
   });
@@ -194,7 +196,7 @@ function EditDialog({ title, onClose }: { title?: JobTitleRow; onClose: () => vo
     <Dialog open onOpenChange={(o) => !o && onClose()}>
       <DialogContent className="max-w-md">
         <DialogHeader>
-          <DialogTitle>{title ? "עריכת תפקיד" : "תפקיד חדש"}</DialogTitle>
+          <DialogTitle>{title ? t("jobTitlesPage.editTitle") : t("jobTitlesPage.createTitle")}</DialogTitle>
         </DialogHeader>
         <form
           onSubmit={(e) => {
@@ -204,29 +206,28 @@ function EditDialog({ title, onClose }: { title?: JobTitleRow; onClose: () => vo
           className="space-y-4"
         >
           <div className="space-y-1.5">
-            <label className="text-sm font-medium">שם התפקיד</label>
+            <label className="text-sm font-medium">{t("jobTitlesPage.jobTitleName")}</label>
             <Input
               value={name}
               onChange={(e) => setName(e.target.value)}
-              placeholder="לדוגמה: מנהל כוח אדם"
+              placeholder={t("jobTitlesPage.jobTitlePlaceholder")}
               required
               maxLength={80}
             />
           </div>
           <div className="flex items-start justify-between rounded-lg border border-border p-3 gap-3">
             <div>
-              <p className="text-sm font-medium">לא נכלל בסטטיסטיקות כוח האדם</p>
+              <p className="text-sm font-medium">{t("jobTitlesPage.excludeFromHeadcount")}</p>
               <p className="text-xs text-muted-foreground mt-0.5">
-                כאשר מסומן, עובדים בתפקיד זה לא ייספרו במצבת כוח האדם של המחלקות ובספירות
-                בוקר / ערב / חופש. הם ימשיכו להופיע ברשימות, בחיפוש, בהרשאות, בסידורים ובכל מסכי הניהול.
+                {t("jobTitlesPage.excludeHint")}
               </p>
             </div>
             <Switch checked={excluded} onCheckedChange={setExcluded} />
           </div>
           <DialogFooter className="gap-2">
-            <Button type="button" variant="outline" onClick={onClose}>ביטול</Button>
+            <Button type="button" variant="outline" onClick={onClose}>{t("common.cancel")}</Button>
             <Button type="submit" disabled={mut.isPending}>
-              {mut.isPending ? <Loader2 className="size-4 animate-spin" /> : "שמור"}
+              {mut.isPending ? <Loader2 className="size-4 animate-spin" /> : t("common.save")}
             </Button>
           </DialogFooter>
         </form>

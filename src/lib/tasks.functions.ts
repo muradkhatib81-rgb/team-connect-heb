@@ -1,6 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { requireBranchContext } from "@/integrations/supabase/active-branch.server";
 import { canExecuteTask, canEditTaskContent, canViewTask } from "@/lib/task-execution";
+import i18n from "@/i18n";
 import { z } from "zod";
 import { notifyUsersWithPush } from "@/lib/push-dispatch.server";
 
@@ -109,7 +110,7 @@ async function resolveTaskBranchId(
 const TARGET_SCOPE = ["all_departments", "departments", "single_department"] as const;
 
 const createSchema = z.object({
-  title: z.string().trim().min(1, "כותרת חובה").max(200),
+  title: z.string().trim().min(1, i18n.t("serverErrors.common.titleRequired")).max(200),
   description: z.string().trim().max(2000).optional().nullable(),
   department_id: z.string().uuid().optional().nullable(),
   department_ids: z.array(z.string().uuid()).optional().default([]),
@@ -130,12 +131,12 @@ function enforceDeptHeadCreateScope(
 ): CreateTaskInput {
   if (!caps.isDeptManager || caps.canCreateTasks) return data;
   const ownDept = deptHeadOwnDepartmentId(caps);
-  if (!ownDept) throw new Error("לא נמצאה מחלקה משויכת לחשבון");
+  if (!ownDept) throw new Error(i18n.t("serverErrors.tasks.noDeptAssigned"));
   if (data.target_scope !== "single_department") {
-    throw new Error("רכז מחלקה יכול ליצור משימות רק למחלקה שלו");
+    throw new Error(i18n.t("serverErrors.tasks.deptHeadOwnDeptOnly"));
   }
   if (data.department_id && data.department_id !== ownDept) {
-    throw new Error("ניתן ליצור משימה רק למחלקה שלך");
+    throw new Error(i18n.t("serverErrors.tasks.ownDeptOnly"));
   }
   return {
     ...data,
@@ -320,7 +321,7 @@ async function assertCanExecuteTask(
     .eq("id", taskId)
     .maybeSingle();
   if (error) throw new Error(error.message);
-  if (!task) throw new Error("משימה לא נמצאה");
+  if (!task) throw new Error(i18n.t("serverErrors.tasks.notFound"));
   const assigneeMap = await loadMultiAssigneeMap(supabase, [taskId]);
   const { data: profile } = await supabase
     .from("profiles")
@@ -329,7 +330,7 @@ async function assertCanExecuteTask(
     .maybeSingle();
   const deptId = (profile?.department_id as string | null | undefined) ?? null;
   if (!canExecuteTask(task, userId, deptId, assigneeMap.get(taskId) ?? [])) {
-    throw new Error("אין הרשאה לעדכן משימה זו");
+    throw new Error(i18n.t("serverErrors.tasks.noUpdatePermission"));
   }
   return task;
 }
@@ -409,12 +410,12 @@ export const createTask = createServerFn({ method: "POST" })
     const data = enforceDeptHeadCreateScope(caps, rawData);
 
     if (data.target_scope === "single_department") {
-      if (!data.department_id) throw new Error("נדרשת מחלקה");
+      if (!data.department_id) throw new Error(i18n.t("serverErrors.tasks.departmentRequired"));
       if (!canCreateForDept(caps, data.department_id))
-        throw new Error("אין הרשאה ליצור משימה במחלקה זו");
+        throw new Error(i18n.t("serverErrors.tasks.noCreateInDept"));
     } else {
       if (!caps.canCreateTasks)
-        throw new Error("אין הרשאה ליצור משימה לכמה מחלקות / לכל הארגון");
+        throw new Error(i18n.t("serverErrors.tasks.noCreateMultiDept"));
     }
 
     const primaryDept =
@@ -427,7 +428,7 @@ export const createTask = createServerFn({ method: "POST" })
       primaryDept,
       context.branchId,
     );
-    if (!branchId) throw new Error("לא ניתן לקבוע סניף למשימה");
+    if (!branchId) throw new Error(i18n.t("serverErrors.tasks.cannotResolveBranch"));
 
     const { data: row, error } = await supabaseAdmin
       .from("tasks")
@@ -488,7 +489,7 @@ export const createTask = createServerFn({ method: "POST" })
     await notifyUsers(
       supabaseAdmin,
       Array.from(notifyTargets),
-      `הוקצתה לך משימה חדשה: ${data.title}`,
+      i18n.t("libErrors.tasks.assignedNew", { title: data.title }),
     );
 
     return row;
@@ -544,7 +545,7 @@ export const updateTask = createServerFn({ method: "POST" })
           .eq("id", id)
           .maybeSingle();
         if (!canEditTaskContent(task ?? { created_by: null }, context.userId)) {
-          throw new Error("רק יוצר המשימה יכול לערוך אותה");
+          throw new Error(i18n.t("serverErrors.tasks.onlyCreatorEdits"));
         }
       }
       if (Object.keys(cleaned).length) {
@@ -559,7 +560,7 @@ export const updateTask = createServerFn({ method: "POST" })
         .eq("id", id)
         .maybeSingle();
       if (!canEditTaskContent(task ?? { created_by: null }, context.userId)) {
-        throw new Error("רק יוצר המשימה יכול לערוך אותה");
+        throw new Error(i18n.t("serverErrors.tasks.onlyCreatorEdits"));
       }
     }
     if (department_ids) {
@@ -595,7 +596,7 @@ export const updateTask = createServerFn({ method: "POST" })
           .select("title")
           .eq("id", id)
           .maybeSingle();
-        await notifyUsers(context.supabase, toAdd, `הוקצתה לך משימה: ${t?.title ?? ""}`);
+        await notifyUsers(context.supabase, toAdd, i18n.t("libErrors.tasks.assigned", { title: t?.title ?? "" }));
       }
     }
     return { ok: true };
@@ -694,7 +695,7 @@ export const deleteTask = createServerFn({ method: "POST" })
   .inputValidator((d: unknown) => z.object({ id: z.string().uuid() }).parse(d))
   .handler(async ({ data, context }) => {
     const caps = await getCallerCaps(context.supabase, context.userId);
-    if (!caps.canDeleteTasks) throw new Error("רק בעלי הרשאת מחיקת משימות יכולים למחוק");
+    if (!caps.canDeleteTasks) throw new Error(i18n.t("serverErrors.tasks.onlyDeletersCanDelete"));
     // Remove image files first
     const { data: imgs } = await context.supabase
       .from("task_images")
@@ -878,7 +879,7 @@ export const createRecurrence = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     const caps = await getCallerCaps(context.supabase, context.userId);
     if (!canCreateForDept(caps, data.department_id))
-      throw new Error("אין הרשאה ליצור משימה חוזרת במחלקה זו");
+      throw new Error(i18n.t("serverErrors.tasks.noRecurringInDept"));
     const next = computeNextRunAt(
       data.frequency,
       data.days_of_week,
@@ -911,7 +912,7 @@ export const updateRecurrence = createServerFn({ method: "POST" })
       .eq("id", id)
       .maybeSingle();
     if (rErr) throw new Error(rErr.message);
-    if (!existing) throw new Error("משימה חוזרת לא נמצאה");
+    if (!existing) throw new Error(i18n.t("serverErrors.tasks.recurringNotFound"));
     const merged = { ...existing, ...patch };
     const next = computeNextRunAt(
       merged.frequency,
@@ -1014,7 +1015,7 @@ export const setTaskManagementPermission = createServerFn({ method: "POST" })
   .inputValidator((d: unknown) => grantSchema.parse(d))
   .handler(async ({ data, context }) => {
     const caps = await getCallerCaps(context.supabase, context.userId);
-    if (!caps.isMainAdmin) throw new Error("רק בעל המערכת יכול להעניק הרשאה זו");
+    if (!caps.isMainAdmin) throw new Error(i18n.t("serverErrors.tasks.onlyOwnerGrants"));
     const { error } = await context.supabase
       .from("user_task_permissions")
       .upsert(
@@ -1045,7 +1046,7 @@ export const markTaskPendingApproval = createServerFn({ method: "POST" })
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const task = await assertCanExecuteTask(supabaseAdmin, context.userId, data.id);
     if (!["new", "in_progress"].includes(task.status as string)) {
-      throw new Error("לא ניתן לשלוח משימה זו לאישור");
+      throw new Error(i18n.t("serverErrors.tasks.cannotSubmitForApproval"));
     }
     await applyTaskExecutionUpdate(
       context.supabase,
@@ -1062,7 +1063,7 @@ async function assertCanApprove(supabase: any, userId: string, taskId: string) {
     _approver_id: userId,
   });
   if (error) throw new Error(error.message);
-  if (!data) throw new Error("אין לך הרשאה לאשר משימה זו");
+  if (!data) throw new Error(i18n.t("serverErrors.tasks.noApprovePermission"));
 }
 
 export const approveTask = createServerFn({ method: "POST" })
@@ -1104,7 +1105,7 @@ export const rejectTask = createServerFn({ method: "POST" })
     z
       .object({
         id: z.string().uuid(),
-        rejection_note: z.string().trim().min(1, "נדרשת הערה").max(2000),
+        rejection_note: z.string().trim().min(1, i18n.t("serverErrors.common.noteRequired")).max(2000),
       })
       .parse(d),
   )
@@ -1218,7 +1219,7 @@ async function assertCanManageTargetPermissions(
   const callerIsBranchManager = callerRoleSet.has("branch_manager");
 
   if (!caps.canManagePermissions) {
-    throw new Error("אין הרשאה לנהל הרשאות");
+    throw new Error(i18n.t("serverErrors.tasks.noManagePermissions"));
   }
 
   const { data: target, error: targetError } = await supabase
@@ -1227,10 +1228,10 @@ async function assertCanManageTargetPermissions(
     .eq("id", targetUserId)
     .maybeSingle();
   if (targetError) throw new Error(targetError.message);
-  if (!target) throw new Error("המשתמש לא נמצא בסניף הפעיל");
+  if (!target) throw new Error(i18n.t("serverErrors.tasks.userNotInBranch"));
 
   if (!caps.isMainAdmin && targetUserId === callerUserId) {
-    throw new Error("לא ניתן לערוך את ההרשאות של עצמך");
+    throw new Error(i18n.t("serverErrors.common.cannotEditOwnPermissions"));
   }
 
   return target as { id: string; branch_id: string | null };
@@ -1344,11 +1345,11 @@ export const setUserPermissions = createServerFn({ method: "POST" })
     if (rolesError) throw new Error(rolesError.message);
     const roles = new Set((targetRoles ?? []).map((r: any) => r.role));
     if (!roles.has("assistant_manager") && !roles.has("branch_manager")) {
-      throw new Error("ניתן לערוך הרשאות מפורטות רק למנהל סניף או סגן מנהל");
+      throw new Error(i18n.t("serverErrors.tasks.granularPermsOnly"));
     }
     // Only platform owners may edit branch-manager grants
     if (roles.has("branch_manager") && !caps.isMainAdmin) {
-      throw new Error("רק בעל המערכת יכול לערוך הרשאות של מנהל סניף");
+      throw new Error(i18n.t("serverErrors.tasks.onlyOwnerEditsBranchMgr"));
     }
 
     const row: Record<string, any> = {
@@ -1378,9 +1379,9 @@ export const listBranchPermissionOverrides = createServerFn({ method: "GET" })
       .eq("user_id", context.userId);
     const callerRoleSet = new Set((callerRoles ?? []).map((r: any) => r.role));
     if (!caps.canManagePermissions) {
-      throw new Error("אין הרשאה");
+      throw new Error(i18n.t("serverErrors.common.noPermission"));
     }
-    if (!context.branchId) throw new Error("יש לבחור סניף פעיל");
+    if (!context.branchId) throw new Error(i18n.t("serverErrors.common.selectBranch"));
 
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const { SCHEDULE_PERMISSION_KEYS, TASK_PERMISSION_KEYS, CUSTODY_PERMISSION_KEYS } =
@@ -1455,7 +1456,7 @@ export const closeTask = createServerFn({ method: "POST" })
   .inputValidator((d: unknown) => z.object({ id: z.string().uuid() }).parse(d))
   .handler(async ({ data, context }) => {
     const caps = await getCallerCaps(context.supabase, context.userId);
-    if (!caps.canCloseTasks) throw new Error("אין הרשאה לסגור משימה זו");
+    if (!caps.canCloseTasks) throw new Error(i18n.t("serverErrors.tasks.noClosePermission"));
     const { error } = await context.supabase
       .from("tasks")
       .update({ status: "closed" } as any)

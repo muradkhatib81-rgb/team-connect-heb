@@ -1,6 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { requireBranchContext } from "@/integrations/supabase/active-branch.server";
 import type { SupabaseClient } from "@supabase/supabase-js";
+import i18n from "@/i18n";
 import type { Database } from "@/integrations/supabase/types";
 import { z } from "zod";
 
@@ -12,8 +13,8 @@ type AdminClient = SupabaseClient<Database>;
 function formatAuthError(error: { message?: string; code?: string } | null): string {
   const raw = error?.message?.trim();
   if (raw && raw !== "{}" && raw !== "undefined") return raw;
-  if (error?.code === "email_exists") return "כבר קיים עובד עם מספר זהות זה.";
-  return "שגיאה בחשבון ההתחברות של העובד. נסו שוב או פנו לתמיכה.";
+  if (error?.code === "email_exists") return i18n.t("serverErrors.common.duplicateIdNumber");
+  return i18n.t("serverErrors.common.authAccountError");
 }
 
 async function findAuthUserIdByEmail(supabaseAdmin: AdminClient, email: string): Promise<string | null> {
@@ -115,7 +116,7 @@ async function assertIdNumberAvailableInBranch(
     .neq("id", excludeUserId)
     .maybeSingle();
   if (error) throw new Error(error.message);
-  if (data) throw new Error("כבר קיים עובד עם מספר זהות זה");
+  if (data) throw new Error(i18n.t("serverErrors.common.duplicateIdNumber"));
 }
 
 /**
@@ -251,7 +252,7 @@ async function ensureDepartmentManagerAssignment(
     .eq("branch_id", opts.branchId)
     .maybeSingle();
   if (deptErr) throw new Error(deptErr.message);
-  if (!dept) throw new Error("מחלקה לא נמצאה בסניף הפעיל");
+  if (!dept) throw new Error(i18n.t("serverErrors.common.departmentNotInBranch"));
 
   if ((dept as { manager_id: string | null }).manager_id === opts.userId) return;
 
@@ -259,7 +260,7 @@ async function ensureDepartmentManagerAssignment(
     (dept as { manager_id: string | null }).manager_id &&
     (dept as { manager_id: string | null }).manager_id !== opts.userId
   ) {
-    throw new Error("למחלקה שנבחרה כבר קיים אחראי מחלקה");
+    throw new Error(i18n.t("serverErrors.common.deptHasManager"));
   }
 
   const { error: assignErr } = await supabaseAdmin
@@ -308,7 +309,7 @@ async function applyUserRoleChange(
   }
 
   if (newRole === "department_manager") {
-    if (!departmentId) throw new Error("יש לשייך מחלקה לפני הגדרת אחראי מחלקה");
+    if (!departmentId) throw new Error(i18n.t("serverErrors.common.assignDeptBeforeHead"));
     await clearManagementOnShiftIfDemoted(supabaseAdmin, oldRoleSet, newRole, targetUserId);
     const { error } = await supabase.rpc("set_department_manager", {
       _dept_id: departmentId,
@@ -351,10 +352,10 @@ async function applyUserRoleChange(
 
 
 const createEmployeeSchema = z.object({
-  first_name: z.string().trim().min(1, "יש למלא שם פרטי").max(50),
-  last_name: z.string().trim().min(1, "יש למלא שם משפחה").max(50),
-  id_number: z.string().regex(ID_REGEX, "מספר זהות לא תקין"),
-  department_id: z.string().uuid("יש לבחור מחלקה"),
+  first_name: z.string().trim().min(1, i18n.t("serverErrors.common.firstNameRequired")).max(50),
+  last_name: z.string().trim().min(1, i18n.t("serverErrors.common.lastNameRequired")).max(50),
+  id_number: z.string().regex(ID_REGEX, i18n.t("serverErrors.common.invalidIdNumber")),
+  department_id: z.string().uuid(i18n.t("serverErrors.common.departmentRequired")),
   job_title: z.string().trim().max(80).optional().default(""),
   phone: z.string().trim().max(20).optional().default(""),
   password: z.string().min(6).max(72),
@@ -371,7 +372,7 @@ async function getEmployeeManagerCaps(supabase: any, userId: string) {
       .eq("user_id", userId)
       .maybeSingle(),
   ]);
-  if (error) throw new Error("שגיאת הרשאות");
+  if (error) throw new Error(i18n.t("serverErrors.common.permissionError"));
   const roles = (rolesRows ?? []).map((r: any) => r.role as string);
   const isMainAdmin = roles.includes("main_admin");
   const isSystemAdmin = roles.includes("system_admin");
@@ -398,10 +399,10 @@ async function getEmployeeManagerCaps(supabase: any, userId: string) {
 function assertAssignableRole(role: (typeof APP_ROLES)[number], caps: Awaited<ReturnType<typeof getEmployeeManagerCaps>>) {
   if (caps.isPlatformOwner) return;
   if (!caps.canManageUsers && role !== "employee") {
-    throw new Error("אין הרשאה להענקת תפקיד ניהולי");
+    throw new Error(i18n.t("serverErrors.common.noGrantMgmtRole"));
   }
   if (role === "main_admin" || role === "branch_manager") {
-    throw new Error("מנהל סניף אינו יכול להעניק תפקיד בעל המערכת או מנהל סניף");
+    throw new Error(i18n.t("serverErrors.common.branchMgrCannotGrant"));
   }
 }
 
@@ -413,7 +414,7 @@ async function assertTargetIsNotProtectedManager(supabase: any, targetUserId: st
     .filter((r: any) => r.user_id === targetUserId)
     .map((r: any) => r.role as string);
   if (roles.includes("main_admin") || roles.includes("branch_manager") || roles.includes("system_admin")) {
-    throw new Error("רק בעל המערכת יכול לערוך בעל המערכת או מנהל סניף");
+    throw new Error(i18n.t("serverErrors.common.onlyOwnerEditsOwners"));
   }
 }
 
@@ -424,7 +425,7 @@ async function assertProfileVisibleInActiveBranch(supabase: any, userId: string)
     .eq("id", userId)
     .maybeSingle();
   if (error) throw new Error(error.message);
-  if (!data) throw new Error("עובד לא נמצא בסניף הפעיל");
+  if (!data) throw new Error(i18n.t("serverErrors.common.employeeNotInBranch"));
 }
 
 const createEmployeeSchemaExt = createEmployeeSchema.extend({
@@ -438,7 +439,7 @@ export const createEmployee = createServerFn({ method: "POST" })
   .inputValidator((data: unknown) => createEmployeeSchemaExt.parse(data))
   .handler(async ({ data, context }) => {
     const caps = await getEmployeeManagerCaps(context.supabase, context.userId);
-    if (!caps.canAdd) throw new Error("אין הרשאה להוספת עובד");
+    if (!caps.canAdd) throw new Error(i18n.t("serverErrors.common.noAddEmployee"));
     assertAssignableRole(data.role, caps);
 
     const { data: dept, error: dErr } = await context.supabase
@@ -447,7 +448,7 @@ export const createEmployee = createServerFn({ method: "POST" })
       .eq("id", data.department_id)
       .maybeSingle();
     if (dErr) throw new Error(dErr.message);
-    if (!dept) throw new Error("מחלקה לא נמצאה");
+    if (!dept) throw new Error(i18n.t("serverErrors.common.departmentNotFound"));
 
     const branchId = (dept as { branch_id: string }).branch_id;
 
@@ -518,9 +519,9 @@ export const createEmployee = createServerFn({ method: "POST" })
       if (msg.includes("already") || msg.includes("registered") || msg.includes("exists") || msg.includes("duplicate")) {
         const fallbackId = await reprovisionOrphanEmployeeAuth(supabaseAdmin, data, branchId);
         if (fallbackId) return { id: fallbackId };
-        throw new Error("כבר קיים עובד עם מספר זהות זה.");
+        throw new Error(i18n.t("serverErrors.common.duplicateIdNumber"));
       }
-      throw new Error(formatAuthError(error) || "שגיאה ביצירת עובד");
+      throw new Error(formatAuthError(error) || i18n.t("serverErrors.common.createEmployeeError"));
     }
 
     const newUserId = created.user?.id ?? null;
@@ -562,9 +563,9 @@ export const deleteEmployee = createServerFn({ method: "POST" })
   .inputValidator((data: unknown) => deleteSchema.parse(data))
   .handler(async ({ data, context }) => {
     const caps = await getEmployeeManagerCaps(context.supabase, context.userId);
-    if (!caps.canDelete) throw new Error("אין הרשאה למחיקת עובד");
+    if (!caps.canDelete) throw new Error(i18n.t("serverErrors.common.noDeleteEmployee"));
     if (data.user_id === context.userId) {
-      throw new Error("לא ניתן למחוק את החשבון של עצמך");
+      throw new Error(i18n.t("serverErrors.common.cannotDeleteSelf"));
     }
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
 
@@ -603,7 +604,7 @@ export const deleteEmployee = createServerFn({ method: "POST" })
       } else {
         throw new Error(
           error.message ||
-            "העובד הועבר לארכיון אך מחיקת חשבון ההתחברות נכשלה. נסו שוב.",
+            i18n.t("serverErrors.common.archiveAuthFailed"),
         );
       }
     }
@@ -623,7 +624,7 @@ export const resetEmployeePassword = createServerFn({ method: "POST" })
   .inputValidator((data: unknown) => resetSchema.parse(data))
   .handler(async ({ data, context }) => {
     const caps = await getEmployeeManagerCaps(context.supabase, context.userId);
-    if (!caps.canResetPassword) throw new Error("אין הרשאה לאיפוס סיסמה");
+    if (!caps.canResetPassword) throw new Error(i18n.t("serverErrors.common.noResetPassword"));
     await assertProfileVisibleInActiveBranch(context.supabase, data.user_id);
     await assertTargetIsNotProtectedManager(context.supabase, data.user_id, caps);
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
@@ -667,10 +668,10 @@ const setActiveSchema = z.object({
 
 const updateEmployeeSchema = z.object({
   user_id: z.string().uuid(),
-  first_name: z.string().trim().min(1, "יש למלא שם פרטי").max(50),
-  last_name: z.string().trim().min(1, "יש למלא שם משפחה").max(50),
-  id_number: z.string().regex(ID_REGEX, "מספר זהות לא תקין").nullable().optional(),
-  department_id: z.string().uuid("יש לבחור מחלקה"),
+  first_name: z.string().trim().min(1, i18n.t("serverErrors.common.firstNameRequired")).max(50),
+  last_name: z.string().trim().min(1, i18n.t("serverErrors.common.lastNameRequired")).max(50),
+  id_number: z.string().regex(ID_REGEX, i18n.t("serverErrors.common.invalidIdNumber")).nullable().optional(),
+  department_id: z.string().uuid(i18n.t("serverErrors.common.departmentRequired")),
   phone: z.string().trim().max(20).optional().default(""),
   job_title: z.string().trim().max(80).optional().default(""),
   on_leave: z.boolean(),
@@ -693,13 +694,13 @@ export const changeUserRole = createServerFn({ method: "POST" })
   .middleware([requireBranchContext])
   .inputValidator((data: unknown) => changeUserRoleSchema.parse(data))
   .handler(async ({ data, context }) => {
-    if (!context.branchId) throw new Error("יש לבחור סניף פעיל");
+    if (!context.branchId) throw new Error(i18n.t("serverErrors.common.selectBranch"));
     const caps = await getEmployeeManagerCaps(context.supabase, context.userId);
     if (!caps.canManageUsers) {
-      throw new Error("אין הרשאה לשינוי תפקיד");
+      throw new Error(i18n.t("serverErrors.common.noChangeRole"));
     }
     if (data.user_id === context.userId) {
-      throw new Error("לא ניתן לשנות את התפקיד של עצמך");
+      throw new Error(i18n.t("serverErrors.common.cannotChangeOwnRole"));
     }
 
     await assertProfileVisibleInActiveBranch(context.supabase, data.user_id);
@@ -711,7 +712,7 @@ export const changeUserRole = createServerFn({ method: "POST" })
       .eq("id", data.user_id)
       .maybeSingle();
     if (profileErr) throw new Error(profileErr.message);
-    if (!profile) throw new Error("עובד לא נמצא בסניף הפעיל");
+    if (!profile) throw new Error(i18n.t("serverErrors.common.employeeNotInBranch"));
 
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     await applyUserRoleChange(context.supabase, supabaseAdmin, {
@@ -730,17 +731,17 @@ export const updateEmployee = createServerFn({ method: "POST" })
   .inputValidator((data: unknown) => updateEmployeeSchema.parse(data))
   .handler(async ({ data, context }) => {
     const caps = await getEmployeeManagerCaps(context.supabase, context.userId);
-    if (!caps.canEdit) throw new Error("אין הרשאה לעריכת עובד");
+    if (!caps.canEdit) throw new Error(i18n.t("serverErrors.common.noEditEmployee"));
     if (data.role_changed && !caps.canManageUsers) {
-      throw new Error("אין הרשאה לשינוי תפקיד");
+      throw new Error(i18n.t("serverErrors.common.noChangeRole"));
     }
-    if (!context.branchId) throw new Error("יש לבחור סניף פעיל");
+    if (!context.branchId) throw new Error(i18n.t("serverErrors.common.selectBranch"));
 
     await assertProfileVisibleInActiveBranch(context.supabase, data.user_id);
     await assertTargetIsNotProtectedManager(context.supabase, data.user_id, caps);
 
     if (data.user_id === context.userId && data.is_active_changed && !data.is_active) {
-      throw new Error("לא ניתן להשבית את החשבון של עצמך");
+      throw new Error(i18n.t("serverErrors.common.cannotDisableSelf"));
     }
 
     let leaveStart = data.leave_start_date ?? null;
@@ -748,13 +749,13 @@ export const updateEmployee = createServerFn({ method: "POST" })
     let leaveTypeCode = data.leave_type_code ?? null;
     if (data.on_leave) {
       if (!leaveStart || !leaveEnd) {
-        throw new Error("יש להזין תאריך התחלה וסיום לחופשה");
+        throw new Error(i18n.t("serverErrors.common.leaveDatesRequired"));
       }
       if (leaveEnd < leaveStart) {
-        throw new Error("תאריך סיום החופשה חייב להיות אחרי תאריך ההתחלה");
+        throw new Error(i18n.t("serverErrors.common.leaveEndAfterStart"));
       }
       if (!leaveTypeCode) {
-        throw new Error("יש לבחור סוג חופשה (רגילה או מחלה)");
+        throw new Error(i18n.t("serverErrors.common.leaveTypeRequired"));
       }
     } else {
       leaveStart = null;
@@ -769,7 +770,7 @@ export const updateEmployee = createServerFn({ method: "POST" })
       .maybeSingle();
     if (dErr) throw new Error(dErr.message);
     if (!dept || (dept as { branch_id: string }).branch_id !== context.branchId) {
-      throw new Error("מחלקה לא נמצאה בסניף הפעיל");
+      throw new Error(i18n.t("serverErrors.common.departmentNotInBranch"));
     }
 
     if (data.is_active_changed) {
@@ -789,7 +790,7 @@ export const updateEmployee = createServerFn({ method: "POST" })
       .eq("branch_id", context.branchId)
       .maybeSingle();
     if (existingProfileErr) throw new Error(existingProfileErr.message);
-    if (!existingProfile) throw new Error("עובד לא נמצא בסניף הפעיל");
+    if (!existingProfile) throw new Error(i18n.t("serverErrors.common.employeeNotInBranch"));
 
     const { data: currentRoleRows, error: currentRolesErr } = await supabaseAdmin
       .from("user_roles")
@@ -810,7 +811,7 @@ export const updateEmployee = createServerFn({ method: "POST" })
       (dept as { manager_id?: string | null }).manager_id &&
       (dept as { manager_id?: string | null }).manager_id !== data.user_id
     ) {
-      throw new Error("למחלקה שנבחרה כבר קיים אחראי מחלקה");
+      throw new Error(i18n.t("serverErrors.common.deptHasManager"));
     }
 
     const trimmedFirst = data.first_name.trim();
@@ -818,7 +819,7 @@ export const updateEmployee = createServerFn({ method: "POST" })
     const nextIdNumber = data.id_number?.trim() || null;
 
     if (nextIdNumber) {
-      if (!ID_REGEX.test(nextIdNumber)) throw new Error("מספר זהות לא תקין");
+      if (!ID_REGEX.test(nextIdNumber)) throw new Error(i18n.t("serverErrors.common.invalidIdNumber"));
       await assertIdNumberAvailableInBranch(
         context.supabase,
         nextIdNumber,
@@ -918,7 +919,7 @@ export const updateEmployee = createServerFn({ method: "POST" })
           "admin_cancel_active_leave",
           {
             _user_id: data.user_id,
-            _note: "בוטל מעריכת פרטי עובד",
+            _note: i18n.t("serverErrors.common.cancelledFromEdit"),
           },
         );
 
@@ -972,7 +973,7 @@ export const updateEmployee = createServerFn({ method: "POST" })
               .filter(Boolean)
               .join(" ")
               .trim() ||
-            "מנהל";
+            i18n.t("common.manager");
           const whenLocal = new Intl.DateTimeFormat("he-IL", {
             timeZone: "Asia/Jerusalem",
             day: "2-digit",
@@ -996,7 +997,7 @@ export const updateEmployee = createServerFn({ method: "POST" })
                 admin_decided_by: context.userId,
                 admin_decided_at: new Date().toISOString(),
                 admin_decider_name: actorName,
-                admin_note: "בוטל מעריכת פרטי עובד",
+                admin_note: i18n.t("serverErrors.common.cancelledFromEdit"),
                 updated_at: new Date().toISOString(),
               })
               .eq("id", r.id);
@@ -1034,7 +1035,7 @@ export const updateEmployee = createServerFn({ method: "POST" })
 
           if (toCancel.length > 0) {
             try {
-              const msg = `החופשה שלך בוטלה על ידי ${actorName} · ${whenLocal}`;
+              const msg = i18n.t("serverErrors.common.leaveCancelledMsg", { actor: actorName, when: whenLocal });
               const { notifyUsersWithPush } = await import("@/lib/push-dispatch.server");
               await notifyUsersWithPush({
                 userIds: [data.user_id],
@@ -1129,11 +1130,11 @@ export const setEmployeeActive = createServerFn({ method: "POST" })
   .inputValidator((data: unknown) => setActiveSchema.parse(data))
   .handler(async ({ data, context }) => {
     const caps = await getEmployeeManagerCaps(context.supabase, context.userId);
-    if (!caps.canEdit && !caps.canDelete) throw new Error("אין הרשאה לעדכון סטטוס עובד");
+    if (!caps.canEdit && !caps.canDelete) throw new Error(i18n.t("serverErrors.common.noUpdateEmployeeStatus"));
     await assertProfileVisibleInActiveBranch(context.supabase, data.user_id);
     await assertTargetIsNotProtectedManager(context.supabase, data.user_id, caps);
     if (data.user_id === context.userId && !data.is_active) {
-      throw new Error("לא ניתן להשבית את החשבון של עצמך");
+      throw new Error(i18n.t("serverErrors.common.cannotDisableSelf"));
     }
     const { error } = await context.supabase.rpc("set_employee_active", {
       _user_id: data.user_id,

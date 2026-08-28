@@ -7,12 +7,14 @@ import { CustodySettingsPanel } from "@/components/custody-settings-panel";
 import { useQuery } from "@tanstack/react-query";
 import { fetchCustodyUserCaps } from "@/lib/custody-workflow";
 import { supportContactInstruction } from "@/lib/constants";
+import { useTranslation } from "react-i18next";
 
 export const Route = createFileRoute("/_authenticated/custody-settings")({
   component: CustodySettingsPage,
 });
 
 function CustodySettingsPage() {
+  const { t } = useTranslation();
   const { data: me } = useAuth();
   const { activeBranchId } = useActiveBranch();
   const branchId = activeBranchId ?? me?.branch_id ?? null;
@@ -28,8 +30,8 @@ function CustodySettingsPage() {
   if (!branchId) {
     return (
       <Card className="card-elevated p-8 text-center">
-        <h2 className="text-lg font-semibold">לא נמצא סניף</h2>
-        <p className="text-sm text-muted-foreground mt-2">יש לבחור סניף פעיל.</p>
+        <h2 className="text-lg font-semibold">{t("custody.noBranchTitle")}</h2>
+        <p className="text-sm text-muted-foreground mt-2">{t("custody.selectBranchHint")}</p>
       </Card>
     );
   }
@@ -45,9 +47,11 @@ function CustodySettingsPage() {
   if (!capsQ.data?.canOpenSettings) {
     return (
       <Card className="card-elevated p-8 text-center">
-        <h2 className="text-lg font-semibold">אין הרשאה</h2>
+        <h2 className="text-lg font-semibold">{t("custody.noPermissionTitle")}</h2>
         <p className="text-sm text-muted-foreground mt-2">
-          נדרשת הרשאה מ«מערכת ניהול ציוד». {supportContactInstruction(me.roles)}.
+          {t("custody.permissionRequired", {
+            contact: supportContactInstruction(me.roles),
+          })}
         </p>
       </Card>
     );
@@ -60,8 +64,8 @@ function CustodySettingsPage() {
           <Package className="size-5" />
         </div>
         <div>
-          <h1 className="text-2xl font-bold">מערכת ניהול ציוד</h1>
-          <p className="text-sm text-muted-foreground">הגדרות פריטי ציוד והתראות</p>
+          <h1 className="text-2xl font-bold">{t("custody.settingsTitle")}</h1>
+          <p className="text-sm text-muted-foreground">{t("custody.settingsSubtitle")}</p>
         </div>
       </header>
 

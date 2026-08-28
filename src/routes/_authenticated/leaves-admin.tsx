@@ -14,11 +14,12 @@ import {
   XCircle,
 } from "lucide-react";
 import { toast } from "sonner";
+import { useTranslation } from "react-i18next";
+import i18n from "@/i18n";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/use-auth";
 import { useLeaveAccess } from "@/lib/leave-permissions";
 import {
-  LEAVE_STATUS_LABEL,
   LEAVE_STATUS_TONE,
   adjustLeaveBalance,
   adminCancelActiveLeave,
@@ -76,7 +77,19 @@ export const Route = createFileRoute("/_authenticated/leaves-admin")({
   component: LeavesAdminPage,
 });
 
+function getLeaveStatusLabel(status: string): string {
+  const map: Record<string, string> = {
+    pending_dept: "leaves.statusPendingDept",
+    pending_admin: "leaves.statusPendingAdmin",
+    approved: "leaves.statusApproved",
+    rejected: "leaves.statusRejected",
+    cancelled: "leaves.statusCancelled",
+  };
+  return i18n.t(map[status] ?? status);
+}
+
 function LeavesAdminPage() {
+  const { t } = useTranslation();
   const { data: me } = useAuth();
   const navigate = useNavigate();
   const leaveAccess = useLeaveAccess();
@@ -134,10 +147,10 @@ function LeavesAdminPage() {
     leaveAccess.pendingQueueMode === "admin" ||
     leaveAccess.pendingQueueMode === "both";
   const historyTitle = deptScopedOnly
-    ? "כל הבקשות במחלקה שלי"
+    ? t("leavesAdminPage.historyDeptOnly")
     : leaveAccess.isPlatformOwner
-      ? "כל בקשות החופשה"
-      : "כל הבקשות בסניף";
+      ? t("leavesAdminPage.historyPlatform")
+      : t("leavesAdminPage.historyBranch");
 
   const [decideTarget, setDecideTarget] = useState<{
     row: LeaveRequestRow;
@@ -159,7 +172,7 @@ function LeavesAdminPage() {
       });
     },
     onSuccess: () => {
-      toast.success(decideTarget?.approve ? "הבקשה אושרה" : "הבקשה נדחתה");
+      toast.success(decideTarget?.approve ? t("leavesAdminPage.requestApproved") : t("leavesAdminPage.requestRejected"));
       setDecideTarget(null);
       setDecideNote("");
       qc.invalidateQueries({ queryKey: ["leave-admin-requests"] });
@@ -171,7 +184,7 @@ function LeavesAdminPage() {
 
   function displayName(r: LeaveRequestRow) {
     const p = r.profiles;
-    return p?.full_name || [p?.first_name, p?.last_name].filter(Boolean).join(" ") || "עובד";
+    return p?.full_name || [p?.first_name, p?.last_name].filter(Boolean).join(" ") || t("leavesAdminPage.defaultEmployee");
   }
 
   function RequestList({
@@ -187,7 +200,7 @@ function LeavesAdminPage() {
       stage === "dept" ? leaveAccess.isDeptManager : leaveAccess.canReject;
 
     if (rows.length === 0) {
-      return <p className="text-sm text-muted-foreground">אין בקשות ממתינות</p>;
+      return <p className="text-sm text-muted-foreground">{t("leavesAdminPage.noPendingRequests")}</p>;
     }
 
     return (
@@ -202,31 +215,31 @@ function LeavesAdminPage() {
                 <div className="font-medium">
                   {displayName(r)} ·{" "}
                   {r.kind === "cancellation"
-                    ? "ביטול · "
+                    ? t("leaves.kindCancel")
                     : r.kind === "extension"
-                      ? "הארכה · "
+                      ? t("leaves.kindExtend")
                       : ""}
-                  {r.leave_types?.name ?? "חופשה"}
+                  {r.leave_types?.name ?? t("leaves.defaultLeaveName")}
                 </div>
                 <div className="text-muted-foreground">
-                  {formatLeaveDateRange(r.start_date, r.end_date)} · {r.days_count} ימים
+                  {formatLeaveDateRange(r.start_date, r.end_date)} · {t("leavesAdminPage.daysCount", { count: r.days_count })}
                 </div>
                 {deptApproved && (
                   <div className="rounded-md border border-sky-200 bg-sky-50 px-2.5 py-1.5 text-xs text-sky-950 dark:border-sky-800 dark:bg-sky-950/40 dark:text-sky-100">
-                    ✅ אושר במחלקה על ידי{" "}
+                    {t("leavesAdminPage.deptApprovedBy")}{" "}
                     <span className="font-semibold">{deptApproved.name}</span>
                     {" · "}
                     {deptApproved.at}
-                    <span className="text-muted-foreground"> · ממתין לאישור הנהלה</span>
+                    <span className="text-muted-foreground">{t("leavesAdminPage.awaitingAdmin")}</span>
                   </div>
                 )}
                 {r.note && <p className="mt-1">{r.note}</p>}
                 {r.balance_warning && (
-                  <p className="mt-1 text-xs text-amber-700">אזהרת יתרה</p>
+                  <p className="mt-1 text-xs text-amber-700">{t("leavesAdminPage.balanceWarning")}</p>
                 )}
               </div>
               <Badge className={LEAVE_STATUS_TONE[r.status]}>
-                {LEAVE_STATUS_LABEL[r.status]}
+                {getLeaveStatusLabel(r.status)}
               </Badge>
             </div>
             <div className="mt-3 flex flex-wrap gap-2">
@@ -239,7 +252,7 @@ function LeavesAdminPage() {
                   }}
                 >
                   <CheckCircle2 className="h-4 w-4" />
-                  אישור
+                  {t("leavesAdminPage.approve")}
                 </Button>
               )}
               {canReject && (
@@ -252,7 +265,7 @@ function LeavesAdminPage() {
                   }}
                 >
                   <XCircle className="h-4 w-4" />
-                  דחייה
+                  {t("leavesAdminPage.reject")}
                 </Button>
               )}
             </div>
@@ -277,35 +290,35 @@ function LeavesAdminPage() {
         <div>
           <h1 className="flex items-center gap-2 text-2xl font-semibold tracking-tight">
             <Palmtree className="h-6 w-6" />
-            ניהול חופשות
+            {t("leavesAdminPage.title")}
           </h1>
           <p className="mt-1 text-sm text-muted-foreground">
             {deptScopedOnly
-              ? "אישורי חופשה לעובדי המחלקה שלך."
-              : "אישורים, יתרות ודוחות — לפי הרשאות בדף ההרשאות."}
+              ? t("leavesAdminPage.subtitleDept")
+              : t("leavesAdminPage.subtitleDefault")}
           </p>
         </div>
         <Button asChild variant="outline" size="sm">
-          <Link to="/leaves">החופשות שלי</Link>
+          <Link to="/leaves">{t("leavesAdminPage.myLeaves")}</Link>
         </Button>
       </div>
 
       <Tabs defaultValue="queue">
         <TabsList className="flex h-auto flex-wrap gap-1">
-          <TabsTrigger value="queue">תור אישורים</TabsTrigger>
+          <TabsTrigger value="queue">{t("leavesAdminPage.tabQueue")}</TabsTrigger>
           {leaveAccess.canApprove && (
             <TabsTrigger value="on-leave">
               <Users className="h-3.5 w-3.5" />
-              עובדים בחופשה
+              {t("leavesAdminPage.tabOnLeave")}
             </TabsTrigger>
           )}
           {(leaveAccess.canView || leaveAccess.canManageLeave) && (
-            <TabsTrigger value="history">היסטוריה / דוח</TabsTrigger>
+            <TabsTrigger value="history">{t("leavesAdminPage.tabHistory")}</TabsTrigger>
           )}
           {leaveAccess.canEditBalance && (
             <TabsTrigger value="balances">
               <Wallet className="h-3.5 w-3.5" />
-              יתרות
+              {t("leavesAdminPage.tabBalances")}
             </TabsTrigger>
           )}
         </TabsList>
@@ -313,7 +326,7 @@ function LeavesAdminPage() {
         <TabsContent value="queue" className="space-y-4">
           {leaveAccess.isDeptManager && (
             <Card className="space-y-3 p-4">
-              <h2 className="font-medium">ממתין לאחראי מחלקה</h2>
+              <h2 className="font-medium">{t("leavesAdminPage.pendingDept")}</h2>
               {requestsQ.isLoading ? (
                 <Loader2 className="h-5 w-5 animate-spin" />
               ) : (
@@ -323,7 +336,7 @@ function LeavesAdminPage() {
           )}
           {showAdminQueue && (
             <Card className="space-y-3 p-4">
-              <h2 className="font-medium">ממתין להנהלה</h2>
+              <h2 className="font-medium">{t("leavesAdminPage.pendingAdmin")}</h2>
               {requestsQ.isLoading ? (
                 <Loader2 className="h-5 w-5 animate-spin" />
               ) : (
@@ -343,12 +356,12 @@ function LeavesAdminPage() {
           <Card className="space-y-3 p-4">
             <h2 className="font-medium">{historyTitle}</h2>
             <p className="text-xs text-muted-foreground">
-              אדום = חופשה פעילה · ירוק = הסתיימה או בוטלה. חופשת מחלה — לחצו לפתיחת המסמך המצורף.
+              {t("leavesAdminPage.historyHint")}
             </p>
             {requestsQ.isLoading ? (
               <Loader2 className="h-5 w-5 animate-spin" />
             ) : (requestsQ.data ?? []).length === 0 ? (
-              <p className="text-sm text-muted-foreground">אין בקשות להצגה.</p>
+              <p className="text-sm text-muted-foreground">{t("leavesAdminPage.noRequestsToShow")}</p>
             ) : (
               <ul className="max-h-[32rem] space-y-2 overflow-y-auto">
                 {(requestsQ.data ?? []).map((r) => (
@@ -372,19 +385,19 @@ function LeavesAdminPage() {
         <DialogContent dir="rtl">
           <DialogHeader>
             <DialogTitle>
-              {decideTarget?.approve ? "אישור בקשה" : "דחיית בקשה"}
+              {decideTarget?.approve ? t("leavesAdminPage.approveRequestTitle") : t("leavesAdminPage.rejectRequestTitle")}
             </DialogTitle>
           </DialogHeader>
           <div className="space-y-2">
-            <Label>הערה (אופציונלי)</Label>
+            <Label>{t("leavesAdminPage.noteOptional")}</Label>
             <Textarea value={decideNote} onChange={(e) => setDecideNote(e.target.value)} rows={3} />
           </div>
           <DialogFooter className="gap-2 sm:justify-start">
             <Button disabled={decideMut.isPending} onClick={() => decideMut.mutate()}>
-              {decideMut.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : "אישור"}
+              {decideMut.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : t("leavesAdminPage.approve")}
             </Button>
             <Button variant="outline" onClick={() => setDecideTarget(null)}>
-              ביטול
+              {t("common.cancel")}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -393,12 +406,15 @@ function LeavesAdminPage() {
   );
 }
 
-function empDisplayName(e: {
-  full_name?: string | null;
-  first_name?: string | null;
-  last_name?: string | null;
-}) {
-  return e.full_name || [e.first_name, e.last_name].filter(Boolean).join(" ") || "עובד";
+function empDisplayName(
+  e: {
+    full_name?: string | null;
+    first_name?: string | null;
+    last_name?: string | null;
+  },
+  fallback?: string,
+) {
+  return e.full_name || [e.first_name, e.last_name].filter(Boolean).join(" ") || fallback || i18n.t("leavesAdminPage.defaultEmployee");
 }
 
 function requestEmployeeName(r: LeaveRequestRow) {
@@ -406,9 +422,9 @@ function requestEmployeeName(r: LeaveRequestRow) {
 }
 
 function decisionVerb(status: LeaveRequestRow["status"]): string {
-  if (status === "rejected") return "נדחה";
-  if (status === "cancelled") return "בוטל";
-  return "אושר";
+  if (status === "rejected") return i18n.t("leavesAdminPage.decisionRejected");
+  if (status === "cancelled") return i18n.t("leavesAdminPage.decisionCancelled");
+  return i18n.t("leavesAdminPage.decisionApproved");
 }
 
 function decisionActorLabel(
@@ -419,14 +435,14 @@ function decisionActorLabel(
     const name =
       (r.admin_decider_name || "").trim() ||
       (r.admin_decider ? empDisplayName(r.admin_decider) : "") ||
-      "מנהל";
+      i18n.t("leavesAdminPage.defaultManager");
     return { verb, name, at: formatLeaveDateTime(r.admin_decided_at) };
   }
   if (r.dept_decided_by && r.dept_decided_at) {
     const name =
       (r.dept_decider_name || "").trim() ||
       (r.dept_decider ? empDisplayName(r.dept_decider) : "") ||
-      "מנהל";
+      i18n.t("leavesAdminPage.defaultManager");
     return { verb, name, at: formatLeaveDateTime(r.dept_decided_at) };
   }
   return null;
@@ -438,7 +454,7 @@ function deptStageApprovedLabel(r: LeaveRequestRow): { name: string; at: string 
   const name =
     (r.dept_decider_name || "").trim() ||
     (r.dept_decider ? empDisplayName(r.dept_decider) : "") ||
-    "אחראי מחלקה";
+    i18n.t("leavesAdminPage.defaultDeptHead");
   return { name, at: formatLeaveDateTime(r.dept_decided_at) };
 }
 
@@ -447,7 +463,7 @@ function statusBadgeForRow(r: LeaveRequestRow) {
   if (life === "active") {
     return (
       <Badge className={LEAVE_LIFECYCLE_BADGE.active} variant="outline">
-        חופשה פעילה
+        {i18n.t("leavesAdminPage.activeLeave")}
       </Badge>
     );
   }
@@ -456,16 +472,17 @@ function statusBadgeForRow(r: LeaveRequestRow) {
       r.status === "cancelled" || r.kind === "cancellation";
     return (
       <Badge className={LEAVE_LIFECYCLE_BADGE.done} variant="outline">
-        {cancelled ? "בוטלה" : "הסתיימה"}
+        {cancelled ? i18n.t("leavesAdminPage.lifecycleCancelled") : i18n.t("leavesAdminPage.lifecycleDone")}
       </Badge>
     );
   }
   return (
-    <Badge className={LEAVE_STATUS_TONE[r.status]}>{LEAVE_STATUS_LABEL[r.status]}</Badge>
+    <Badge className={LEAVE_STATUS_TONE[r.status]}>{getLeaveStatusLabel(r.status)}</Badge>
   );
 }
 
 function SickAttachmentButton({ row }: { row: LeaveRequestRow }) {
+  const { t } = useTranslation();
   const getUrlFn = useServerFn(getLeaveAttachmentSignedUrl);
   const [busy, setBusy] = useState(false);
   const attachments = row.leave_request_attachments ?? [];
@@ -478,7 +495,7 @@ function SickAttachmentButton({ row }: { row: LeaveRequestRow }) {
       const { url } = await getUrlFn({ data: { attachment_id: id } });
       window.open(url, "_blank", "noopener,noreferrer");
     } catch (e: any) {
-      toast.error(e?.message ?? "לא ניתן לפתוח את המסמך");
+      toast.error(e?.message ?? t("leavesAdminPage.cannotOpenDoc"));
     } finally {
       setBusy(false);
     }
@@ -497,7 +514,7 @@ function SickAttachmentButton({ row }: { row: LeaveRequestRow }) {
           onClick={() => openAttachment(a.id)}
         >
           {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <FileText className="h-3.5 w-3.5" />}
-          מסמך רפואי{attachments.length > 1 ? `: ${a.file_name}` : ""}
+          {t("leavesAdminPage.medicalDoc")}{attachments.length > 1 ? `: ${a.file_name}` : ""}
         </Button>
       ))}
     </div>
@@ -511,6 +528,7 @@ function LeaveReportRow({
   row: LeaveRequestRow;
   canPurge?: boolean;
 }) {
+  const { t } = useTranslation();
   const qc = useQueryClient();
   const purgeFn = useServerFn(purgeLeaveRequest);
   const [confirmOpen, setConfirmOpen] = useState(false);
@@ -519,14 +537,14 @@ function LeaveReportRow({
   const deptApproved =
     row.status === "pending_admin" ? deptStageApprovedLabel(row) : null;
   const kindPrefix =
-    row.kind === "cancellation" ? "ביטול · " : row.kind === "extension" ? "הארכה · " : "";
+    row.kind === "cancellation" ? t("leaves.kindCancel") : row.kind === "extension" ? t("leaves.kindExtend") : "";
 
   const purgeMut = useMutation({
     mutationFn: async () => {
       await purgeFn({ data: { request_id: row.id } });
     },
     onSuccess: () => {
-      toast.success("הבקשה נמחקה מההיסטוריה");
+      toast.success(t("leavesAdminPage.deletedFromHistory"));
       setConfirmOpen(false);
       qc.invalidateQueries({ queryKey: ["leave-admin-requests"] });
       qc.invalidateQueries({ queryKey: ["leave-admin-on-leave"] });
@@ -546,25 +564,25 @@ function LeaveReportRow({
             {requestEmployeeName(row)}
             {" · "}
             {kindPrefix}
-            {row.leave_types?.name ?? "חופשה"}
+            {row.leave_types?.name ?? t("leaves.defaultLeaveName")}
           </div>
           <div className="text-muted-foreground">
             {formatLeaveDateRange(row.start_date, row.end_date)}
             {" · "}
-            <span className="font-medium text-foreground">{row.days_count} ימים</span>
+            <span className="font-medium text-foreground">{t("leavesAdminPage.daysCount", { count: row.days_count })}</span>
           </div>
           {deptApproved ? (
             <div className="rounded-md border border-sky-200 bg-sky-50 px-2.5 py-1.5 text-xs text-sky-950 dark:border-sky-800 dark:bg-sky-950/40 dark:text-sky-100">
-              ✅ אושר במחלקה על ידי{" "}
+              {t("leavesAdminPage.deptApprovedBy")}{" "}
               <span className="font-semibold">{deptApproved.name}</span>
               {" · "}
               {deptApproved.at}
-              <span className="text-muted-foreground"> · ממתין לאישור הנהלה</span>
+              <span className="text-muted-foreground">{t("leavesAdminPage.awaitingAdmin")}</span>
             </div>
           ) : (
             decided && (
               <div className="text-xs text-muted-foreground">
-                {decided.verb} על ידי{" "}
+                {t("leavesAdminPage.decidedBy", { verb: decided.verb })}{" "}
                 <span className="font-medium text-foreground">{decided.name}</span>
                 {" · "}
                 {decided.at}
@@ -584,7 +602,7 @@ function LeaveReportRow({
               onClick={() => setConfirmOpen(true)}
             >
               <Trash2 className="h-4 w-4" />
-              מחיקה
+              {t("common.delete")}
             </Button>
           )}
         </div>
@@ -593,9 +611,9 @@ function LeaveReportRow({
       <AlertDialog open={confirmOpen} onOpenChange={(o) => !o && !purgeMut.isPending && setConfirmOpen(false)}>
         <AlertDialogContent dir="rtl">
           <AlertDialogHeader>
-            <AlertDialogTitle>למחוק את הבקשה מההיסטוריה?</AlertDialogTitle>
+            <AlertDialogTitle>{t("leavesAdminPage.purgeTitle")}</AlertDialogTitle>
             <AlertDialogDescription>
-              פעולה זו מוחקת את רשומת החופשה לצמיתות (זמין לבעל המערכת בלבד).
+              {t("leavesAdminPage.purgeDesc")}
               {" "}
               {requestEmployeeName(row)}
               {formatLeaveDateRange(row.start_date, row.end_date)
@@ -614,10 +632,10 @@ function LeaveReportRow({
               {purgeMut.isPending ? (
                 <Loader2 className="h-4 w-4 animate-spin" />
               ) : (
-                "כן, מחק"
+                t("leavesAdminPage.yesDelete")
               )}
             </AlertDialogAction>
-            <AlertDialogCancel disabled={purgeMut.isPending}>חזרה</AlertDialogCancel>
+            <AlertDialogCancel disabled={purgeMut.isPending}>{t("leavesAdminPage.back")}</AlertDialogCancel>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
@@ -662,6 +680,7 @@ type OnLeaveListItem =
     };
 
 function ActiveOnLeaveTab() {
+  const { t } = useTranslation();
   const qc = useQueryClient();
   const cancelFn = useServerFn(adminCancelActiveLeave);
   const [cancelTarget, setCancelTarget] = useState<{
@@ -774,10 +793,10 @@ function ActiveOnLeaveTab() {
 
   const cancelMut = useMutation({
     mutationFn: async (uid: string) => {
-      await cancelFn({ data: { user_id: uid, note: "ביטול ישיר מניהול חופשות" } });
+      await cancelFn({ data: { user_id: uid, note: t("leavesAdminPage.cancelLeaveNote") } });
     },
     onSuccess: () => {
-      toast.success("החופשה בוטלה — הסידור והתראת העובד עודכנו");
+      toast.success(t("leavesAdminPage.leaveCancelled"));
       setCancelTarget(null);
       qc.invalidateQueries({ queryKey: ["leave-admin-on-leave"] });
       qc.invalidateQueries({ queryKey: ["leave-admin-requests"] });
@@ -805,7 +824,7 @@ function ActiveOnLeaveTab() {
       const name =
         p.full_name ||
         [p.first_name, p.last_name].filter(Boolean).join(" ") ||
-        "עובד";
+        t("leavesAdminPage.defaultEmployee");
       const setter = setters?.get(p.id);
       list.push({
         source: "manual",
@@ -840,20 +859,19 @@ function ActiveOnLeaveTab() {
     <>
       <Card className="space-y-3 p-4">
         <div>
-          <h2 className="font-medium">עובדים בחופשה</h2>
+          <h2 className="font-medium">{t("leavesAdminPage.onLeaveTitle")}</h2>
           <p className="mt-1 text-xs text-muted-foreground">
-            חופשות פעילות (אדום) — כולל בקשות שאושרו וחופשה ידנית מקובץ העובד.
-            ביטול מעדכן את הסידור ומודיע לעובד. אחראי מחלקה אינו יכול לבטל מכאן.
+            {t("leavesAdminPage.onLeaveDesc")}
           </p>
         </div>
         {loading ? (
           <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
         ) : error ? (
           <p className="text-sm text-destructive">
-            לא ניתן לטעון: {(error as Error).message}
+            {t("leavesAdminPage.loadError", { message: (error as Error).message })}
           </p>
         ) : items.length === 0 ? (
-          <p className="text-sm text-muted-foreground">אין עובדים בחופשה כרגע.</p>
+          <p className="text-sm text-muted-foreground">{t("leavesAdminPage.noOnLeaveNow")}</p>
         ) : (
           <ul className="max-h-[32rem] space-y-2 overflow-y-auto">
             {items.map((item) => {
@@ -872,11 +890,11 @@ function ActiveOnLeaveTab() {
                       <div className="text-muted-foreground">
                         {formatLeaveDateRange(r.start_date, r.end_date)}
                         {" · "}
-                        <span className="font-medium text-foreground">{r.days_count} ימים</span>
+                        <span className="font-medium text-foreground">{t("leavesAdminPage.daysCount", { count: r.days_count })}</span>
                       </div>
                       {decided && (
                         <div className="text-xs text-muted-foreground">
-                          {decided.verb} על ידי{" "}
+                          {t("leavesAdminPage.decidedBy", { verb: decided.verb })}{" "}
                           <span className="font-medium text-foreground">{decided.name}</span>
                           {" · "}
                           {decided.at}
@@ -886,7 +904,7 @@ function ActiveOnLeaveTab() {
                     </div>
                     <div className="flex flex-col items-end gap-2 shrink-0">
                       <Badge className={LEAVE_LIFECYCLE_BADGE.active} variant="outline">
-                        חופשה פעילה
+                        {t("leavesAdminPage.activeLeave")}
                       </Badge>
                       <Button
                         size="sm"
@@ -902,7 +920,7 @@ function ActiveOnLeaveTab() {
                         }
                       >
                         <UserMinus className="h-4 w-4" />
-                        ביטול חופשה
+                        {t("leavesAdminPage.cancelLeave")}
                       </Button>
                     </div>
                   </li>
@@ -929,17 +947,17 @@ function ActiveOnLeaveTab() {
                         <>
                           {" · "}
                           <span className="font-medium text-foreground">
-                            {days} {days === 1 ? "יום" : "ימים"}
+                            {days} {days === 1 ? t("leavesAdminPage.dayOne") : t("leavesAdminPage.daysMany")}
                           </span>
                         </>
                       )}
                     </div>
                     <div className="text-xs text-muted-foreground">
-                      הוזן ידנית מקובץ העובד
+                      {t("leavesAdminPage.manualFromProfile")}
                       {item.set_by_name && (
                         <>
                           {" · "}
-                          על ידי{" "}
+                          {t("leavesAdminPage.byActor")}{" "}
                           <span className="font-medium text-foreground">{item.set_by_name}</span>
                           {item.set_at ? ` · ${item.set_at}` : ""}
                         </>
@@ -948,7 +966,7 @@ function ActiveOnLeaveTab() {
                   </div>
                   <div className="flex flex-col items-end gap-2 shrink-0">
                     <Badge className={LEAVE_LIFECYCLE_BADGE.active} variant="outline">
-                      חופשה פעילה
+                      {t("leavesAdminPage.activeLeave")}
                     </Badge>
                     <Button
                       size="sm"
@@ -964,7 +982,7 @@ function ActiveOnLeaveTab() {
                       }
                     >
                       <UserMinus className="h-4 w-4" />
-                      ביטול חופשה
+                      {t("leavesAdminPage.cancelLeave")}
                     </Button>
                   </div>
                 </li>
@@ -980,16 +998,16 @@ function ActiveOnLeaveTab() {
       >
         <AlertDialogContent dir="rtl">
           <AlertDialogHeader>
-            <AlertDialogTitle>לבטל את החופשה?</AlertDialogTitle>
+            <AlertDialogTitle>{t("leavesAdminPage.cancelLeaveTitle")}</AlertDialogTitle>
             <AlertDialogDescription>
               {cancelTarget && (
                 <>
-                  יבוטל החופש של{" "}
+                  {t("leavesAdminPage.cancelLeaveDesc")}{" "}
                   <span className="font-medium text-foreground">{cancelTarget.name}</span>
                   {formatLeaveDateRange(cancelTarget.start, cancelTarget.end)
                     ? ` (${formatLeaveDateRange(cancelTarget.start, cancelTarget.end)})`
                     : ""}
-                  . הסידור יתעדכן, והעובד יקבל התראה בדשבורד עם שמך ותאריך הביטול.
+                  {t("leavesAdminPage.cancelLeaveDescSuffix")}
                 </>
               )}
             </AlertDialogDescription>
@@ -1005,10 +1023,10 @@ function ActiveOnLeaveTab() {
               {cancelMut.isPending ? (
                 <Loader2 className="h-4 w-4 animate-spin" />
               ) : (
-                "כן, בטל חופשה"
+                t("leavesAdminPage.yesCancelLeave")
               )}
             </AlertDialogAction>
-            <AlertDialogCancel disabled={cancelMut.isPending}>חזרה</AlertDialogCancel>
+            <AlertDialogCancel disabled={cancelMut.isPending}>{t("leavesAdminPage.back")}</AlertDialogCancel>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
@@ -1026,6 +1044,7 @@ type BalanceEmp = {
 };
 
 function BalancesTab({ types }: { types: LeaveTypeRow[] }) {
+  const { t } = useTranslation();
   const qc = useQueryClient();
   const adjustFn = useServerFn(adjustLeaveBalance);
   const setEmpRateFn = useServerFn(setLeaveEmployeeAccrualRate);
@@ -1144,14 +1163,14 @@ function BalancesTab({ types }: { types: LeaveTypeRow[] }) {
 
   const saveRateMut = useMutation({
     mutationFn: async (leaveTypeId: string) => {
-      if (!userId) throw new Error("יש לבחור עובד");
+      if (!userId) throw new Error(t("leavesAdminPage.errSelectEmployee"));
       const draft = rateDrafts[leaveTypeId];
-      if (!draft) throw new Error("אין נתונים");
+      if (!draft) throw new Error(t("leavesAdminPage.errNoData"));
       const n = Number(draft.days);
-      if (!Number.isFinite(n) || n < 0) throw new Error("ערך צבירה לא תקין");
+      if (!Number.isFinite(n) || n < 0) throw new Error(t("leavesAdminPage.errInvalidAccrual"));
       const capN = draft.cap.trim() ? Number(draft.cap) : null;
       if (draft.cap.trim() && (!Number.isFinite(capN) || (capN as number) < 0)) {
-        throw new Error("תקרה לא תקינה");
+        throw new Error(t("leavesAdminPage.errInvalidCap"));
       }
       await setEmpRateFn({
         data: {
@@ -1164,7 +1183,7 @@ function BalancesTab({ types }: { types: LeaveTypeRow[] }) {
       });
     },
     onSuccess: () => {
-      toast.success("שיעור הצבירה נשמר");
+      toast.success(t("leavesAdminPage.accrualSaved"));
       qc.invalidateQueries({ queryKey: ["leave-emp-accrual-rates", userId] });
     },
     onError: (e: Error) => toast.error(e.message),
@@ -1172,10 +1191,10 @@ function BalancesTab({ types }: { types: LeaveTypeRow[] }) {
 
   const adjustMut = useMutation({
     mutationFn: async (leaveTypeId: string) => {
-      if (!userId) throw new Error("יש לבחור עובד");
+      if (!userId) throw new Error(t("leavesAdminPage.errSelectEmployee"));
       const draft = adjustDrafts[leaveTypeId];
       const n = Number(draft?.delta);
-      if (!Number.isFinite(n) || n === 0) throw new Error("ערך שינוי לא תקין");
+      if (!Number.isFinite(n) || n === 0) throw new Error(t("leavesAdminPage.errInvalidDelta"));
       await adjustFn({
         data: {
           user_id: userId,
@@ -1186,7 +1205,7 @@ function BalancesTab({ types }: { types: LeaveTypeRow[] }) {
       });
     },
     onSuccess: (_d, leaveTypeId) => {
-      toast.success("היתרה עודכנה");
+      toast.success(t("leavesAdminPage.balanceUpdated"));
       setAdjustDrafts((prev) => ({
         ...prev,
         [leaveTypeId]: { delta: "1", reason: "" },
@@ -1200,21 +1219,21 @@ function BalancesTab({ types }: { types: LeaveTypeRow[] }) {
   return (
     <div className="space-y-4" lang="he-IL">
       <Card className="space-y-3 p-4">
-        <h2 className="font-medium">יתרות ושיעור צבירה לעובד</h2>
+        <h2 className="font-medium">{t("leavesAdminPage.balancesTitle")}</h2>
         <p className="text-xs text-muted-foreground">
-          בחרו עובד לפי שם או ת.ז. — עדכון יתרה ידנית ושיעור צבירה חודשית לכל סוג חופשה.
+          {t("leavesAdminPage.balancesDesc")}
         </p>
         {employeesQ.isError && (
           <p className="text-sm text-destructive">
-            לא ניתן לטעון עובדים: {(employeesQ.error as Error).message}
+            {t("leavesAdminPage.loadEmployeesError", { message: (employeesQ.error as Error).message })}
           </p>
         )}
         <div className="space-y-2">
-          <Label>חיפוש עובד</Label>
+          <Label>{t("leavesAdminPage.searchEmployee")}</Label>
           <Input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="שם או מספר תעודת זהות…"
+            placeholder={t("leavesAdminPage.searchPlaceholder")}
           />
         </div>
         <div className="max-h-48 space-y-1 overflow-y-auto rounded border p-1">
@@ -1223,7 +1242,7 @@ function BalancesTab({ types }: { types: LeaveTypeRow[] }) {
               <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
             </div>
           ) : filteredEmployees.length === 0 ? (
-            <p className="p-2 text-sm text-muted-foreground">לא נמצאו עובדים.</p>
+            <p className="p-2 text-sm text-muted-foreground">{t("leavesAdminPage.noEmployeesFound")}</p>
           ) : (
             filteredEmployees.map((e) => {
               const active = e.id === userId;
@@ -1252,43 +1271,46 @@ function BalancesTab({ types }: { types: LeaveTypeRow[] }) {
           <div>
             <h3 className="font-medium">{empDisplayName(selected)}</h3>
             <p className="text-xs text-muted-foreground">
-              ת.ז. {selected.id_number || "לא הוזנה"}
+              {t("leavesAdminPage.idNumber")} {selected.id_number || t("leavesAdminPage.idNotEntered")}
             </p>
           </div>
           {(balancesQ.isLoading || empRatesQ.isLoading || branchRulesQ.isLoading) && (
             <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
           )}
           <ul className="space-y-4">
-            {types.map((t) => {
-              const bal = (balancesQ.data ?? []).find((b: any) => b.leave_type_id === t.id);
+            {types.map((leaveType) => {
+              const bal = (balancesQ.data ?? []).find((b: any) => b.leave_type_id === leaveType.id);
               const available = bal
                 ? Number(bal.manual_balance) +
                   Number(bal.accrued_days) -
                   Number(bal.used_days) -
                   Number(bal.reserved_days)
                 : 0;
-              const br = (branchRulesQ.data ?? []).find((r: any) => r.leave_type_id === t.id);
-              const rate = rateDrafts[t.id] ?? { days: "0", cap: "", useOverride: false };
-              const adj = adjustDrafts[t.id] ?? { delta: "1", reason: "" };
+              const br = (branchRulesQ.data ?? []).find((r: any) => r.leave_type_id === leaveType.id);
+              const rate = rateDrafts[leaveType.id] ?? { days: "0", cap: "", useOverride: false };
+              const adj = adjustDrafts[leaveType.id] ?? { delta: "1", reason: "" };
               return (
-                <li key={t.id} className="space-y-3 rounded border p-3">
+                <li key={leaveType.id} className="space-y-3 rounded border p-3">
                   <div className="flex flex-wrap items-baseline justify-between gap-2">
-                    <span className="font-medium">{t.name}</span>
+                    <span className="font-medium">{leaveType.name}</span>
                     <span className="text-sm">
-                      זמין{" "}
+                      {t("leavesAdminPage.available")}{" "}
                       <span className="font-semibold tabular-nums">{available}</span>
                       {bal ? (
                         <span className="text-muted-foreground">
                           {" "}
-                          (ידני {bal.manual_balance} · צבור {bal.accrued_days} · נוצל{" "}
-                          {bal.used_days}
-                          {Number(bal.reserved_days) > 0
-                            ? ` · שמור ${bal.reserved_days}`
-                            : ""}
-                          )
+                          {t("leavesAdminPage.balanceBreakdown", {
+                            manual: bal.manual_balance,
+                            accrued: bal.accrued_days,
+                            used: bal.used_days,
+                            reserved:
+                              Number(bal.reserved_days) > 0
+                                ? t("leavesAdminPage.reservedPart", { count: bal.reserved_days })
+                                : "",
+                          })}
                         </span>
                       ) : (
-                        <span className="text-muted-foreground"> · אין רשומת יתרה עדיין</span>
+                        <span className="text-muted-foreground">{t("leavesAdminPage.noBalanceRecord")}</span>
                       )}
                     </span>
                   </div>
@@ -1302,46 +1324,52 @@ function BalancesTab({ types }: { types: LeaveTypeRow[] }) {
                           onChange={(e) =>
                             setRateDrafts((prev) => ({
                               ...prev,
-                              [t.id]: { ...rate, useOverride: e.target.checked },
+                              [leaveType.id]: { ...rate, useOverride: e.target.checked },
                             }))
                           }
                         />
-                        שיעור אישי לעובד
+                        {t("leavesAdminPage.personalRate")}
                       </label>
                       <span className="text-xs text-muted-foreground">
-                        ברירת סניף:{" "}
+                        {t("leavesAdminPage.branchDefault")}{" "}
                         {br
-                          ? `${br.days_per_month} ימים/חודש${br.max_cap != null ? ` · תקרה ${br.max_cap}` : ""}`
-                          : "לא הוגדרה"}
+                          ? t("leavesAdminPage.branchRate", {
+                              days: br.days_per_month,
+                              cap:
+                                br.max_cap != null
+                                  ? t("leavesAdminPage.branchCap", { cap: br.max_cap })
+                                  : "",
+                            })
+                          : t("leavesAdminPage.branchNotSet")}
                       </span>
                     </div>
                     <div className="grid gap-2 sm:grid-cols-3">
                       <div className="space-y-1">
-                        <Label className="text-xs">ימים לחודש</Label>
+                        <Label className="text-xs">{t("leavesAdminPage.daysPerMonth")}</Label>
                         <Input
                           value={rate.days}
                           disabled={!rate.useOverride}
                           onChange={(e) =>
                             setRateDrafts((prev) => ({
                               ...prev,
-                              [t.id]: { ...rate, days: e.target.value },
+                              [leaveType.id]: { ...rate, days: e.target.value },
                             }))
                           }
                           inputMode="decimal"
                         />
                       </div>
                       <div className="space-y-1">
-                        <Label className="text-xs">תקרה (אופציונלי)</Label>
+                        <Label className="text-xs">{t("leavesAdminPage.capOptional")}</Label>
                         <Input
                           value={rate.cap}
                           disabled={!rate.useOverride}
                           onChange={(e) =>
                             setRateDrafts((prev) => ({
                               ...prev,
-                              [t.id]: { ...rate, cap: e.target.value },
+                              [leaveType.id]: { ...rate, cap: e.target.value },
                             }))
                           }
-                          placeholder="ללא"
+                          placeholder={t("leavesAdminPage.noCap")}
                           inputMode="decimal"
                         />
                       </div>
@@ -1350,14 +1378,14 @@ function BalancesTab({ types }: { types: LeaveTypeRow[] }) {
                           size="sm"
                           variant="secondary"
                           disabled={saveRateMut.isPending}
-                          onClick={() => saveRateMut.mutate(t.id)}
+                          onClick={() => saveRateMut.mutate(leaveType.id)}
                         >
-                          {saveRateMut.isPending && saveRateMut.variables === t.id ? (
+                          {saveRateMut.isPending && saveRateMut.variables === leaveType.id ? (
                             <Loader2 className="h-4 w-4 animate-spin" />
                           ) : rate.useOverride ? (
-                            "שמירת שיעור"
+                            t("leavesAdminPage.saveRate")
                           ) : (
-                            "חזרה לברירת סניף"
+                            t("leavesAdminPage.revertToBranch")
                           )}
                         </Button>
                       </div>
@@ -1366,26 +1394,26 @@ function BalancesTab({ types }: { types: LeaveTypeRow[] }) {
 
                   <div className="grid gap-2 sm:grid-cols-3">
                     <div className="space-y-1">
-                      <Label className="text-xs">שינוי יתרה (+/−)</Label>
+                      <Label className="text-xs">{t("leavesAdminPage.balanceDelta")}</Label>
                       <Input
                         value={adj.delta}
                         onChange={(e) =>
                           setAdjustDrafts((prev) => ({
                             ...prev,
-                            [t.id]: { ...adj, delta: e.target.value },
+                            [leaveType.id]: { ...adj, delta: e.target.value },
                           }))
                         }
                         inputMode="decimal"
                       />
                     </div>
                     <div className="space-y-1 sm:col-span-1">
-                      <Label className="text-xs">סיבה</Label>
+                      <Label className="text-xs">{t("leavesAdminPage.reason")}</Label>
                       <Input
                         value={adj.reason}
                         onChange={(e) =>
                           setAdjustDrafts((prev) => ({
                             ...prev,
-                            [t.id]: { ...adj, reason: e.target.value },
+                            [leaveType.id]: { ...adj, reason: e.target.value },
                           }))
                         }
                       />
@@ -1394,12 +1422,12 @@ function BalancesTab({ types }: { types: LeaveTypeRow[] }) {
                       <Button
                         size="sm"
                         disabled={adjustMut.isPending}
-                        onClick={() => adjustMut.mutate(t.id)}
+                        onClick={() => adjustMut.mutate(leaveType.id)}
                       >
-                        {adjustMut.isPending && adjustMut.variables === t.id ? (
+                        {adjustMut.isPending && adjustMut.variables === leaveType.id ? (
                           <Loader2 className="h-4 w-4 animate-spin" />
                         ) : (
-                          "עדכון יתרה"
+                          t("leavesAdminPage.updateBalance")
                         )}
                       </Button>
                     </div>

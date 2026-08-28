@@ -1,7 +1,8 @@
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/use-auth";
 import { ROLE_LABELS, isPlatformOwner, type AppRole } from "@/lib/constants";
@@ -52,6 +53,7 @@ import { toast } from "sonner";
 import { formatEmployeeName } from "@/lib/employee-name";
 import { CreateEmployeeDialog } from "@/routes/_authenticated/employees";
 import { ProfilePhoneField } from "@/components/contact-actions";
+import i18n from "@/i18n";
 
 export const Route = createFileRoute("/_authenticated/departments")({
   component: DepartmentsPage,
@@ -121,7 +123,7 @@ async function fetchDepartmentsWithManagers(): Promise<DepartmentRow[]> {
 }
 
 function DepartmentsPage() {
-  const navigate = useNavigate();
+  const { t } = useTranslation();
   const { data: me, isLoading: meLoading } = useAuth();
   const permissionsQ = useCurrentPermissions(me?.id);
   const canManageDepartments = me
@@ -211,15 +213,15 @@ function DepartmentsPage() {
     <div className="space-y-6">
       <header className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h1 className="text-2xl sm:text-3xl font-bold">מחלקות הסניף</h1>
+          <h1 className="text-2xl sm:text-3xl font-bold">{t("departmentsPage.title")}</h1>
           <p className="text-sm text-muted-foreground mt-1">
-            ניהול מחלקות, אחראים וכמות עובדים
+            {t("departmentsPage.subtitle")}
           </p>
         </div>
         {canManageDepartments && (
           <Button className="gap-2" onClick={() => setCreating(true)}>
             <Plus className="size-4" />
-            הוספת מחלקה
+            {t("departmentsPage.addDepartment")}
           </Button>
         )}
       </header>
@@ -242,9 +244,9 @@ function DepartmentsPage() {
                   <div className="min-w-0">
                     <h2 className="text-xl sm:text-2xl font-bold leading-tight truncate">{d.name}</h2>
                     <p className="mt-1.5 leading-tight">
-                      <span className="text-xs text-muted-foreground">אחראי מחלקה: </span>
+                      <span className="text-xs text-muted-foreground">{t("departmentsPage.departmentManagerLabel")} </span>
                       <span className="text-base sm:text-lg font-bold">
-                        {d.manager ? formatEmployeeName(d.manager) : "לא הוגדר"}
+                        {d.manager ? formatEmployeeName(d.manager) : t("departmentsPage.notDefined")}
                       </span>
                     </p>
                   </div>
@@ -253,11 +255,11 @@ function DepartmentsPage() {
                   </div>
                 </div>
                 <div className="mt-4">
-                  <Stat label="סך עובדים" value={c.total} />
+                  <Stat label={t("departmentsPage.totalEmployees")} value={c.total} />
                 </div>
                 <div className="flex items-center justify-between mt-4">
                   {!d.is_active && (
-                    <Badge variant="destructive" className="rounded-full">לא פעילה</Badge>
+                    <Badge variant="destructive" className="rounded-full">{t("departmentsPage.inactiveDepartment")}</Badge>
                   )}
                   {canManageDepartments && (
                     <div className="flex gap-1 mr-auto">
@@ -268,7 +270,7 @@ function DepartmentsPage() {
                           e.stopPropagation();
                           setEditing(d);
                         }}
-                        aria-label="עריכה"
+                        aria-label={t("common.edit")}
                       >
                         <Pencil className="size-4" />
                       </Button>
@@ -279,7 +281,7 @@ function DepartmentsPage() {
                           e.stopPropagation();
                           setDeleting(d);
                         }}
-                        aria-label="מחיקה"
+                        aria-label={t("common.delete")}
                       >
                         <Trash2 className="size-4 text-destructive" />
                       </Button>
@@ -321,7 +323,7 @@ function DepartmentsPage() {
 
       {!canManageDepartments && (
         <p className="text-xs text-muted-foreground text-center">
-רק מנהל מורשה יכול ליצור, לערוך או למחוק מחלקות בסניף שלו.
+          {t("departmentsPage.readOnlyHint")}
         </p>
       )}
     </div>
@@ -365,6 +367,7 @@ function DeptEmployeesDialog({
   departments: DepartmentRow[];
   currentUserRoles?: AppRole[];
 }) {
+  const { t } = useTranslation();
   const open = deptId !== null;
   const qc = useQueryClient();
   const updateFn = useServerFn(updateDepartment);
@@ -397,7 +400,6 @@ function DeptEmployeesDialog({
           ? supabase.from("profiles").select("first_name, last_name, full_name").eq("id", dept.manager_id).maybeSingle()
           : Promise.resolve({ data: null as any }),
       ]);
-      // Highest role wins so a dual-role member shows their management title.
       const rolePriority: AppRole[] = [
         "system_admin",
         "main_admin",
@@ -427,7 +429,7 @@ function DeptEmployeesDialog({
         managerId: dept.manager_id ?? fallbackManager?.id ?? null,
         employees: (emps ?? []).map((e: any) => ({
           ...e,
-          roleLabel: roleMap[e.id] ?? "עובד",
+          roleLabel: roleMap[e.id] ?? i18n.t("departmentsPage.defaultEmployeeRole"),
           isManager: e.id === (dept.manager_id ?? fallbackManager?.id),
         })),
       };
@@ -454,10 +456,10 @@ function DeptEmployeesDialog({
 
   const setManagerMut = useMutation({
     mutationFn: async (managerId: string | null) => {
-      if (!deptId || !q.data?.deptName) throw new Error("לא נמצאה מחלקה");
+      if (!deptId || !q.data?.deptName) throw new Error(t("departmentsPage.deptNotFound"));
       if (managerId && otherManagersQuery.data?.[managerId]) {
         throw new Error(
-          `העובד כבר משמש כאחראי מחלקה של "${otherManagersQuery.data[managerId]}".`,
+          t("departmentsPage.managerConflict", { dept: otherManagersQuery.data[managerId] }),
         );
       }
       await updateFn({
@@ -470,10 +472,10 @@ function DeptEmployeesDialog({
       });
     },
     onSuccess: (_data, managerId) => {
-      toast.success(managerId ? "אחראי מחלקה עודכן" : "אחראי מחלקה הוסר");
+      toast.success(managerId ? t("departmentsPage.managerUpdated") : t("departmentsPage.managerRemoved"));
       invalidateDepartmentEmployeeQueries(qc, deptId);
     },
-    onError: (e: Error) => toast.error(e.message ?? "שגיאה בעדכון אחראי מחלקה"),
+    onError: (e: Error) => toast.error(e.message ?? t("departmentsPage.managerUpdateError")),
   });
 
   const deptRow = departments.find((d) => d.id === deptId);
@@ -483,10 +485,11 @@ function DeptEmployeesDialog({
       <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
         <DialogContent className="max-w-lg">
           <DialogHeader>
-            <DialogTitle>עובדי {q.data?.deptName ?? "—"}</DialogTitle>
+            <DialogTitle>{t("departmentsPage.employeesOf", { name: q.data?.deptName ?? "—" })}</DialogTitle>
             {q.data?.managerName && (
               <p className="text-sm text-muted-foreground">
-                אחראי מחלקה: <span className="font-semibold text-foreground">{q.data.managerName}</span>
+                {t("departmentsPage.departmentManagerLabel")}{" "}
+                <span className="font-semibold text-foreground">{q.data.managerName}</span>
               </p>
             )}
           </DialogHeader>
@@ -500,7 +503,7 @@ function DeptEmployeesDialog({
                 onClick={() => setAddingEmployee(true)}
               >
                 <UserPlus className="size-4" />
-                הוסף עובד למחלקה
+                {t("departmentsPage.addEmployeeToDept")}
               </Button>
               {q.data?.managerId && (
                 <Button
@@ -510,7 +513,7 @@ function DeptEmployeesDialog({
                   disabled={setManagerMut.isPending}
                   onClick={() => setManagerMut.mutate(null)}
                 >
-                  הסר אחראי מחלקה
+                  {t("departmentsPage.removeDepartmentManager")}
                 </Button>
               )}
             </div>
@@ -522,7 +525,7 @@ function DeptEmployeesDialog({
             </div>
           ) : !q.data || q.data.employees.length === 0 ? (
             <p className="text-sm text-muted-foreground py-6 text-center">
-              {canManage ? "אין עובדים במחלקה — לחץ «הוסף עובד» למעלה." : "אין עובדים במחלקה זו."}
+              {canManage ? t("departmentsPage.noEmployeesCanManage") : t("departmentsPage.noEmployees")}
             </p>
           ) : (
             <ul className="divide-y max-h-[60vh] overflow-auto">
@@ -560,13 +563,13 @@ function DeptEmployeesDialog({
                           onClick={() => setManagerMut.mutate(emp.id)}
                         >
                           <Crown className="size-3.5" />
-                          אחראי מחלקה
+                          {t("departmentsPage.departmentManager")}
                         </Button>
                       )}
                     </div>
                     {conflictDept && canManage && !emp.isManager && (
                       <p className="text-xs text-muted-foreground mt-1 mr-1">
-                        אחראי ב«{conflictDept}»
+                        {t("departmentsPage.managerOfOther", { dept: conflictDept })}
                       </p>
                     )}
                   </li>
@@ -595,6 +598,7 @@ function DeptEmployeesDialog({
 }
 
 function EmployeeListItem({ emp }: { emp: any }) {
+  const { t } = useTranslation();
   return (
     <div className="flex items-center justify-between gap-2">
       <div className="min-w-0">
@@ -602,19 +606,19 @@ function EmployeeListItem({ emp }: { emp: any }) {
         <p className="text-xs text-muted-foreground mt-0.5">
           {emp.roleLabel}
           {emp.isManager && (
-            <span className="text-primary font-semibold mr-1">· אחראי מחלקה</span>
+            <span className="text-primary font-semibold mr-1">{t("departmentsPage.departmentManagerSuffix")}</span>
           )}
         </p>
       </div>
       <div className="flex gap-1 shrink-0">
         {!emp.is_active && (
-          <Badge variant="destructive" className="rounded-full text-xs">לא פעיל</Badge>
+          <Badge variant="destructive" className="rounded-full text-xs">{t("profile.inactive")}</Badge>
         )}
         {isEmployeeCurrentlyOnLeave(emp) && (
-          <Badge variant="secondary" className="rounded-full text-xs">בחופש</Badge>
+          <Badge variant="secondary" className="rounded-full text-xs">{t("profile.onLeave")}</Badge>
         )}
         {emp.is_active && !isEmployeeCurrentlyOnLeave(emp) && (
-          <Badge variant="outline" className="rounded-full text-xs">פעיל</Badge>
+          <Badge variant="outline" className="rounded-full text-xs">{t("profile.active")}</Badge>
         )}
       </div>
     </div>
@@ -628,6 +632,7 @@ function EmpProfileDialog({
   employeeId: string | null;
   onClose: () => void;
 }) {
+  const { t } = useTranslation();
   const open = employeeId !== null;
   const q = useQuery({
     enabled: open && !!employeeId,
@@ -666,18 +671,22 @@ function EmpProfileDialog({
     },
   });
 
+  const leaveDates = q.data
+    ? formatLeaveDateRange(q.data.leave_start_date, q.data.leave_end_date)
+    : null;
+
   return (
     <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
       <DialogContent className="max-w-md">
         <DialogHeader>
-          <DialogTitle>פרטי עובד</DialogTitle>
+          <DialogTitle>{t("departmentsPage.employeeDetails")}</DialogTitle>
         </DialogHeader>
         {q.isLoading ? (
           <div className="flex justify-center py-8">
             <Loader2 className="size-5 animate-spin text-primary" />
           </div>
         ) : !q.data ? (
-          <p className="text-sm text-muted-foreground py-6 text-center">לא נמצאו פרטי עובד.</p>
+          <p className="text-sm text-muted-foreground py-6 text-center">{t("departmentsPage.employeeNotFound")}</p>
         ) : (
           <div className="space-y-4">
             <div className="flex items-center gap-4">
@@ -694,17 +703,19 @@ function EmpProfileDialog({
               </div>
             </div>
             <Card className="p-4 space-y-3">
-              <ProfileRow label="מספר זהות" value={q.data.id_number ?? "—"} />
-              <ProfileRow label="מחלקה" value={q.data.departmentName} />
-              <ProfilePhoneField label="טלפון" phone={q.data.phone} />
+              <ProfileRow label={t("profile.idNumber")} value={q.data.id_number ?? "—"} />
+              <ProfileRow label={t("profile.department")} value={q.data.departmentName} />
+              <ProfilePhoneField label={t("profile.phone")} phone={q.data.phone} />
               <ProfileRow
-                label="סטטוס"
+                label={t("profile.status")}
                 value={
                   isEmployeeCurrentlyOnLeave(q.data)
-                    ? `בחופש${formatLeaveDateRange(q.data.leave_start_date, q.data.leave_end_date) ? ` (${formatLeaveDateRange(q.data.leave_start_date, q.data.leave_end_date)})` : ""}`
+                    ? t("departmentsPage.onLeaveWithDates", {
+                        dates: leaveDates ? ` (${leaveDates})` : "",
+                      })
                     : q.data.is_active
-                    ? "פעיל"
-                    : "לא פעיל"
+                    ? t("profile.active")
+                    : t("profile.inactive")
                 }
               />
             </Card>
@@ -731,8 +742,8 @@ function CreateDialog({
   managers: ManagerOption[];
   onClose: () => void;
 }) {
+  const { t } = useTranslation();
   const qc = useQueryClient();
-  const navigate = useNavigate();
   const fn = useServerFn(createDepartment);
   const [form, setForm] = useState({ name: "", manager_id: "" as string });
   const mutation = useMutation({
@@ -745,20 +756,20 @@ function CreateDialog({
       });
     },
     onSuccess: () => {
-      toast.success("המחלקה נוצרה");
+      toast.success(t("departmentsPage.created"));
       qc.invalidateQueries({ queryKey: ["departments"] });
       qc.invalidateQueries({ queryKey: ["employees"] });
       qc.invalidateQueries({ queryKey: ["all-roles"] });
       onClose();
     },
-    onError: (e: any) => toast.error(e?.message ?? "שגיאה ביצירת מחלקה"),
+    onError: (e: any) => toast.error(e?.message ?? t("departmentsPage.createError")),
   });
 
   return (
     <Dialog open onOpenChange={(o) => !o && onClose()}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>הוספת מחלקה חדשה</DialogTitle>
+          <DialogTitle>{t("departmentsPage.createTitle")}</DialogTitle>
         </DialogHeader>
         <form
           className="space-y-4"
@@ -767,14 +778,14 @@ function CreateDialog({
             mutation.mutate();
           }}
         >
-          <Field label="שם המחלקה">
+          <Field label={t("departmentsPage.departmentName")}>
             <Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required maxLength={80} />
           </Field>
-          <Field label="אחראי מחלקה (אופציונלי)">
+          <Field label={t("departmentsPage.departmentManagerOptional")}>
             <Select value={form.manager_id || "none"} onValueChange={(v) => setForm({ ...form, manager_id: v === "none" ? "" : v })}>
               <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
-                <SelectItem value="none">לא הוגדר</SelectItem>
+                <SelectItem value="none">{t("departmentsPage.notDefined")}</SelectItem>
                 {managers.map((m) => (
                   <SelectItem key={m.id} value={m.id}>{formatEmployeeName(m)}</SelectItem>
                 ))}
@@ -783,17 +794,17 @@ function CreateDialog({
           </Field>
           <div className="flex items-center justify-between rounded-lg border border-border p-3">
             <div>
-              <p className="text-sm font-medium">מחלקה פעילה</p>
+              <p className="text-sm font-medium">{t("departmentsPage.activeDepartment")}</p>
               <p className="text-xs text-muted-foreground">
-                ניתן להשבית מחלקה מבלי למחוק אותה
+                {t("departmentsPage.deactivateHint")}
               </p>
             </div>
             <Switch checked={true} disabled />
           </div>
           <div className="flex justify-end gap-2">
-            <Button type="button" variant="outline" onClick={onClose}>ביטול</Button>
+            <Button type="button" variant="outline" onClick={onClose}>{t("common.cancel")}</Button>
             <Button type="submit" disabled={mutation.isPending}>
-              {mutation.isPending ? <Loader2 className="size-4 animate-spin" /> : "צור"}
+              {mutation.isPending ? <Loader2 className="size-4 animate-spin" /> : t("departmentsPage.create")}
             </Button>
           </div>
         </form>
@@ -809,6 +820,7 @@ function EditDialog({
   dept: DepartmentRow;
   onClose: () => void;
 }) {
+  const { t } = useTranslation();
   const qc = useQueryClient();
   const fn = useServerFn(updateDepartment);
   const [form, setForm] = useState({
@@ -817,7 +829,6 @@ function EditDialog({
     is_active: dept.is_active,
   });
 
-  // Only employees of THIS department are eligible to be its manager.
   const deptEmployeesQuery = useQuery({
     queryKey: ["dept-employees-for-manager", dept.id],
     queryFn: async () => {
@@ -833,7 +844,6 @@ function EditDialog({
     },
   });
 
-  // Other departments' managers, to prevent assigning the same employee to two departments.
   const otherManagersQuery = useQuery({
     queryKey: ["other-dept-managers", dept.id],
     queryFn: async () => {
@@ -851,7 +861,6 @@ function EditDialog({
     },
   });
 
-  // Auto-refresh employee list when profiles change (employee moves between departments).
   useEffect(() => {
     const ch = supabase
       .channel(`dept-edit-${dept.id}`)
@@ -880,9 +889,7 @@ function EditDialog({
       const conflictDept =
         form.manager_id && otherManagersQuery.data?.[form.manager_id];
       if (conflictDept) {
-        throw new Error(
-          `העובד כבר משמש כאחראי של מחלקת "${conflictDept}". לא ניתן להגדיר אותו כאחראי של שתי מחלקות במקביל.`,
-        );
+        throw new Error(t("departmentsPage.editManagerConflict", { dept: conflictDept }));
       }
       await fn({
         data: {
@@ -894,14 +901,14 @@ function EditDialog({
       });
     },
     onSuccess: () => {
-      toast.success("המחלקה עודכנה");
+      toast.success(t("departmentsPage.updated"));
       qc.invalidateQueries({ queryKey: ["departments"] });
       qc.invalidateQueries({ queryKey: ["employees"] });
       qc.invalidateQueries({ queryKey: ["all-roles"] });
       qc.invalidateQueries({ queryKey: ["dashboard", "stats"] });
       onClose();
     },
-    onError: (e: any) => toast.error(e?.message ?? "שגיאה בעדכון"),
+    onError: (e: any) => toast.error(e?.message ?? t("departmentsPage.updateError")),
   });
 
   const employees = deptEmployeesQuery.data ?? [];
@@ -911,7 +918,7 @@ function EditDialog({
     <Dialog open onOpenChange={(o) => !o && onClose()}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>עריכת מחלקה</DialogTitle>
+          <DialogTitle>{t("departmentsPage.editTitle")}</DialogTitle>
         </DialogHeader>
         <form
           className="space-y-4"
@@ -920,25 +927,25 @@ function EditDialog({
             mutation.mutate();
           }}
         >
-          <Field label="שם המחלקה">
+          <Field label={t("departmentsPage.departmentName")}>
             <Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required maxLength={80} />
           </Field>
-          <Field label="אחראי מחלקה">
+          <Field label={t("departmentsPage.departmentManager")}>
             <Select value={form.manager_id || "none"} onValueChange={(v) => setForm({ ...form, manager_id: v === "none" ? "" : v })}>
               <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
-                <SelectItem value="none">לא הוגדר</SelectItem>
+                <SelectItem value="none">{t("departmentsPage.notDefined")}</SelectItem>
                 {deptEmployeesQuery.isLoading ? (
-                  <SelectItem value="__loading" disabled>טוען עובדים…</SelectItem>
+                  <SelectItem value="__loading" disabled>{t("departmentsPage.loadingEmployees")}</SelectItem>
                 ) : employees.length === 0 ? (
-                  <SelectItem value="__empty" disabled>אין עובדים פעילים במחלקה זו</SelectItem>
+                  <SelectItem value="__empty" disabled>{t("departmentsPage.noActiveEmployees")}</SelectItem>
                 ) : (
                   employees.map((m) => {
                     const conflict = otherMgrs[m.id];
                     return (
                       <SelectItem key={m.id} value={m.id} disabled={!!conflict}>
                         {formatEmployeeName(m)}
-                        {conflict ? ` (אחראי ב"${conflict}")` : ""}
+                        {conflict ? t("departmentsPage.managerOfConflict", { dept: conflict }) : ""}
                       </SelectItem>
                     );
                   })
@@ -946,22 +953,22 @@ function EditDialog({
               </SelectContent>
             </Select>
             <p className="text-xs text-muted-foreground mt-1">
-              מוצגים רק עובדי המחלקה. עובד יכול להיות אחראי של מחלקה אחת בלבד.
+              {t("departmentsPage.managerSelectHint")}
             </p>
           </Field>
           <div className="flex items-center justify-between rounded-lg border border-border p-3">
             <div>
-              <p className="text-sm font-medium">מחלקה פעילה</p>
+              <p className="text-sm font-medium">{t("departmentsPage.activeDepartment")}</p>
               <p className="text-xs text-muted-foreground">
-                ניתן להשבית מחלקה מבלי למחוק אותה
+                {t("departmentsPage.deactivateHint")}
               </p>
             </div>
             <Switch checked={form.is_active} onCheckedChange={(v) => setForm({ ...form, is_active: v })} />
           </div>
           <div className="flex justify-end gap-2">
-            <Button type="button" variant="outline" onClick={onClose}>ביטול</Button>
+            <Button type="button" variant="outline" onClick={onClose}>{t("common.cancel")}</Button>
             <Button type="submit" disabled={mutation.isPending}>
-              {mutation.isPending ? <Loader2 className="size-4 animate-spin" /> : "שמירה"}
+              {mutation.isPending ? <Loader2 className="size-4 animate-spin" /> : t("common.save")}
             </Button>
           </div>
         </form>
@@ -972,6 +979,7 @@ function EditDialog({
 
 
 function DeleteDialog({ dept, onClose }: { dept: DepartmentRow; onClose: () => void }) {
+  const { t } = useTranslation();
   const qc = useQueryClient();
   const fn = useServerFn(deleteDepartment);
   const mutation = useMutation({
@@ -979,24 +987,23 @@ function DeleteDialog({ dept, onClose }: { dept: DepartmentRow; onClose: () => v
       await fn({ data: { id: dept.id } });
     },
     onSuccess: () => {
-      toast.success("המחלקה נמחקה");
+      toast.success(t("departmentsPage.deleted"));
       qc.invalidateQueries({ queryKey: ["departments"] });
       onClose();
     },
-    onError: (e: any) => toast.error(e?.message ?? "שגיאה במחיקה"),
+    onError: (e: any) => toast.error(e?.message ?? t("departmentsPage.deleteError")),
   });
   return (
     <AlertDialog open onOpenChange={(o) => !o && onClose()}>
       <AlertDialogContent>
         <AlertDialogHeader>
-          <AlertDialogTitle>מחיקת מחלקה</AlertDialogTitle>
+          <AlertDialogTitle>{t("departmentsPage.deleteTitle")}</AlertDialogTitle>
           <AlertDialogDescription>
-            האם למחוק את המחלקה "{dept.name}"? לא ניתן לבטל פעולה זו.
-            מחלקה עם עובדים משויכים לא תימחק.
+            {t("departmentsPage.deleteDesc", { name: dept.name })}
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
-          <AlertDialogCancel>ביטול</AlertDialogCancel>
+          <AlertDialogCancel>{t("common.cancel")}</AlertDialogCancel>
           <AlertDialogAction
             onClick={(e) => {
               e.preventDefault();
@@ -1004,7 +1011,7 @@ function DeleteDialog({ dept, onClose }: { dept: DepartmentRow; onClose: () => v
             }}
             disabled={mutation.isPending}
           >
-            {mutation.isPending ? <Loader2 className="size-4 animate-spin" /> : "מחק"}
+            {mutation.isPending ? <Loader2 className="size-4 animate-spin" /> : t("departmentsPage.deleteAction")}
           </AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>

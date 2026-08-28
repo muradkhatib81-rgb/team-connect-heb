@@ -45,11 +45,12 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { useTranslation } from "react-i18next";
 import {
   BREAK_PRE_ACTIVE_STATUSES,
   BREAK_PENDING_APPROVAL_STATUSES,
-  BREAK_STATUS_LABEL,
   BREAK_STATUS_TONE,
+  getBreakStatusLabel,
   BreakLiveTimer,
   consumedBreakSettingIdsForJerusalemDay,
   fmtBreakTime,
@@ -96,6 +97,7 @@ interface BreakRequest {
 }
 
 function BreaksPage() {
+  const { t } = useTranslation();
   const { data: me } = useAuth();
   const qc = useQueryClient();
   const canRequestQ = useCanUserRequestBreak();
@@ -343,7 +345,7 @@ function BreaksPage() {
                     <SelectContent>
                       {availableSettings.map((s) => (
                         <SelectItem key={s.id} value={s.id}>
-                          {s.name} · {s.duration_minutes} דק׳
+                          {s.name} · {s.duration_minutes} {t("common.minutesShort")}
                         </SelectItem>
                       ))}
                     </SelectContent>
@@ -430,7 +432,8 @@ function BreaksPage() {
                   <Card key={r.id} className="card-elevated p-4 flex items-center gap-3">
                     <div className="flex-1 min-w-0">
                       <p className="font-medium truncate">
-                      {setting?.name ?? i18n.t("breaks.defaultBreak")} · {r.duration_minutes} דק׳
+                      {setting?.name ?? i18n.t("breaks.defaultBreak")} · {r.duration_minutes}{" "}
+                      {t("common.minutesShort")}
                       </p>
                       <p className="text-xs text-muted-foreground">
                         {i18n.t("breaks.timeLabel2")} {fmtBreakTime(showTime)}
@@ -451,7 +454,7 @@ function BreaksPage() {
                       )}
                     </div>
                     <Badge variant={BREAK_STATUS_TONE[r.status] ?? "secondary"}>
-                      {BREAK_STATUS_LABEL[r.status] ?? r.status}
+                      {getBreakStatusLabel(r.status)}
                     </Badge>
                   </Card>
                 );
@@ -481,6 +484,7 @@ export function ApproveList({
   departments: { id: string; name: string; manager_id: string | null }[];
   me: string;
 }) {
+  const { t } = useTranslation();
   const qc = useQueryClient();
   const [editing, setEditing] = useState<BreakRequest | null>(null);
   const [rejectTarget, setRejectTarget] = useState<BreakRequest | null>(null);
@@ -591,7 +595,8 @@ export function ApproveList({
                     {prof?.full_name ?? "—"} · {deptName(prof?.department_id ?? null)}
                   </p>
                   <p className="text-xs text-muted-foreground">
-                    {setting?.name ?? i18n.t("breaks.defaultBreak")} · {r.duration_minutes} דק׳ · {i18n.t("breaks.requestedHour")}{" "}
+                    {setting?.name ?? i18n.t("breaks.defaultBreak")} · {r.duration_minutes}{" "}
+                    {t("common.minutesShort")} · {i18n.t("breaks.requestedHour")}{" "}
                     {fmtBreakTime(r.requested_at)}
                   </p>
                   {r.note && (

@@ -18,6 +18,7 @@ import { WhatsAppIcon } from "@/components/whatsapp-icon";
 import { Store, Loader2 } from "lucide-react";
 import { LanguageSwitcher } from "@/components/language-switcher";
 import { useTranslation } from "react-i18next";
+import i18n from "@/i18n";
 
 const searchSchema = z.object({ redirect: z.string().optional() });
 
@@ -32,7 +33,7 @@ function safeInternalRedirectPath(raw: string | undefined, fallback = "/dashboar
 
 export const Route = createFileRoute("/auth")({
   validateSearch: searchSchema,
-  head: () => ({ meta: [{ title: `התחברות | ${APP_NAME}` }] }),
+  head: () => ({ meta: [{ title: `${i18n.t("auth.loginPageTitle")} | ${APP_NAME}` }] }),
   component: AuthPage,
 });
 

@@ -1175,6 +1175,7 @@ function isBranchModuleRoute(pathname: string): boolean {
  * bouncing any direct navigation attempt back to the Platform Dashboard.
  */
 function BranchModeGuard({ isPlatformOwner }: { isPlatformOwner: boolean }) {
+  const { t } = useTranslation();
   const { activeBranchId, isLoading } = useActiveBranch();
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const navigate = useNavigate();
@@ -1182,9 +1183,9 @@ function BranchModeGuard({ isPlatformOwner }: { isPlatformOwner: boolean }) {
   useEffect(() => {
     if (!isPlatformOwner || isLoading || activeBranchId) return;
     if (!isBranchModuleRoute(pathname)) return;
-    toast.info("יש לבחור סניף פעיל כדי להיכנס למודולים של הסניף");
+    toast.info(t("appShell.selectActiveBranchToEnter"));
     navigate({ to: "/platform", replace: true });
-  }, [isPlatformOwner, isLoading, activeBranchId, pathname, navigate]);
+  }, [isPlatformOwner, isLoading, activeBranchId, pathname, navigate, t]);
 
   return null;
 }
@@ -1193,10 +1194,16 @@ function BranchModeGuard({ isPlatformOwner }: { isPlatformOwner: boolean }) {
 // It intentionally does not read `useActiveBranch`: leaving Platform Branch
 // Mode must remove the indicator synchronously with the Platform selection.
 function BranchSubtitle() {
+  const { t, i18n } = useTranslation();
   const { activeCompany } = useCompanyContext();
   const { activeBranch } = useBranchContext();
   const name = activeBranch?.name?.trim() ?? activeCompany?.name?.trim();
   if (!name) return null;
-  const label = activeBranch ? (name.startsWith("סניף") ? name : `סניף ${name}`) : name;
+  const label =
+    activeBranch && i18n.language === "he" && name.startsWith("סניף")
+      ? name
+      : activeBranch
+        ? t("appShell.branchPrefix", { name })
+        : name;
   return <p className="text-xs text-muted-foreground truncate">{label}</p>;
 }

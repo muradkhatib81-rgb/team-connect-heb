@@ -4,6 +4,7 @@ import { useServerFn } from "@tanstack/react-start";
 import { useEffect, useMemo, useState } from "react";
 import { Loader2, UserCog, Search, Building2 } from "lucide-react";
 import { toast } from "sonner";
+import { useTranslation } from "react-i18next";
 
 import { useAuth } from "@/lib/use-auth";
 import { listBranchesWithStats, listEmployeesForManagerPicker, assignBranchManager } from "@/lib/branches.functions";
@@ -40,6 +41,7 @@ export const Route = createFileRoute("/_authenticated/system/branch-managers")({
 });
 
 function BranchManagersPage() {
+  const { t } = useTranslation();
   const qc = useQueryClient();
   const { data: profile } = useAuth();
   const isSystemAdmin = profile?.roles?.includes("system_admin");
@@ -88,11 +90,11 @@ function BranchManagersPage() {
     mutationFn: async ({ branchId, managerId }: { branchId: string; managerId: string | null }) =>
       assign({ data: { branch_id: branchId, manager_id: managerId } }),
     onSuccess: () => {
-      toast.success("הקצאת מנהל הסניף עודכנה");
+      toast.success(t("systemBranchManagersPage.assignUpdated"));
       qc.invalidateQueries({ queryKey: ["system", "branches"] });
       qc.invalidateQueries({ queryKey: ["system", "branch-managers", "branches"] });
     },
-    onError: (error: Error) => toast.error(error.message ?? "העדכון נכשל"),
+    onError: (error: Error) => toast.error(error.message ?? t("systemBranchManagersPage.updateFailed")),
   });
 
   function handleManagerChange(branchId: string, managerId: string | null) {
@@ -107,8 +109,8 @@ function BranchManagersPage() {
           <div className="mx-auto flex size-12 items-center justify-center rounded-xl bg-destructive/10">
             <UserCog className="size-6 text-destructive" />
           </div>
-          <h1 className="text-xl font-bold">אין הרשאה</h1>
-          <p className="text-sm text-muted-foreground">הדף הזה זמין רק לבעל המערכת הראשי.</p>
+          <h1 className="text-xl font-bold">{t("shiftSettingsPage.noPermissionTitle")}</h1>
+          <p className="text-sm text-muted-foreground">{t("systemBranchManagersPage.noPermissionDesc")}</p>
         </Card>
       </div>
     );
@@ -122,8 +124,8 @@ function BranchManagersPage() {
             <UserCog className="size-6" />
           </div>
           <div>
-            <h1 className="text-2xl font-bold">מנהלי סניפים</h1>
-            <p className="text-sm text-muted-foreground">הקצאה והחלפה של מנהלי סניפים לכל סניף</p>
+            <h1 className="text-2xl font-bold">{t("systemBranchManagersPage.title")}</h1>
+            <p className="text-sm text-muted-foreground">{t("systemBranchManagersPage.subtitle")}</p>
           </div>
         </div>
       </div>
@@ -134,7 +136,7 @@ function BranchManagersPage() {
           <Input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="חיפוש לפי שם סניף, קוד או מנהל"
+            placeholder={t("systemBranchManagersPage.searchPlaceholder")}
             className="pr-9"
           />
         </div>
@@ -145,7 +147,7 @@ function BranchManagersPage() {
           <Loader2 className="size-6 animate-spin text-muted-foreground" />
         </div>
       ) : filteredBranches.length === 0 ? (
-        <Card className="p-8 text-center text-sm text-muted-foreground">לא נמצאו סניפים.</Card>
+        <Card className="p-8 text-center text-sm text-muted-foreground">{t("systemBranchManagersPage.noBranches")}</Card>
       ) : (
         <div className="grid gap-4">
           {filteredBranches.map((branch) => {
@@ -159,25 +161,25 @@ function BranchManagersPage() {
                       <h2 className="text-lg font-semibold">{branch.name}</h2>
                     </div>
                     <div className="mt-1 flex flex-wrap gap-3 text-sm text-muted-foreground">
-                      <span>קוד: {branch.code}</span>
-                      <span>עובדים: {branch.employees_count}</span>
-                      <span>מחלקות: {branch.departments_count}</span>
-                      <span>סידורים פעילים: {branch.active_schedules_count}</span>
+                      <span>{t("systemBranchManagersPage.codeLabel")} {branch.code}</span>
+                      <span>{t("systemBranchManagersPage.employeesLabel")} {branch.employees_count}</span>
+                      <span>{t("systemBranchManagersPage.departmentsLabel")} {branch.departments_count}</span>
+                      <span>{t("systemBranchManagersPage.activeSchedulesLabel")} {branch.active_schedules_count}</span>
                     </div>
                   </div>
 
                   <div className="w-full lg:max-w-sm">
-                    <label className="mb-2 block text-sm font-medium">מנהל סניף</label>
+                    <label className="mb-2 block text-sm font-medium">{t("systemBranchManagersPage.branchManagerLabel")}</label>
                     <Select
                       value={selectedValue}
                       onValueChange={(value) => handleManagerChange(branch.id, value === "__none__" ? null : value)}
                       disabled={assignMut.isPending}
                     >
                       <SelectTrigger className="w-full">
-                        <SelectValue placeholder="ללא מנהל סניף" />
+                        <SelectValue placeholder={t("systemBranchManagersPage.noBranchManagerPlaceholder")} />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="__none__">ללא מנהל סניף</SelectItem>
+                        <SelectItem value="__none__">{t("systemBranchManagersPage.noBranchManager")}</SelectItem>
                         {(managersQ.data as ManagerOption[] | undefined)?.map((manager) => (
                           <SelectItem key={manager.id} value={manager.id}>
                             {manager.full_name}
@@ -186,7 +188,9 @@ function BranchManagersPage() {
                       </SelectContent>
                     </Select>
                     <p className="mt-2 text-xs text-muted-foreground">
-                      {branch.manager_name ? `מנהל נוכחי: ${branch.manager_name}` : "אין מנהל סניף משויך כרגע"}
+                      {branch.manager_name
+                        ? t("systemBranchManagersPage.currentManager", { name: branch.manager_name })
+                        : t("systemBranchManagersPage.noManagerAssigned")}
                     </p>
                   </div>
                 </div>

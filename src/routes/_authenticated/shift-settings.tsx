@@ -1,6 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/use-auth";
 import {
@@ -50,6 +51,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { toast } from "sonner";
 import { supportContactInstruction } from "@/lib/constants";
+import i18n from "@/i18n";
 import {
   Clock,
   Plus,
@@ -99,7 +101,7 @@ function summarizeShiftHours(
 ): string {
   const filtered = dayRows.filter((r) => periodDows.includes(r.day_of_week as ScheduleDow));
   if (!def.start_time && !def.end_time && filtered.length === 0) {
-    return "ללא שעות (לדוגמה: חופש)";
+    return i18n.t("shiftSettingsPage.noHoursExample");
   }
   if (filtered.length === 0 && def.start_time && def.end_time) {
     return `${hmFromDb(def.start_time)} – ${hmFromDb(def.end_time)}`;
@@ -112,12 +114,12 @@ function summarizeShiftHours(
     .map((r) => formatShiftTimeRange(r.start, r.end))
     .filter(Boolean);
   if (rangeLabels.length === 0 && def.start_time) {
-    return formatShiftTimeRange(hmFromDb(def.start_time), hmFromDb(def.end_time)) ?? "ללא שעות";
+    return formatShiftTimeRange(hmFromDb(def.start_time), hmFromDb(def.end_time)) ?? i18n.t("shiftSettingsPage.noHours");
   }
   const first = rangeLabels[0];
   const allSame = rangeLabels.every((r) => r === first);
   if (allSame && first) return first;
-  return "שעות שונות לפי יום";
+  return i18n.t("shiftSettingsPage.hoursVaryByDay");
 }
 
 function buildDayHoursState(
@@ -139,6 +141,7 @@ function buildDayHoursState(
 }
 
 function ShiftSettingsPage() {
+  const { t } = useTranslation();
   const qc = useQueryClient();
   const { data: me } = useAuth();
   const periodConfigQ = useSchedulePeriodConfig();
@@ -190,7 +193,7 @@ function ShiftSettingsPage() {
     mutationFn: async () => {
       const workingDows = normalizeMonthlyWorkingDows(monthlyWorkingDows);
       if (periodType === "monthly" && workingDows.length === 0) {
-        throw new Error("יש לבחור לפחות יום עבודה אחד");
+        throw new Error(t("shiftSettingsPage.errSelectWorkingDay"));
       }
       const { data: existing, error: fetchErr } = await supabase
         .from("company_settings" as any)
@@ -254,11 +257,11 @@ function ShiftSettingsPage() {
     },
     onSuccess: () => {
       periodFormDirtyRef.current = false;
-      toast.success("הגדרות תקופת הסידור נשמרו — חלות מיד על סידורי העבודה");
+      toast.success(t("shiftSettingsPage.periodSaved"));
       qc.invalidateQueries({ queryKey: ["company-settings"] });
       qc.invalidateQueries({ queryKey: ["schedule-period-config"] });
     },
-    onError: (e: any) => toast.error(e?.message ?? "שגיאה"),
+    onError: (e: any) => toast.error(e?.message ?? t("common.error")),
   });
 
   async function upsertDayHours(
@@ -284,7 +287,7 @@ function ShiftSettingsPage() {
       );
       if (error) {
         if (/shift_definition_day_hours|relation|schema cache/i.test(error.message ?? "")) {
-          throw new Error("יש להריץ את migration שעות משמרות ב-Supabase לפני שמירת שעות לפי יום");
+          throw new Error(t("shiftSettingsPage.errMigrationRequired"));
         }
         throw error;
       }
@@ -352,12 +355,12 @@ function ShiftSettingsPage() {
       }
     },
     onSuccess: () => {
-      toast.success("נשמר — השינויים חלים מיד על סידורי העבודה");
+      toast.success(t("shiftSettingsPage.saved"));
       setEditing(null);
       setCreateOpen(false);
       qc.invalidateQueries({ queryKey: ["shift-definitions"] });
     },
-    onError: (e: any) => toast.error(e?.message ?? "שגיאה"),
+    onError: (e: any) => toast.error(e?.message ?? t("common.error")),
   });
 
   const deleteMut = useMutation({
@@ -369,20 +372,18 @@ function ShiftSettingsPage() {
           .select("id", { count: "exact", head: true })
           .eq("shift", target.code);
         if ((count ?? 0) > 0) {
-          throw new Error(
-            `לא ניתן למחוק — המשמרת בשימוש ב-${count} שיבוצי עובדים. ניתן להשבית אותה במקום.`,
-          );
+          throw new Error(t("shiftSettingsPage.deleteInUse", { count: count ?? 0 }));
         }
       }
       const { error } = await supabase.from("shift_definitions").delete().eq("id", id);
       if (error) throw error;
     },
     onSuccess: () => {
-      toast.success("נמחק");
+      toast.success(t("shiftSettingsPage.deleted"));
       setDeleteTarget(null);
       qc.invalidateQueries({ queryKey: ["shift-definitions"] });
     },
-    onError: (e: any) => toast.error(e?.message ?? "שגיאה"),
+    onError: (e: any) => toast.error(e?.message ?? t("common.error")),
   });
 
   const reorderMut = useMutation({
@@ -399,7 +400,7 @@ function ShiftSettingsPage() {
       }
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["shift-definitions"] }),
-    onError: (e: any) => toast.error(e?.message ?? "שגיאה"),
+    onError: (e: any) => toast.error(e?.message ?? t("common.error")),
   });
 
   function move(idx: number, dir: -1 | 1) {
@@ -420,9 +421,9 @@ function ShiftSettingsPage() {
   if (!canManage) {
     return (
       <Card className="card-elevated p-8 text-center">
-        <h2 className="text-lg font-semibold">אין הרשאה</h2>
+        <h2 className="text-lg font-semibold">{t("shiftSettingsPage.noPermissionTitle")}</h2>
         <p className="text-sm text-muted-foreground mt-2">
-          אין הרשאה לגשת למסך זה. {supportContactInstruction(me.roles)}.
+          {t("shiftSettingsPage.noPermissionDesc")} {supportContactInstruction(me.roles)}.
         </p>
       </Card>
     );
@@ -436,22 +437,21 @@ function ShiftSettingsPage() {
             <Clock className="size-5" />
           </div>
           <div>
-            <h1 className="text-2xl sm:text-3xl font-bold">הגדרות משמרות</h1>
+            <h1 className="text-2xl sm:text-3xl font-bold">{t("shiftSettingsPage.title")}</h1>
             <p className="text-sm text-muted-foreground mt-1">
-              ניהול סוגי משמרות, שעות לפי יום ותקופת הסידור. השינויים חלים מיד על סידורי העבודה
-              (מלבד תאים עם שעות ידניות).
+              {t("shiftSettingsPage.subtitle")}
             </p>
           </div>
         </div>
         <Dialog open={createOpen} onOpenChange={setCreateOpen}>
           <DialogTrigger asChild>
             <Button className="gap-2">
-              <Plus className="size-4" /> משמרת חדשה
+              <Plus className="size-4" /> {t("shiftSettingsPage.newShift")}
             </Button>
           </DialogTrigger>
           <ShiftDialog
             key={createOpen ? "create" : "create-closed"}
-            title="יצירת משמרת"
+            title={t("shiftSettingsPage.createTitle")}
             dayNames={dayNames}
             periodDows={periodDows}
             saving={saveMut.isPending}
@@ -463,25 +463,25 @@ function ShiftSettingsPage() {
       <Card className="card-elevated p-4 space-y-4">
         <div className="flex items-center gap-2">
           <CalendarRange className="size-5 text-primary" />
-          <h2 className="font-semibold">תקופת סידור עבודה (סניף)</h2>
+          <h2 className="font-semibold">{t("shiftSettingsPage.periodCardTitle")}</h2>
         </div>
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           <div className="space-y-1.5">
-            <Label>סוג תקופה</Label>
+            <Label>{t("shiftSettingsPage.periodTypeLabel")}</Label>
             <Select value={periodType} onValueChange={(v) => { markPeriodDirty(); setPeriodType(v as ScheduleType); }}>
               <SelectTrigger>
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="weekly">שבועי</SelectItem>
-                <SelectItem value="monthly">חודשי (מ-1 לחודש)</SelectItem>
+                <SelectItem value="weekly">{t("shiftSettingsPage.weekly")}</SelectItem>
+                <SelectItem value="monthly">{t("shiftSettingsPage.monthly")}</SelectItem>
               </SelectContent>
             </Select>
           </div>
           {periodType === "weekly" && (
             <>
               <div className="space-y-1.5">
-                <Label>יום התחלת השבוע</Label>
+                <Label>{t("shiftSettingsPage.weekStartLabel")}</Label>
                 <Select value={weekStartDow} onValueChange={(v) => { markPeriodDirty(); setWeekStartDow(v); }}>
                   <SelectTrigger>
                     <SelectValue />
@@ -496,7 +496,7 @@ function ShiftSettingsPage() {
                 </Select>
               </div>
               <div className="space-y-1.5">
-                <Label>יום סיום השבוע</Label>
+                <Label>{t("shiftSettingsPage.weekEndLabel")}</Label>
                 <Select value={weekEndDow} onValueChange={(v) => { markPeriodDirty(); setWeekEndDow(v); }}>
                   <SelectTrigger>
                     <SelectValue />
@@ -515,10 +515,9 @@ function ShiftSettingsPage() {
         </div>
         {periodType === "monthly" && (
           <div className="space-y-2">
-            <Label>ימי עבודה בחודש</Label>
+            <Label>{t("shiftSettingsPage.monthlyWorkingDays")}</Label>
             <p className="text-xs text-muted-foreground">
-              סידור חודשי מתחיל ב-1 לכל חודש. סמנו אילו ימים בשבוע יופיעו בסידור — ימים שלא
-              מסומנים (למשל שישי) לא יוצגו בכלל.
+              {t("shiftSettingsPage.monthlyWorkingDaysHint")}
             </p>
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
               {dayNames.map((name, i) => {
@@ -554,7 +553,7 @@ function ShiftSettingsPage() {
           className="gap-2"
         >
           {periodSaveMut.isPending && <Loader2 className="size-4 animate-spin" />}
-          שמירת הגדרות תקופה
+          {t("shiftSettingsPage.savePeriodSettings")}
         </Button>
       </Card>
 
@@ -564,7 +563,7 @@ function ShiftSettingsPage() {
         </div>
       ) : rows.length === 0 ? (
         <Card className="card-elevated p-8 text-center text-sm text-muted-foreground">
-          עדיין לא הוגדרו משמרות. לחצו על "משמרת חדשה" כדי להתחיל.
+          {t("shiftSettingsPage.emptyState")}
         </Card>
       ) : (
         <div className="grid gap-3">
@@ -581,21 +580,21 @@ function ShiftSettingsPage() {
                   <p className="font-medium truncate">{r.name}</p>
                   {r.is_system && (
                     <Badge variant="outline" className="gap-1">
-                      <Lock className="size-3" /> מערכת
+                      <Lock className="size-3" /> {t("shiftSettingsPage.systemBadge")}
                     </Badge>
                   )}
-                  {!r.is_active && <Badge variant="secondary">לא פעיל</Badge>}
+                  {!r.is_active && <Badge variant="secondary">{t("profile.inactive")}</Badge>}
                 </div>
                 <p className="text-xs text-muted-foreground">
                   {summarizeShiftHours(r, listQ.dayHoursForShift(r.id), periodDows)}
-                  {" · "}קוד: {r.code}
+                  {" · "}{t("shiftSettingsPage.codeLabel")} {r.code}
                 </p>
               </div>
               <div className="flex items-center gap-1 shrink-0">
                 <Button
                   variant="ghost"
                   size="icon"
-                  aria-label="העלאה למעלה"
+                  aria-label={t("shiftSettingsPage.moveUp")}
                   disabled={idx === 0 || reorderMut.isPending}
                   onClick={() => move(idx, -1)}
                 >
@@ -604,21 +603,21 @@ function ShiftSettingsPage() {
                 <Button
                   variant="ghost"
                   size="icon"
-                  aria-label="הורדה למטה"
+                  aria-label={t("shiftSettingsPage.moveDown")}
                   disabled={idx === rows.length - 1 || reorderMut.isPending}
                   onClick={() => move(idx, 1)}
                 >
                   <ArrowDown className="size-4" />
                 </Button>
-                <Button variant="ghost" size="icon" aria-label="עריכה" onClick={() => setEditing(r)}>
+                <Button variant="ghost" size="icon" aria-label={t("common.edit")} onClick={() => setEditing(r)}>
                   <Pencil className="size-4" />
                 </Button>
                 <Button
                   variant="ghost"
                   size="icon"
-                  aria-label="מחיקה"
+                  aria-label={t("common.delete")}
                   disabled={r.is_system}
-                  title={r.is_system ? "לא ניתן למחוק משמרת מערכת" : undefined}
+                  title={r.is_system ? t("shiftSettingsPage.cannotDeleteSystem") : undefined}
                   onClick={() => setDeleteTarget(r)}
                 >
                   <Trash2 className="size-4 text-destructive" />
@@ -633,7 +632,7 @@ function ShiftSettingsPage() {
         {editing && (
           <ShiftDialog
             key={editing.id}
-            title="עריכת משמרת"
+            title={t("shiftSettingsPage.editTitle")}
             dayNames={dayNames}
             periodDows={periodDows}
             initial={editing}
@@ -647,19 +646,18 @@ function ShiftSettingsPage() {
       <AlertDialog open={!!deleteTarget} onOpenChange={(o) => !o && setDeleteTarget(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>מחיקת משמרת</AlertDialogTitle>
+            <AlertDialogTitle>{t("shiftSettingsPage.deleteTitle")}</AlertDialogTitle>
             <AlertDialogDescription>
-              האם למחוק את "{deleteTarget?.name}"? אם המשמרת בשימוש בסידור עבודה קיים — המחיקה תיחסם
-              והמערכת תציע להשבית אותה במקום.
+              {t("shiftSettingsPage.deleteDesc", { name: deleteTarget?.name ?? "" })}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>ביטול</AlertDialogCancel>
+            <AlertDialogCancel>{t("common.cancel")}</AlertDialogCancel>
             <AlertDialogAction
               onClick={() => deleteTarget && deleteMut.mutate(deleteTarget.id)}
               disabled={deleteMut.isPending}
             >
-              מחיקה
+              {t("common.delete")}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -693,6 +691,7 @@ function ShiftDialog({
     noTimes: boolean;
   }) => void;
 }) {
+  const { t } = useTranslation();
   const [name, setName] = useState(initial?.name ?? "");
   const [color, setColor] = useState(initial?.color ?? PRESET_COLORS[0]);
   const [isActive, setIsActive] = useState(initial?.is_active ?? true);
@@ -717,13 +716,13 @@ function ShiftDialog({
   function submit() {
     const n = name.trim();
     if (!n) {
-      toast.error("יש להזין שם משמרת");
+      toast.error(t("shiftSettingsPage.errShiftNameRequired"));
       return;
     }
     if (!noTimes) {
       for (const row of dayHours) {
         if (!row.start_time.trim()) {
-          toast.error(`יש להזין שעת התחלה ליום ${dayNames[row.day_of_week]}`);
+          toast.error(t("shiftSettingsPage.errStartTimeRequired", { day: dayNames[row.day_of_week] }));
           return;
         }
       }
@@ -747,12 +746,12 @@ function ShiftDialog({
       </DialogHeader>
       <div className="space-y-3">
         <div className="space-y-1.5">
-          <Label htmlFor="sh-name">שם המשמרת</Label>
+          <Label htmlFor="sh-name">{t("shiftSettingsPage.shiftNameLabel")}</Label>
           <Input
             id="sh-name"
             value={name}
             onChange={(e) => setName(e.target.value)}
-            placeholder="לדוגמה: בוקר, לילה, אמצע"
+            placeholder={t("shiftSettingsPage.shiftNamePlaceholder")}
             autoComplete="off"
           />
         </div>
@@ -760,21 +759,21 @@ function ShiftDialog({
         <div className="flex items-center gap-2 pt-1">
           <Switch id="sh-notimes" checked={noTimes} onCheckedChange={setNoTimes} />
           <Label htmlFor="sh-notimes" className="text-sm">
-            ללא שעות (לדוגמה: חופש)
+            {t("shiftSettingsPage.noHoursExample")}
           </Label>
         </div>
 
         {!noTimes && (
           <div className="space-y-2">
             <div className="flex items-center justify-between gap-2">
-              <Label>שעות לפי יום</Label>
+              <Label>{t("shiftSettingsPage.hoursByDay")}</Label>
               <Button
                 type="button"
                 variant="outline"
                 size="sm"
                 onClick={() => applyToAllDays(dayHours[0]?.start_time ?? "07:00", dayHours[0]?.end_time ?? "15:00")}
               >
-                העתק {dayNames[periodDows[0] ?? 0]} לכל הימים
+                {t("shiftSettingsPage.copyDayToAll", { day: dayNames[periodDows[0] ?? 0] })}
               </Button>
             </div>
             <div className="space-y-2 rounded-md border p-2">
@@ -782,19 +781,19 @@ function ShiftDialog({
                 <div key={row.day_of_week} className="grid grid-cols-[4.5rem_1fr_1fr] gap-2 items-start">
                   <span className="text-xs font-medium truncate pt-2">{dayNames[row.day_of_week]}</span>
                   <Time24Input
-                    aria-label={`התחלה ${dayNames[row.day_of_week]}`}
+                    aria-label={t("shiftSettingsPage.startAria", { day: dayNames[row.day_of_week] })}
                     value={row.start_time}
                     onChange={(v) => setDayHour(idx, "start_time", v)}
                     className="flex h-9 w-full rounded-md border border-input bg-background px-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
                   />
                   <div className="space-y-0.5">
                     <Time24Input
-                      aria-label={`סיום ${dayNames[row.day_of_week]} (אופציונלי)`}
+                      aria-label={t("shiftSettingsPage.endAria", { day: dayNames[row.day_of_week] })}
                       value={row.end_time}
                       onChange={(v) => setDayHour(idx, "end_time", v)}
                       className="flex h-9 w-full rounded-md border border-input bg-background px-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
                     />
-                    <span className="text-[10px] text-muted-foreground">סיום — אופציונלי</span>
+                    <span className="text-[10px] text-muted-foreground">{t("shiftSettingsPage.endOptional")}</span>
                   </div>
                 </div>
               ))}
@@ -803,13 +802,13 @@ function ShiftDialog({
         )}
 
         <div className="space-y-1.5">
-          <Label>צבע המשמרת</Label>
+          <Label>{t("shiftSettingsPage.shiftColor")}</Label>
           <div className="flex items-center gap-2 flex-wrap">
             {PRESET_COLORS.map((c) => (
               <button
                 key={c}
                 type="button"
-                aria-label={`צבע ${c}`}
+                aria-label={t("shiftSettingsPage.colorAria", { color: c })}
                 onClick={() => setColor(c)}
                 className={`size-8 rounded-full border-2 transition ${
                   color === c ? "border-foreground scale-110" : "border-transparent"
@@ -829,13 +828,13 @@ function ShiftDialog({
         <div className="flex items-center gap-2 pt-1">
           <Switch id="sh-active" checked={isActive} onCheckedChange={setIsActive} />
           <Label htmlFor="sh-active" className="text-sm">
-            פעיל (יוצג בסידורי עבודה)
+            {t("shiftSettingsPage.activeInSchedule")}
           </Label>
         </div>
       </div>
       <DialogFooter>
         <Button onClick={submit} disabled={saving} className="gap-2">
-          {saving && <Loader2 className="size-4 animate-spin" />} שמירה
+          {saving && <Loader2 className="size-4 animate-spin" />} {t("common.save")}
         </Button>
       </DialogFooter>
     </DialogContent>

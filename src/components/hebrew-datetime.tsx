@@ -1,3 +1,4 @@
+import { useTranslation } from "react-i18next";
 import { useMemo, useState } from "react";
 import { he } from "date-fns/locale";
 import { Calendar as CalendarIcon, Clock } from "lucide-react";
@@ -33,7 +34,7 @@ function fromYmd(s: string): Date | undefined {
 export function HebrewDateInput({
   value,
   onChange,
-  placeholder = "בחר תאריך",
+  placeholder,
   className,
   min,
   max,
@@ -49,6 +50,8 @@ export function HebrewDateInput({
   max?: string;
   disabled?: boolean;
 }) {
+  const { t } = useTranslation();
+  const datePlaceholder = placeholder ?? t("libErrors.datetime.pickDate");
   const [open, setOpen] = useState(false);
   const selected = useMemo(() => fromYmd(value), [value]);
   const minDate = useMemo(() => fromYmd(min ?? ""), [min]);
@@ -69,7 +72,7 @@ export function HebrewDateInput({
           )}
         >
           <CalendarIcon className="ms-0 me-2 size-4 opacity-70" />
-          {selected ? formatHeDate(selected) : placeholder}
+          {selected ? formatHeDate(selected) : datePlaceholder}
         </Button>
       </PopoverTrigger>
       <PopoverContent className="w-auto p-0" align="start" dir="rtl">
@@ -111,6 +114,7 @@ export function HebrewTimeInput({
   minuteStep?: number;
   className?: string;
 }) {
+  const { t } = useTranslation();
   const [hh, mm] = (value || "").split(":");
   const hours = Array.from({ length: 24 }, (_, i) => String(i).padStart(2, "0"));
   const minutes = Array.from({ length: Math.floor(60 / minuteStep) }, (_, i) =>
@@ -125,7 +129,7 @@ export function HebrewTimeInput({
         onValueChange={(h) => setPart(h, mm || "00")}
       >
         <SelectTrigger lang="he" className="w-[5rem] text-center">
-          <SelectValue placeholder="שעה" />
+          <SelectValue placeholder={t("libErrors.datetime.hour")} />
         </SelectTrigger>
         <SelectContent className="max-h-60">
           {hours.map((h) => (
@@ -139,7 +143,7 @@ export function HebrewTimeInput({
         onValueChange={(m) => setPart(hh || "00", m)}
       >
         <SelectTrigger lang="he" className="w-[5rem] text-center">
-          <SelectValue placeholder="דקה" />
+          <SelectValue placeholder={t("libErrors.datetime.minute")} />
         </SelectTrigger>
         <SelectContent className="max-h-60">
           {minutes.map((m) => (

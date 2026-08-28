@@ -6,6 +6,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
+import i18n from "@/i18n";
 
 async function assertPlatformOwner(supabase: any, userId: string) {
   const { data, error } = await supabase.rpc("is_platform_owner", { _user_id: userId });
@@ -202,7 +203,7 @@ async function resolveOperationalBranchId(scopeId: string): Promise<string> {
     .maybeSingle();
   if (assignment?.source_branch_id) return assignment.source_branch_id as string;
 
-  throw new Error("הסניף שנבחר אינו קיים במערכת");
+  throw new Error(i18n.t("libErrors.ops.branchNotFound"));
 }
 
 export const upsertOpsErrorFeatureScope = createServerFn({ method: "POST" })

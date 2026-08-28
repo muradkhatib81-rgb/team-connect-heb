@@ -1,9 +1,11 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
+import i18n from "@/i18n";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
 import {
-  PLATFORM_PUSH_EVENTS,
+  PLATFORM_PUSH_EVENT_DEFS,
+  getPlatformPushEventLabel,
   type PlatformPushEventKey,
   isPlatformPushEventKey,
 } from "@/lib/platform-push-events";
@@ -16,7 +18,7 @@ async function assertPlatformOwner(supabase: any, userId: string) {
     .in("role", ["system_admin", "main_admin"]);
   if (error) throw new Error(error.message);
   if (!(data ?? []).length) {
-    throw new Error("אין הרשאה — בעל מערכת בלבד");
+    throw new Error(i18n.t("libErrors.platformPush.ownersOnly"));
   }
 }
 
@@ -140,11 +142,11 @@ export const listPlatformPushSettings = createServerFn({ method: "GET" })
       ]),
     );
 
-    return PLATFORM_PUSH_EVENTS.map((ev) => {
+    return PLATFORM_PUSH_EVENT_DEFS.map((ev) => {
       const row = map.get(ev.key);
       return {
         key: ev.key as PlatformPushEventKey,
-        label: ev.label,
+        label: getPlatformPushEventLabel(ev.key),
         group: ev.group,
         pushEnabled: row?.push_enabled ?? true,
         updatedAt: row?.updated_at ?? null,
@@ -227,8 +229,12 @@ export const listPlatformPushScopes = createServerFn({ method: "GET" })
           enabled: s.enabled,
           updatedAt: s.updated_at,
           label: s.company_id
-            ? `חברה: ${companyName.get(s.company_id) ?? s.company_id}`
-            : `סניף: ${branchName.get(s.branch_id!) ?? s.branch_id}`,
+            ? i18n.t("libErrors.platformPush.scopeCompany", {
+                name: companyName.get(s.company_id) ?? s.company_id,
+              })
+            : i18n.t("libErrors.platformPush.scopeBranch", {
+                name: branchName.get(s.branch_id!) ?? s.branch_id,
+              }),
         }),
       ),
       companies: (companies ?? []).map((c: { id: string; name: string; status: string }) => ({
@@ -261,7 +267,7 @@ export const addPlatformPushScope = createServerFn({ method: "POST" })
         branchId: z.string().uuid().optional(),
       })
       .refine((v) => (!!v.companyId) !== (!!v.branchId), {
-        message: "יש לבחור חברה או סניף",
+        message: i18n.t("libErrors.platformPush.pickCompanyOrBranch"),
       })
       .parse(d),
   )
@@ -275,7 +281,7 @@ export const addPlatformPushScope = createServerFn({ method: "POST" })
       updated_by: context.userId,
     });
     if (insErr) {
-      if (insErr.code === "23505") throw new Error("ההיקף כבר קיים");
+      if (insErr.code === "23505") throw new Error(i18n.t("libErrors.platformPush.scopeExists"));
       throw new Error(insErr.message);
     }
     invalidatePlatformPushSettingsCache();

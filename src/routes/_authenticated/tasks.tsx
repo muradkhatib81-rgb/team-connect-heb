@@ -177,7 +177,9 @@ function getFreqLabel(f: string): string {
   };
   return i18n.t(map[f] ?? f);
 }
-const DOW_LABELS = ["א'", "ב'", "ג'", "ד'", "ה'", "ו'", "ש'"];
+function getDowLabel(d: number): string {
+  return i18n.t(`tasks.dow${d}`);
+}
 
 interface TasksSearch { status?: string; due?: string }
 
@@ -1669,7 +1671,7 @@ function RecurringSection({
                     {dept && <span>{i18n.t("tasks.dept")} {dept.name}</span>}
                     <span>{i18n.t("tasks.time")} {r.time_of_day}</span>
                     {r.frequency === "weekly" && r.days_of_week.length > 0 && (
-                      <span>{i18n.t("tasks.days")} {r.days_of_week.map((d) => DOW_LABELS[d]).join(", ")}</span>
+                      <span>{i18n.t("tasks.days")} {r.days_of_week.map((d) => getDowLabel(d)).join(", ")}</span>
                     )}
                     {r.frequency === "monthly" && r.day_of_month && (
                       <span>{i18n.t("tasks.dayOfMonth")} {r.day_of_month}</span>
@@ -1875,7 +1877,7 @@ function RecurrenceFormDialog({
             <div>
               <Label>{i18n.t("tasks.formWeekdays")}</Label>
               <div className="flex gap-2 mt-2 flex-wrap">
-                {DOW_LABELS.map((lbl, i) => (
+                {[0, 1, 2, 3, 4, 5, 6].map((i) => (
                   <Button
                     key={i}
                     type="button"
@@ -1883,7 +1885,7 @@ function RecurrenceFormDialog({
                     size="sm"
                     onClick={() => toggleDow(i)}
                   >
-                    {lbl}
+                    {getDowLabel(i)}
                   </Button>
                 ))}
               </div>

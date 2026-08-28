@@ -287,7 +287,7 @@ export function LiveShiftCardsSection() {
       const list = byShift.get(shiftCode) ?? [];
       list.push({
         id: empId,
-        full_name: info?.full_name ?? "עובד",
+        full_name: info?.full_name ?? i18n.t("dashboard.employee"),
         job_title: info?.job_title ?? null,
         department_name: info?.department_name ?? null,
         excluded_from_headcount: false,

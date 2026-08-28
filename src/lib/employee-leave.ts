@@ -1,3 +1,4 @@
+import i18n from "@/i18n";
 /** Profile fields used to decide if an employee is on leave on a calendar day (YYYY-MM-DD). */
 export type LeaveTypeCode = "regular" | "sick";
 
@@ -57,9 +58,9 @@ export function effectiveScheduleShift<T extends string | null | undefined>(
 
 /** Schedule card label for leave days — same wording for manual + request paths. */
 export function leaveOffLabel(code: LeaveTypeCode | string | null | undefined): string {
-  if (code === "sick") return "חופש מחלה";
-  if (code === "regular") return "חופש רגיל";
-  return "חופש";
+  if (code === "sick") return i18n.t("libErrors.leaves.offSick");
+  if (code === "regular") return i18n.t("libErrors.leaves.offRegular");
+  return i18n.t("libErrors.leaves.offGeneric");
 }
 
 /** Single calendar day as Hebrew short date (Latin digits, Gregorian). */
@@ -137,12 +138,12 @@ type LeaveDecisionPerson = {
 } | null | undefined;
 
 function leavePersonName(p: LeaveDecisionPerson): string {
-  if (!p) return "ההנהלה";
+  if (!p) return i18n.t("libErrors.leaves.managementFallback");
   const n =
     p.full_name ||
     [p.first_name, p.last_name].filter(Boolean).join(" ") ||
     "";
-  return n.trim() || "ההנהלה";
+  return n.trim() || i18n.t("libErrors.leaves.managementFallback");
 }
 
 /**
@@ -171,21 +172,21 @@ export function leaveDecisionMessage(r: {
   const notePart = note ? ` · ${note}` : "";
   const kindLabel =
     r.kind === "cancellation"
-      ? "בקשת הביטול"
+      ? i18n.t("libErrors.leaves.kindCancellation")
       : r.kind === "extension"
-        ? "בקשת ההארכה"
-        : "בקשת החופשה";
+        ? i18n.t("libErrors.leaves.kindExtension")
+        : i18n.t("libErrors.leaves.kindLeave");
 
   if (r.status === "rejected") {
     return {
       tone: "rejected",
-      text: `${kindLabel} נדחתה על ידי ${who}${when}${notePart}`,
+      text: i18n.t("libErrors.leaves.rejectedBy", { kind: kindLabel, who, when, note: notePart }),
     };
   }
   if (r.status === "cancelled") {
     return {
       tone: "cancelled",
-      text: `החופשה בוטלה על ידי ${who}${when}${notePart}`,
+      text: i18n.t("libErrors.leaves.cancelledBy", { who, when, note: notePart }),
     };
   }
   if (
@@ -198,7 +199,7 @@ export function leaveDecisionMessage(r: {
   ) {
     return {
       tone: "approved",
-      text: `${kindLabel} אושרה על ידי ${who}${when}`,
+      text: i18n.t("libErrors.leaves.approvedBy", { kind: kindLabel, who, when }),
     };
   }
   return null;

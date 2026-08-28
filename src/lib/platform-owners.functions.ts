@@ -15,6 +15,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import i18n from "@/i18n";
 import { formatEmployeeName } from "./employee-name";
 
 export type PlatformOwnerLevel = "primary" | "owner";
@@ -86,7 +87,7 @@ async function assertCallerIsPlatformOwner(
     .in("role", ["system_admin", "main_admin"]);
   if (error) throw new Error(error.message);
   const roles = (data ?? []).map((r: { role: string }) => r.role);
-  if (roles.length === 0) throw new Error("אין הרשאה — פעולה מיועדת לבעלי מערכת בלבד");
+  if (roles.length === 0) throw new Error(i18n.t("serverErrors.common.platformOwnersOnly"));
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
   const byUser = await loadOwnerRolesByUser(supabaseAdmin);
   return { isPrimary: resolvePrimaryOwnerUserId(byUser) === userId };
@@ -95,7 +96,7 @@ async function assertCallerIsPlatformOwner(
 async function assertCallerIsPrimary(supabase: any, userId: string): Promise<void> {
   const { isPrimary } = await assertCallerIsPlatformOwner(supabase, userId);
   if (!isPrimary) {
-    throw new Error("פעולה זו מותרת רק לבעל המערכת הראשי");
+    throw new Error(i18n.t("serverErrors.common.primaryOwnerOnly"));
   }
 }
 
@@ -159,10 +160,10 @@ export const listPlatformOwners = createServerFn({ method: "GET" })
 
 
 const createOwnerInput = z.object({
-  first_name: z.string().trim().min(1, "נדרש שם פרטי").max(50),
-  last_name: z.string().trim().min(1, "נדרש שם משפחה").max(50),
-  email: z.string().email("כתובת דוא\"ל לא תקינה"),
-  password: z.string().min(8, "סיסמה חייבת להכיל לפחות 8 תווים"),
+  first_name: z.string().trim().min(1, i18n.t("serverErrors.common.firstNameMin")).max(50),
+  last_name: z.string().trim().min(1, i18n.t("serverErrors.common.lastNameMin")).max(50),
+  email: z.string().email(i18n.t("serverErrors.common.invalidEmail")),
+  password: z.string().min(8, i18n.t("serverErrors.common.passwordMin8")),
   id_number: z.string().trim().optional().nullable(),
   phone: z.string().trim().optional().nullable(),
 });
@@ -208,7 +209,7 @@ export const createPlatformOwner = createServerFn({ method: "POST" })
       const detail = [errAny?.message, errAny?.code ? `(code: ${errAny.code})` : null, errAny?.status ? `(status: ${errAny.status})` : null]
         .filter(Boolean)
         .join(" ");
-      throw new Error(detail || "יצירת המשתמש נכשלה (שגיאת שרת לא ידועה)");
+      throw new Error(detail || i18n.t("serverErrors.common.userCreateFailed"));
     }
     const newUserId = created.user.id;
 
@@ -231,7 +232,7 @@ export const suspendPlatformOwner = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     await assertCallerIsPrimary(context.supabase, context.userId);
     if (data.user_id === context.userId) {
-      throw new Error("לא ניתן להשעות את עצמך");
+      throw new Error(i18n.t("serverErrors.common.cannotSuspendSelf"));
     }
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
 
@@ -241,10 +242,10 @@ export const suspendPlatformOwner = createServerFn({ method: "POST" })
       .eq("user_id", data.user_id);
     const roles = new Set((target ?? []).map((r: { role: string }) => r.role));
     if (!roles.has("main_admin") && !roles.has("system_admin")) {
-      throw new Error("המשתמש אינו בעל מערכת");
+      throw new Error(i18n.t("serverErrors.common.userNotPlatformOwner"));
     }
     if (roles.has("system_admin")) {
-      throw new Error("לא ניתן להשעות את בעל המערכת הראשי");
+      throw new Error(i18n.t("serverErrors.common.cannotSuspendPrimary"));
     }
 
     const { error } = await supabaseAdmin
@@ -294,7 +295,7 @@ export const deletePlatformOwner = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     await assertCallerIsPrimary(context.supabase, context.userId);
     if (data.user_id === context.userId) {
-      throw new Error("לא ניתן למחוק את עצמך");
+      throw new Error(i18n.t("serverErrors.common.cannotDeleteSelf"));
     }
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
 
@@ -304,10 +305,10 @@ export const deletePlatformOwner = createServerFn({ method: "POST" })
       .eq("user_id", data.user_id);
     const roles = new Set((rows ?? []).map((r: { role: string }) => r.role));
     if (roles.has("system_admin")) {
-      throw new Error("לא ניתן למחוק את בעל המערכת הראשי");
+      throw new Error(i18n.t("serverErrors.common.cannotDeletePrimary"));
     }
     if (!roles.has("main_admin")) {
-      throw new Error("המשתמש אינו בעל מערכת");
+      throw new Error(i18n.t("serverErrors.common.userNotPlatformOwner"));
     }
 
     // Delete roles first (guards allow it because service_role has no auth.uid()).
@@ -335,7 +336,7 @@ export const transferPrimaryOwnership = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     await assertCallerIsPrimary(context.supabase, context.userId);
     if (data.user_id === context.userId) {
-      throw new Error("לבחור בעל מערכת אחר לצורך העברת בעלות");
+      throw new Error(i18n.t("serverErrors.common.chooseOtherOwner"));
     }
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
 
@@ -345,7 +346,7 @@ export const transferPrimaryOwnership = createServerFn({ method: "POST" })
       .eq("user_id", data.user_id);
     const roles = new Set((targetRoles ?? []).map((r: { role: string }) => r.role));
     if (!roles.has("main_admin")) {
-      throw new Error("היעד חייב להיות בעל מערכת קיים");
+      throw new Error(i18n.t("serverErrors.common.targetMustBeOwner"));
     }
 
     // The enforce_single_system_admin trigger requires only one system_admin
@@ -400,8 +401,8 @@ export const listPlatformOwnerAuditLog = createServerFn({ method: "GET" })
 
 const updateProfileInput = z.object({
   user_id: z.string().uuid(),
-  first_name: z.string().trim().min(1, "נדרש שם פרטי").max(50),
-  last_name: z.string().trim().min(1, "נדרש שם משפחה").max(50),
+  first_name: z.string().trim().min(1, i18n.t("serverErrors.common.firstNameMin")).max(50),
+  last_name: z.string().trim().min(1, i18n.t("serverErrors.common.lastNameMin")).max(50),
   phone: z.string().trim().nullable().optional(),
   id_number: z.string().trim().nullable().optional(),
 });
@@ -425,7 +426,7 @@ export const updatePlatformOwnerProfile = createServerFn({ method: "POST" })
       .eq("user_id", data.user_id);
     const roles = new Set((rows ?? []).map((r: { role: string }) => r.role));
     if (!roles.has("main_admin") && !roles.has("system_admin")) {
-      throw new Error("המשתמש אינו בעל מערכת");
+      throw new Error(i18n.t("serverErrors.common.userNotPlatformOwner"));
     }
 
     const patch: { first_name: string; last_name: string; phone?: string | null; id_number?: string | null } = {

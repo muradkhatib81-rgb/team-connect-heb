@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { Building2, Plus, Pencil, Trash2, UserCog, Search, Loader2 } from "lucide-react";
 import { toast } from "sonner";
+import { useTranslation } from "react-i18next";
 
 import {
   listBranchesWithStats,
@@ -72,6 +73,7 @@ export const Route = createFileRoute("/_authenticated/system/branches")({
 });
 
 function BranchesPage() {
+  const { t } = useTranslation();
   const qc = useQueryClient();
   const list = useServerFn(listBranchesWithStats);
   const { setActiveBranchId } = useActiveBranch();
@@ -129,12 +131,12 @@ function BranchesPage() {
             <Building2 className="size-6 text-primary-foreground" />
           </div>
           <div>
-            <h1 className="text-2xl font-bold">סניפים</h1>
-            <p className="text-sm text-muted-foreground">ניהול כלל סניפי הרשת</p>
+            <h1 className="text-2xl font-bold">{t("systemBranchesPage.title")}</h1>
+            <p className="text-sm text-muted-foreground">{t("systemBranchesPage.subtitle")}</p>
           </div>
         </div>
         <Button onClick={() => setCreateOpen(true)}>
-          <Plus className="size-4" /> סניף חדש
+          <Plus className="size-4" /> {t("systemBranchesPage.newBranch")}
         </Button>
       </div>
 
@@ -145,26 +147,26 @@ function BranchesPage() {
             <Input
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="חיפוש לפי שם, קוד, כתובת, טלפון או מנהל"
+              placeholder={t("systemBranchesPage.searchPlaceholder")}
               className="pr-9"
             />
           </div>
           <Select value={status} onValueChange={(v) => setStatus(v as FilterStatus)}>
-            <SelectTrigger><SelectValue placeholder="סטטוס" /></SelectTrigger>
+            <SelectTrigger><SelectValue placeholder={t("profile.status")} /></SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">כל הסטטוסים</SelectItem>
-              <SelectItem value="active">פעיל</SelectItem>
-              <SelectItem value="inactive">לא פעיל</SelectItem>
+              <SelectItem value="all">{t("systemBranchesPage.allStatuses")}</SelectItem>
+              <SelectItem value="active">{t("profile.active")}</SelectItem>
+              <SelectItem value="inactive">{t("profile.inactive")}</SelectItem>
             </SelectContent>
           </Select>
           <Select value={sort} onValueChange={(v) => setSort(v as SortKey)}>
-            <SelectTrigger><SelectValue placeholder="מיון" /></SelectTrigger>
+            <SelectTrigger><SelectValue placeholder={t("dashboard.sort")} /></SelectTrigger>
             <SelectContent>
-              <SelectItem value="created">תאריך יצירה</SelectItem>
-              <SelectItem value="name">שם</SelectItem>
-              <SelectItem value="code">קוד</SelectItem>
-              <SelectItem value="employees">מס' עובדים</SelectItem>
-              <SelectItem value="departments">מס' מחלקות</SelectItem>
+              <SelectItem value="created">{t("systemBranchesPage.sortCreated")}</SelectItem>
+              <SelectItem value="name">{t("systemBranchesPage.sortName")}</SelectItem>
+              <SelectItem value="code">{t("systemBranchesPage.sortCode")}</SelectItem>
+              <SelectItem value="employees">{t("systemBranchesPage.sortEmployees")}</SelectItem>
+              <SelectItem value="departments">{t("systemBranchesPage.sortDepartments")}</SelectItem>
             </SelectContent>
           </Select>
         </div>
@@ -175,7 +177,7 @@ function BranchesPage() {
           <Loader2 className="size-6 animate-spin text-muted-foreground" />
         </div>
       ) : filtered.length === 0 ? (
-        <Card className="p-8 text-center text-muted-foreground">לא נמצאו סניפים</Card>
+        <Card className="p-8 text-center text-muted-foreground">{t("systemBranchesPage.noBranches")}</Card>
       ) : (
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
           {filtered.map((b) => (
@@ -186,40 +188,40 @@ function BranchesPage() {
                   <div className="text-xs text-muted-foreground font-mono">{b.code}</div>
                 </div>
                 <Badge variant={b.is_active ? "default" : "secondary"}>
-                  {b.is_active ? "פעיל" : "לא פעיל"}
+                  {b.is_active ? t("profile.active") : t("profile.inactive")}
                 </Badge>
               </div>
               <div className="text-sm space-y-1">
-                <div><span className="text-muted-foreground">כתובת: </span>{b.address || "—"}</div>
-                <div><span className="text-muted-foreground">טלפון: </span>{b.phone || "—"}</div>
-                <div><span className="text-muted-foreground">מנהל סניף: </span>{b.manager_name || "—"}</div>
+                <div><span className="text-muted-foreground">{t("systemBranchesPage.addressLabel")} </span>{b.address || "—"}</div>
+                <div><span className="text-muted-foreground">{t("systemBranchesPage.phoneLabel")} </span>{b.phone || "—"}</div>
+                <div><span className="text-muted-foreground">{t("systemBranchesPage.branchManagerLabel")} </span>{b.manager_name || "—"}</div>
               </div>
               <div className="grid grid-cols-3 gap-2 text-center text-sm border-t pt-3">
                 <div>
                   <div className="font-bold">{b.employees_count}</div>
-                  <div className="text-xs text-muted-foreground">עובדים</div>
+                  <div className="text-xs text-muted-foreground">{t("systemBranchesPage.employees")}</div>
                 </div>
                 <div>
                   <div className="font-bold">{b.departments_count}</div>
-                  <div className="text-xs text-muted-foreground">מחלקות</div>
+                  <div className="text-xs text-muted-foreground">{t("systemBranchesPage.departments")}</div>
                 </div>
                 <div>
                   <div className="font-bold">{b.active_schedules_count}</div>
-                  <div className="text-xs text-muted-foreground">סידורים פעילים</div>
+                  <div className="text-xs text-muted-foreground">{t("systemBranchesPage.activeSchedules")}</div>
                 </div>
               </div>
               <div className="text-xs text-muted-foreground">
-                נוצר: {new Date(b.created_at).toLocaleDateString("he-IL")}
+                {t("systemBranchesPage.createdAt")} {new Date(b.created_at).toLocaleDateString("he-IL")}
               </div>
               <div className="flex flex-wrap gap-2 pt-2 border-t">
                 <Button size="sm" variant="outline" onClick={() => setEditing(b)}>
-                  <Pencil className="size-3.5" /> עריכה
+                  <Pencil className="size-3.5" /> {t("common.edit")}
                 </Button>
                 <Button size="sm" variant="outline" onClick={() => setManaging(b)}>
-                  <UserCog className="size-3.5" /> מנהל סניף
+                  <UserCog className="size-3.5" /> {t("systemBranchesPage.branchManagerAction")}
                 </Button>
                 <Button size="sm" variant="destructive" onClick={() => setDeleting(b)}>
-                  <Trash2 className="size-3.5" /> מחק
+                  <Trash2 className="size-3.5" /> {t("common.delete")}
                 </Button>
               </div>
             </Card>
@@ -298,6 +300,7 @@ function BranchFormDialog({
   onCreated?: (branchId: string) => void;
   onUpdated?: () => void;
 }) {
+  const { t } = useTranslation();
   const isEdit = !!branch;
   const create = useServerFn(createBranch);
   const update = useServerFn(updateBranch);
@@ -350,56 +353,56 @@ function BranchFormDialog({
     },
     onSuccess: (res: any) => {
       if (isEdit) {
-        toast.success("הסניף עודכן");
+        toast.success(t("systemBranchesPage.updated"));
         onUpdated?.();
       } else {
         const copied = res?.departments_copied ?? 0;
         toast.success(
           copied > 0
-            ? `הסניף נוצר והועתקו ${copied} מחלקות`
-            : "הסניף נוצר",
+            ? t("systemBranchesPage.createdWithDepartments", { count: copied })
+            : t("systemBranchesPage.created"),
         );
         if (res?.id) onCreated?.(res.id as string);
       }
       onOpenChange(false);
     },
-    onError: (e: any) => toast.error(e?.message ?? "שגיאה"),
+    onError: (e: any) => toast.error(e?.message ?? t("common.error")),
   });
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent dir="rtl">
         <DialogHeader>
-          <DialogTitle>{isEdit ? "עריכת סניף" : "סניף חדש"}</DialogTitle>
-          <DialogDescription>פרטי הסניף</DialogDescription>
+          <DialogTitle>{isEdit ? t("systemBranchesPage.editTitle") : t("systemBranchesPage.newBranch")}</DialogTitle>
+          <DialogDescription>{t("systemBranchesPage.formDesc")}</DialogDescription>
         </DialogHeader>
         <div className="space-y-3">
           <div>
-            <Label>שם הסניף</Label>
+            <Label>{t("systemBranchesPage.branchName")}</Label>
             <Input value={name} onChange={(e) => setName(e.target.value)} maxLength={100} />
           </div>
           <div>
-            <Label>קוד סניף (ייחודי)</Label>
+            <Label>{t("systemBranchesPage.branchCode")}</Label>
             <Input value={code} onChange={(e) => setCode(e.target.value)} maxLength={40} className="font-mono" />
           </div>
           <div>
-            <Label>כתובת</Label>
+            <Label>{t("platformBranches.stats.address")}</Label>
             <Input value={address} onChange={(e) => setAddress(e.target.value)} maxLength={200} />
           </div>
           <div>
-            <Label>טלפון</Label>
+            <Label>{t("profile.phone")}</Label>
             <Input value={phone} onChange={(e) => setPhone(e.target.value)} maxLength={40} />
           </div>
           <div className="flex items-center justify-between rounded-lg border p-3">
             <div>
-              <div className="font-medium">סטטוס</div>
-              <div className="text-xs text-muted-foreground">סניף לא פעיל חוסם כניסת עובדים, יצירת סידורים ודיווחים</div>
+              <div className="font-medium">{t("profile.status")}</div>
+              <div className="text-xs text-muted-foreground">{t("systemBranchesPage.inactiveHint")}</div>
             </div>
             <Switch checked={isActive} onCheckedChange={setIsActive} />
           </div>
           {!isEdit && (
             <div className="space-y-3 rounded-lg border p-3">
-              <div className="font-medium">מבנה מחלקות</div>
+              <div className="font-medium">{t("systemBranchesPage.deptStructure")}</div>
               <div className="flex flex-col gap-2">
                 <label className="flex items-center gap-2 text-sm cursor-pointer">
                   <input
@@ -408,7 +411,7 @@ function BranchFormDialog({
                     checked={copyMode === "empty"}
                     onChange={() => setCopyMode("empty")}
                   />
-                  סניף ריק (ללא מחלקות)
+                  {t("systemBranchesPage.emptyBranch")}
                 </label>
                 <label className="flex items-center gap-2 text-sm cursor-pointer">
                   <input
@@ -417,16 +420,19 @@ function BranchFormDialog({
                     checked={copyMode === "copy"}
                     onChange={() => setCopyMode("copy")}
                   />
-                  העתק מסניף קיים
+                  {t("systemBranchesPage.copyFromExisting")}
                 </label>
               </div>
               {copyMode === "copy" && (
                 <Select value={sourceBranchId} onValueChange={setSourceBranchId}>
-                  <SelectTrigger><SelectValue placeholder="בחר סניף מקור" /></SelectTrigger>
+                  <SelectTrigger><SelectValue placeholder={t("systemBranchesPage.selectSourceBranch")} /></SelectTrigger>
                   <SelectContent>
                     {branches.map((b) => (
                       <SelectItem key={b.id} value={b.id}>
-                        {b.name} ({b.departments_count} מחלקות)
+                        {t("systemBranchesPage.sourceBranchOption", {
+                          name: b.name,
+                          count: b.departments_count,
+                        })}
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -434,14 +440,14 @@ function BranchFormDialog({
               )}
               {copyMode === "copy" && (
                 <p className="text-xs text-muted-foreground">
-                  יועתקו שמות, סטטוס פעיל/לא פעיל וסדר המחלקות. עובדים, סידורים ומשימות לא יועתקו.
+                  {t("systemBranchesPage.copyHint")}
                 </p>
               )}
             </div>
           )}
         </div>
         <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>ביטול</Button>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>{t("common.cancel")}</Button>
           <Button
             onClick={() => m.mutate()}
             disabled={
@@ -452,7 +458,7 @@ function BranchFormDialog({
             }
           >
             {m.isPending && <Loader2 className="size-4 animate-spin" />}
-            {isEdit ? "שמור שינויים" : "צור סניף"}
+            {isEdit ? t("systemBranchesPage.saveChanges") : t("systemBranchesPage.createBranch")}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -469,6 +475,7 @@ function ManagerDialog({
   onClose: () => void;
   onSaved: () => void;
 }) {
+  const { t } = useTranslation();
   const listEmp = useServerFn(listEmployeesForManagerPicker);
   const assign = useServerFn(assignBranchManager);
   const empQ = useQuery({
@@ -486,26 +493,26 @@ function ManagerDialog({
         },
       }),
     onSuccess: () => {
-      toast.success("מנהל הסניף עודכן");
+      toast.success(t("systemBranchesPage.managerUpdated"));
       onSaved();
     },
-    onError: (e: any) => toast.error(e?.message ?? "שגיאה"),
+    onError: (e: any) => toast.error(e?.message ?? t("common.error")),
   });
 
   return (
     <Dialog open onOpenChange={(o) => !o && onClose()}>
       <DialogContent dir="rtl">
         <DialogHeader>
-          <DialogTitle>מנהל סניף — {branch.name}</DialogTitle>
-          <DialogDescription>עובד אחד יכול לנהל סניף אחד בלבד</DialogDescription>
+          <DialogTitle>{t("systemBranchesPage.managerDialogTitle", { name: branch.name })}</DialogTitle>
+          <DialogDescription>{t("systemBranchesPage.oneManagerRule")}</DialogDescription>
         </DialogHeader>
         {empQ.isLoading ? (
           <div className="flex justify-center py-6"><Loader2 className="size-5 animate-spin" /></div>
         ) : (
           <Select value={managerId} onValueChange={setManagerId}>
-            <SelectTrigger><SelectValue placeholder="בחר עובד" /></SelectTrigger>
+            <SelectTrigger><SelectValue placeholder={t("common.select")} /></SelectTrigger>
             <SelectContent>
-              <SelectItem value="__none__">— ללא מנהל סניף —</SelectItem>
+              <SelectItem value="__none__">{t("systemBranchesPage.noBranchManager")}</SelectItem>
               {((empQ.data ?? []) as any[]).map((e) => (
                 <SelectItem key={e.id} value={e.id}>{e.full_name}</SelectItem>
               ))}
@@ -513,10 +520,10 @@ function ManagerDialog({
           </Select>
         )}
         <DialogFooter>
-          <Button variant="outline" onClick={onClose}>ביטול</Button>
+          <Button variant="outline" onClick={onClose}>{t("common.cancel")}</Button>
           <Button onClick={() => m.mutate()} disabled={m.isPending}>
             {m.isPending && <Loader2 className="size-4 animate-spin" />}
-            שמור
+            {t("common.save")}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -533,6 +540,7 @@ function DeleteDialog({
   onClose: () => void;
   onDeleted: () => void;
 }) {
+  const { t } = useTranslation();
   const del = useServerFn(deleteBranch);
   const fetchBlockers = useServerFn(getBranchDeleteBlockers);
   const blockersQ = useQuery({
@@ -543,12 +551,12 @@ function DeleteDialog({
 
   const data = blockersQ.data;
   const operationalRows: { label: string; value: number }[] = [
-    { label: "עובדים", value: data?.employees ?? 0 },
-    { label: "סידורי עבודה", value: data?.schedules ?? 0 },
-    { label: "דוחות", value: data?.reports ?? 0 },
-    { label: "משימות", value: data?.tasks ?? 0 },
-    { label: "הודעות", value: data?.messages ?? 0 },
-    { label: "התראות", value: data?.notifications ?? 0 },
+    { label: t("systemBranchesPage.blockerEmployees"), value: data?.employees ?? 0 },
+    { label: t("systemBranchesPage.blockerSchedules"), value: data?.schedules ?? 0 },
+    { label: t("systemBranchesPage.blockerReports"), value: data?.reports ?? 0 },
+    { label: t("systemBranchesPage.blockerTasks"), value: data?.tasks ?? 0 },
+    { label: t("systemBranchesPage.blockerMessages"), value: data?.messages ?? 0 },
+    { label: t("systemBranchesPage.blockerNotifications"), value: data?.notifications ?? 0 },
   ];
   const loading = blockersQ.isLoading;
   const loadError = data?.ok === false ? data.error : null;
@@ -569,17 +577,20 @@ function DeleteDialog({
       if (res?.ok && res?.deleted) {
         if ((res?.departmentsDeleted ?? 0) > 0) {
           toast.success(
-            `הסניף "${branch.name}" נמחק יחד עם ${res.departmentsDeleted} מחלקות`,
+            t("systemBranchesPage.deletedWithDepts", {
+              name: branch.name,
+              count: res.departmentsDeleted,
+            }),
           );
         } else {
-          toast.success(`הסניף "${branch.name}" נמחק בהצלחה`);
+          toast.success(t("systemBranchesPage.deletedSuccess", { name: branch.name }));
         }
         onDeleted();
         return;
       }
       const message =
         (typeof res?.message === "string" && res.message.trim()) ||
-        "לא ניתן למחוק את הסניף כעת. נסה שוב מאוחר יותר.";
+        t("systemBranchesPage.deleteBlocked");
       const [first, ...rest] = message.split("\n");
       toast.error(first, {
         description: rest.length ? rest.join("\n") : undefined,
@@ -588,26 +599,26 @@ function DeleteDialog({
     },
     onError: (e: any) => {
       console.error("[DeleteBranch] unexpected error:", e);
-      toast.error("אירעה שגיאה לא צפויה במחיקת הסניף. נסה שוב מאוחר יותר.", {
+      toast.error(t("systemBranchesPage.deleteUnexpectedError"), {
         duration: 8000,
       });
     },
   });
 
-  let actionLabel = "מחק סניף";
-  if (onlyDepartments) actionLabel = "מחק סניף ומחלקות";
+  let actionLabel = t("systemBranchesPage.deleteBranch");
+  if (onlyDepartments) actionLabel = t("systemBranchesPage.deleteBranchAndDepts");
 
   return (
     <AlertDialog open onOpenChange={(o) => !o && onClose()}>
       <AlertDialogContent dir="rtl">
         <AlertDialogHeader>
-          <AlertDialogTitle>מחיקת סניף "{branch.name}"</AlertDialogTitle>
+          <AlertDialogTitle>{t("systemBranchesPage.deleteTitle", { name: branch.name })}</AlertDialogTitle>
           <AlertDialogDescription asChild>
             <div className="space-y-3">
               {loading && (
                 <div className="flex items-center gap-2 text-muted-foreground">
                   <Loader2 className="size-4 animate-spin" />
-                  בודק נתונים מקושרים…
+                  {t("systemBranchesPage.checkingLinkedData")}
                 </div>
               )}
 
@@ -616,19 +627,19 @@ function DeleteDialog({
               )}
 
               {!loading && !loadError && isEmpty && (
-                <div>הסניף ריק לחלוטין. הפעולה אינה ניתנת לביטול.</div>
+                <div>{t("systemBranchesPage.emptyBranchDelete")}</div>
               )}
 
               {!loading && !loadError && onlyDepartments && (
                 <div className="space-y-2">
                   <div className="font-medium text-foreground">
-                    הסניף מכיל {departmentsCount} מחלקות ואין בו נתונים תפעוליים נוספים.
+                    {t("systemBranchesPage.onlyDepartmentsDelete", { count: departmentsCount })}
                   </div>
                   <div>
-                    האם ברצונך למחוק את הסניף יחד עם כל המחלקות שלו?
+                    {t("systemBranchesPage.confirmDeleteWithDepts")}
                   </div>
                   <div className="text-xs text-muted-foreground">
-                    הפעולה אינה ניתנת לביטול. המחלקות יימחקו תחילה ואז הסניף.
+                    {t("systemBranchesPage.deleteCascadeHint")}
                   </div>
                 </div>
               )}
@@ -636,7 +647,7 @@ function DeleteDialog({
               {!loading && !loadError && !canDelete && (
                 <div className="space-y-2">
                   <div className="font-medium text-foreground">
-                    לא ניתן למחוק את הסניף. קיימים בו נתונים תפעוליים:
+                    {t("systemBranchesPage.cannotDeleteOperational")}
                   </div>
                   <ul className="space-y-1 rounded-md border bg-muted/40 p-3 text-foreground">
                     {operationalRows.map((r) => (
@@ -655,12 +666,12 @@ function DeleteDialog({
                       </li>
                     ))}
                     <li className="flex items-center justify-between border-t pt-1 text-muted-foreground">
-                      <span>• מחלקות</span>
+                      <span>• {t("systemBranchesPage.blockerDepartments")}</span>
                       <span>{departmentsCount}</span>
                     </li>
                   </ul>
                   <div className="text-xs text-muted-foreground">
-                    יש להעביר או למחוק את הנתונים התפעוליים לפני מחיקת הסניף.
+                    {t("systemBranchesPage.transferOrDeleteHint")}
                   </div>
                 </div>
               )}
@@ -668,7 +679,7 @@ function DeleteDialog({
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
-          <AlertDialogCancel>ביטול</AlertDialogCancel>
+          <AlertDialogCancel>{t("common.cancel")}</AlertDialogCancel>
           <AlertDialogAction
             onClick={(e) => {
               e.preventDefault();

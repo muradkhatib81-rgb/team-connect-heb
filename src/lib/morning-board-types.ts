@@ -1,3 +1,4 @@
+import i18n from "@/i18n";
 export type MorningBoardItemType =
   | "image"
   | "video"
@@ -104,3 +105,29 @@ export const PRIORITY_BADGE_CLASS: Record<MorningBoardPriority, string> = {
   urgent: "bg-orange-100 text-orange-900 dark:bg-orange-900/40 dark:text-orange-100",
   critical: "bg-red-100 text-red-900 dark:bg-red-900/40 dark:text-red-100",
 };
+
+
+const MORNING_BOARD_TYPE_I18N: Record<MorningBoardItemType, string> = {
+  image: "libErrors.morningBoard.typeImage",
+  video: "libErrors.morningBoard.typeVideo",
+  audio: "libErrors.morningBoard.typeAudio",
+  announcement: "libErrors.morningBoard.typeAnnouncement",
+  highlight: "libErrors.morningBoard.typeHighlight",
+};
+
+const MORNING_BOARD_PRIORITY_I18N: Record<MorningBoardPriority, string> = {
+  normal: "libErrors.morningBoard.priorityNormal",
+  important: "libErrors.morningBoard.priorityImportant",
+  urgent: "libErrors.morningBoard.priorityUrgent",
+  critical: "libErrors.morningBoard.priorityCritical",
+};
+
+export function getMorningBoardTypeLabel(type: MorningBoardItemType): string {
+  const key = MORNING_BOARD_TYPE_I18N[type];
+  return key ? i18n.t(key) : type;
+}
+
+export function getMorningBoardPriorityLabel(priority: MorningBoardPriority): string {
+  const key = MORNING_BOARD_PRIORITY_I18N[priority];
+  return key ? i18n.t(key) : priority;
+}
