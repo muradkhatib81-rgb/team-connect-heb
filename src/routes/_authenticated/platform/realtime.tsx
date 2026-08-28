@@ -2,6 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
 import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
 import { toast } from "sonner";
+import { useTranslation } from "react-i18next";
 import { Eye, EyeOff, Loader2, Lock, Pencil, Plus, Radio, Trash2, Users, Zap } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -43,18 +44,13 @@ export const Route = createFileRoute("/_authenticated/platform/realtime")({
 
 const CHANNELS_QUERY_KEY = ["platform-realtime-channels"] as const;
 
-const VISIBILITY_LABELS: Record<ChannelVisibility, string> = {
-  public: "ציבורי",
-  private: "פרטי",
-  system: "מערכת",
-};
-
 function VisibilityBadge({ visibility }: { visibility: ChannelVisibility }) {
+  const { t } = useTranslation();
   if (visibility === "system") {
     return (
       <Badge variant="secondary" className="gap-1">
         <Zap className="size-3" />
-        מערכת
+        {t("platformRealtime.visibility.system")}
       </Badge>
     );
   }
@@ -62,19 +58,20 @@ function VisibilityBadge({ visibility }: { visibility: ChannelVisibility }) {
     return (
       <Badge variant="outline" className="gap-1">
         <Lock className="size-3" />
-        פרטי
+        {t("platformRealtime.visibility.private")}
       </Badge>
     );
   }
   return (
     <Badge variant="outline" className="gap-1">
       <Eye className="size-3" />
-      ציבורי
+      {t("platformRealtime.visibility.public")}
     </Badge>
   );
 }
 
 function PlatformRealtimePage() {
+  const { t } = useTranslation();
   const { runtime } = usePlatformContext();
   const qc = useQueryClient();
   const [openCreate, setOpenCreate] = useState(false);
@@ -90,10 +87,10 @@ function PlatformRealtimePage() {
   const closeMut = useMutation({
     mutationFn: async (name: string) => runtime.closeRealtimeChannel(name),
     onSuccess: () => {
-      toast.success("הערוץ נסגר");
+      toast.success(t("platformRealtime.toasts.closed"));
       qc.invalidateQueries({ queryKey: CHANNELS_QUERY_KEY });
     },
-    onError: (e: Error) => toast.error(e.message ?? "הפעולה נכשלה"),
+    onError: (e: Error) => toast.error(e.message ?? t("platformRealtime.toasts.failed")),
   });
 
   const reopenMut = useMutation({
@@ -104,20 +101,20 @@ function PlatformRealtimePage() {
         visibility: channel.visibility,
       }),
     onSuccess: () => {
-      toast.success("הערוץ נפתח מחדש");
+      toast.success(t("platformRealtime.toasts.reopened"));
       qc.invalidateQueries({ queryKey: CHANNELS_QUERY_KEY });
     },
-    onError: (e: Error) => toast.error(e.message ?? "הפעולה נכשלה"),
+    onError: (e: Error) => toast.error(e.message ?? t("platformRealtime.toasts.failed")),
   });
 
   const publishMut = useMutation({
     mutationFn: async (name: string) =>
       runtime.publishRealtimeEvent(name, { type: "platform.test-event", sentAt: new Date().toISOString() }),
     onSuccess: () => {
-      toast.success("אירוע בדיקה נשלח");
+      toast.success(t("platformRealtime.toasts.testSent"));
       qc.invalidateQueries({ queryKey: CHANNELS_QUERY_KEY });
     },
-    onError: (e: Error) => toast.error(e.message ?? "הפעולה נכשלה"),
+    onError: (e: Error) => toast.error(e.message ?? t("platformRealtime.toasts.failed")),
   });
 
   const channels = channelsQuery.data ?? [];
@@ -131,23 +128,22 @@ function PlatformRealtimePage() {
             <Radio className="size-6" />
           </div>
           <div className="min-w-0">
-            <h1 className="truncate text-2xl sm:text-3xl font-bold">ניהול Real-Time</h1>
+            <h1 className="truncate text-2xl sm:text-3xl font-bold">{t("platformRealtime.title")}</h1>
             <p className="text-sm text-muted-foreground mt-1">
-              ערוצי Real-Time בהיקף הפלטפורמה — דרך ה-Realtime Manager הקיים. ללא ספק Realtime
-              חיצוני מחובר.
+              {t("platformRealtime.subtitle")}
             </p>
           </div>
         </div>
         <Button onClick={() => setOpenCreate(true)} className="gap-2">
           <Plus className="size-4" />
-          פתיחת ערוץ
+          {t("platformRealtime.openChannel")}
         </Button>
       </header>
 
       <Card className="card-elevated overflow-hidden">
         <div className="p-4 border-b flex items-center justify-between">
           <h2 className="text-sm font-semibold text-muted-foreground">
-            ערוצים ({channels.length}) · פתוחים: {openCount}
+            {t("platformRealtime.channelsHeader", { count: channels.length, open: openCount })}
           </h2>
         </div>
         {channelsQuery.isLoading ? (
@@ -156,7 +152,7 @@ function PlatformRealtimePage() {
           </div>
         ) : channels.length === 0 ? (
           <div className="p-8 text-sm text-muted-foreground text-center">
-            אין ערוצים עדיין בסשן הנוכחי. ניתן לפתוח ערוץ חדש מהכפתור מעלה.
+            {t("platformRealtime.noChannels")}
           </div>
         ) : (
           <ul className="divide-y">
@@ -172,11 +168,11 @@ function PlatformRealtimePage() {
                       {channel.closedAt ? (
                         <Badge variant="secondary" className="gap-1">
                           <EyeOff className="size-3" />
-                          סגור
+                          {t("platformRealtime.status.closed")}
                         </Badge>
                       ) : (
                         <Badge className="gap-1 bg-emerald-100 text-emerald-800 hover:bg-emerald-100 dark:bg-emerald-950/30 dark:text-emerald-400">
-                          פתוח
+                          {t("platformRealtime.status.open")}
                         </Badge>
                       )}
                     </div>
@@ -189,7 +185,7 @@ function PlatformRealtimePage() {
                       variant="ghost"
                       size="icon"
                       className="size-8"
-                      title="עריכה"
+                      title={t("platformRealtime.actions.edit")}
                       onClick={() => setEditChannel(channel)}
                     >
                       <Pencil className="size-4" />
@@ -199,7 +195,7 @@ function PlatformRealtimePage() {
                           variant="ghost"
                           size="icon"
                           className="size-8"
-                          title="שליחת אירוע בדיקה"
+                          title={t("platformRealtime.actions.testEvent")}
                           onClick={() => publishMut.mutate(channel.name)}
                           disabled={publishMut.isPending}
                         >
@@ -213,7 +209,7 @@ function PlatformRealtimePage() {
                         onClick={() => reopenMut.mutate(channel)}
                         disabled={reopenMut.isPending}
                       >
-                        פתיחה מחדש
+                        {t("platformRealtime.actions.reopen")}
                       </Button>
                     ) : (
                       <Button
@@ -222,14 +218,14 @@ function PlatformRealtimePage() {
                         onClick={() => closeMut.mutate(channel.name)}
                         disabled={closeMut.isPending}
                       >
-                        סגירה
+                        {t("platformRealtime.actions.close")}
                       </Button>
                     )}
                     <Button
                       variant="ghost"
                       size="icon"
                       className="size-8 text-destructive hover:text-destructive"
-                      title="מחיקה"
+                      title={t("platformRealtime.actions.delete")}
                       onClick={() => setDeleteChannel(channel)}
                     >
                       <Trash2 className="size-4" />
@@ -237,12 +233,12 @@ function PlatformRealtimePage() {
                   </div>
                 </div>
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-center text-xs">
-                  <StatBox icon={Users} label="לקוחות מחוברים" value={channel.connectedClients} />
-                  <StatBox icon={Radio} label="מנויים פעילים" value={channel.activeSubscriptions} />
-                  <StatBox icon={Zap} label="אירועים פעילים" value={channel.eventsPublished} />
+                  <StatBox icon={Users} label={t("platformRealtime.stats.clients")} value={channel.connectedClients} />
+                  <StatBox icon={Radio} label={t("platformRealtime.stats.subscriptions")} value={channel.activeSubscriptions} />
+                  <StatBox icon={Zap} label={t("platformRealtime.stats.events")} value={channel.eventsPublished} />
                   <StatBox
                     icon={Loader2}
-                    label="פעילות אחרונה"
+                    label={t("platformRealtime.stats.lastActivity")}
                     value={
                       channel.lastActivityAt
                         ? channel.lastActivityAt.toLocaleTimeString("he-IL")
@@ -271,24 +267,23 @@ function PlatformRealtimePage() {
         <AlertDialog open onOpenChange={(v) => !v && setDeleteChannel(null)}>
           <AlertDialogContent>
             <AlertDialogHeader>
-              <AlertDialogTitle>מחיקת ערוץ</AlertDialogTitle>
+              <AlertDialogTitle>{t("platformRealtime.delete.title")}</AlertDialogTitle>
               <AlertDialogDescription>
-                האם למחוק את הערוץ &quot;{deleteChannel.name}&quot;? הפעולה תסיר את כל המנויים
-                הפעילים ואת היסטוריית האירועים של הערוץ.
+                {t("platformRealtime.delete.desc", { name: deleteChannel.name })}
               </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
-              <AlertDialogCancel>ביטול</AlertDialogCancel>
+              <AlertDialogCancel>{t("common.cancel")}</AlertDialogCancel>
               <AlertDialogAction
                 className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
                 onClick={() => {
                   runtime.deleteRealtimeChannel(deleteChannel.name);
-                  toast.success("הערוץ נמחק");
+                  toast.success(t("platformRealtime.toasts.deleted"));
                   qc.invalidateQueries({ queryKey: CHANNELS_QUERY_KEY });
                   setDeleteChannel(null);
                 }}
               >
-                מחיקה
+                {t("platformRealtime.actions.delete")}
               </AlertDialogAction>
             </AlertDialogFooter>
           </AlertDialogContent>
@@ -329,6 +324,7 @@ function ChannelFormDialog({
   onOpenChange: (v: boolean) => void;
   channel?: ChannelSnapshot;
 }) {
+  const { t } = useTranslation();
   const { runtime } = usePlatformContext();
   const qc = useQueryClient();
   const isEdit = !!channel;
@@ -351,7 +347,7 @@ function ChannelFormDialog({
       });
     },
     onSuccess: () => {
-      toast.success(isEdit ? "הערוץ עודכן" : "הערוץ נפתח");
+      toast.success(isEdit ? t("platformRealtime.toasts.updated") : t("platformRealtime.toasts.opened"));
       qc.invalidateQueries({ queryKey: CHANNELS_QUERY_KEY });
       onOpenChange(false);
       if (!isEdit) {
@@ -360,17 +356,20 @@ function ChannelFormDialog({
         setVisibility("public");
       }
     },
-    onError: (e: Error) => toast.error(e.message ?? "הפעולה נכשלה"),
+    onError: (e: Error) => toast.error(e.message ?? t("platformRealtime.toasts.failed")),
   });
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>{isEdit ? `עריכת ערוץ — ${channel?.name}` : "פתיחת ערוץ חדש"}</DialogTitle>
+          <DialogTitle>
+            {isEdit
+              ? t("platformRealtime.form.editTitle", { name: channel?.name })
+              : t("platformRealtime.form.createTitle")}
+          </DialogTitle>
           <DialogDescription>
-            ערוץ Real-Time בהיקף הפלטפורמה, מנוהל ונשמר דרך ה-Realtime Manager הקיים לאורך הסשן
-            הנוכחי.
+            {t("platformRealtime.form.desc")}
           </DialogDescription>
         </DialogHeader>
         <form
@@ -382,7 +381,7 @@ function ChannelFormDialog({
         >
           {!isEdit && (
             <div className="space-y-1">
-              <Label htmlFor="channel-name">שם הערוץ *</Label>
+              <Label htmlFor="channel-name">{t("platformRealtime.form.name")}</Label>
               <Input
                 id="channel-name"
                 value={name}
@@ -396,7 +395,7 @@ function ChannelFormDialog({
             </div>
           )}
           <div className="space-y-1">
-            <Label htmlFor="channel-description">תיאור (אופציונלי)</Label>
+            <Label htmlFor="channel-description">{t("platformRealtime.form.description")}</Label>
             <Textarea
               id="channel-description"
               value={description}
@@ -406,21 +405,21 @@ function ChannelFormDialog({
             />
           </div>
           <div className="space-y-1">
-            <Label>חשיפה</Label>
+            <Label>{t("platformRealtime.form.visibility")}</Label>
             <Select value={visibility} onValueChange={(v) => setVisibility(v as ChannelVisibility)}>
               <SelectTrigger>
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="public">{VISIBILITY_LABELS.public}</SelectItem>
-                <SelectItem value="private">{VISIBILITY_LABELS.private}</SelectItem>
-                <SelectItem value="system">{VISIBILITY_LABELS.system}</SelectItem>
+                <SelectItem value="public">{t("platformRealtime.visibility.public")}</SelectItem>
+                <SelectItem value="private">{t("platformRealtime.visibility.private")}</SelectItem>
+                <SelectItem value="system">{t("platformRealtime.visibility.system")}</SelectItem>
               </SelectContent>
             </Select>
           </div>
           <DialogFooter>
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
-              ביטול
+              {t("common.cancel")}
             </Button>
             <Button
               type="submit"
@@ -428,7 +427,7 @@ function ChannelFormDialog({
               className="gap-2"
             >
               {mut.isPending && <Loader2 className="size-4 animate-spin" />}
-              {isEdit ? "שמירה" : "פתיחת ערוץ"}
+              {isEdit ? t("platformRealtime.form.save") : t("platformRealtime.form.open")}
             </Button>
           </DialogFooter>
         </form>

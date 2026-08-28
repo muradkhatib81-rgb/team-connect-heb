@@ -319,6 +319,8 @@
     "markAllRead": "סמן הכל כנקרא",
     "noNewNotifs": "אין התראות חדשות",
     "minutesShort": "דק׳",
+    "startedAtShort": "התחיל ב־{{time}}",
+    "onBreakMeta": "🏬 {{dept}} · ☕ {{type}} · {{started}} · {{expectedReturn}}",
     "departmentColleagues": "עמיתים במחלקה",
     "noColleagues": "אין עמיתים נוספים במחלקה",
     "colleagueOnLeave": "בחופש",
@@ -1542,5 +1544,724 @@
     "archived": "בארכיון",
     "makeActive": "הפוך לפעילה",
     "selectActiveCompany": "בחירת חברה פעילה"
+  },
+  "employeesPage": {
+    "title": "ניהול עובדים",
+    "noAccessTitle": "אין הרשאה",
+    "noAccessDesc": "העמוד הזה זמין למנהלים ולאחראי מחלקות.",
+    "departmentLabel": "מחלקה: {{name}}",
+    "headerSubtitle": "{{shown}} מתוך {{total}} עובדים · {{filter}}{{deptSuffix}}",
+    "exportEmployees": "ייצוא עובדים",
+    "addEmployee": "הוספת עובד",
+    "deptHead": "👤 אחראי המחלקה",
+    "searchPlaceholder": "חיפוש לפי שם, ת.ז, טלפון...",
+    "allDepartments": "כל המחלקות",
+    "loadError": "שגיאה בטעינת רשימת העובדים",
+    "loadFailed": "לא ניתן לטעון נתונים",
+    "retry": "נסה שוב",
+    "noEmployees": "לא נמצאו עובדים",
+    "noDepartment": "ללא מחלקה",
+    "changePhoto": "החלפת תמונה",
+    "uploadPhoto": "העלאת תמונה",
+    "fileTooLarge": "הקובץ גדול מדי (מקסימום 5MB)",
+    "reactivated": "העובד הופעל מחדש",
+    "reactivateError": "שגיאה בהפעלת העובד",
+    "createError": "שגיאה ביצירת עובד",
+    "createSuccess": "העובד נוצר. סיסמה ראשונית — העובד יחויב להחליפה בכניסה הראשונה.",
+    "createSuccessShort": "עובד חדש נוצר בהצלחה",
+    "avatarUploadFailed": "העובד נוצר אך העלאת התמונה נכשלה: {{message}}",
+    "updated": "העובד עודכן",
+    "updateError": "שגיאה בעדכון",
+    "deleted": "העובד נמחק לצמיתות והוסר מהמערכת",
+    "deleteError": "שגיאה במחיקת העובד",
+    "resetPasswordSuccess": "הסיסמה אופסה. העובד יכול להתחבר עם הסיסמה החדשה.",
+    "resetPasswordError": "שגיאה באיפוס הסיסמה",
+    "defaultEmployeeName": "עובד",
+    "filters": {
+      "all": "👥 כל העובדים",
+      "active": "🟢 עובדים פעילים",
+      "inactive": "🔴 עובדים לא פעילים",
+      "on_leave": "🏖️ בחופשה",
+      "on_break": "☕ בהפסקה",
+      "managers": "👔 מנהלים",
+      "workers": "👤 עובדים"
+    },
+    "stats": {
+      "workers": "עובדים",
+      "managers": "מנהלים",
+      "active": "עובדים פעילים",
+      "onLeave": "בחופשה",
+      "inactive": "לא פעילים",
+      "deptEmployees": "עובדי המחלקה"
+    },
+    "badges": {
+      "onLeave": "בחופש",
+      "inactive": "לא פעיל",
+      "active": "פעיל",
+      "activeOnLeave": " (בחופשה)",
+      "employeesCount": "עובדים: {{count}}",
+      "activeCount": "פעילים: {{count}}",
+      "onLeaveCount": "בחופש: {{count}}"
+    },
+    "csv": {
+      "name": "שם",
+      "department": "מחלקה",
+      "jobTitle": "תפקיד",
+      "status": "סטטוס",
+      "idNumber": "ת.ז",
+      "phone": "טלפון",
+      "active": "פעיל",
+      "inactive": "לא פעיל"
+    },
+    "fields": {
+      "profilePhotoOptional": "תמונת פרופיל (אופציונלי)",
+      "profilePhoto": "תמונת פרופיל",
+      "firstName": "שם פרטי",
+      "lastName": "שם משפחה",
+      "idNumber": "מספר זהות",
+      "department": "מחלקה",
+      "phone": "טלפון",
+      "permission": "הרשאה",
+      "jobTitle": "תפקיד",
+      "initialPassword": "סיסמה ראשונית",
+      "newPassword": "סיסמה חדשה",
+      "confirmPassword": "אימות סיסמה",
+      "selectDepartment": "בחר מחלקה",
+      "noJobTitle": "ללא תפקיד",
+      "excludedFromHeadcount": " (לא נכלל במצבת)",
+      "status": "סטטוס",
+      "onLeave": "בחופש",
+      "leaveType": "סוג חופשה",
+      "leaveStart": "תאריך התחלת חופשה",
+      "leaveEnd": "תאריך סיום חופשה",
+      "selectLeaveType": "בחרו סוג"
+    },
+    "status": {
+      "activeInSystem": "העובד פעיל במערכת",
+      "inactiveInSystem": "העובד אינו פעיל",
+      "onLeaveNow": "העובד נמצא כעת בחופש",
+      "notOnLeave": "העובד אינו בחופש"
+    },
+    "leaveTypes": {
+      "regular": "חופש רגיל",
+      "sick": "חופש מחלה"
+    },
+    "create": {
+      "title": "הוספת עובד חדש",
+      "passwordHint": "העובד יחויב להחליף את הסיסמה הראשונית בכניסה הראשונה למערכת.",
+      "submit": "צור עובד"
+    },
+    "edit": {
+      "title": "עריכת עובד",
+      "leaveScheduleHint": "בימים אלו הסידור יסומן אוטומטית כ«חופש רגיל» או «חופש מחלה» לפי הסוג שנבחר.",
+      "deleteEmployee": "מחק עובד",
+      "save": "שמירה"
+    },
+    "row": {
+      "reactivateAria": "הפעל עובד",
+      "reactivate": "✅ הפעל עובד",
+      "resetPasswordAria": "איפוס סיסמה",
+      "resetPassword": "איפוס סיסמה",
+      "editAria": "עריכה",
+      "deleteAria": "מחיקה סופית",
+      "fullDelete": "מחיקה מלאה"
+    },
+    "delete": {
+      "title": "מחיקה מלאה — {{name}}",
+      "confirm": "האם אתה בטוח שברצונך למחוק את העובד לצמיתות? פעולה זו אינה ניתנת לביטול.",
+      "submit": "מחק עובד"
+    },
+    "resetPassword": {
+      "title": "איפוס סיסמה — {{name}}",
+      "hint": "הסיסמה תישמר מיד והעובד יוכל להתחבר איתה — אין צורך בקישור או בתהליך נוסף.",
+      "submit": "אפס סיסמה"
+    },
+    "duplicate": {
+      "activeTitle": "עובד זה כבר רשום במערכת.",
+      "inactiveTitle": "עובד זה קיים במערכת ומסומן כלא פעיל.",
+      "activeDesc": "לא ניתן ליצור עובד נוסף עם אותו מספר זהות. להלן פרטי העובד הקיים:",
+      "inactiveDesc": "כל הנתונים וההיסטוריה של העובד נשמרו. ניתן להפעיל אותו מחדש במקום ליצור רשומה חדשה.",
+      "viewCard": "👁️ צפייה בכרטיס העובד",
+      "editDetails": "✏️ ערוך את פרטי העובד",
+      "reactivate": "✅ הפעל מחדש את העובד",
+      "cancel": "❌ ביטול",
+      "labelName": "שם:",
+      "labelJobTitle": "תפקיד:",
+      "labelDepartment": "מחלקה:",
+      "labelStatus": "סטטוס:"
+    },
+    "archived": {
+      "title": "ℹ️ עובד זה היה רשום בעבר במערכת.",
+      "desc": "ניתן לשחזר את העובד הקודם עם כל הנתונים שנשמרו בארכיון, או לפתוח עבורו תקופת העסקה חדשה. ההיסטוריה הקודמת תישמר בארכיון בכל מקרה.",
+      "archivedAt": "הועבר לארכיון:",
+      "viewArchive": "👁️ הצג נתוני הארכיון",
+      "restore": "♻️ שחזר את העובד הקודם",
+      "newEmployment": "🆕 פתח העסקה חדשה",
+      "archiveViewTitle": "📁 נתוני ארכיון (לצפייה בלבד)",
+      "deactivatedAt": "הושבת:"
+    },
+    "validation": {
+      "selectDepartment": "יש לבחור מחלקה",
+      "idNumberDigits": "מספר זהות חייב להכיל 5–15 ספרות",
+      "passwordMin6": "סיסמה ראשונית של 6 תווים לפחות",
+      "firstNameRequired": "יש למלא שם פרטי",
+      "lastNameRequired": "יש למלא שם משפחה",
+      "departmentNotFound": "מחלקה לא נמצאה",
+      "leaveDatesRequired": "יש להזין תאריך התחלה וסיום לחופשה",
+      "leaveTypeRequired": "יש לבחור סוג חופשה (רגילה או מחלה)",
+      "leaveEndAfterStart": "תאריך סיום החופשה חייב להיות אחרי תאריך ההתחלה",
+      "passwordMin6Reset": "סיסמה חייבת להכיל לפחות 6 תווים",
+      "passwordsMismatch": "הסיסמאות אינן תואמות"
+    }
+  },
+  "platformSettings": {
+    "title": "הגדרות פלטפורמה",
+    "subtitle": "הגדרות גלובליות בהיקף הפלטפורמה — דרך ה-Configuration Manager הקיים",
+    "platformId": "מזהה פלטפורמה",
+    "supportEmail": "אימייל תמיכה של הפלטפורמה",
+    "whatsappNumber": "מספר וואטסאפ ליצירת קשר (מסך התחברות)",
+    "whatsappPlaceholder": "0501234567 או 972501234567",
+    "whatsappHint": "יוצג כקישור וואטסאפ בתחתית מסך ההתחברות. השאר ריק כדי להסתיר.",
+    "maintenanceMode": "מצב תחזוקה (Maintenance Mode)",
+    "maintenanceHint": "דגל גלובלי בלבד — אינו חוסם כניסה בפועל בשלב זה",
+    "saveSettings": "שמירת הגדרות",
+    "pwaIconTitle": "אייקון התקנת האפליקציה (PWA)",
+    "pwaIconDesc": "רק בעל הפלטפורמה יכול לשנות. שם ההתקנה נקבע לפי שפת מערכת המכשיר (עברית / ערבית / אנגלית) לפני ההתקנה, ואינו ניתן לשינוי על ידי משתמשים.",
+    "changeIcon": "החלפת אייקון",
+    "pwaIconFormat": "PNG / JPG / WebP · עד 5MB · יומר ל־512×512",
+    "invalidWhatsapp": "מספר וואטסאפ לא תקין",
+    "saveSuccess": "הגדרות הפלטפורמה נשמרו",
+    "saveFailed": "שמירת ההגדרות נכשלה",
+    "iconUpdated": "אייקון האפליקציה עודכן",
+    "iconUploadFailed": "העלאת האייקון נכשלה"
+  },
+  "platformHub": {
+    "title": "ניהול פלטפורמה",
+    "welcome": "ברוך הבא, {{name}}",
+    "welcomeFallback": "מרכז הבקרה של הפלטפורמה",
+    "pageNotFound": "הדף לא נמצא",
+    "stats": {
+      "activeOwners": "בעלי מערכת פעילים",
+      "suspended": "מושעים",
+      "primaryOwner": "בעל מערכת ראשי",
+      "auditEvents30d": "אירועי יומן (30 יום)",
+      "companies": "חברות בפלטפורמה",
+      "branches": "סניפים בפלטפורמה"
+    },
+    "quick": {
+      "manageOwners": "ניהול בעלי מערכת",
+      "auditLog": "יומן פעילות פלטפורמה",
+      "manageCompanies": "ניהול חברות",
+      "manageBranches": "ניהול סניפים"
+    },
+    "recentActivity": "פעילות אחרונה",
+    "fullLog": "ליומן המלא",
+    "noRecentActivity": "אין פעילות אחרונה",
+    "actor": "מבצע: {{name}}",
+    "target": "יעד: {{name}}",
+    "modulesSection": "מודולי פלטפורמה",
+    "modules": {
+      "companies": "ניהול חברות",
+      "branches": "ניהול סניפים",
+      "monitoring": "ניטור וזמינות",
+      "realtime": "ניהול Real-Time",
+      "billing": "חיוב ומנויים",
+      "featureFlags": "דגלי פיצ'רים",
+      "analytics": "אנליטיקס גלובלי",
+      "owners": "בעלי מערכת",
+      "auditLog": "יומן פעילות פלטפורמה",
+      "notifications": "התראות פלטפורמה",
+      "settings": "הגדרות פלטפורמה"
+    },
+    "hints": {
+      "companies": "{{count}} חברות",
+      "branches": "{{count}} סניפים",
+      "owners": "{{count}} בעלי מערכת"
+    }
+  },
+  "platformOwners": {
+    "title": "בעלי מערכת",
+    "subtitle": "ניהול חשבונות בעלי המערכת",
+    "transferPrimary": "העברת בעלות ראשית",
+    "newOwner": "בעל מערכת חדש",
+    "searchPlaceholder": "חיפוש לפי שם, דוא״ל או טלפון…",
+    "filters": {
+      "allLevels": "כל הרמות",
+      "primary": "בעל מערכת ראשי",
+      "owner": "בעל מערכת",
+      "allStatuses": "כל הסטטוסים",
+      "active": "פעיל",
+      "suspended": "מושעה"
+    },
+    "empty": "אין בעלי מערכת.",
+    "emptyFilter": "אין תוצאות מתאימות לסינון.",
+    "cols": {
+      "name": "שם",
+      "email": "דוא\"ל",
+      "phone": "טלפון",
+      "level": "רמה",
+      "status": "סטטוס",
+      "created": "נוצר",
+      "lastSignIn": "כניסה אחרונה"
+    },
+    "badges": {
+      "primaryShort": "בעל ראשי",
+      "primary": "בעל המערכת הראשי",
+      "owner": "בעל המערכת",
+      "active": "פעיל",
+      "suspended": "מושעה"
+    },
+    "neverSignedIn": "מעולם לא התחבר",
+    "actions": {
+      "editProfile": "עריכת פרופיל",
+      "suspend": "השעיה",
+      "restore": "שחזור",
+      "delete": "מחיקה",
+      "edit": "עריכה"
+    },
+    "toasts": {
+      "suspended": "בעל המערכת הושעה",
+      "restored": "בעל המערכת שוחזר",
+      "suspendFailed": "השעיה נכשלה",
+      "restoreFailed": "שחזור נכשל",
+      "created": "בעל המערכת נוצר",
+      "createFailed": "יצירה נכשלה",
+      "updated": "הפרופיל עודכן",
+      "updateFailed": "עדכון נכשל",
+      "deleted": "בעל המערכת נמחק",
+      "deleteFailed": "מחיקה נכשלה",
+      "transferred": "הבעלות הראשית הועברה",
+      "transferFailed": "העברה נכשלה"
+    },
+    "detail": {
+      "notFound": "בעל המערכת לא נמצא",
+      "backToList": "חזרה לרשימה",
+      "businessIdentity": "Business Identity",
+      "activitySummary": "סיכום פעילות",
+      "fullLog": "ליומן המלא",
+      "noActivity": "אין פעילות מתועדת",
+      "actor": "מבצע",
+      "target": "יעד",
+      "identity": "זהות",
+      "statusSection": "סטטוס וכניסה",
+      "level": "רמה",
+      "lastSignIn": "כניסה אחרונה",
+      "created": "נוצר",
+      "capabilities": "יכולות פלטפורמה",
+      "primaryOnly": "בעל ראשי בלבד",
+      "emailFutureHint": "שינוי דוא\"ל הוא יכולת עתידית — יתווסף בגרסה הבאה של ניהול הפלטפורמה."
+    },
+    "capabilities": {
+      "fullManagement": "ניהול מלא של הפלטפורמה",
+      "manageOwners": "יצירה, השעיה ומחיקה של בעלי מערכת",
+      "transferPrimary": "העברת בעלות ראשית",
+      "viewOwners": "צפייה בכל בעלי המערכת",
+      "viewAudit": "צפייה ביומן פעילות הפלטפורמה",
+      "crossBranch": "גישה חוצת-סניפים"
+    },
+    "fields": {
+      "firstName": "שם פרטי",
+      "lastName": "שם משפחה",
+      "email": "דוא\"ל",
+      "password": "סיסמה (מינ' 8 תווים)",
+      "phone": "טלפון",
+      "idNumber": "ת.ז"
+    },
+    "dialogs": {
+      "createTitle": "הוספת בעל מערכת",
+      "createDesc": "יצירת חשבון בעל מערכת חדש. זהו חשבון עצמאי — אינו קשור למשתמש המחובר או לזהות עובד כלשהי.",
+      "createSubmit": "צור",
+      "editTitle": "עריכת פרופיל בעל מערכת",
+      "editDesc": "עדכון פרטי זהות של בעל המערכת",
+      "deleteTitle": "מחיקת בעל מערכת",
+      "deleteDesc": "פעולה זו בלתי הפיכה",
+      "deleteWarning": "המחיקה תסיר את חשבון בעל המערכת מהמערכת לצמיתות. לא ניתן למחוק את בעל המערכת הראשי.",
+      "deleteConfirm": "לאישור, הקלד את כתובת הדוא\"ל של בעל המערכת:",
+      "deleteSubmit": "מחק לצמיתות",
+      "transferTitle": "העברת בעלות ראשית",
+      "transferDesc": "העברת תפקיד \"בעל המערכת הראשי\" לבעל מערכת אחר",
+      "transferIrreversible": "פעולה בלתי הפיכה",
+      "transferWarning": "לאחר האישור, {{current}} יהפוך לבעל מערכת רגיל, ובעל המערכת שנבחר יהפוך לבעל המערכת הראשי בעל הסמכות המלאה בפלטפורמה.",
+      "transferTarget": "יעד ההעברה",
+      "transferSelectPlaceholder": "בחר בעל מערכת",
+      "transferNoEligible": "אין בעלי מערכת פעילים נוספים",
+      "transferResult": "תוצאה: {{name}} יקבל בעלות ראשית. אתה תיהפך לבעל מערכת רגיל.",
+      "transferConfirmLabel": "לאישור, הקלד את הדוא\"ל של היעד:",
+      "transferSubmit": "אשר והעבר בעלות",
+      "warning": "אזהרה"
+    },
+    "events": {
+      "created": "בעל מערכת נוצר",
+      "suspended": "בעל מערכת הושעה",
+      "restored": "בעל מערכת שוחזר",
+      "deleted": "בעל מערכת נמחק",
+      "primaryTransferred": "הועברה בעלות ראשית",
+      "profileUpdated": "פרטי בעל מערכת עודכנו"
+    }
+  },
+  "platformNotifications": {
+    "title": "התראות פלטפורמה",
+    "subtitle": "מערכת Push לבעל המערכת בלבד — הפעלה לפי סוג אירוע, והענקה לחברה או לסניף. כיבוי Push משאיר את פעמון ההתראות השקט פעיל.",
+    "scopeTitle": "הענקה לחברה / סניף",
+    "scopeDesc": "כל עוד אין היקפים — Push פעיל לכל הסניפים. אחרי הוספת היקף ראשון, Push יישלח רק לחברות/סניפים שמופיעים כאן.",
+    "scopeType": "סוג היקף",
+    "company": "חברה",
+    "branch": "סניף",
+    "selectCompany": "בחר חברה",
+    "selectBranch": "בחר סניף",
+    "grantPush": "הענק Push",
+    "loadingScopes": "טוען היקפים…",
+    "noScopes": "עדיין אין היקפים — Push לפי סוגי האירועים חל על כל הסניפים.",
+    "removeScopeAria": "הסר היקף",
+    "eventsTitle": "הפעלה / כיבוי של Web Push לפי אירוע",
+    "eventsDesc": "שליטה באירועים שישלחו התראת Push (בתוך ההיקפים שהוענקו). ההתראה השקטה תמיד נשמרת.",
+    "loadingSettings": "טוען הגדרות…",
+    "loadError": "שגיאה בטעינת ההגדרות",
+    "pushUpdated": "הגדרת ה-Push עודכנה",
+    "updateFailed": "העדכון נכשל",
+    "selectCompanyError": "יש לבחור חברה",
+    "selectBranchError": "יש לבחור סניף",
+    "scopeAdded": "ההיקף נוסף — Push פעיל עבורו",
+    "scopeAddFailed": "הוספת ההיקף נכשלה",
+    "scopeRemoved": "ההיקף הוסר",
+    "scopeRemoveFailed": "ההסרה נכשלה",
+    "groups": {
+      "schedule": "סידור עבודה",
+      "leave": "חופשות",
+      "break": "הפסקות",
+      "custody": "ניהול ציוד",
+      "ops": "תפעול כללי"
+    }
+  },
+  "platformRealtime": {
+    "title": "ניהול Real-Time",
+    "subtitle": "ערוצי Real-Time בהיקף הפלטפורמה — דרך ה-Realtime Manager הקיים. ללא ספק Realtime חיצוני מחובר.",
+    "openChannel": "פתיחת ערוץ",
+    "channelsHeader": "ערוצים ({{count}}) · פתוחים: {{open}}",
+    "noChannels": "אין ערוצים עדיין בסשן הנוכחי. ניתן לפתוח ערוץ חדש מהכפתור מעלה.",
+    "visibility": {
+      "public": "ציבורי",
+      "private": "פרטי",
+      "system": "מערכת"
+    },
+    "status": {
+      "closed": "סגור",
+      "open": "פתוח"
+    },
+    "actions": {
+      "edit": "עריכה",
+      "testEvent": "שליחת אירוע בדיקה",
+      "reopen": "פתיחה מחדש",
+      "close": "סגירה",
+      "delete": "מחיקה"
+    },
+    "stats": {
+      "clients": "לקוחות מחוברים",
+      "subscriptions": "מנויים פעילים",
+      "events": "אירועים פעילים",
+      "lastActivity": "פעילות אחרונה"
+    },
+    "toasts": {
+      "closed": "הערוץ נסגר",
+      "reopened": "הערוץ נפתח מחדש",
+      "testSent": "אירוע בדיקה נשלח",
+      "deleted": "הערוץ נמחק",
+      "updated": "הערוץ עודכן",
+      "opened": "הערוץ נפתח",
+      "failed": "הפעולה נכשלה"
+    },
+    "delete": {
+      "title": "מחיקת ערוץ",
+      "desc": "האם למחוק את הערוץ \"{{name}}\"? הפעולה תסיר את כל המנויים הפעילים ואת היסטוריית האירועים של הערוץ."
+    },
+    "form": {
+      "editTitle": "עריכת ערוץ — {{name}}",
+      "createTitle": "פתיחת ערוץ חדש",
+      "desc": "ערוץ Real-Time בהיקף הפלטפורמה, מנוהל ונשמר דרך ה-Realtime Manager הקיים לאורך הסשן הנוכחי.",
+      "name": "שם הערוץ *",
+      "description": "תיאור (אופציונלי)",
+      "visibility": "חשיפה",
+      "save": "שמירה",
+      "open": "פתיחת ערוץ"
+    }
+  },
+  "platformAuditLog": {
+    "title": "יומן פעילות פלטפורמה",
+    "subtitle": "כל פעולות בעלי המערכת מתועדות כאן",
+    "searchPlaceholder": "חיפוש לפי מבצע או יעד…",
+    "allEvents": "כל האירועים",
+    "noResults": "אין רשומות תואמות",
+    "cols": {
+      "date": "תאריך",
+      "event": "אירוע",
+      "actor": "מבצע",
+      "target": "יעד",
+      "details": "פרטים"
+    }
+  },
+  "platformBranches": {
+    "title": "סניפים",
+    "subtitleWithCompany": "ניהול הסניפים של {{name}}",
+    "subtitleDefault": "ניהול הסניפים של החברות בפלטפורמה",
+    "assignExisting": "שיוך סניף קיים",
+    "needCompanyFirst": "יש ליצור חברה בפלטפורמה לפני ניהול סניפים.",
+    "manageCompanies": "ניהול חברות",
+    "selectCompanyHint": "יש לבחור חברה פעילה (מהבורר מעלה) כדי לראות ולנהל את הסניפים שלה.",
+    "noBranches": "אין עדיין סניפים משויכים לחברה הפעילה.",
+    "noBranchesForCompany": "לחברה זו אין עדיין סניפים משויכים.",
+    "assignHint": "ניתן לשייך סניף קיים מהכפתור מעלה.",
+    "selectActiveBranch": "בחירת סניף פעיל",
+    "cols": {
+      "name": "שם הסניף",
+      "id": "מזהה",
+      "created": "נוצר",
+      "status": "סטטוס"
+    },
+    "badges": {
+      "active": "פעיל",
+      "inactive": "לא פעיל"
+    },
+    "actions": {
+      "makeActive": "הפוך לפעיל",
+      "detailsSync": "פרטים / סנכרון",
+      "unassign": "הסרת שיוך"
+    },
+    "backToList": "חזרה לרשימת הסניפים",
+    "notFound": "הסניף לא נמצא",
+    "branchDetail": {
+      "activeBranch": "סניף פעיל",
+      "makeActive": "הפוך לפעיל",
+      "cannotEnterInactiveCompany": "לא ניתן להיכנס למצב סניף עבור חברה לא פעילה או מושהית.",
+      "tabs": {
+        "dashboard": "סקירה כללית",
+        "statistics": "סטטיסטיקות",
+        "settings": "הגדרות"
+      }
+    },
+    "stats": {
+      "branchesInCompany": "סניפים בחברה",
+      "branchAgeDays": "גיל הסניף (ימים)",
+      "company": "חברה",
+      "daysUnit": "{{count}} ימים",
+      "address": "כתובת",
+      "phone": "טלפון",
+      "addressPlaceholder": "רחוב, מספר, עיר",
+      "phonePlaceholder": "03-1234567",
+      "saveSettings": "שמירת הגדרות",
+      "settingsSaved": "הגדרות הסניף נשמרו"
+    },
+    "rows": {
+      "createdAt": "נוצר בתאריך",
+      "updatedAt": "עודכן לאחרונה",
+      "branchAge": "גיל הסניף",
+      "branchesInCompanyTotal": "סניפים בחברה (סה״כ)"
+    }
+  },
+  "platformBranchDialogs": {
+    "createTitle": "שיוך סניף קיים",
+    "createDesc": "שיוך סניף קיים במערכת לחברה זו. הסניף ונתוניו (עובדים, מחלקות, סידורי עבודה וכו׳) נשארים ללא שינוי — נוצר קישור בלבד בין החברה לסניף.",
+    "selectPlaceholder": "בחר סניף לשיוך",
+    "noAvailable": "כל הסניפים הקיימים במערכת משויכים כבר לחברות בפלטפורמה. ניתן ליצור סניף חדש דרך ניהול סניפי המערכת.",
+    "assignSubmit": "שיוך הסניף",
+    "assignSuccess": "הסניף שויך לחברה בהצלחה",
+    "selectRequired": "יש לבחור סניף קיים לשיוך.",
+    "editTitle": "פרטי סניף — {{name}}",
+    "editDesc": "פרטי הסניף המלאים (כולל עובדים, מחלקות וסידורי עבודה) מנוהלים בניהול סניפי המערכת. כאן ניתן לצפות בתמונת המצב וּלסנכרן אותה מהמידע האמיתי העדכני ביותר.",
+    "fields": {
+      "name": "שם",
+      "code": "קוד",
+      "address": "כתובת",
+      "status": "סטטוס"
+    },
+    "statusActive": "פעיל",
+    "statusInactive": "לא פעיל",
+    "sourceNotFound": "לא נמצא הסניף המקורי במערכת (ייתכן שנמחק). מוצגת תמונת המצב האחרונה שנשמרה.",
+    "syncFromReal": "סנכרון מהסניף האמיתי",
+    "syncSuccess": "פרטי הסניף סונכרנו",
+    "syncFailed": "הסנכרון נכשל",
+    "loadSourceFailed": "לא ניתן לטעון את פרטי הסניף המקורי כעת.",
+    "deleteTitle": "הסרת שיוך סניף",
+    "deleteDesc": "האם להסיר את השיוך של הסניף \"{{name}}\" לחברה? הפעולה מסירה רק את הקישור בין החברה לסניף — הסניף עצמו וכל הנתונים שבו (עובדים, מחלקות, סידורי עבודה וכו׳) יישארו קיימים במערכת ללא שינוי, וניתן לשייך אותו מחדש בכל עת.",
+    "unassignSubmit": "הסרת שיוך",
+    "unassignSuccess": "שיוך הסניף לחברה הוסר",
+    "actionFailed": "הפעולה נכשלה"
+  },
+  "platformCompanyDetail": {
+    "notFound": "החברה לא נמצאה",
+    "backToList": "חזרה לרשימת החברות",
+    "tabs": {
+      "dashboard": "סקירה כללית",
+      "statistics": "סטטיסטיקות",
+      "branches": "סניפים",
+      "managers": "מנהלים",
+      "users": "משתמשים",
+      "reports": "דוחות",
+      "settings": "הגדרות"
+    },
+    "stats": {
+      "companiesOnPlatform": "חברות בפלטפורמה",
+      "companyAgeDays": "גיל החברה (ימים)",
+      "assignedBranches": "סניפים משויכים",
+      "companiesOnPlatformTotal": "חברות בפלטפורמה (סה״כ)",
+      "createdAt": "נוצרה בתאריך",
+      "updatedAt": "עודכנה לאחרונה",
+      "companyAge": "גיל החברה",
+      "daysUnit": "{{count}} ימים"
+    },
+    "managers": {
+      "nameLabel": "שם המנהל",
+      "emailLabel": "אימייל (אופציונלי)",
+      "namePlaceholder": "שם מלא",
+      "add": "הוספת מנהל",
+      "added": "המנהל נוסף לחברה",
+      "addFailed": "ההוספה נכשלה",
+      "empty": "לחברה זו אין עדיין מנהלים רשומים. ניתן להוסיף מנהל מהטופס מעלה."
+    },
+    "users": {
+      "title": "אין עדיין ספריית משתמשים מחוברת לחברה זו",
+      "description": "המשתמשים בפועל (עובדים) מנוהלים כיום בהיקף הסניף הבודד, ולא בהיקף החברה. לחברה זו יש {{count}} סניפים — ניתן לנהל את המשתמשים מתוך כל סניף בנפרד."
+    },
+    "reports": {
+      "branchesInCompany": "סניפים בחברה",
+      "avgBranchAgeDays": "גיל ממוצע לסניף (ימים)",
+      "companyAgeDays": "גיל החברה (ימים)",
+      "oldestBranch": "הסניף הראשון שנוצר",
+      "newestBranch": "הסניף האחרון שנוצר"
+    },
+    "settings": {
+      "contactEmail": "אימייל ליצירת קשר",
+      "billingEnabled": "חיוב פעיל",
+      "billingEnabledDesc": "האם החברה כלולה במעגל החיוב של הפלטפורמה",
+      "saveSettings": "שמירת הגדרות",
+      "settingsSaved": "הגדרות החברה נשמרו"
+    }
+  },
+  "platformCompanyDialogs": {
+    "fields": {
+      "name": "שם החברה *",
+      "logoUrl": "כתובת לוגו (URL)",
+      "companyCode": "קוד חברה",
+      "legalName": "שם משפטי",
+      "taxNumber": "מספר עוסק / ח.פ.",
+      "phone": "טלפון",
+      "email": "אימייל",
+      "address": "כתובת",
+      "currency": "מטבע",
+      "language": "שפה",
+      "timeZone": "אזור זמן",
+      "status": "סטטוס חברה"
+    },
+    "statusHint": "חברה שאינה פעילה נשארת גלויה ברשימה אך לא ניתן להיכנס למצב סניף עבורה.",
+    "create": {
+      "title": "חברה חדשה",
+      "desc": "יצירת חברה חדשה בפלטפורמה.",
+      "submit": "יצירה",
+      "success": "החברה נוצרה בהצלחה",
+      "failed": "יצירת החברה נכשלה"
+    },
+    "edit": {
+      "title": "עריכת חברה",
+      "desc": "עדכון פרטי החברה.",
+      "success": "החברה עודכנה",
+      "failed": "העדכון נכשל"
+    },
+    "delete": {
+      "title": "מחיקת חברה",
+      "desc": "האם למחוק את החברה \"{{name}}\"? זו מחיקה רכה — ניתן לשחזר בעתיד.",
+      "checkingBranches": "בודק סניפים משויכים…",
+      "blocked": "לא ניתן למחוק: לחברה זו משויכים {{count}} סניפים. יש להסיר את השיוך של כל הסניפים (בלשונית \"סניפים\") לפני המחיקה.",
+      "success": "החברה נמחקה",
+      "failed": "המחיקה נכשלה"
+    }
+  },
+  "platformCompanyActions": {
+    "ariaLabel": "ניהול חברה",
+    "menuLabel": "ניהול חברה",
+    "editCompany": "ערוך חברה",
+    "manageBranches": "נהל סניפים",
+    "companyManagers": "מנהלי החברה",
+    "companySettings": "הגדרות החברה",
+    "deactivateCompany": "השבת חברה",
+    "activateCompany": "הפעל חברה",
+    "restoreFromArchive": "שחזור מהארכיון",
+    "archive": "ארכיון",
+    "deleteCompany": "מחק חברה",
+    "toasts": {
+      "deactivated": "החברה הושבתה",
+      "activated": "החברה הופעלה",
+      "archived": "החברה הועברה לארכיון",
+      "restored": "החברה שוחזרה מהארכיון",
+      "actionFailed": "הפעולה נכשלה"
+    }
+  },
+  "platformFeatureFlags": {
+    "title": "דגלי פיצ'רים (Feature Flags)",
+    "subtitle": "הפעלה/כיבוי של דגלים בהיקף פלטפורמה — דרך ה-Feature Flag Manager הקיים",
+    "newFlag": "דגל חדש",
+    "searchPlaceholder": "חיפוש בשם או מפתח",
+    "filters": {
+      "allScopes": "כל ההיקפים",
+      "allStatuses": "כל הסטטוסים",
+      "enabled": "פעיל",
+      "disabled": "כבוי",
+      "archived": "בארכיון"
+    },
+    "sort": {
+      "name": "שם",
+      "scope": "היקף",
+      "status": "סטטוס",
+      "updated": "עדכון אחרון"
+    },
+    "loading": "טוען…",
+    "empty": "אין דגלי פיצ'רים רשומים",
+    "actionSuccess": "הפעולה הושלמה",
+    "system": "מערכת",
+    "scopes": {
+      "platform": "פלטפורמה",
+      "company": "חברה",
+      "branch": "סניף"
+    },
+    "details": {
+      "noDescription": "ללא תיאור",
+      "created": "נוצר",
+      "updated": "עודכן",
+      "notes": "הערות"
+    },
+    "delete": {
+      "title": "מחיקת דגל",
+      "desc": "האם למחוק את {{name}}? הפעולה אינה ניתנת לשחזור."
+    },
+    "dialog": {
+      "createTitle": "דגל חדש",
+      "editTitle": "עריכת דגל",
+      "displayName": "שם תצוגה",
+      "key": "מפתח",
+      "description": "תיאור",
+      "scope": "היקף",
+      "notes": "הערות",
+      "saved": "הדגל נשמר",
+      "nameKeyRequired": "שם ומפתח הם שדות חובה."
+    }
+  },
+  "platformAnalytics": {
+    "title": "אנליטיקס גלובלי",
+    "subtitle": "נתונים מצטברים על פני כל הפלטפורמה — חברות, סניפים ומשתמשים פעילים",
+    "stats": {
+      "companies": "חברות",
+      "branches": "סניפים",
+      "activeSessions": "משתמשים עם session פעיל",
+      "avgBranchesPerCompany": "ממוצע סניפים לחברה"
+    },
+    "companiesByBranches": "חברות לפי מספר סניפים",
+    "loading": "טוען…",
+    "noCompanies": "אין עדיין חברות בפלטפורמה",
+    "branchCount": "{{count}} סניפים",
+    "oldestCompany": "החברה הוותיקה ביותר בפלטפורמה",
+    "newestCompany": "החברה החדשה ביותר בפלטפורמה"
+  },
+  "platformAiRedirect": {
+    "title": "הקצאות לפי חברה וסניף עברו לחיוב",
+    "description": "בחירת תוכנית, דקות AI וסניף נעשית ב־חיוב ומנויים. כאן נשארים ספקים, יומן שימוש והגדרות פלטפורמה.",
+    "link": "מעבר לחיוב ומנויים"
   }
 }

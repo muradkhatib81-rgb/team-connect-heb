@@ -919,7 +919,7 @@ function DeptHeadOnBreakSection() {
                       <p className="font-semibold truncate">{r.full_name}</p>
                       <p className="text-sm text-muted-foreground">
                         {i18n.t("dashboard.breakTypeLabel")} {r.break_type}
-                        {r.duration_minutes ? ` · ${r.duration_minutes} דק׳` : ""}
+                        {r.duration_minutes ? ` · ${fmtMinutesCount(r.duration_minutes)}` : ""}
                       </p>
                       <p className="text-sm text-muted-foreground">
                         {i18n.t("dashboard.breakLeftReturns").replace("{start}", fmtT(r.started_at)).replace("{end}", fmtT(r.ends_at))}
@@ -1071,7 +1071,7 @@ function DeptHeadOnBreakSection() {
                         <td className="p-2 whitespace-nowrap">{fmtT(r.completed_at)}</td>
                         <td className="p-2 whitespace-nowrap">
                           {r.overrunMin > 0 ? (
-                            <span className="text-red-600 font-bold">+{r.overrunMin} דק׳</span>
+                            <span className="text-red-600 font-bold">{fmtOverrunMinutes(r.overrunMin)}</span>
                           ) : (
                             <span className="text-muted-foreground">—</span>
                           )}
@@ -2562,7 +2562,15 @@ function fmtMinsHM(totalMins: number) {
   const m = Math.max(0, Math.floor(totalMins));
   const h = Math.floor(m / 60);
   const r = m % 60;
-  return h > 0 ? `${h}:${String(r).padStart(2, "0")}` : `${r} דק׳`;
+  return h > 0 ? `${h}:${String(r).padStart(2, "0")}` : `${r} ${i18n.t("dashboard.minutesShort")}`;
+}
+
+function fmtMinutesCount(n: number) {
+  return `${n} ${i18n.t("dashboard.minutesShort")}`;
+}
+
+function fmtOverrunMinutes(n: number) {
+  return `+${n} ${i18n.t("dashboard.minutesShort")}`;
 }
 
 function fmtHMS(ms: number) {
@@ -2700,7 +2708,7 @@ function MyActiveBreakCard({ userId }: { userId: string }) {
                 {tone.label}
               </Badge>
               <span className="text-sm text-muted-foreground">
-                ☕ {r.setting_name} · {r.duration_minutes} דק׳
+                ☕ {r.setting_name} · {fmtMinutesCount(r.duration_minutes)}
               </span>
             </div>
 
@@ -2778,7 +2786,7 @@ function MyActiveBreakCard({ userId }: { userId: string }) {
           </DialogHeader>
           <div className="space-y-2 text-sm">
             <DetailRow k={i18n.t("dashboard.breakTypeLabelDetail")} v={r.setting_name} />
-            <DetailRow k={i18n.t("dashboard.approvedDuration")} v={`${r.duration_minutes} דק׳`} />
+            <DetailRow k={i18n.t("dashboard.approvedDuration")} v={fmtMinutesCount(r.duration_minutes)} />
             <DetailRow k={i18n.t("dashboard.breakStartTime")} v={startsAtIso ? formatHeDateTime(startsAtIso) : "—"} />
             <DetailRow
               k={i18n.t("dashboard.plannedEndTime")}
@@ -2790,7 +2798,7 @@ function MyActiveBreakCard({ userId }: { userId: string }) {
             />
             <DetailRow
               k={i18n.t("dashboard.actualDuration")}
-              v={actualDurMin != null ? `${actualDurMin} דק׳` : "—"}
+              v={actualDurMin != null ? fmtMinutesCount(actualDurMin) : "—"}
             />
             <DetailRow
               k={i18n.t("dashboard.overrunTime")}
@@ -2798,7 +2806,7 @@ function MyActiveBreakCard({ userId }: { userId: string }) {
                 overrun
                   ? fmtHMS(overrunMs)
                   : actualDurMin != null && r.duration_minutes && actualDurMin > r.duration_minutes
-                    ? `${actualDurMin - r.duration_minutes} דק׳`
+                    ? fmtMinutesCount(actualDurMin - r.duration_minutes)
                     : i18n.t("dashboard.noOverrun")
               }
             />
@@ -2946,7 +2954,7 @@ function DashboardActiveBreakCard({
             <h3 className="font-semibold">{i18n.t("dashboard.currentBreak")}</h3>
             <Badge variant={overrun ? "destructive" : "default"}>{tone.label}</Badge>
             <span className="text-sm text-muted-foreground">
-              ☕ {row.setting_name} · {row.duration_minutes} דק׳
+              ☕ {row.setting_name} · {fmtMinutesCount(row.duration_minutes)}
             </span>
           </div>
           <div className="flex flex-col items-center justify-center py-1 select-none">
@@ -2999,7 +3007,7 @@ function DashboardUpcomingBreakCard({ row }: { row: DashboardBreakRow }) {
             <h3 className="font-semibold">{i18n.t("dashboard.nextBreak")}</h3>
             <Badge variant="secondary">{BREAK_STATUS_LABEL[row.status] ?? row.status}</Badge>
             <span className="text-sm text-muted-foreground">
-              ☕ {row.setting_name} · {row.duration_minutes} דק׳
+              ☕ {row.setting_name} · {fmtMinutesCount(row.duration_minutes)}
             </span>
           </div>
           <div className="flex flex-col items-center justify-center py-1 select-none">
@@ -3035,7 +3043,7 @@ function DashboardPendingBreakCard({ row }: { row: DashboardBreakRow }) {
             <Badge variant="secondary">{i18n.t("dashboard.pendingApprovalBreakBadge")}</Badge>
           </div>
           <p className="text-sm text-muted-foreground">
-            ☕ {row.setting_name} · {row.duration_minutes} דק׳ · {i18n.t("breaks.requestedHour")}{" "}
+            ☕ {row.setting_name} · {fmtMinutesCount(row.duration_minutes)} · {i18n.t("breaks.requestedHour")}{" "}
             {row.requested_at ? fmtHM(row.requested_at) : "—"}
           </p>
         </div>
@@ -3353,14 +3361,14 @@ function BreakShortcutCard({ userId }: { userId: string }) {
       if (error) throw error;
     },
     onSuccess: () => {
-      toast.success("סומן: חזרת מההפסקה");
+      toast.success(i18n.t("dashboard.markReturn"));
       qc.invalidateQueries({ queryKey: ["my-break-shortcut", userId] });
       qc.invalidateQueries({ queryKey: ["my-active-break", userId] });
       qc.invalidateQueries({ queryKey: ["my-breaks-today"] });
       qc.invalidateQueries({ queryKey: ["dashboard-on-break"] });
       qc.invalidateQueries({ queryKey: ["dashboard-daily-breaks"] });
     },
-    onError: (e: any) => toast.error(e?.message ?? "שגיאה"),
+    onError: (e: any) => toast.error(e?.message ?? i18n.t("dashboard.error")),
   });
 
   const goRequest = () => navigate({ to: "/breaks" });
@@ -3500,7 +3508,7 @@ function OnBreakSection({ profile }: { profile: any }) {
           null,
         role_label: (mMap.get(r.user_id) as any)?.role_label ?? null,
         department: dMap.get(r.department_id) ?? "—",
-        type: sMap.get(r.break_setting_id) ?? "הפסקה",
+        type: sMap.get(r.break_setting_id) ?? i18n.t("dashboard.break"),
         durationMinutes: r.duration_minutes as number,
         startedAt: r.started_at as string | null,
         endsAt: r.ends_at as string | null,
@@ -4031,20 +4039,20 @@ function OnBreakSection({ profile }: { profile: any }) {
                     </SelectContent>
                   </Select>
                   <Select value={logStatusFilter} onValueChange={setLogStatusFilter}>
-                    <SelectTrigger><SelectValue placeholder="סטטוס" /></SelectTrigger>
+                    <SelectTrigger><SelectValue placeholder={i18n.t("dashboard.statusPlaceholder")} /></SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="__all">כל הסטטוסים</SelectItem>
+                      <SelectItem value="__all">{i18n.t("dashboard.allStatuses")}</SelectItem>
                       {statuses.map((s) => (
                         <SelectItem key={s} value={s}>{STATUS_LABEL[s] ?? s}</SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
                   <Select value={logSort} onValueChange={(v: any) => setLogSort(v)}>
-                    <SelectTrigger><SelectValue placeholder="מיון" /></SelectTrigger>
+                    <SelectTrigger><SelectValue placeholder={i18n.t("dashboard.sort")} /></SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="created">לפי שעת בקשה</SelectItem>
-                      <SelectItem value="overrun">לפי זמן חריגה</SelectItem>
-                      <SelectItem value="return">לפי זמן חזרה</SelectItem>
+                      <SelectItem value="created">{i18n.t("dashboard.sortByRequest")}</SelectItem>
+                      <SelectItem value="overrun">{i18n.t("dashboard.sortByOverrun")}</SelectItem>
+                      <SelectItem value="return">{i18n.t("dashboard.sortByReturn")}</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -4056,26 +4064,26 @@ function OnBreakSection({ profile }: { profile: any }) {
                     </div>
                   ) : sorted.length === 0 ? (
                     <p className="p-6 text-sm text-muted-foreground text-center">
-                      לא נמצאו רשומות התואמות את הסינון.
+                      {i18n.t("dashboard.noMatchingRecords")}
                     </p>
                   ) : (
                     <table className="w-full text-xs sm:text-sm">
                       <thead className="bg-muted/40 sticky top-0">
                         <tr>
-                          <th className="text-right p-2">👤 עובד</th>
-                          <th className="text-right p-2">💼 תפקיד</th>
+                          <th className="text-right p-2">{i18n.t("dashboard.colEmployeeIcon")}</th>
+                          <th className="text-right p-2">{i18n.t("dashboard.colRole")}</th>
                           {departments.length > 1 && (
-                            <th className="text-right p-2">🏬 מחלקה</th>
+                            <th className="text-right p-2">{i18n.t("dashboard.colDept")}</th>
                           )}
-                          <th className="text-right p-2">☕ סוג</th>
-                          <th className="text-right p-2">👤 אישר</th>
-                          <th className="text-right p-2">🕒 התחלה / מתוכננת</th>
-                          <th className="text-right p-2">🏁 סיום מתוכנן</th>
-                          <th className="text-right p-2">🕒 חזרה בפועל</th>
-                          <th className="text-right p-2">⏱️ משך בפועל</th>
-                          <th className="text-right p-2">🔴 חריגה</th>
-                          <th className="text-right p-2">📅 תאריך</th>
-                          <th className="text-right p-2">📌 סטטוס</th>
+                          <th className="text-right p-2">{i18n.t("dashboard.colBreakType")}</th>
+                          <th className="text-right p-2">{i18n.t("dashboard.colApprover")}</th>
+                          <th className="text-right p-2">{i18n.t("dashboard.colStartPlanned")}</th>
+                          <th className="text-right p-2">{i18n.t("dashboard.colScheduledEnd")}</th>
+                          <th className="text-right p-2">{i18n.t("dashboard.colActualReturn")}</th>
+                          <th className="text-right p-2">{i18n.t("dashboard.colActualDuration")}</th>
+                          <th className="text-right p-2">{i18n.t("dashboard.colOverrunIcon")}</th>
+                          <th className="text-right p-2">{i18n.t("dashboard.colDate")}</th>
+                          <th className="text-right p-2">{i18n.t("dashboard.colStatusIcon")}</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -4093,11 +4101,11 @@ function OnBreakSection({ profile }: { profile: any }) {
                           const isOnTime = r.returnedOnTime;
                           const isActiveRow = r.status === "active";
                           const statusBadge = isActiveRow ? (
-                            <Badge className="bg-amber-500 text-white hover:bg-amber-500">🟡 בהפסקה</Badge>
+                            <Badge className="bg-amber-500 text-white hover:bg-amber-500">{i18n.t("dashboard.onBreakBadgeIcon")}</Badge>
                           ) : isOnTime ? (
-                            <Badge className="bg-green-600 text-white hover:bg-green-600">🟢 חזר בזמן</Badge>
+                            <Badge className="bg-green-600 text-white hover:bg-green-600">{i18n.t("dashboard.returnedOnTimeIcon")}</Badge>
                           ) : isLate ? (
-                            <Badge className="bg-red-600 text-white hover:bg-red-600">🔴 חזר באיחור</Badge>
+                            <Badge className="bg-red-600 text-white hover:bg-red-600">{i18n.t("dashboard.returnedLateIcon")}</Badge>
                           ) : (
                             <Badge variant={STATUS_TONE[r.status] ?? "secondary"}>
                               {STATUS_LABEL[r.status] ?? r.status}
@@ -4127,7 +4135,7 @@ function OnBreakSection({ profile }: { profile: any }) {
                                 {fmtT(r.displayStart ?? r.startedAt)}
                                 {r.reschedule ? (
                                   <div className="text-[11px] text-muted-foreground mt-0.5 whitespace-normal">
-                                    שונה ע״י {r.reschedule.by}:{" "}
+                                    {i18n.t("dashboard.changedBy").replace("{name}", r.reschedule.by)}:{" "}
                                     {fmtT(r.reschedule.oldStart)} → {fmtT(r.reschedule.newStart)}
                                   </div>
                                 ) : null}
@@ -4147,18 +4155,18 @@ function OnBreakSection({ profile }: { profile: any }) {
                                 {fmtT(r.completedAt)}
                                 {r.manualReturn ? (
                                   <div className="text-[11px] text-muted-foreground mt-0.5 whitespace-normal">
-                                    הוחזר מהפסקה על ידי: {r.manualReturn.by}
+                                    {i18n.t("dashboard.returnedByMgr").replace("{name}", r.manualReturn.by)}
                                     <br />
                                     ({fmtT(r.manualReturn.at)})
                                   </div>
                                 ) : null}
                               </td>
                               <td className="p-2 whitespace-nowrap">
-                                {r.actualDurMin != null ? `${r.actualDurMin} דק׳` : "—"}
+                                {r.actualDurMin != null ? fmtMinutesCount(r.actualDurMin) : "—"}
                               </td>
                               <td className="p-2 whitespace-nowrap">
                                 {r.overrunMin > 0 ? (
-                                  <span className="text-red-600 font-bold">+{r.overrunMin} דק׳</span>
+                                  <span className="text-red-600 font-bold">{fmtOverrunMinutes(r.overrunMin)}</span>
                                 ) : (
                                   <span className="text-muted-foreground">—</span>
                                 )}
@@ -4173,7 +4181,7 @@ function OnBreakSection({ profile }: { profile: any }) {
                   )}
                 </div>
                 <div className="text-xs text-muted-foreground mt-2">
-                  סה״כ: {sorted.length} מתוך {log.length}
+                  {i18n.t("dashboard.logTotal").replace("{n}", String(sorted.length)).replace("{total}", String(log.length))}
                 </div>
               </>
             );
@@ -4193,14 +4201,14 @@ function OnBreakSection({ profile }: { profile: any }) {
         <DialogContent>
           <DialogHeader>
             <DialogTitle>
-              {listKind === "late" ? "עובדים מאחרים מהפסקה" : "עובדים בהפסקה כעת"}
+              {listKind === "late" ? i18n.t("dashboard.lateFromBreak") : i18n.t("dashboard.onBreakNow")}
             </DialogTitle>
           </DialogHeader>
           {dialogList.length === 0 ? (
             <p className="text-sm text-muted-foreground py-6 text-center">
               {listKind === "late"
-                ? "אין עובדים מאחרים מהפסקה כרגע."
-                : "אין עובדים בהפסקה כרגע."}
+                ? i18n.t("dashboard.noLateBreaks")
+                : i18n.t("dashboard.noOnBreak")}
             </p>
           ) : (
             <ul className="space-y-2 max-h-[60vh] overflow-y-auto">
@@ -4228,16 +4236,26 @@ function OnBreakSection({ profile }: { profile: any }) {
                         {r.job_title ? ` · ${r.job_title}` : ""}
                       </p>
                       <p className="text-xs text-muted-foreground">
-                        🏬 {r.department} · ☕ {r.type} · התחיל ב־{startStr} · 🕒 חזרה משוערת:{" "}
-                        {endStr}
+                        {i18n.t("dashboard.onBreakMeta", {
+                          dept: r.department,
+                          type: r.type,
+                          started: i18n.t("dashboard.startedAtShort", { time: startStr }),
+                          expectedReturn: `${i18n.t("dashboard.breakExpectedReturn")} ${endStr}`,
+                        })}
                       </p>
-                      <p className="text-xs text-muted-foreground">אישר/ה: {r.approverName}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {i18n.t("dashboard.approvedByShort").replace("{name}", r.approverName)}
+                      </p>
                     </div>
                     <div className="shrink-0 flex flex-col items-end gap-1">
                       {overrunMs > 0 ? (
-                        <Badge variant="destructive">🔴 חריגה {overMin} דק׳</Badge>
+                        <Badge variant="destructive">
+                          {i18n.t("dashboard.overrunMin").replace("{n}", String(overMin))}
+                        </Badge>
                       ) : (
-                        <Badge variant="secondary">⏳ נותר {remMin} דק׳</Badge>
+                        <Badge variant="secondary">
+                          {i18n.t("dashboard.remainingMin").replace("{n}", String(remMin))}
+                        </Badge>
                       )}
                       {canManageBreaks && (
                         <Button
@@ -4254,7 +4272,7 @@ function OnBreakSection({ profile }: { profile: any }) {
                           ) : (
                             <CheckCircle2 className="size-4" />
                           )}
-                          החזר מההפסקה
+                          {i18n.t("dashboard.returnFromBreak")}
                         </Button>
                       )}
                     </div>
@@ -4272,7 +4290,7 @@ function OnBreakSection({ profile }: { profile: any }) {
       >
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>כבר להחזיר את העובד מההפסקה?</AlertDialogTitle>
+            <AlertDialogTitle>{i18n.t("dashboard.confirmReturn")}</AlertDialogTitle>
             {confirmReturn?.name ? (
               <AlertDialogDescription>
                 {confirmReturn.name}
@@ -4280,7 +4298,7 @@ function OnBreakSection({ profile }: { profile: any }) {
             ) : null}
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>ביטול</AlertDialogCancel>
+            <AlertDialogCancel>{i18n.t("common.cancel")}</AlertDialogCancel>
             <AlertDialogAction
               onClick={() => {
                 if (confirmReturn) {
@@ -4289,7 +4307,7 @@ function OnBreakSection({ profile }: { profile: any }) {
                 setConfirmReturn(null);
               }}
             >
-              אישור
+              {i18n.t("common.confirm")}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

@@ -1,5 +1,6 @@
 import { createFileRoute, Outlet, Navigate } from "@tanstack/react-router";
 import { Loader2 } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import { useAuth } from "@/lib/use-auth";
 import { isPlatformOwner } from "@/lib/constants";
 
@@ -17,13 +18,23 @@ import { isPlatformOwner } from "@/lib/constants";
  */
 export const Route = createFileRoute("/_authenticated/platform")({
   component: PlatformLayout,
-  errorComponent: ({ error }) => (
-    <div className="p-6 text-sm text-destructive" role="alert">
-      {(error as Error)?.message ?? "שגיאה"}
-    </div>
-  ),
-  notFoundComponent: () => <div className="p-6 text-sm text-muted-foreground">הדף לא נמצא</div>,
+  errorComponent: PlatformRouteError,
+  notFoundComponent: PlatformRouteNotFound,
 });
+
+function PlatformRouteError({ error }: { error: unknown }) {
+  const { t } = useTranslation();
+  return (
+    <div className="p-6 text-sm text-destructive" role="alert">
+      {(error as Error)?.message ?? t("common.error")}
+    </div>
+  );
+}
+
+function PlatformRouteNotFound() {
+  const { t } = useTranslation();
+  return <div className="p-6 text-sm text-muted-foreground">{t("platformHub.pageNotFound")}</div>;
+}
 
 function PlatformLayout() {
   const { data: profile, isLoading } = useAuth();

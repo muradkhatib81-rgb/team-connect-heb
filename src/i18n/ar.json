@@ -319,6 +319,8 @@
     "markAllRead": "تعيين الكل كمقروء",
     "noNewNotifs": "لا توجد إشعارات جديدة",
     "minutesShort": "د",
+    "startedAtShort": "بدأ في {{time}}",
+    "onBreakMeta": "🏬 {{dept}} · ☕ {{type}} · {{started}} · {{expectedReturn}}",
     "departmentColleagues": "زملاء القسم",
     "noColleagues": "لا يوجد زملاء آخرون في القسم",
     "colleagueOnLeave": "في إجازة",
@@ -1542,5 +1544,724 @@
     "archived": "مؤرشفة",
     "makeActive": "تعيين كنشطة",
     "selectActiveCompany": "اختيار الشركة النشطة"
+  },
+  "employeesPage": {
+    "title": "إدارة الموظفين",
+    "noAccessTitle": "لا توجد صلاحية",
+    "noAccessDesc": "هذه الصفحة متاحة للمديرين ومسؤولي الأقسام.",
+    "departmentLabel": "القسم: {{name}}",
+    "headerSubtitle": "{{shown}} من {{total}} موظف · {{filter}}{{deptSuffix}}",
+    "exportEmployees": "تصدير الموظفين",
+    "addEmployee": "إضافة موظف",
+    "deptHead": "👤 مسؤول القسم",
+    "searchPlaceholder": "بحث بالاسم، رقم الهوية، الهاتف...",
+    "allDepartments": "كل الأقسام",
+    "loadError": "خطأ في تحميل قائمة الموظفين",
+    "loadFailed": "تعذّر تحميل البيانات",
+    "retry": "حاول مجدداً",
+    "noEmployees": "لم يُعثر على موظفين",
+    "noDepartment": "بدون قسم",
+    "changePhoto": "تغيير الصورة",
+    "uploadPhoto": "رفع صورة",
+    "fileTooLarge": "الملف كبير جداً (الحد الأقصى 5MB)",
+    "reactivated": "تمت إعادة تفعيل الموظف",
+    "reactivateError": "خطأ في تفعيل الموظف",
+    "createError": "خطأ في إنشاء الموظف",
+    "createSuccess": "تم إنشاء الموظف. كلمة مرور أولية — سيُطلب من الموظف تغييرها عند أول دخول.",
+    "createSuccessShort": "تم إنشاء موظف جديد بنجاح",
+    "avatarUploadFailed": "تم إنشاء الموظف لكن فشل رفع الصورة: {{message}}",
+    "updated": "تم تحديث الموظف",
+    "updateError": "خطأ في التحديث",
+    "deleted": "تم حذف الموظف نهائياً وإزالته من النظام",
+    "deleteError": "خطأ في حذف الموظف",
+    "resetPasswordSuccess": "تمت إعادة تعيين كلمة المرور. يمكن للموظف تسجيل الدخول بكلمة المرور الجديدة.",
+    "resetPasswordError": "خطأ في إعادة تعيين كلمة المرور",
+    "defaultEmployeeName": "موظف",
+    "filters": {
+      "all": "👥 كل الموظفين",
+      "active": "🟢 موظفون نشطون",
+      "inactive": "🔴 موظفون غير نشطين",
+      "on_leave": "🏖️ في إجازة",
+      "on_break": "☕ في استراحة",
+      "managers": "👔 مديرون",
+      "workers": "👤 موظفون"
+    },
+    "stats": {
+      "workers": "موظفون",
+      "managers": "مديرون",
+      "active": "موظفون نشطون",
+      "onLeave": "في إجازة",
+      "inactive": "غير نشطين",
+      "deptEmployees": "موظفو القسم"
+    },
+    "badges": {
+      "onLeave": "في إجازة",
+      "inactive": "غير نشط",
+      "active": "نشط",
+      "activeOnLeave": " (في إجازة)",
+      "employeesCount": "موظفون: {{count}}",
+      "activeCount": "نشطون: {{count}}",
+      "onLeaveCount": "في إجازة: {{count}}"
+    },
+    "csv": {
+      "name": "الاسم",
+      "department": "القسم",
+      "jobTitle": "المسمى",
+      "status": "الحالة",
+      "idNumber": "ر.ه",
+      "phone": "الهاتف",
+      "active": "نشط",
+      "inactive": "غير نشط"
+    },
+    "fields": {
+      "profilePhotoOptional": "صورة الملف (اختياري)",
+      "profilePhoto": "صورة الملف",
+      "firstName": "الاسم الأول",
+      "lastName": "اسم العائلة",
+      "idNumber": "رقم الهوية",
+      "department": "القسم",
+      "phone": "الهاتف",
+      "permission": "الصلاحية",
+      "jobTitle": "المسمى الوظيفي",
+      "initialPassword": "كلمة مرور أولية",
+      "newPassword": "كلمة مرور جديدة",
+      "confirmPassword": "تأكيد كلمة المرور",
+      "selectDepartment": "اختر قسماً",
+      "noJobTitle": "بدون مسمى",
+      "excludedFromHeadcount": " (غير محسوب في الهيكل)",
+      "status": "الحالة",
+      "onLeave": "في إجازة",
+      "leaveType": "نوع الإجازة",
+      "leaveStart": "تاريخ بدء الإجازة",
+      "leaveEnd": "تاريخ انتهاء الإجازة",
+      "selectLeaveType": "اختر النوع"
+    },
+    "status": {
+      "activeInSystem": "الموظف نشط في النظام",
+      "inactiveInSystem": "الموظف غير نشط",
+      "onLeaveNow": "الموظف في إجازة حالياً",
+      "notOnLeave": "الموظف ليس في إجازة"
+    },
+    "leaveTypes": {
+      "regular": "إجازة عادية",
+      "sick": "إجازة مرضية"
+    },
+    "create": {
+      "title": "إضافة موظف جديد",
+      "passwordHint": "سيُطلب من الموظف تغيير كلمة المرور الأولية عند أول دخول للنظام.",
+      "submit": "إنشاء موظف"
+    },
+    "edit": {
+      "title": "تعديل موظف",
+      "leaveScheduleHint": "في هذه الأيام سيُعلّم الجدول تلقائياً «إجازة عادية» أو «إجازة مرضية» حسب النوع المختار.",
+      "deleteEmployee": "حذف موظف",
+      "save": "حفظ"
+    },
+    "row": {
+      "reactivateAria": "تفعيل موظف",
+      "reactivate": "✅ تفعيل موظف",
+      "resetPasswordAria": "إعادة تعيين كلمة المرور",
+      "resetPassword": "إعادة تعيين كلمة المرور",
+      "editAria": "تعديل",
+      "deleteAria": "حذف نهائي",
+      "fullDelete": "حذف كامل"
+    },
+    "delete": {
+      "title": "حذف كامل — {{name}}",
+      "confirm": "هل أنت متأكد أنك تريد حذف الموظف نهائياً؟ لا يمكن التراجع عن هذا الإجراء.",
+      "submit": "حذف موظف"
+    },
+    "resetPassword": {
+      "title": "إعادة تعيين كلمة المرور — {{name}}",
+      "hint": "تُحفظ كلمة المرور فوراً ويمكن للموظف تسجيل الدخول بها — لا حاجة لرابط أو إجراء إضافي.",
+      "submit": "إعادة التعيين"
+    },
+    "duplicate": {
+      "activeTitle": "هذا الموظف مسجّل بالفعل في النظام.",
+      "inactiveTitle": "هذا الموظف موجود في النظام ومعلّم كغير نشط.",
+      "activeDesc": "لا يمكن إنشاء موظف آخر بنفس رقم الهوية. فيما يلي بيانات الموظف الحالي:",
+      "inactiveDesc": "جميع بيانات الموظف وسجله محفوظة. يمكن إعادة تفعيله بدلاً من إنشاء سجل جديد.",
+      "viewCard": "👁️ عرض بطاقة الموظف",
+      "editDetails": "✏️ تعديل بيانات الموظف",
+      "reactivate": "✅ إعادة تفعيل الموظف",
+      "cancel": "❌ إلغاء",
+      "labelName": "الاسم:",
+      "labelJobTitle": "المسمى:",
+      "labelDepartment": "القسم:",
+      "labelStatus": "الحالة:"
+    },
+    "archived": {
+      "title": "ℹ️ كان هذا الموظف مسجّلاً سابقاً في النظام.",
+      "desc": "يمكن استعادة الموظف السابق بكل البيانات المحفوظة في الأرشيف، أو فتح فترة توظيف جديدة. السجل السابق يبقى في الأرشيف في كل الأحوال.",
+      "archivedAt": "نُقل للأرشيف:",
+      "viewArchive": "👁️ عرض بيانات الأرشيف",
+      "restore": "♻️ استعادة الموظف السابق",
+      "newEmployment": "🆕 فتح فترة توظيف جديدة",
+      "archiveViewTitle": "📁 بيانات الأرشيف (للعرض فقط)",
+      "deactivatedAt": "تم التعطيل:"
+    },
+    "validation": {
+      "selectDepartment": "يجب اختيار قسم",
+      "idNumberDigits": "رقم الهوية يجب أن يحتوي 5–15 رقماً",
+      "passwordMin6": "كلمة المرور الأولية 6 أحرف على الأقل",
+      "firstNameRequired": "يجب إدخال الاسم الأول",
+      "lastNameRequired": "يجب إدخال اسم العائلة",
+      "departmentNotFound": "القسم غير موجود",
+      "leaveDatesRequired": "يجب إدخال تاريخ بدء وانتهاء الإجازة",
+      "leaveTypeRequired": "يجب اختيار نوع الإجازة (عادية أو مرضية)",
+      "leaveEndAfterStart": "تاريخ انتهاء الإجازة يجب أن يكون بعد تاريخ البدء",
+      "passwordMin6Reset": "كلمة المرور يجب أن تحتوي 6 أحرف على الأقل",
+      "passwordsMismatch": "كلمتا المرور غير متطابقتين"
+    }
+  },
+  "platformSettings": {
+    "title": "إعدادات المنصة",
+    "subtitle": "إعدادات عامة على مستوى المنصة — عبر مدير الإعدادات الحالي",
+    "platformId": "معرّف المنصة",
+    "supportEmail": "بريد دعم المنصة",
+    "whatsappNumber": "رقم واتساب للتواصل (شاشة تسجيل الدخول)",
+    "whatsappPlaceholder": "0501234567 أو 972501234567",
+    "whatsappHint": "يُعرض كرابط واتساب في أسفل شاشة تسجيل الدخول. اتركه فارغاً للإخفاء.",
+    "maintenanceMode": "وضع الصيانة (Maintenance Mode)",
+    "maintenanceHint": "علامة عامة فقط — لا يمنع الدخول فعلياً في هذه المرحلة",
+    "saveSettings": "حفظ الإعدادات",
+    "pwaIconTitle": "أيقونة تثبيت التطبيق (PWA)",
+    "pwaIconDesc": "فقط مالك المنصة يمكنه التغيير. اسم التثبيت يُحدَّد حسب لغة جهاز المستخدم (عبرية / عربية / إنجليزية) قبل التثبيت، ولا يمكن للمستخدمين تغييره.",
+    "changeIcon": "تغيير الأيقونة",
+    "pwaIconFormat": "PNG / JPG / WebP · حتى 5MB · يُحوَّل إلى 512×512",
+    "invalidWhatsapp": "رقم واتساب غير صالح",
+    "saveSuccess": "تم حفظ إعدادات المنصة",
+    "saveFailed": "فشل حفظ الإعدادات",
+    "iconUpdated": "تم تحديث أيقونة التطبيق",
+    "iconUploadFailed": "فشل رفع الأيقونة"
+  },
+  "platformHub": {
+    "title": "إدارة المنصة",
+    "welcome": "مرحباً، {{name}}",
+    "welcomeFallback": "مركز التحكم بالمنصة",
+    "pageNotFound": "الصفحة غير موجودة",
+    "stats": {
+      "activeOwners": "مالكو نظام نشطون",
+      "suspended": "موقوفون",
+      "primaryOwner": "مالك النظام الرئيسي",
+      "auditEvents30d": "أحداث السجل (30 يوماً)",
+      "companies": "شركات على المنصة",
+      "branches": "فروع على المنصة"
+    },
+    "quick": {
+      "manageOwners": "إدارة مالكي النظام",
+      "auditLog": "سجل نشاط المنصة",
+      "manageCompanies": "إدارة الشركات",
+      "manageBranches": "إدارة الفروع"
+    },
+    "recentActivity": "نشاط حديث",
+    "fullLog": "السجل الكامل",
+    "noRecentActivity": "لا يوجد نشاط حديث",
+    "actor": "منفّذ: {{name}}",
+    "target": "هدف: {{name}}",
+    "modulesSection": "وحدات المنصة",
+    "modules": {
+      "companies": "إدارة الشركات",
+      "branches": "إدارة الفروع",
+      "monitoring": "المراقبة والتوفر",
+      "realtime": "إدارة Real-Time",
+      "billing": "الفوترة والاشتراكات",
+      "featureFlags": "علامات الميزات",
+      "analytics": "تحليلات عامة",
+      "owners": "مالكو النظام",
+      "auditLog": "سجل نشاط المنصة",
+      "notifications": "إشعارات المنصة",
+      "settings": "إعدادات المنصة"
+    },
+    "hints": {
+      "companies": "{{count}} شركات",
+      "branches": "{{count}} فروع",
+      "owners": "{{count}} مالكي نظام"
+    }
+  },
+  "platformOwners": {
+    "title": "مالكو النظام",
+    "subtitle": "إدارة حسابات مالكي النظام",
+    "transferPrimary": "نقل الملكية الرئيسية",
+    "newOwner": "مالك نظام جديد",
+    "searchPlaceholder": "بحث بالاسم أو البريد أو الهاتف…",
+    "filters": {
+      "allLevels": "كل المستويات",
+      "primary": "مالك النظام الرئيسي",
+      "owner": "مالك نظام",
+      "allStatuses": "كل الحالات",
+      "active": "نشط",
+      "suspended": "موقوف"
+    },
+    "empty": "لا يوجد مالكو نظام.",
+    "emptyFilter": "لا توجد نتائج مطابقة للتصفية.",
+    "cols": {
+      "name": "الاسم",
+      "email": "البريد",
+      "phone": "الهاتف",
+      "level": "المستوى",
+      "status": "الحالة",
+      "created": "تاريخ الإنشاء",
+      "lastSignIn": "آخر دخول"
+    },
+    "badges": {
+      "primaryShort": "مالك رئيسي",
+      "primary": "مالك النظام الرئيسي",
+      "owner": "مالك النظام",
+      "active": "نشط",
+      "suspended": "موقوف"
+    },
+    "neverSignedIn": "لم يسجّل الدخول أبداً",
+    "actions": {
+      "editProfile": "تعديل الملف",
+      "suspend": "إيقاف",
+      "restore": "استعادة",
+      "delete": "حذف",
+      "edit": "تعديل"
+    },
+    "toasts": {
+      "suspended": "تم إيقاف مالك النظام",
+      "restored": "تمت استعادة مالك النظام",
+      "suspendFailed": "فشل الإيقاف",
+      "restoreFailed": "فشلت الاستعادة",
+      "created": "تم إنشاء مالك النظام",
+      "createFailed": "فشل الإنشاء",
+      "updated": "تم تحديث الملف",
+      "updateFailed": "فشل التحديث",
+      "deleted": "تم حذف مالك النظام",
+      "deleteFailed": "فشل الحذف",
+      "transferred": "تم نقل الملكية الرئيسية",
+      "transferFailed": "فشل النقل"
+    },
+    "detail": {
+      "notFound": "مالك النظام غير موجود",
+      "backToList": "العودة للقائمة",
+      "businessIdentity": "Business Identity",
+      "activitySummary": "ملخص النشاط",
+      "fullLog": "السجل الكامل",
+      "noActivity": "لا يوجد نشاط مسجّل",
+      "actor": "منفّذ",
+      "target": "هدف",
+      "identity": "الهوية",
+      "statusSection": "الحالة والدخول",
+      "level": "المستوى",
+      "lastSignIn": "آخر دخول",
+      "created": "تاريخ الإنشاء",
+      "capabilities": "صلاحيات المنصة",
+      "primaryOnly": "المالك الرئيسي فقط",
+      "emailFutureHint": "تغيير البريد ميزة مستقبلية — ستُضاف في الإصدار التالي من إدارة المنصة."
+    },
+    "capabilities": {
+      "fullManagement": "إدارة كاملة للمنصة",
+      "manageOwners": "إنشاء وإيقاف وحذف مالكي النظام",
+      "transferPrimary": "نقل الملكية الرئيسية",
+      "viewOwners": "عرض كل مالكي النظام",
+      "viewAudit": "عرض سجل نشاط المنصة",
+      "crossBranch": "وصول عبر الفروع"
+    },
+    "fields": {
+      "firstName": "الاسم الأول",
+      "lastName": "اسم العائلة",
+      "email": "البريد",
+      "password": "كلمة المرور (8 أحرف على الأقل)",
+      "phone": "الهاتف",
+      "idNumber": "ر.ه"
+    },
+    "dialogs": {
+      "createTitle": "إضافة مالك نظام",
+      "createDesc": "إنشاء حساب مالك نظام جديد. حساب مستقل — غير مرتبط بالمستخدم الحالي أو بموظف.",
+      "createSubmit": "إنشاء",
+      "editTitle": "تعديل ملف مالك النظام",
+      "editDesc": "تحديث بيانات هوية مالك النظام",
+      "deleteTitle": "حذف مالك نظام",
+      "deleteDesc": "هذا الإجراء لا يمكن التراجع عنه",
+      "deleteWarning": "سيُزال حساب مالك النظام نهائياً. لا يمكن حذف المالك الرئيسي.",
+      "deleteConfirm": "للتأكيد، اكتب بريد مالك النظام:",
+      "deleteSubmit": "حذف نهائي",
+      "transferTitle": "نقل الملكية الرئيسية",
+      "transferDesc": "نقل دور \"مالك النظام الرئيسي\" إلى مالك نظام آخر",
+      "transferIrreversible": "إجراء لا رجعة فيه",
+      "transferWarning": "بعد التأكيد، {{current}} سيصبح مالك نظام عادياً، والمالك المختار سيصبح المالك الرئيسي بصلاحيات كاملة.",
+      "transferTarget": "هدف النقل",
+      "transferSelectPlaceholder": "اختر مالك نظام",
+      "transferNoEligible": "لا يوجد مالكو نظام نشطون إضافيون",
+      "transferResult": "النتيجة: {{name}} سيحصل على الملكية الرئيسية. ستصبح مالك نظام عادياً.",
+      "transferConfirmLabel": "للتأكيد، اكتب بريد الهدف:",
+      "transferSubmit": "تأكيد ونقل الملكية",
+      "warning": "تحذير"
+    },
+    "events": {
+      "created": "تم إنشاء مالك نظام",
+      "suspended": "تم إيقاف مالك نظام",
+      "restored": "تمت استعادة مالك نظام",
+      "deleted": "تم حذف مالك نظام",
+      "primaryTransferred": "تم نقل الملكية الرئيسية",
+      "profileUpdated": "تم تحديث بيانات مالك النظام"
+    }
+  },
+  "platformNotifications": {
+    "title": "إشعارات المنصة",
+    "subtitle": "نظام Push لمالك النظام فقط — تفعيل حسب نوع الحدث، ومنح لشركة أو فرع. إيقاف Push يبقي جرس الإشعارات الصامت فعالاً.",
+    "scopeTitle": "منح لشركة / فرع",
+    "scopeDesc": "طالما لا توجد نطاقات — Push نشط لكل الفروع. بعد إضافة أول نطاق، يُرسل Push فقط للشركات/الفروع المدرجة هنا.",
+    "scopeType": "نوع النطاق",
+    "company": "شركة",
+    "branch": "فرع",
+    "selectCompany": "اختر شركة",
+    "selectBranch": "اختر فرع",
+    "grantPush": "منح Push",
+    "loadingScopes": "جاري تحميل النطاقات…",
+    "noScopes": "لا توجد نطاقات بعد — Push حسب أنواع الأحداث ينطبق على كل الفروع.",
+    "removeScopeAria": "إزالة النطاق",
+    "eventsTitle": "تفعيل/إيقاف Web Push حسب الحدث",
+    "eventsDesc": "التحكم بالأحداث التي ترسل إشعار Push (ضمن النطاقات الممنوحة). الإشعار الصامت يبقى دائماً.",
+    "loadingSettings": "جاري تحميل الإعدادات…",
+    "loadError": "خطأ في تحميل الإعدادات",
+    "pushUpdated": "تم تحديث إعداد Push",
+    "updateFailed": "فشل التحديث",
+    "selectCompanyError": "يجب اختيار شركة",
+    "selectBranchError": "يجب اختيار فرع",
+    "scopeAdded": "تمت إضافة النطاق — Push نشط له",
+    "scopeAddFailed": "فشلت إضافة النطاق",
+    "scopeRemoved": "تمت إزالة النطاق",
+    "scopeRemoveFailed": "فشلت الإزالة",
+    "groups": {
+      "schedule": "جدول العمل",
+      "leave": "الإجازات",
+      "break": "الاستراحات",
+      "custody": "إدارة المعدات",
+      "ops": "تشغيل عام"
+    }
+  },
+  "platformRealtime": {
+    "title": "إدارة Real-Time",
+    "subtitle": "قنوات Real-Time على مستوى المنصة — عبر مدير Realtime الحالي. بدون مزود Realtime خارجي.",
+    "openChannel": "فتح قناة",
+    "channelsHeader": "قنوات ({{count}}) · مفتوحة: {{open}}",
+    "noChannels": "لا توجد قنوات بعد في الجلسة الحالية. يمكن فتح قناة جديدة من الزر أعلاه.",
+    "visibility": {
+      "public": "عام",
+      "private": "خاص",
+      "system": "النظام"
+    },
+    "status": {
+      "closed": "مغلق",
+      "open": "مفتوح"
+    },
+    "actions": {
+      "edit": "تعديل",
+      "testEvent": "إرسال حدث اختبار",
+      "reopen": "إعادة الفتح",
+      "close": "إغلاق",
+      "delete": "حذف"
+    },
+    "stats": {
+      "clients": "عملاء متصلون",
+      "subscriptions": "اشتراكات نشطة",
+      "events": "أحداث نشطة",
+      "lastActivity": "آخر نشاط"
+    },
+    "toasts": {
+      "closed": "تم إغلاق القناة",
+      "reopened": "تم إعادة فتح القناة",
+      "testSent": "تم إرسال حدث اختبار",
+      "deleted": "تم حذف القناة",
+      "updated": "تم تحديث القناة",
+      "opened": "تم فتح القناة",
+      "failed": "فشلت العملية"
+    },
+    "delete": {
+      "title": "حذف القناة",
+      "desc": "هل تريد حذف القناة \"{{name}}\"؟ سيُزال كل المشتركين النشطين وسجل أحداث القناة."
+    },
+    "form": {
+      "editTitle": "تعديل القناة — {{name}}",
+      "createTitle": "فتح قناة جديدة",
+      "desc": "قناة Real-Time على مستوى المنصة، تُدار عبر مدير Realtime الحالي طوال الجلسة.",
+      "name": "اسم القناة *",
+      "description": "الوصف (اختياري)",
+      "visibility": "الظهور",
+      "save": "حفظ",
+      "open": "فتح القناة"
+    }
+  },
+  "platformAuditLog": {
+    "title": "سجل نشاط المنصة",
+    "subtitle": "جميع عمليات مالكي النظام مسجّلة هنا",
+    "searchPlaceholder": "بحث بالمنفّذ أو الهدف…",
+    "allEvents": "كل الأحداث",
+    "noResults": "لا توجد سجلات مطابقة",
+    "cols": {
+      "date": "التاريخ",
+      "event": "الحدث",
+      "actor": "منفّذ",
+      "target": "هدف",
+      "details": "تفاصيل"
+    }
+  },
+  "platformBranches": {
+    "title": "الفروع",
+    "subtitleWithCompany": "إدارة فروع {{name}}",
+    "subtitleDefault": "إدارة فروع الشركات على المنصة",
+    "assignExisting": "ربط فرع موجود",
+    "needCompanyFirst": "يجب إنشاء شركة على المنصة قبل إدارة الفروع.",
+    "manageCompanies": "إدارة الشركات",
+    "selectCompanyHint": "اختر شركة نشطة (من المُبدّل أعلاه) لعرض فروعها وإدارتها.",
+    "noBranches": "لا توجد فروع مرتبطة بالشركة النشطة بعد.",
+    "noBranchesForCompany": "لا توجد فروع مرتبطة بهذه الشركة بعد.",
+    "assignHint": "يمكن ربط فرع موجود من الزر أعلاه.",
+    "selectActiveBranch": "اختيار الفرع النشط",
+    "cols": {
+      "name": "اسم الفرع",
+      "id": "المعرف",
+      "created": "تاريخ الإنشاء",
+      "status": "الحالة"
+    },
+    "badges": {
+      "active": "نشط",
+      "inactive": "غير نشط"
+    },
+    "actions": {
+      "makeActive": "تعيين كنشط",
+      "detailsSync": "تفاصيل / مزامنة",
+      "unassign": "إزالة الربط"
+    },
+    "backToList": "العودة إلى قائمة الفروع",
+    "notFound": "الفرع غير موجود",
+    "branchDetail": {
+      "activeBranch": "فرع نشط",
+      "makeActive": "تعيين كنشط",
+      "cannotEnterInactiveCompany": "لا يمكن الدخول إلى وضع الفرع لشركة غير نشطة أو موقوفة.",
+      "tabs": {
+        "dashboard": "نظرة عامة",
+        "statistics": "إحصائيات",
+        "settings": "الإعدادات"
+      }
+    },
+    "stats": {
+      "branchesInCompany": "فروع في الشركة",
+      "branchAgeDays": "عمر الفرع (أيام)",
+      "company": "شركة",
+      "daysUnit": "{{count}} يوم",
+      "address": "العنوان",
+      "phone": "الهاتف",
+      "addressPlaceholder": "شارع، رقم، مدينة",
+      "phonePlaceholder": "03-1234567",
+      "saveSettings": "حفظ الإعدادات",
+      "settingsSaved": "تم حفظ إعدادات الفرع"
+    },
+    "rows": {
+      "createdAt": "تاريخ الإنشاء",
+      "updatedAt": "آخر تحديث",
+      "branchAge": "عمر الفرع",
+      "branchesInCompanyTotal": "فروع في الشركة (الإجمالي)"
+    }
+  },
+  "platformBranchDialogs": {
+    "createTitle": "ربط فرع موجود",
+    "createDesc": "ربط فرع موجود في النظام بهذه الشركة. يبقى الفرع وبياناته (الموظفون، الأقسام، جداول العمل، إلخ) دون تغيير — يُنشأ رابط فقط بين الشركة والفرع.",
+    "selectPlaceholder": "اختر فرعاً للربط",
+    "noAvailable": "كل الفروع الموجودة في النظام مرتبطة بالفعل بشركات على المنصة. يمكن إنشاء فرع جديد عبر إدارة فروع النظام.",
+    "assignSubmit": "ربط الفرع",
+    "assignSuccess": "تم ربط الفرع بالشركة بنجاح",
+    "selectRequired": "يجب اختيار فرع موجود للربط.",
+    "editTitle": "تفاصيل الفرع — {{name}}",
+    "editDesc": "تُدار تفاصيل الفرع الكاملة (بما في ذلك الموظفون والأقسام وجداول العمل) في إدارة فروع النظام. هنا يمكنك عرض اللقطة ومزامنتها من أحدث البيانات الفعلية.",
+    "fields": {
+      "name": "الاسم",
+      "code": "الرمز",
+      "address": "العنوان",
+      "status": "الحالة"
+    },
+    "statusActive": "نشط",
+    "statusInactive": "غير نشط",
+    "sourceNotFound": "لم يُعثر على الفرع الأصلي في النظام (ربما حُذف). تُعرض آخر لقطة محفوظة.",
+    "syncFromReal": "مزامنة من الفرع الفعلي",
+    "syncSuccess": "تمت مزامنة تفاصيل الفرع",
+    "syncFailed": "فشلت المزامنة",
+    "loadSourceFailed": "لا يمكن تحميل تفاصيل الفرع الأصلي حالياً.",
+    "deleteTitle": "إزالة ربط الفرع",
+    "deleteDesc": "هل تريد إزالة ربط الفرع \"{{name}}\" بالشركة؟ تزيل العملية الرابط فقط — يبقى الفرع وجميع بياناته (الموظفون، الأقسام، جداول العمل، إلخ) في النظام دون تغيير، ويمكن إعادة ربطه في أي وقت.",
+    "unassignSubmit": "إزالة الربط",
+    "unassignSuccess": "تمت إزالة ربط الفرع بالشركة",
+    "actionFailed": "فشلت العملية"
+  },
+  "platformCompanyDetail": {
+    "notFound": "الشركة غير موجودة",
+    "backToList": "العودة إلى قائمة الشركات",
+    "tabs": {
+      "dashboard": "نظرة عامة",
+      "statistics": "إحصائيات",
+      "branches": "الفروع",
+      "managers": "المديرون",
+      "users": "المستخدمون",
+      "reports": "التقارير",
+      "settings": "الإعدادات"
+    },
+    "stats": {
+      "companiesOnPlatform": "شركات على المنصة",
+      "companyAgeDays": "عمر الشركة (أيام)",
+      "assignedBranches": "فروع مرتبطة",
+      "companiesOnPlatformTotal": "شركات على المنصة (الإجمالي)",
+      "createdAt": "تاريخ الإنشاء",
+      "updatedAt": "آخر تحديث",
+      "companyAge": "عمر الشركة",
+      "daysUnit": "{{count}} يوم"
+    },
+    "managers": {
+      "nameLabel": "اسم المدير",
+      "emailLabel": "البريد (اختياري)",
+      "namePlaceholder": "الاسم الكامل",
+      "add": "إضافة مدير",
+      "added": "تمت إضافة المدير للشركة",
+      "addFailed": "فشلت الإضافة",
+      "empty": "لا يوجد مديرون مسجلون لهذه الشركة بعد. يمكنك إضافة مدير من النموذج أعلاه."
+    },
+    "users": {
+      "title": "لا توجد مكتبة مستخدمين مرتبطة بهذه الشركة بعد",
+      "description": "يُدار المستخدمون الفعليون (الموظفون) حالياً على مستوى الفرع الواحد، وليس على مستوى الشركة. لدى هذه الشركة {{count}} فروع — يمكنك إدارة المستخدمين من كل فرع على حدة."
+    },
+    "reports": {
+      "branchesInCompany": "فروع في الشركة",
+      "avgBranchAgeDays": "متوسط عمر الفرع (أيام)",
+      "companyAgeDays": "عمر الشركة (أيام)",
+      "oldestBranch": "أول فرع تم إنشاؤه",
+      "newestBranch": "آخر فرع تم إنشاؤه"
+    },
+    "settings": {
+      "contactEmail": "بريد للتواصل",
+      "billingEnabled": "الفوترة مفعّلة",
+      "billingEnabledDesc": "هل الشركة ضمن دورة الفوترة للمنصة",
+      "saveSettings": "حفظ الإعدادات",
+      "settingsSaved": "تم حفظ إعدادات الشركة"
+    }
+  },
+  "platformCompanyDialogs": {
+    "fields": {
+      "name": "اسم الشركة *",
+      "logoUrl": "رابط الشعار (URL)",
+      "companyCode": "رمز الشركة",
+      "legalName": "الاسم القانوني",
+      "taxNumber": "رقم التاجر / الشركة",
+      "phone": "الهاتف",
+      "email": "البريد",
+      "address": "العنوان",
+      "currency": "العملة",
+      "language": "اللغة",
+      "timeZone": "المنطقة الزمنية",
+      "status": "حالة الشركة"
+    },
+    "statusHint": "تبقى الشركة غير النشطة ظاهرة في القائمة لكن لا يمكن الدخول إلى وضع الفرع لها.",
+    "create": {
+      "title": "شركة جديدة",
+      "desc": "إنشاء شركة جديدة على المنصة.",
+      "submit": "إنشاء",
+      "success": "تم إنشاء الشركة بنجاح",
+      "failed": "فشل إنشاء الشركة"
+    },
+    "edit": {
+      "title": "تعديل الشركة",
+      "desc": "تحديث بيانات الشركة.",
+      "success": "تم تحديث الشركة",
+      "failed": "فشل التحديث"
+    },
+    "delete": {
+      "title": "حذف الشركة",
+      "desc": "هل تريد حذف الشركة \"{{name}}\"؟ هذا حذف ناعم — يمكن الاستعادة لاحقاً.",
+      "checkingBranches": "جاري التحقق من الفروع المرتبطة…",
+      "blocked": "لا يمكن الحذف: لدى هذه الشركة {{count}} فروع مرتبطة. أزل ربط جميع الفروع (في تبويب \"الفروع\") قبل الحذف.",
+      "success": "تم حذف الشركة",
+      "failed": "فشل الحذف"
+    }
+  },
+  "platformCompanyActions": {
+    "ariaLabel": "إدارة الشركة",
+    "menuLabel": "إدارة الشركة",
+    "editCompany": "تعديل الشركة",
+    "manageBranches": "إدارة الفروع",
+    "companyManagers": "مديرو الشركة",
+    "companySettings": "إعدادات الشركة",
+    "deactivateCompany": "إيقاف الشركة",
+    "activateCompany": "تفعيل الشركة",
+    "restoreFromArchive": "استعادة من الأرشيف",
+    "archive": "أرشفة",
+    "deleteCompany": "حذف الشركة",
+    "toasts": {
+      "deactivated": "تم إيقاف الشركة",
+      "activated": "تم تفعيل الشركة",
+      "archived": "تمت أرشفة الشركة",
+      "restored": "تمت استعادة الشركة من الأرشيف",
+      "actionFailed": "فشلت العملية"
+    }
+  },
+  "platformFeatureFlags": {
+    "title": "أعلام الميزات (Feature Flags)",
+    "subtitle": "تفعيل/إيقاف الأعلام على مستوى المنصة — عبر مدير Feature Flag الحالي",
+    "newFlag": "علم جديد",
+    "searchPlaceholder": "بحث بالاسم أو المفتاح",
+    "filters": {
+      "allScopes": "كل النطاقات",
+      "allStatuses": "كل الحالات",
+      "enabled": "مفعّل",
+      "disabled": "معطّل",
+      "archived": "مؤرشف"
+    },
+    "sort": {
+      "name": "الاسم",
+      "scope": "النطاق",
+      "status": "الحالة",
+      "updated": "آخر تحديث"
+    },
+    "loading": "جاري التحميل…",
+    "empty": "لا توجد أعلام ميزات مسجّلة",
+    "actionSuccess": "اكتملت العملية",
+    "system": "النظام",
+    "scopes": {
+      "platform": "المنصة",
+      "company": "الشركة",
+      "branch": "الفرع"
+    },
+    "details": {
+      "noDescription": "بدون وصف",
+      "created": "تاريخ الإنشاء",
+      "updated": "آخر تحديث",
+      "notes": "ملاحظات"
+    },
+    "delete": {
+      "title": "حذف العلم",
+      "desc": "هل تريد حذف {{name}}؟ لا يمكن التراجع عن هذا الإجراء."
+    },
+    "dialog": {
+      "createTitle": "علم جديد",
+      "editTitle": "تعديل العلم",
+      "displayName": "اسم العرض",
+      "key": "المفتاح",
+      "description": "الوصف",
+      "scope": "النطاق",
+      "notes": "ملاحظات",
+      "saved": "تم حفظ العلم",
+      "nameKeyRequired": "الاسم والمفتاح حقول مطلوبة."
+    }
+  },
+  "platformAnalytics": {
+    "title": "تحليلات عامة",
+    "subtitle": "بيانات مجمّعة عبر المنصة — الشركات والفروع والمستخدمون النشطون",
+    "stats": {
+      "companies": "شركات",
+      "branches": "فروع",
+      "activeSessions": "مستخدمون بجلسة نشطة",
+      "avgBranchesPerCompany": "متوسط الفروع لكل شركة"
+    },
+    "companiesByBranches": "الشركات حسب عدد الفروع",
+    "loading": "جاري التحميل…",
+    "noCompanies": "لا توجد شركات على المنصة بعد",
+    "branchCount": "{{count}} فروع",
+    "oldestCompany": "أقدم شركة على المنصة",
+    "newestCompany": "أحدث شركة على المنصة"
+  },
+  "platformAiRedirect": {
+    "title": "انتقلت التخصيصات حسب الشركة والفرع إلى الفوترة",
+    "description": "اختيار الخطة ودقائق الذكاء الاصطناعي والفرع يتم في الفوترة والاشتراكات. هنا تبقى المزودون وسجل الاستخدام وإعدادات المنصة.",
+    "link": "الانتقال إلى الفوترة والاشتراكات"
   }
 }

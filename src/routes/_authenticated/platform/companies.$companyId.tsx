@@ -1,6 +1,7 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState, type ComponentType } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 import {
   Archive,
@@ -64,7 +65,7 @@ type CompanyDetailsTab = (typeof VALID_TABS)[number];
 
 export const Route = createFileRoute("/_authenticated/platform/companies/$companyId")({
   component: CompanyDetailsPage,
-  notFoundComponent: () => <div className="p-6 text-sm text-muted-foreground">החברה לא נמצאה</div>,
+  notFoundComponent: CompanyDetailsNotFound,
   validateSearch: (search: Record<string, unknown>): { tab: CompanyDetailsTab } => {
     const raw = typeof search.tab === "string" ? search.tab : "dashboard";
     return {
@@ -75,21 +76,29 @@ export const Route = createFileRoute("/_authenticated/platform/companies/$compan
   },
 });
 
+function CompanyDetailsNotFound() {
+  const { t } = useTranslation();
+  return (
+    <div className="p-6 text-sm text-muted-foreground">{t("platformCompanyDetail.notFound")}</div>
+  );
+}
+
 const CONTACT_EMAIL_KEY = "contactEmail";
 const BILLING_ENABLED_KEY = "billingEnabled";
 
-const STATUS_LABELS: Record<Company["status"], string> = {
-  active: "פעילה",
-  inactive: "לא פעילה",
-  suspended: "מושהית",
-};
-
 function StatusBadge({ company }: { company: Company }) {
+  const { t } = useTranslation();
+  const labels: Record<Company["status"], string> = {
+    active: t("platformCompanies.statusActive"),
+    inactive: t("platformCompanies.statusInactive"),
+    suspended: t("platformCompanies.statusSuspended"),
+  };
+
   if (company.status === "active") {
     return (
       <Badge className="gap-1 bg-emerald-100 text-emerald-800 hover:bg-emerald-100 dark:bg-emerald-950/30 dark:text-emerald-400">
         <Star className="size-3" />
-        פעילה
+        {labels.active}
       </Badge>
     );
   }
@@ -99,12 +108,13 @@ function StatusBadge({ company }: { company: Company }) {
       className="gap-1 border-amber-300 text-amber-800 dark:border-amber-800 dark:text-amber-400"
     >
       <ShieldAlert className="size-3" />
-      {STATUS_LABELS[company.status]}
+      {labels[company.status]}
     </Badge>
   );
 }
 
 function CompanyDetailsPage() {
+  const { t } = useTranslation();
   const { companyId } = Route.useParams();
   const { tab } = Route.useSearch();
   const navigate = Route.useNavigate();
@@ -145,10 +155,12 @@ function CompanyDetailsPage() {
         <Button asChild variant="ghost" size="sm" className="gap-2">
           <Link to="/platform/companies">
             <ArrowRight className="size-4" />
-            חזרה לרשימת החברות
+            {t("platformCompanyDetail.backToList")}
           </Link>
         </Button>
-        <Card className="p-8 text-sm text-muted-foreground text-center">החברה לא נמצאה</Card>
+        <Card className="p-8 text-sm text-muted-foreground text-center">
+          {t("platformCompanyDetail.notFound")}
+        </Card>
       </div>
     );
   }
@@ -160,7 +172,7 @@ function CompanyDetailsPage() {
       <Button asChild variant="ghost" size="sm" className="gap-2">
         <Link to="/platform/companies">
           <ArrowRight className="size-4" />
-          חזרה לרשימת החברות
+          {t("platformCompanyDetail.backToList")}
         </Link>
       </Button>
 
@@ -179,14 +191,14 @@ function CompanyDetailsPage() {
               {isActive && (
                 <Badge className="gap-1 bg-primary/10 text-primary hover:bg-primary/10">
                   <Star className="size-3" />
-                  חברה פעילה בפלטפורמה
+                  {t("platformCompanies.activeOnPlatform")}
                 </Badge>
               )}
               <StatusBadge company={company} />
               {company.archivedAt && (
                 <Badge variant="secondary" className="gap-1">
                   <Archive className="size-3" />
-                  בארכיון
+                  {t("platformCompanies.archived")}
                 </Badge>
               )}
             </div>
@@ -206,7 +218,7 @@ function CompanyDetailsPage() {
                 className="gap-2"
               >
                 <Star className="size-4" />
-                הפוך לפעילה
+                {t("platformCompanies.makeActive")}
               </Button>
             )}
             <CompanyActionsMenu
@@ -225,31 +237,31 @@ function CompanyDetailsPage() {
         <TabsList>
           <TabsTrigger value="dashboard" className="gap-2">
             <LayoutDashboard className="size-4" />
-            סקירה כללית
+            {t("platformCompanyDetail.tabs.dashboard")}
           </TabsTrigger>
           <TabsTrigger value="statistics" className="gap-2">
             <BarChart3 className="size-4" />
-            סטטיסטיקות
+            {t("platformCompanyDetail.tabs.statistics")}
           </TabsTrigger>
           <TabsTrigger value="branches" className="gap-2">
             <GitBranch className="size-4" />
-            סניפים
+            {t("platformCompanyDetail.tabs.branches")}
           </TabsTrigger>
           <TabsTrigger value="managers" className="gap-2">
             <UserCog className="size-4" />
-            מנהלים
+            {t("platformCompanyDetail.tabs.managers")}
           </TabsTrigger>
           <TabsTrigger value="users" className="gap-2">
             <Users className="size-4" />
-            משתמשים
+            {t("platformCompanyDetail.tabs.users")}
           </TabsTrigger>
           <TabsTrigger value="reports" className="gap-2">
             <FileText className="size-4" />
-            דוחות
+            {t("platformCompanyDetail.tabs.reports")}
           </TabsTrigger>
           <TabsTrigger value="settings" className="gap-2">
             <SettingsIcon className="size-4" />
-            הגדרות
+            {t("platformCompanyDetail.tabs.settings")}
           </TabsTrigger>
         </TabsList>
 
@@ -309,6 +321,8 @@ function CompanyDashboardTab({
   isLoading: boolean;
   branchesCount: number;
 }) {
+  const { t } = useTranslation();
+
   if (isLoading || !snapshot) {
     return (
       <div className="p-8 flex justify-center">
@@ -321,11 +335,19 @@ function CompanyDashboardTab({
     <div className="grid gap-4 md:grid-cols-3">
       <StatCard
         icon={Building2}
-        label="חברות בפלטפורמה"
+        label={t("platformCompanyDetail.stats.companiesOnPlatform")}
         value={snapshot.statistics.totalCompaniesOnPlatform}
       />
-      <StatCard icon={Calendar} label="גיל החברה (ימים)" value={snapshot.statistics.ageInDays} />
-      <StatCard icon={GitBranch} label="סניפים משויכים" value={branchesCount} />
+      <StatCard
+        icon={Calendar}
+        label={t("platformCompanyDetail.stats.companyAgeDays")}
+        value={snapshot.statistics.ageInDays}
+      />
+      <StatCard
+        icon={GitBranch}
+        label={t("platformCompanyDetail.stats.assignedBranches")}
+        value={branchesCount}
+      />
     </div>
   );
 }
@@ -337,6 +359,8 @@ function CompanyStatisticsTab({
   snapshot?: CompanyDashboardSnapshot;
   isLoading: boolean;
 }) {
+  const { t } = useTranslation();
+
   if (isLoading || !snapshot) {
     return (
       <div className="p-8 flex justify-center">
@@ -348,12 +372,21 @@ function CompanyStatisticsTab({
   return (
     <Card className="card-elevated p-5 space-y-3">
       <Row
-        label="חברות בפלטפורמה (סה״כ)"
+        label={t("platformCompanyDetail.stats.companiesOnPlatformTotal")}
         value={String(snapshot.statistics.totalCompaniesOnPlatform)}
       />
-      <Row label="נוצרה בתאריך" value={snapshot.statistics.createdAt.toLocaleString("he-IL")} />
-      <Row label="עודכנה לאחרונה" value={snapshot.statistics.updatedAt.toLocaleString("he-IL")} />
-      <Row label="גיל החברה" value={`${snapshot.statistics.ageInDays} ימים`} />
+      <Row
+        label={t("platformCompanyDetail.stats.createdAt")}
+        value={snapshot.statistics.createdAt.toLocaleString("he-IL")}
+      />
+      <Row
+        label={t("platformCompanyDetail.stats.updatedAt")}
+        value={snapshot.statistics.updatedAt.toLocaleString("he-IL")}
+      />
+      <Row
+        label={t("platformCompanyDetail.stats.companyAge")}
+        value={t("platformCompanyDetail.stats.daysUnit", { count: snapshot.statistics.ageInDays })}
+      />
     </Card>
   );
 }
@@ -367,6 +400,7 @@ function CompanyBranchesTab({
   branches: Branch[];
   isLoading: boolean;
 }) {
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const { setActiveCompanyId } = useCompanyContext();
   const { setActiveBranchId } = useBranchContext();
@@ -388,7 +422,7 @@ function CompanyBranchesTab({
       <div className="flex justify-end">
         <Button onClick={() => setOpenCreate(true)} size="sm" className="gap-2">
           <Plus className="size-4" />
-          שיוך סניף קיים
+          {t("platformBranches.assignExisting")}
         </Button>
       </div>
 
@@ -399,7 +433,7 @@ function CompanyBranchesTab({
           </div>
         ) : branches.length === 0 ? (
           <div className="p-8 text-sm text-muted-foreground text-center">
-            לחברה זו אין עדיין סניפים משויכים. ניתן לשייך סניף קיים מהכפתור מעלה.
+            {t("platformBranches.noBranchesForCompany")} {t("platformBranches.assignHint")}
           </div>
         ) : (
           <ul className="divide-y">
@@ -425,14 +459,14 @@ function CompanyBranchesTab({
                   <DropdownMenuContent align="end">
                     <DropdownMenuItem onClick={() => setEditBranch(branch)} className="gap-2">
                       <Pencil className="size-4" />
-                      פרטים / סנכרון
+                      {t("platformBranches.actions.detailsSync")}
                     </DropdownMenuItem>
                     <DropdownMenuItem
                       onClick={() => setDeleteBranch(branch)}
                       className="gap-2 text-destructive focus:text-destructive"
                     >
                       <Trash2 className="size-4" />
-                      הסרת שיוך
+                      {t("platformBranches.actions.unassign")}
                     </DropdownMenuItem>
                   </DropdownMenuContent>
                 </DropdownMenu>
@@ -471,6 +505,7 @@ function CompanyBranchesTab({
 const COMPANY_MANAGERS_QUERY_KEY = (companyId: UUID) => ["company-managers", companyId] as const;
 
 function CompanyManagersTab({ companyId }: { companyId: UUID }) {
+  const { t } = useTranslation();
   const qc = useQueryClient();
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
@@ -483,12 +518,12 @@ function CompanyManagersTab({ companyId }: { companyId: UUID }) {
   const addMut = useMutation({
     mutationFn: async () => companyService.addCompanyManager(companyId, name, email),
     onSuccess: () => {
-      toast.success("המנהל נוסף לחברה");
+      toast.success(t("platformCompanyDetail.managers.added"));
       setName("");
       setEmail("");
       qc.invalidateQueries({ queryKey: COMPANY_MANAGERS_QUERY_KEY(companyId) });
     },
-    onError: (error: Error) => toast.error(error.message ?? "ההוספה נכשלה"),
+    onError: (error: Error) => toast.error(error.message ?? t("platformCompanyDetail.managers.addFailed")),
   });
 
   const removeMut = useMutation({
@@ -512,20 +547,20 @@ function CompanyManagersTab({ companyId }: { companyId: UUID }) {
         >
           <div className="space-y-1.5">
             <Label htmlFor="manager-name" className="text-xs">
-              שם המנהל
+              {t("platformCompanyDetail.managers.nameLabel")}
             </Label>
             <Input
               id="manager-name"
               value={name}
               onChange={(e) => setName(e.target.value)}
               maxLength={120}
-              placeholder="שם מלא"
+              placeholder={t("platformCompanyDetail.managers.namePlaceholder")}
               className="w-48"
             />
           </div>
           <div className="space-y-1.5">
             <Label htmlFor="manager-email" className="text-xs">
-              אימייל (אופציונלי)
+              {t("platformCompanyDetail.managers.emailLabel")}
             </Label>
             <Input
               id="manager-email"
@@ -545,7 +580,7 @@ function CompanyManagersTab({ companyId }: { companyId: UUID }) {
             disabled={addMut.isPending || !name.trim()}
           >
             <Plus className="size-4" />
-            הוספת מנהל
+            {t("platformCompanyDetail.managers.add")}
           </Button>
         </form>
       </Card>
@@ -557,7 +592,7 @@ function CompanyManagersTab({ companyId }: { companyId: UUID }) {
           </div>
         ) : managers.length === 0 ? (
           <div className="p-8 text-sm text-muted-foreground text-center">
-            לחברה זו אין עדיין מנהלים רשומים. ניתן להוסיף מנהל מהטופס מעלה.
+            {t("platformCompanyDetail.managers.empty")}
           </div>
         ) : (
           <ul className="divide-y">
@@ -591,13 +626,14 @@ function CompanyManagersTab({ companyId }: { companyId: UUID }) {
 }
 
 function CompanyUsersTab({ branchesCount }: { branchesCount: number }) {
+  const { t } = useTranslation();
+
   return (
     <Card className="card-elevated p-8 text-center space-y-2">
       <Users className="size-8 mx-auto text-muted-foreground" />
-      <p className="text-sm font-medium">אין עדיין ספריית משתמשים מחוברת לחברה זו</p>
+      <p className="text-sm font-medium">{t("platformCompanyDetail.users.title")}</p>
       <p className="text-xs text-muted-foreground max-w-md mx-auto">
-        המשתמשים בפועל (עובדים) מנוהלים כיום בהיקף הסניף הבודד, ולא בהיקף החברה. לחברה זו יש{" "}
-        {branchesCount} סניפים — ניתן לנהל את המשתמשים מתוך כל סניף בנפרד.
+        {t("platformCompanyDetail.users.description", { count: branchesCount })}
       </p>
     </Card>
   );
@@ -612,6 +648,8 @@ function CompanyReportsTab({
   branches: Branch[];
   isLoading: boolean;
 }) {
+  const { t } = useTranslation();
+
   if (isLoading) {
     return (
       <div className="p-8 flex justify-center">
@@ -636,23 +674,24 @@ function CompanyReportsTab({
   return (
     <div className="space-y-4">
       <div className="grid gap-4 md:grid-cols-3">
-        <StatCard icon={GitBranch} label="סניפים בחברה" value={branches.length} />
-        <StatCard icon={Calendar} label="גיל ממוצע לסניף (ימים)" value={avgBranchAgeDays} />
+        <StatCard icon={GitBranch} label={t("platformCompanyDetail.reports.branchesInCompany")} value={branches.length} />
+        <StatCard icon={Calendar} label={t("platformCompanyDetail.reports.avgBranchAgeDays")} value={avgBranchAgeDays} />
         <StatCard
           icon={Calendar}
-          label="גיל החברה (ימים)"
+          label={t("platformCompanyDetail.reports.companyAgeDays")}
           value={snapshot?.statistics.ageInDays ?? 0}
         />
       </div>
       <Card className="card-elevated p-5 space-y-3">
-        <Row label="הסניף הראשון שנוצר" value={oldestBranch?.name ?? "—"} />
-        <Row label="הסניף האחרון שנוצר" value={newestBranch?.name ?? "—"} />
+        <Row label={t("platformCompanyDetail.reports.oldestBranch")} value={oldestBranch?.name ?? "—"} />
+        <Row label={t("platformCompanyDetail.reports.newestBranch")} value={newestBranch?.name ?? "—"} />
       </Card>
     </div>
   );
 }
 
 function CompanySettingsTab({ companyId }: { companyId: UUID }) {
+  const { t } = useTranslation();
   const [contactEmail, setContactEmail] = useState("");
   const [billingEnabled, setBillingEnabled] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -669,7 +708,7 @@ function CompanySettingsTab({ companyId }: { companyId: UUID }) {
     try {
       companyService.setCompanySetting(companyId, CONTACT_EMAIL_KEY, contactEmail.trim());
       companyService.setCompanySetting(companyId, BILLING_ENABLED_KEY, billingEnabled);
-      toast.success("הגדרות החברה נשמרו");
+      toast.success(t("platformCompanyDetail.settings.settingsSaved"));
     } finally {
       setSaving(false);
     }
@@ -678,7 +717,7 @@ function CompanySettingsTab({ companyId }: { companyId: UUID }) {
   return (
     <Card className="card-elevated p-6 space-y-5">
       <div className="space-y-2">
-        <Label htmlFor="company-contact-email">אימייל ליצירת קשר</Label>
+        <Label htmlFor="company-contact-email">{t("platformCompanyDetail.settings.contactEmail")}</Label>
         <Input
           id="company-contact-email"
           type="email"
@@ -691,15 +730,15 @@ function CompanySettingsTab({ companyId }: { companyId: UUID }) {
       </div>
       <div className="flex items-center justify-between rounded-lg border p-3">
         <div>
-          <p className="text-sm font-medium">חיוב פעיל</p>
-          <p className="text-xs text-muted-foreground">האם החברה כלולה במעגל החיוב של הפלטפורמה</p>
+          <p className="text-sm font-medium">{t("platformCompanyDetail.settings.billingEnabled")}</p>
+          <p className="text-xs text-muted-foreground">{t("platformCompanyDetail.settings.billingEnabledDesc")}</p>
         </div>
         <Switch checked={billingEnabled} onCheckedChange={setBillingEnabled} />
       </div>
       <div className="flex justify-end">
         <Button onClick={handleSave} disabled={saving} size="sm" className="gap-2">
           {saving && <Loader2 className="size-4 animate-spin" />}
-          שמירת הגדרות
+          {t("platformCompanyDetail.settings.saveSettings")}
         </Button>
       </div>
     </Card>

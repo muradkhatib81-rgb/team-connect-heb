@@ -3,6 +3,7 @@ import { useMemo, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
+import { useTranslation } from "react-i18next";
 import {
   Crown,
   ArrowRight,
@@ -30,7 +31,7 @@ import {
   usePlatformAuditQuery,
   PLATFORM_AUDIT_KEY,
   PLATFORM_OWNERS_KEY,
-  PLATFORM_EVENT_LABELS,
+  getPlatformEventLabel,
 } from "@/lib/platform-owners.hooks";
 import {
   PlatformOwnerEditDialog,
@@ -40,17 +41,28 @@ import { ProfilePhoneField } from "@/components/contact-actions";
 
 export const Route = createFileRoute("/_authenticated/platform/owners/$userId")({
   component: PlatformOwnerDetailsPage,
-  errorComponent: ({ error }) => (
-    <div className="p-6 text-sm text-destructive" role="alert">
-      {(error as Error)?.message ?? "שגיאה"}
-    </div>
-  ),
-  notFoundComponent: () => (
-    <div className="p-6 text-sm text-muted-foreground">בעל המערכת לא נמצא</div>
-  ),
+  errorComponent: PlatformOwnerDetailsError,
+  notFoundComponent: PlatformOwnerDetailsNotFound,
 });
 
+function PlatformOwnerDetailsError({ error }: { error: unknown }) {
+  const { t } = useTranslation();
+  return (
+    <div className="p-6 text-sm text-destructive" role="alert">
+      {(error as Error)?.message ?? t("common.error")}
+    </div>
+  );
+}
+
+function PlatformOwnerDetailsNotFound() {
+  const { t } = useTranslation();
+  return (
+    <div className="p-6 text-sm text-muted-foreground">{t("platformOwners.detail.notFound")}</div>
+  );
+}
+
 function PlatformOwnerDetailsPage() {
+  const { t } = useTranslation();
   const { userId } = Route.useParams();
   const { data: profile } = useAuth();
   const isPrimary = !!profile?.roles?.includes("system_admin");
@@ -82,11 +94,11 @@ function PlatformOwnerDetailsPage() {
         <Button asChild variant="ghost" size="sm" className="gap-2">
           <Link to="/platform/owners">
             <ArrowRight className="size-4" />
-            חזרה לרשימה
+            {t("platformOwners.detail.backToList")}
           </Link>
         </Button>
         <Card className="p-8 text-sm text-muted-foreground text-center">
-          בעל המערכת לא נמצא
+          {t("platformOwners.detail.notFound")}
         </Card>
       </div>
     );
@@ -97,7 +109,7 @@ function PlatformOwnerDetailsPage() {
       <Button asChild variant="ghost" size="sm" className="gap-2">
         <Link to="/platform/owners">
           <ArrowRight className="size-4" />
-          חזרה לרשימה
+          {t("platformOwners.detail.backToList")}
         </Link>
       </Button>
 
@@ -118,9 +130,9 @@ function PlatformOwnerDetailsPage() {
       <Card className="card-elevated">
         <div className="p-4 border-b flex items-center gap-2">
           <Activity className="size-4 text-primary" />
-          <h2 className="text-base font-semibold">סיכום פעילות</h2>
+          <h2 className="text-base font-semibold">{t("platformOwners.detail.activitySummary")}</h2>
           <Button asChild variant="ghost" size="sm" className="mr-auto">
-            <Link to="/platform/audit-log">ליומן המלא</Link>
+            <Link to="/platform/audit-log">{t("platformOwners.detail.fullLog")}</Link>
           </Button>
         </div>
         {audit.isLoading ? (
@@ -128,7 +140,9 @@ function PlatformOwnerDetailsPage() {
             <Loader2 className="size-4 animate-spin text-primary" />
           </div>
         ) : events.length === 0 ? (
-          <div className="p-6 text-sm text-muted-foreground text-center">אין פעילות מתועדת</div>
+          <div className="p-6 text-sm text-muted-foreground text-center">
+            {t("platformOwners.detail.noActivity")}
+          </div>
         ) : (
           <ul className="divide-y">
             {events.map((ev) => (
@@ -137,10 +151,12 @@ function PlatformOwnerDetailsPage() {
                   {new Date(ev.created_at).toLocaleString("he-IL")}
                 </span>
                 <span className="font-medium">
-                  {PLATFORM_EVENT_LABELS[ev.event] ?? ev.event}
+                  {getPlatformEventLabel(ev.event)}
                 </span>
                 <span className="text-xs text-muted-foreground">
-                  {ev.actor_id === owner.user_id ? "מבצע" : "יעד"}
+                  {ev.actor_id === owner.user_id
+                    ? t("platformOwners.detail.actor")
+                    : t("platformOwners.detail.target")}
                 </span>
               </li>
             ))}
@@ -162,6 +178,7 @@ function OwnerHeader({
   isSelf: boolean;
   onAfterDelete: () => void;
 }) {
+  const { t } = useTranslation();
   const qc = useQueryClient();
   const suspendFn = useServerFn(suspendPlatformOwner);
   const restoreFn = useServerFn(restorePlatformOwner);
@@ -174,13 +191,13 @@ function OwnerHeader({
   };
   const suspendMut = useMutation({
     mutationFn: () => suspendFn({ data: { user_id: owner.user_id } }),
-    onSuccess: () => { toast.success("בעל המערכת הושעה"); invalidate(); },
-    onError: (e: Error) => toast.error(e.message ?? "השעיה נכשלה"),
+    onSuccess: () => { toast.success(t("platformOwners.toasts.suspended")); invalidate(); },
+    onError: (e: Error) => toast.error(e.message ?? t("platformOwners.toasts.suspendFailed")),
   });
   const restoreMut = useMutation({
     mutationFn: () => restoreFn({ data: { user_id: owner.user_id } }),
-    onSuccess: () => { toast.success("בעל המערכת שוחזר"); invalidate(); },
-    onError: (e: Error) => toast.error(e.message ?? "שחזור נכשל"),
+    onSuccess: () => { toast.success(t("platformOwners.toasts.restored")); invalidate(); },
+    onError: (e: Error) => toast.error(e.message ?? t("platformOwners.toasts.restoreFailed")),
   });
 
   const initials = owner.full_name?.trim().charAt(0) || "?";
@@ -199,14 +216,17 @@ function OwnerHeader({
             {isTargetPrimary && (
               <Badge className="gap-1 bg-amber-100 text-amber-800 hover:bg-amber-100 dark:bg-amber-950/40 dark:text-amber-400">
                 <Crown className="size-3" />
-                בעל ראשי
+                {t("platformOwners.badges.primaryShort")}
               </Badge>
             )}
           </div>
           <p className="text-sm text-muted-foreground mt-1">
             <span className="inline-flex items-center gap-1">
               <Crown className="size-3" />
-              Business Identity · {isTargetPrimary ? "בעל המערכת הראשי" : "בעל המערכת"}
+              {t("platformOwners.detail.businessIdentity")} ·{" "}
+              {isTargetPrimary
+                ? t("platformOwners.badges.primary")
+                : t("platformOwners.badges.owner")}
             </span>
           </p>
         </div>
@@ -214,7 +234,7 @@ function OwnerHeader({
           <div className="flex flex-wrap gap-2">
             <Button variant="outline" size="sm" onClick={() => setEditOpen(true)} className="gap-2">
               <Pencil className="size-4" />
-              עריכה
+              {t("platformOwners.actions.edit")}
             </Button>
             {!isTargetPrimary && !isSelf && (
               <>
@@ -227,7 +247,7 @@ function OwnerHeader({
                     className="gap-2"
                   >
                     <Pause className="size-4" />
-                    השעיה
+                    {t("platformOwners.actions.suspend")}
                   </Button>
                 ) : (
                   <Button
@@ -238,7 +258,7 @@ function OwnerHeader({
                     className="gap-2"
                   >
                     <Play className="size-4" />
-                    שחזור
+                    {t("platformOwners.actions.restore")}
                   </Button>
                 )}
                 <Button
@@ -248,7 +268,7 @@ function OwnerHeader({
                   className="gap-2 text-destructive hover:text-destructive"
                 >
                   <Trash2 className="size-4" />
-                  מחיקה
+                  {t("platformOwners.actions.delete")}
                 </Button>
               </>
             )}
@@ -274,18 +294,19 @@ function OwnerHeader({
 }
 
 function IdentityCard({ owner }: { owner: PlatformOwnerRow }) {
+  const { t } = useTranslation();
   return (
     <Card className="card-elevated p-5 space-y-3">
-      <h2 className="text-base font-semibold">זהות</h2>
-      <Row label='דוא"ל' value={owner.email ?? "—"} ltr />
+      <h2 className="text-base font-semibold">{t("platformOwners.detail.identity")}</h2>
+      <Row label={t("platformOwners.fields.email")} value={owner.email ?? "—"} ltr />
       <p className="text-[11px] text-muted-foreground flex items-center gap-1 -mt-2">
         <Info className="size-3" />
-        שינוי דוא"ל הוא יכולת עתידית — יתווסף בגרסה הבאה של ניהול הפלטפורמה.
+        {t("platformOwners.detail.emailFutureHint")}
       </p>
-      <ProfilePhoneField label="טלפון" phone={owner.phone} />
-      <Row label="ת.ז" value={owner.id_number ?? "—"} ltr />
+      <ProfilePhoneField label={t("platformOwners.fields.phone")} phone={owner.phone} />
+      <Row label={t("platformOwners.fields.idNumber")} value={owner.id_number ?? "—"} ltr />
       <Row
-        label="נוצר"
+        label={t("platformOwners.detail.created")}
         value={owner.created_at ? new Date(owner.created_at).toLocaleString("he-IL") : "—"}
       />
     </Card>
@@ -293,55 +314,75 @@ function IdentityCard({ owner }: { owner: PlatformOwnerRow }) {
 }
 
 function StatusCard({ owner }: { owner: PlatformOwnerRow }) {
+  const { t } = useTranslation();
   return (
     <Card className="card-elevated p-5 space-y-3">
-      <h2 className="text-base font-semibold">סטטוס וכניסה</h2>
+      <h2 className="text-base font-semibold">{t("platformOwners.detail.statusSection")}</h2>
       <div className="flex items-center justify-between">
-        <span className="text-sm text-muted-foreground">סטטוס</span>
+        <span className="text-sm text-muted-foreground">{t("platformOwners.cols.status")}</span>
         {owner.is_active ? (
           <Badge className="bg-emerald-100 text-emerald-800 hover:bg-emerald-100 dark:bg-emerald-950/30 dark:text-emerald-400">
-            פעיל
+            {t("platformOwners.badges.active")}
           </Badge>
         ) : (
-          <Badge variant="destructive">מושעה</Badge>
+          <Badge variant="destructive">{t("platformOwners.badges.suspended")}</Badge>
         )}
       </div>
-      <Row label="רמה" value={owner.level === "primary" ? "בעל המערכת הראשי" : "בעל המערכת"} />
       <Row
-        label="כניסה אחרונה"
+        label={t("platformOwners.detail.level")}
+        value={
+          owner.level === "primary"
+            ? t("platformOwners.badges.primary")
+            : t("platformOwners.badges.owner")
+        }
+      />
+      <Row
+        label={t("platformOwners.detail.lastSignIn")}
         value={
           owner.last_sign_in_at
             ? new Date(owner.last_sign_in_at).toLocaleString("he-IL")
-            : "מעולם לא התחבר"
+            : t("platformOwners.neverSignedIn")
         }
       />
     </Card>
   );
 }
 
+const CAPABILITY_IDS = [
+  "fullManagement",
+  "manageOwners",
+  "transferPrimary",
+  "viewOwners",
+  "viewAudit",
+  "crossBranch",
+] as const;
+
+const PRIMARY_ONLY_CAPABILITIES = new Set(["fullManagement", "manageOwners", "transferPrimary"]);
+
 function CapabilitiesCard({ owner }: { owner: PlatformOwnerRow }) {
+  const { t } = useTranslation();
   const isPrimary = owner.level === "primary";
-  const capabilities: { label: string; primaryOnly?: boolean }[] = [
-    { label: "ניהול מלא של הפלטפורמה", primaryOnly: true },
-    { label: "יצירה, השעיה ומחיקה של בעלי מערכת", primaryOnly: true },
-    { label: "העברת בעלות ראשית", primaryOnly: true },
-    { label: "צפייה בכל בעלי המערכת" },
-    { label: "צפייה ביומן פעילות הפלטפורמה" },
-    { label: "גישה חוצת-סניפים" },
-  ];
 
   return (
     <Card className="card-elevated p-5 space-y-3">
-      <h2 className="text-base font-semibold">יכולות פלטפורמה</h2>
+      <h2 className="text-base font-semibold">{t("platformOwners.detail.capabilities")}</h2>
       <ul className="space-y-2">
-        {capabilities.map((c) => {
-          const enabled = isPrimary || !c.primaryOnly;
+        {CAPABILITY_IDS.map((id) => {
+          const primaryOnly = PRIMARY_ONLY_CAPABILITIES.has(id);
+          const enabled = isPrimary || !primaryOnly;
           return (
-            <li key={c.label} className={`flex items-center gap-2 text-sm ${enabled ? "" : "text-muted-foreground line-through opacity-60"}`}>
-              <CheckCircle2 className={`size-4 shrink-0 ${enabled ? "text-emerald-500" : "text-muted-foreground"}`} />
-              <span>{c.label}</span>
-              {c.primaryOnly && (
-                <Badge variant="secondary" className="mr-1 text-[10px]">בעל ראשי בלבד</Badge>
+            <li
+              key={id}
+              className={`flex items-center gap-2 text-sm ${enabled ? "" : "text-muted-foreground line-through opacity-60"}`}
+            >
+              <CheckCircle2
+                className={`size-4 shrink-0 ${enabled ? "text-emerald-500" : "text-muted-foreground"}`}
+              />
+              <span>{t(`platformOwners.capabilities.${id}`)}</span>
+              {primaryOnly && (
+                <Badge variant="secondary" className="mr-1 text-[10px]">
+                  {t("platformOwners.detail.primaryOnly")}
+                </Badge>
               )}
             </li>
           );

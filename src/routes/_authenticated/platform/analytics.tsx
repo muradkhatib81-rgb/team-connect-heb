@@ -1,5 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
+import { useTranslation } from "react-i18next";
 import { BarChart3, Building2, GitBranch, Users2, Calendar } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { usePlatformContext, useCompanyContext } from "@/platform";
@@ -10,6 +11,7 @@ export const Route = createFileRoute("/_authenticated/platform/analytics")({
 });
 
 function PlatformAnalyticsPage() {
+  const { t } = useTranslation();
   const { runtime } = usePlatformContext();
   const { companies, isLoading: companiesLoading } = useCompanyContext();
 
@@ -46,37 +48,47 @@ function PlatformAnalyticsPage() {
           <BarChart3 className="size-6" />
         </div>
         <div className="min-w-0">
-          <h1 className="truncate text-2xl sm:text-3xl font-bold">אנליטיקס גלובלי</h1>
-          <p className="text-sm text-muted-foreground mt-1">
-            נתונים מצטברים על פני כל הפלטפורמה — חברות, סניפים ומשתמשים פעילים
-          </p>
+          <h1 className="truncate text-2xl sm:text-3xl font-bold">{t("platformAnalytics.title")}</h1>
+          <p className="text-sm text-muted-foreground mt-1">{t("platformAnalytics.subtitle")}</p>
         </div>
       </header>
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
-        <StatCard icon={Building2} label="חברות" value={dashboardQuery.data?.companiesCount ?? 0} />
-        <StatCard icon={GitBranch} label="סניפים" value={dashboardQuery.data?.branchesCount ?? 0} />
+        <StatCard
+          icon={Building2}
+          label={t("platformAnalytics.stats.companies")}
+          value={dashboardQuery.data?.companiesCount ?? 0}
+        />
+        <StatCard
+          icon={GitBranch}
+          label={t("platformAnalytics.stats.branches")}
+          value={dashboardQuery.data?.branchesCount ?? 0}
+        />
         <StatCard
           icon={Users2}
-          label="משתמשים עם session פעיל"
+          label={t("platformAnalytics.stats.activeSessions")}
           value={dashboardQuery.data?.activeUserCount ?? 0}
         />
         <StatCard
           icon={Calendar}
-          label="ממוצע סניפים לחברה"
+          label={t("platformAnalytics.stats.avgBranchesPerCompany")}
           value={companies.length > 0 ? (branches.length / companies.length).toFixed(1) : "0"}
         />
       </div>
 
       <Card className="card-elevated overflow-hidden">
         <div className="p-4 border-b">
-          <h2 className="text-sm font-semibold text-muted-foreground">חברות לפי מספר סניפים</h2>
+          <h2 className="text-sm font-semibold text-muted-foreground">
+            {t("platformAnalytics.companiesByBranches")}
+          </h2>
         </div>
         {companiesLoading || allBranchesQuery.isLoading ? (
-          <div className="p-8 text-sm text-muted-foreground text-center">טוען…</div>
+          <div className="p-8 text-sm text-muted-foreground text-center">
+            {t("platformAnalytics.loading")}
+          </div>
         ) : branchesPerCompany.length === 0 ? (
           <div className="p-8 text-sm text-muted-foreground text-center">
-            אין עדיין חברות בפלטפורמה
+            {t("platformAnalytics.noCompanies")}
           </div>
         ) : (
           <ul className="divide-y">
@@ -84,7 +96,7 @@ function PlatformAnalyticsPage() {
               <li key={company.id} className="flex items-center justify-between gap-3 p-3">
                 <span className="truncate text-sm font-medium">{company.name}</span>
                 <span className="text-xs text-muted-foreground tabular-nums shrink-0">
-                  {count} סניפים
+                  {t("platformAnalytics.branchCount", { count })}
                 </span>
               </li>
             ))}
@@ -94,11 +106,11 @@ function PlatformAnalyticsPage() {
 
       <div className="grid gap-4 sm:grid-cols-2">
         <Card className="card-elevated p-5 space-y-1">
-          <p className="text-xs text-muted-foreground">החברה הוותיקה ביותר בפלטפורמה</p>
+          <p className="text-xs text-muted-foreground">{t("platformAnalytics.oldestCompany")}</p>
           <p className="text-lg font-bold truncate">{oldestCompany?.name ?? "—"}</p>
         </Card>
         <Card className="card-elevated p-5 space-y-1">
-          <p className="text-xs text-muted-foreground">החברה החדשה ביותר בפלטפורמה</p>
+          <p className="text-xs text-muted-foreground">{t("platformAnalytics.newestCompany")}</p>
           <p className="text-lg font-bold truncate">{newestCompany?.name ?? "—"}</p>
         </Card>
       </div>

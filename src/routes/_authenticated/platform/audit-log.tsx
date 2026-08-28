@@ -1,5 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -14,22 +15,34 @@ import { ShieldCheck, Search, Loader2 } from "lucide-react";
 import {
   usePlatformOwnersQuery,
   usePlatformAuditQuery,
+  getPlatformEventLabel,
   PLATFORM_EVENT_LABELS,
 } from "@/lib/platform-owners.hooks";
 
+const AUDIT_EVENT_KEYS = Object.keys(PLATFORM_EVENT_LABELS);
+
 export const Route = createFileRoute("/_authenticated/platform/audit-log")({
   component: PlatformAuditLogPage,
-  errorComponent: ({ error }) => (
-    <div className="p-6 text-sm text-destructive" role="alert">
-      {(error as Error)?.message ?? "שגיאה"}
-    </div>
-  ),
-  notFoundComponent: () => (
-    <div className="p-6 text-sm text-muted-foreground">הדף לא נמצא</div>
-  ),
+  errorComponent: PlatformAuditError,
+  notFoundComponent: PlatformAuditNotFound,
 });
 
+function PlatformAuditError({ error }: { error: unknown }) {
+  const { t } = useTranslation();
+  return (
+    <div className="p-6 text-sm text-destructive" role="alert">
+      {(error as Error)?.message ?? t("common.error")}
+    </div>
+  );
+}
+
+function PlatformAuditNotFound() {
+  const { t } = useTranslation();
+  return <div className="p-6 text-sm text-muted-foreground">{t("platformHub.pageNotFound")}</div>;
+}
+
 function PlatformAuditLogPage() {
+  const { t } = useTranslation();
   const owners = usePlatformOwnersQuery();
   const audit = usePlatformAuditQuery();
 
@@ -53,8 +66,6 @@ function PlatformAuditLogPage() {
     });
   }, [audit.data, owners.data, q, event]);
 
-  const eventOptions = Object.keys(PLATFORM_EVENT_LABELS);
-
   return (
     <div className="space-y-6">
       <header className="flex items-center gap-3">
@@ -62,8 +73,8 @@ function PlatformAuditLogPage() {
           <ShieldCheck className="size-6" />
         </div>
         <div className="min-w-0">
-          <h1 className="truncate text-2xl sm:text-3xl font-bold">יומן פעילות פלטפורמה</h1>
-          <p className="text-sm text-muted-foreground mt-1">כל פעולות בעלי המערכת מתועדות כאן</p>
+          <h1 className="truncate text-2xl sm:text-3xl font-bold">{t("platformAuditLog.title")}</h1>
+          <p className="text-sm text-muted-foreground mt-1">{t("platformAuditLog.subtitle")}</p>
         </div>
       </header>
 
@@ -74,16 +85,16 @@ function PlatformAuditLogPage() {
             <Input
               value={q}
               onChange={(e) => setQ(e.target.value)}
-              placeholder="חיפוש לפי מבצע או יעד…"
+              placeholder={t("platformAuditLog.searchPlaceholder")}
               className="pr-9"
             />
           </div>
           <Select value={event} onValueChange={setEvent}>
             <SelectTrigger className="w-full sm:w-64"><SelectValue /></SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">כל האירועים</SelectItem>
-              {eventOptions.map((e) => (
-                <SelectItem key={e} value={e}>{PLATFORM_EVENT_LABELS[e]}</SelectItem>
+              <SelectItem value="all">{t("platformAuditLog.allEvents")}</SelectItem>
+              {AUDIT_EVENT_KEYS.map((e) => (
+                <SelectItem key={e} value={e}>{getPlatformEventLabel(e)}</SelectItem>
               ))}
             </SelectContent>
           </Select>
@@ -97,18 +108,18 @@ function PlatformAuditLogPage() {
           </div>
         ) : rows.length === 0 ? (
           <div className="p-8 text-sm text-muted-foreground text-center">
-            אין רשומות תואמות
+            {t("platformAuditLog.noResults")}
           </div>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead className="text-xs text-muted-foreground bg-muted/40">
                 <tr>
-                  <th className="text-right p-3 font-medium">תאריך</th>
-                  <th className="text-right p-3 font-medium">אירוע</th>
-                  <th className="text-right p-3 font-medium">מבצע</th>
-                  <th className="text-right p-3 font-medium">יעד</th>
-                  <th className="text-right p-3 font-medium hidden md:table-cell">פרטים</th>
+                  <th className="text-right p-3 font-medium">{t("platformAuditLog.cols.date")}</th>
+                  <th className="text-right p-3 font-medium">{t("platformAuditLog.cols.event")}</th>
+                  <th className="text-right p-3 font-medium">{t("platformAuditLog.cols.actor")}</th>
+                  <th className="text-right p-3 font-medium">{t("platformAuditLog.cols.target")}</th>
+                  <th className="text-right p-3 font-medium hidden md:table-cell">{t("platformAuditLog.cols.details")}</th>
                 </tr>
               </thead>
               <tbody>
@@ -118,7 +129,7 @@ function PlatformAuditLogPage() {
                       {new Date(e.created_at).toLocaleString("he-IL")}
                     </td>
                     <td className="p-3">
-                      <Badge variant="outline">{PLATFORM_EVENT_LABELS[e.event] ?? e.event}</Badge>
+                      <Badge variant="outline">{getPlatformEventLabel(e.event)}</Badge>
                     </td>
                     <td className="p-3">{ownerName(e.actor_id) ?? "—"}</td>
                     <td className="p-3">{ownerName(e.target_user_id) ?? "—"}</td>

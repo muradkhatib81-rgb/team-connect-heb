@@ -4,6 +4,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
 import { z } from "zod";
+import { useTranslation } from "react-i18next";
 import {
   Crown,
   Plus,
@@ -64,17 +65,26 @@ const searchSchema = z.object({
 export const Route = createFileRoute("/_authenticated/platform/owners")({
   validateSearch: searchSchema,
   component: PlatformOwnersPage,
-  errorComponent: ({ error }) => (
-    <div className="p-6 text-sm text-destructive" role="alert">
-      {(error as Error)?.message ?? "שגיאה"}
-    </div>
-  ),
-  notFoundComponent: () => (
-    <div className="p-6 text-sm text-muted-foreground">הדף לא נמצא</div>
-  ),
+  errorComponent: PlatformOwnersError,
+  notFoundComponent: PlatformOwnersNotFound,
 });
 
+function PlatformOwnersError({ error }: { error: unknown }) {
+  const { t } = useTranslation();
+  return (
+    <div className="p-6 text-sm text-destructive" role="alert">
+      {(error as Error)?.message ?? t("common.error")}
+    </div>
+  );
+}
+
+function PlatformOwnersNotFound() {
+  const { t } = useTranslation();
+  return <div className="p-6 text-sm text-muted-foreground">{t("platformHub.pageNotFound")}</div>;
+}
+
 function PlatformOwnersPage() {
+  const { t } = useTranslation();
   const { data: profile } = useAuth();
   const isPrimary = !!profile?.roles?.includes("system_admin");
   const navigate = useNavigate({ from: "/platform/owners" });
@@ -113,8 +123,8 @@ function PlatformOwnersPage() {
             <Crown className="size-6" />
           </div>
           <div className="min-w-0">
-            <h1 className="truncate text-2xl sm:text-3xl font-bold">בעלי מערכת</h1>
-            <p className="text-sm text-muted-foreground mt-1">ניהול חשבונות בעלי המערכת</p>
+            <h1 className="truncate text-2xl sm:text-3xl font-bold">{t("platformOwners.title")}</h1>
+            <p className="text-sm text-muted-foreground mt-1">{t("platformOwners.subtitle")}</p>
           </div>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -125,13 +135,13 @@ function PlatformOwnersPage() {
               className="gap-2 border-amber-300 text-amber-700 hover:bg-amber-50 dark:border-amber-800 dark:text-amber-400 dark:hover:bg-amber-950/30"
             >
               <ArrowLeftRight className="size-4" />
-              העברת בעלות ראשית
+              {t("platformOwners.transferPrimary")}
             </Button>
           )}
           {isPrimary && (
             <Button onClick={() => setOpenCreate(true)} className="gap-2">
               <Plus className="size-4" />
-              בעל מערכת חדש
+              {t("platformOwners.newOwner")}
             </Button>
           )}
         </div>
@@ -146,7 +156,7 @@ function PlatformOwnersPage() {
               onChange={(e) =>
                 navigate({ search: (prev: typeof search) => ({ ...prev, q: e.target.value }) })
               }
-              placeholder="חיפוש לפי שם, דוא״ל או טלפון…"
+              placeholder={t("platformOwners.searchPlaceholder")}
               className="pr-9"
             />
           </div>
@@ -158,9 +168,9 @@ function PlatformOwnersPage() {
           >
             <SelectTrigger className="w-full sm:w-52"><SelectValue /></SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">כל הרמות</SelectItem>
-              <SelectItem value="primary">בעל מערכת ראשי</SelectItem>
-              <SelectItem value="owner">בעל מערכת</SelectItem>
+              <SelectItem value="all">{t("platformOwners.filters.allLevels")}</SelectItem>
+              <SelectItem value="primary">{t("platformOwners.filters.primary")}</SelectItem>
+              <SelectItem value="owner">{t("platformOwners.filters.owner")}</SelectItem>
             </SelectContent>
           </Select>
           <Select
@@ -171,9 +181,9 @@ function PlatformOwnersPage() {
           >
             <SelectTrigger className="w-full sm:w-44"><SelectValue /></SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">כל הסטטוסים</SelectItem>
-              <SelectItem value="active">פעיל</SelectItem>
-              <SelectItem value="suspended">מושעה</SelectItem>
+              <SelectItem value="all">{t("platformOwners.filters.allStatuses")}</SelectItem>
+              <SelectItem value="active">{t("platformOwners.filters.active")}</SelectItem>
+              <SelectItem value="suspended">{t("platformOwners.filters.suspended")}</SelectItem>
             </SelectContent>
           </Select>
         </div>
@@ -186,20 +196,20 @@ function PlatformOwnersPage() {
           </div>
         ) : filtered.length === 0 ? (
           <div className="p-8 text-sm text-muted-foreground text-center">
-            {list.length === 0 ? "אין בעלי מערכת." : "אין תוצאות מתאימות לסינון."}
+            {list.length === 0 ? t("platformOwners.empty") : t("platformOwners.emptyFilter")}
           </div>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead className="text-xs text-muted-foreground bg-muted/40">
                 <tr>
-                  <th className="text-right p-3 font-medium">שם</th>
-                  <th className="text-right p-3 font-medium hidden md:table-cell">דוא"ל</th>
-                  <th className="text-right p-3 font-medium hidden lg:table-cell">טלפון</th>
-                  <th className="text-right p-3 font-medium">רמה</th>
-                  <th className="text-right p-3 font-medium">סטטוס</th>
-                  <th className="text-right p-3 font-medium hidden lg:table-cell">נוצר</th>
-                  <th className="text-right p-3 font-medium hidden lg:table-cell">כניסה אחרונה</th>
+                  <th className="text-right p-3 font-medium">{t("platformOwners.cols.name")}</th>
+                  <th className="text-right p-3 font-medium hidden md:table-cell">{t("platformOwners.cols.email")}</th>
+                  <th className="text-right p-3 font-medium hidden lg:table-cell">{t("platformOwners.cols.phone")}</th>
+                  <th className="text-right p-3 font-medium">{t("platformOwners.cols.level")}</th>
+                  <th className="text-right p-3 font-medium">{t("platformOwners.cols.status")}</th>
+                  <th className="text-right p-3 font-medium hidden lg:table-cell">{t("platformOwners.cols.created")}</th>
+                  <th className="text-right p-3 font-medium hidden lg:table-cell">{t("platformOwners.cols.lastSignIn")}</th>
                   <th className="p-3 w-10" />
                 </tr>
               </thead>
@@ -262,6 +272,7 @@ function OwnerRow({
   onEdit: () => void;
   onDelete: () => void;
 }) {
+  const { t } = useTranslation();
   const qc = useQueryClient();
   const suspendFn = useServerFn(suspendPlatformOwner);
   const restoreFn = useServerFn(restorePlatformOwner);
@@ -273,13 +284,13 @@ function OwnerRow({
 
   const suspendMut = useMutation({
     mutationFn: () => suspendFn({ data: { user_id: owner.user_id } }),
-    onSuccess: () => { toast.success("בעל המערכת הושעה"); invalidate(); },
-    onError: (e: Error) => toast.error(e.message ?? "השעיה נכשלה"),
+    onSuccess: () => { toast.success(t("platformOwners.toasts.suspended")); invalidate(); },
+    onError: (e: Error) => toast.error(e.message ?? t("platformOwners.toasts.suspendFailed")),
   });
   const restoreMut = useMutation({
     mutationFn: () => restoreFn({ data: { user_id: owner.user_id } }),
-    onSuccess: () => { toast.success("בעל המערכת שוחזר"); invalidate(); },
-    onError: (e: Error) => toast.error(e.message ?? "שחזור נכשל"),
+    onSuccess: () => { toast.success(t("platformOwners.toasts.restored")); invalidate(); },
+    onError: (e: Error) => toast.error(e.message ?? t("platformOwners.toasts.restoreFailed")),
   });
 
   const initials = owner.full_name?.trim().charAt(0) || "?";
@@ -303,7 +314,7 @@ function OwnerRow({
               {isTargetPrimary && (
                 <Badge className="gap-1 bg-amber-100 text-amber-800 hover:bg-amber-100 dark:bg-amber-950/40 dark:text-amber-400">
                   <Crown className="size-3" />
-                  בעל ראשי
+                  {t("platformOwners.badges.primaryShort")}
                 </Badge>
               )}
             </div>
@@ -326,22 +337,22 @@ function OwnerRow({
         {isTargetPrimary ? (
           <Badge variant="secondary" className="gap-1">
             <Crown className="size-3" />
-            בעל המערכת הראשי
+            {t("platformOwners.badges.primary")}
           </Badge>
         ) : (
           <Badge variant="outline" className="gap-1">
             <ShieldCheck className="size-3" />
-            בעל המערכת
+            {t("platformOwners.badges.owner")}
           </Badge>
         )}
       </td>
       <td className="p-3">
         {owner.is_active ? (
           <Badge className="bg-emerald-100 text-emerald-800 hover:bg-emerald-100 dark:bg-emerald-950/30 dark:text-emerald-400">
-            פעיל
+            {t("platformOwners.badges.active")}
           </Badge>
         ) : (
-          <Badge variant="destructive">מושעה</Badge>
+          <Badge variant="destructive">{t("platformOwners.badges.suspended")}</Badge>
         )}
       </td>
       <td className="p-3 hidden lg:table-cell text-xs text-muted-foreground tabular-nums">
@@ -350,7 +361,7 @@ function OwnerRow({
       <td className="p-3 hidden lg:table-cell text-xs text-muted-foreground tabular-nums">
         {owner.last_sign_in_at
           ? new Date(owner.last_sign_in_at).toLocaleString("he-IL")
-          : "מעולם לא התחבר"}
+          : t("platformOwners.neverSignedIn")}
       </td>
       <td className="p-3">
         {isPrimary && (
@@ -363,7 +374,7 @@ function OwnerRow({
             <DropdownMenuContent align="end">
               <DropdownMenuItem onClick={onEdit} className="gap-2">
                 <Pencil className="size-4" />
-                עריכת פרופיל
+                {t("platformOwners.actions.editProfile")}
               </DropdownMenuItem>
               {!isTargetPrimary && !isSelf && (
                 <>
@@ -375,7 +386,7 @@ function OwnerRow({
                       className="gap-2"
                     >
                       <Pause className="size-4" />
-                      השעיה
+                      {t("platformOwners.actions.suspend")}
                     </DropdownMenuItem>
                   ) : (
                     <DropdownMenuItem
@@ -384,7 +395,7 @@ function OwnerRow({
                       className="gap-2"
                     >
                       <Play className="size-4" />
-                      שחזור
+                      {t("platformOwners.actions.restore")}
                     </DropdownMenuItem>
                   )}
                   <DropdownMenuSeparator />
@@ -393,7 +404,7 @@ function OwnerRow({
                     className="gap-2 text-destructive focus:text-destructive"
                   >
                     <Trash2 className="size-4" />
-                    מחיקה
+                    {t("platformOwners.actions.delete")}
                   </DropdownMenuItem>
                 </>
               )}

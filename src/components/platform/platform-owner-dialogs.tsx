@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
+import { useTranslation } from "react-i18next";
 import { AlertTriangle, Crown, Info, Loader2 } from "lucide-react";
 import {
   Dialog,
@@ -52,6 +53,7 @@ export function PlatformOwnerCreateDialog({
   open: boolean;
   onOpenChange: (v: boolean) => void;
 }) {
+  const { t } = useTranslation();
   const invalidate = useInvalidatePlatform();
   const createFn = useServerFn(createPlatformOwner);
   const [first_name, setFirstName] = useState("");
@@ -74,22 +76,21 @@ export function PlatformOwnerCreateDialog({
         },
       }),
     onSuccess: () => {
-      toast.success("בעל המערכת נוצר");
+      toast.success(t("platformOwners.toasts.created"));
       invalidate();
       onOpenChange(false);
       setFirstName(""); setLastName(""); setEmail(""); setPassword(""); setPhone(""); setIdNumber("");
     },
-    onError: (e: Error) => toast.error(e.message ?? "יצירה נכשלה"),
+    onError: (e: Error) => toast.error(e.message ?? t("platformOwners.toasts.createFailed")),
   });
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>הוספת בעל מערכת</DialogTitle>
+          <DialogTitle>{t("platformOwners.dialogs.createTitle")}</DialogTitle>
           <DialogDescription>
-            יצירת חשבון בעל מערכת חדש. זהו חשבון עצמאי — אינו קשור למשתמש
-            המחובר או לזהות עובד כלשהי.
+            {t("platformOwners.dialogs.createDesc")}
           </DialogDescription>
         </DialogHeader>
         {/* Hidden decoy fields deter aggressive browser autofill from populating
@@ -101,21 +102,21 @@ export function PlatformOwnerCreateDialog({
         >
           <input type="text" name="username" autoComplete="username" className="hidden" tabIndex={-1} aria-hidden />
           <input type="password" name="password" autoComplete="current-password" className="hidden" tabIndex={-1} aria-hidden />
-          <Field label="שם פרטי" value={first_name} onChange={setFirstName} required autoComplete="off" name="po-first-name" />
-          <Field label="שם משפחה" value={last_name} onChange={setLastName} required autoComplete="off" name="po-last-name" />
-          <Field label='דוא"ל' type="email" value={email} onChange={setEmail} required autoComplete="off" name="po-email" />
-          <Field label="סיסמה (מינ' 8 תווים)" type="password" value={password} onChange={setPassword} required autoComplete="new-password" name="po-password" />
-          <Field label="טלפון" value={phone} onChange={setPhone} autoComplete="off" name="po-phone" />
-          <Field label="ת.ז" value={id_number} onChange={setIdNumber} autoComplete="off" name="po-id-number" />
+          <Field label={t("platformOwners.fields.firstName")} value={first_name} onChange={setFirstName} required autoComplete="off" name="po-first-name" />
+          <Field label={t("platformOwners.fields.lastName")} value={last_name} onChange={setLastName} required autoComplete="off" name="po-last-name" />
+          <Field label={t("platformOwners.fields.email")} type="email" value={email} onChange={setEmail} required autoComplete="off" name="po-email" />
+          <Field label={t("platformOwners.fields.password")} type="password" value={password} onChange={setPassword} required autoComplete="new-password" name="po-password" />
+          <Field label={t("platformOwners.fields.phone")} value={phone} onChange={setPhone} autoComplete="off" name="po-phone" />
+          <Field label={t("platformOwners.fields.idNumber")} value={id_number} onChange={setIdNumber} autoComplete="off" name="po-id-number" />
           <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>ביטול</Button>
+            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>{t("common.cancel")}</Button>
             <Button
               type="submit"
               disabled={mut.isPending || first_name.trim().length < 1 || last_name.trim().length < 1 || !email || password.length < 8}
               className="gap-2"
             >
               {mut.isPending && <Loader2 className="size-4 animate-spin" />}
-              צור
+              {t("platformOwners.dialogs.createSubmit")}
             </Button>
           </DialogFooter>
         </form>
@@ -135,6 +136,7 @@ export function PlatformOwnerEditDialog({
   onOpenChange: (v: boolean) => void;
   owner: PlatformOwnerRow;
 }) {
+  const { t } = useTranslation();
   const invalidate = useInvalidatePlatform();
   const updateFn = useServerFn(updatePlatformOwnerProfile);
   const ownerNames = owner.first_name || owner.last_name
@@ -157,43 +159,43 @@ export function PlatformOwnerEditDialog({
         },
       }),
     onSuccess: () => {
-      toast.success("הפרופיל עודכן");
+      toast.success(t("platformOwners.toasts.updated"));
       invalidate();
       onOpenChange(false);
     },
-    onError: (e: Error) => toast.error(e.message ?? "עדכון נכשל"),
+    onError: (e: Error) => toast.error(e.message ?? t("platformOwners.toasts.updateFailed")),
   });
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>עריכת פרופיל בעל מערכת</DialogTitle>
-          <DialogDescription>עדכון פרטי זהות של בעל המערכת</DialogDescription>
+          <DialogTitle>{t("platformOwners.dialogs.editTitle")}</DialogTitle>
+          <DialogDescription>{t("platformOwners.dialogs.editDesc")}</DialogDescription>
         </DialogHeader>
         <div className="space-y-3">
-          <Field label="שם פרטי" value={first_name} onChange={setFirstName} required />
-          <Field label="שם משפחה" value={last_name} onChange={setLastName} required />
+          <Field label={t("platformOwners.fields.firstName")} value={first_name} onChange={setFirstName} required />
+          <Field label={t("platformOwners.fields.lastName")} value={last_name} onChange={setLastName} required />
           <div className="space-y-1">
-            <Label>דוא"ל</Label>
+            <Label>{t("platformOwners.fields.email")}</Label>
             <Input value={owner.email ?? ""} disabled readOnly dir="ltr" />
             <p className="text-[11px] text-muted-foreground flex items-center gap-1">
               <Info className="size-3" />
-              שינוי דוא"ל הוא יכולת עתידית — יתווסף בגרסה הבאה של ניהול הפלטפורמה.
+              {t("platformOwners.detail.emailFutureHint")}
             </p>
           </div>
-          <Field label="טלפון" value={phone} onChange={setPhone} />
-          <Field label="ת.ז" value={id_number} onChange={setIdNumber} />
+          <Field label={t("platformOwners.fields.phone")} value={phone} onChange={setPhone} />
+          <Field label={t("platformOwners.fields.idNumber")} value={id_number} onChange={setIdNumber} />
         </div>
         <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>ביטול</Button>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>{t("common.cancel")}</Button>
           <Button
             onClick={() => mut.mutate()}
             disabled={mut.isPending || first_name.trim().length < 1 || last_name.trim().length < 1}
             className="gap-2"
           >
             {mut.isPending && <Loader2 className="size-4 animate-spin" />}
-            שמור
+            {t("common.save")}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -212,6 +214,7 @@ export function PlatformOwnerDeleteDialog({
   onOpenChange: (v: boolean) => void;
   owner: PlatformOwnerRow;
 }) {
+  const { t } = useTranslation();
   const invalidate = useInvalidatePlatform();
   const deleteFn = useServerFn(deletePlatformOwner);
   const [confirm, setConfirm] = useState("");
@@ -219,12 +222,12 @@ export function PlatformOwnerDeleteDialog({
   const mut = useMutation({
     mutationFn: () => deleteFn({ data: { user_id: owner.user_id } }),
     onSuccess: () => {
-      toast.success("בעל המערכת נמחק");
+      toast.success(t("platformOwners.toasts.deleted"));
       invalidate();
       onOpenChange(false);
       setConfirm("");
     },
-    onError: (e: Error) => toast.error(e.message ?? "מחיקה נכשלה"),
+    onError: (e: Error) => toast.error(e.message ?? t("platformOwners.toasts.deleteFailed")),
   });
 
   const canConfirm = !!owner.email && confirm.trim().toLowerCase() === owner.email.toLowerCase();
@@ -233,25 +236,25 @@ export function PlatformOwnerDeleteDialog({
     <Dialog open={open} onOpenChange={(v) => { if (!v) setConfirm(""); onOpenChange(v); }}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>מחיקת בעל מערכת</DialogTitle>
-          <DialogDescription>פעולה זו בלתי הפיכה</DialogDescription>
+          <DialogTitle>{t("platformOwners.dialogs.deleteTitle")}</DialogTitle>
+          <DialogDescription>{t("platformOwners.dialogs.deleteDesc")}</DialogDescription>
         </DialogHeader>
         <Alert variant="destructive">
           <AlertTriangle className="size-4" />
-          <AlertTitle>אזהרה</AlertTitle>
+          <AlertTitle>{t("platformOwners.dialogs.warning")}</AlertTitle>
           <AlertDescription>
-            המחיקה תסיר את חשבון בעל המערכת מהמערכת לצמיתות. לא ניתן למחוק את בעל המערכת הראשי.
+            {t("platformOwners.dialogs.deleteWarning")}
           </AlertDescription>
         </Alert>
         <div className="space-y-2">
           <p className="text-sm">
-            לאישור, הקלד את כתובת הדוא"ל של בעל המערכת:{" "}
+            {t("platformOwners.dialogs.deleteConfirm")}{" "}
             <span className="font-mono" dir="ltr">{owner.email}</span>
           </p>
           <Input value={confirm} onChange={(e) => setConfirm(e.target.value)} dir="ltr" />
         </div>
         <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>ביטול</Button>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>{t("common.cancel")}</Button>
           <Button
             variant="destructive"
             disabled={!canConfirm || mut.isPending}
@@ -259,7 +262,7 @@ export function PlatformOwnerDeleteDialog({
             className="gap-2"
           >
             {mut.isPending && <Loader2 className="size-4 animate-spin" />}
-            מחק לצמיתות
+            {t("platformOwners.dialogs.deleteSubmit")}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -280,6 +283,7 @@ export function PlatformOwnerTransferDialog({
   owners: PlatformOwnerRow[];
   currentPrimary: PlatformOwnerRow | null;
 }) {
+  const { t } = useTranslation();
   const invalidate = useInvalidatePlatform();
   const transferFn = useServerFn(transferPrimaryOwnership);
   const [targetId, setTargetId] = useState<string>("");
@@ -293,12 +297,12 @@ export function PlatformOwnerTransferDialog({
   const mut = useMutation({
     mutationFn: () => transferFn({ data: { user_id: targetId } }),
     onSuccess: () => {
-      toast.success("הבעלות הראשית הועברה");
+      toast.success(t("platformOwners.toasts.transferred"));
       invalidate();
       onOpenChange(false);
       setTargetId(""); setConfirm("");
     },
-    onError: (e: Error) => toast.error(e.message ?? "העברה נכשלה"),
+    onError: (e: Error) => toast.error(e.message ?? t("platformOwners.toasts.transferFailed")),
   });
 
   return (
@@ -313,29 +317,31 @@ export function PlatformOwnerTransferDialog({
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Crown className="size-5 text-amber-500" />
-            העברת בעלות ראשית
+            {t("platformOwners.dialogs.transferTitle")}
           </DialogTitle>
           <DialogDescription>
-            העברת תפקיד "בעל המערכת הראשי" לבעל מערכת אחר
+            {t("platformOwners.dialogs.transferDesc")}
           </DialogDescription>
         </DialogHeader>
         <Alert variant="destructive">
           <AlertTriangle className="size-4" />
-          <AlertTitle>פעולה בלתי הפיכה</AlertTitle>
+          <AlertTitle>{t("platformOwners.dialogs.transferIrreversible")}</AlertTitle>
           <AlertDescription>
-            לאחר האישור, {currentPrimary?.full_name ?? "בעל המערכת הראשי הנוכחי"} יהפוך לבעל מערכת רגיל, ובעל המערכת שנבחר יהפוך לבעל המערכת הראשי בעל הסמכות המלאה בפלטפורמה.
+            {t("platformOwners.dialogs.transferWarning", {
+              current: currentPrimary?.full_name ?? t("platformOwners.badges.primary"),
+            })}
           </AlertDescription>
         </Alert>
 
         <div className="space-y-3">
           <div className="space-y-1">
-            <Label>יעד ההעברה</Label>
+            <Label>{t("platformOwners.dialogs.transferTarget")}</Label>
             <Select value={targetId} onValueChange={(v) => { setTargetId(v); setConfirm(""); }}>
-              <SelectTrigger><SelectValue placeholder="בחר בעל מערכת" /></SelectTrigger>
+              <SelectTrigger><SelectValue placeholder={t("platformOwners.dialogs.transferSelectPlaceholder")} /></SelectTrigger>
               <SelectContent>
                 {eligible.length === 0 ? (
                   <div className="p-3 text-sm text-muted-foreground text-center">
-                    אין בעלי מערכת פעילים נוספים
+                    {t("platformOwners.dialogs.transferNoEligible")}
                   </div>
                 ) : eligible.map((o) => (
                   <SelectItem key={o.user_id} value={o.user_id}>
@@ -349,11 +355,10 @@ export function PlatformOwnerTransferDialog({
           {target && (
             <div className="space-y-2 rounded-lg border p-3 bg-muted/30">
               <p className="text-sm">
-                תוצאה: <span className="font-medium">{target.full_name}</span> יקבל בעלות ראשית.
-                אתה תיהפך לבעל מערכת רגיל.
+                {t("platformOwners.dialogs.transferResult", { name: target.full_name })}
               </p>
               <div className="space-y-1">
-                <Label className="text-xs">לאישור, הקלד את הדוא"ל של היעד:</Label>
+                <Label className="text-xs">{t("platformOwners.dialogs.transferConfirmLabel")}</Label>
                 <p className="text-xs font-mono text-muted-foreground" dir="ltr">{target.email}</p>
                 <Input value={confirm} onChange={(e) => setConfirm(e.target.value)} dir="ltr" />
               </div>
@@ -362,7 +367,7 @@ export function PlatformOwnerTransferDialog({
         </div>
 
         <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>ביטול</Button>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>{t("common.cancel")}</Button>
           <Button
             variant="destructive"
             disabled={!canConfirm || mut.isPending}
@@ -370,7 +375,7 @@ export function PlatformOwnerTransferDialog({
             className="gap-2"
           >
             {mut.isPending && <Loader2 className="size-4 animate-spin" />}
-            אשר והעבר בעלות
+            {t("platformOwners.dialogs.transferSubmit")}
           </Button>
         </DialogFooter>
       </DialogContent>

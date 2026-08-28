@@ -172,15 +172,13 @@ function PlatformAiPage() {
 
         <TabsContent value="grants" className="mt-4 space-y-3">
           <Card className="p-4 text-sm">
-            <p className="font-medium">הקצאות לפי חברה וסניף עברו לחיוב</p>
-            <p className="text-muted-foreground mt-1">
-              בחירת תוכנית, דקות AI וסניף נעשית ב־חיוב ומנויים. כאן נשארים ספקים, יומן שימוש והגדרות פלטפורמה.
-            </p>
+            <p className="font-medium">{t("platformAiRedirect.title")}</p>
+            <p className="text-muted-foreground mt-1">{t("platformAiRedirect.description")}</p>
             <Link
               to="/platform/billing"
               className="inline-block mt-2 text-primary underline-offset-2 hover:underline"
             >
-              מעבר לחיוב ומנויים
+              {t("platformAiRedirect.link")}
             </Link>
           </Card>
           <Card className="card-elevated overflow-hidden">

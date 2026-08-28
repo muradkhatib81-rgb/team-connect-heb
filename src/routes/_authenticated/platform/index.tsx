@@ -26,7 +26,7 @@ import {
   usePlatformOwnersQuery,
   usePlatformAuditQuery,
   usePlatformStats,
-  PLATFORM_EVENT_LABELS,
+  getPlatformEventLabel,
 } from "@/lib/platform-owners.hooks";
 import { useCompanyContext } from "@/platform";
 import { branchService } from "@/modules/branches";
@@ -34,13 +34,23 @@ import { useTranslation } from "react-i18next";
 
 export const Route = createFileRoute("/_authenticated/platform/")({
   component: PlatformDashboardPage,
-  errorComponent: ({ error }) => (
-    <div className="p-6 text-sm text-destructive" role="alert">
-      {(error as Error)?.message ?? "שגיאה"}
-    </div>
-  ),
-  notFoundComponent: () => <div className="p-6 text-sm text-muted-foreground">הדף לא נמצא</div>,
+  errorComponent: PlatformDashboardError,
+  notFoundComponent: PlatformDashboardNotFound,
 });
+
+function PlatformDashboardError({ error }: { error: unknown }) {
+  const { t } = useTranslation();
+  return (
+    <div className="p-6 text-sm text-destructive" role="alert">
+      {(error as Error)?.message ?? t("common.error")}
+    </div>
+  );
+}
+
+function PlatformDashboardNotFound() {
+  const { t } = useTranslation();
+  return <div className="p-6 text-sm text-muted-foreground">{t("platformHub.pageNotFound")}</div>;
+}
 
 function PlatformDashboardPage() {
   const { t } = useTranslation();
@@ -68,9 +78,11 @@ function PlatformDashboardPage() {
             <Crown className="size-6" />
           </div>
           <div className="min-w-0">
-            <h1 className="truncate text-2xl sm:text-3xl font-bold">ניהול פלטפורמה</h1>
+            <h1 className="truncate text-2xl sm:text-3xl font-bold">{t("platformHub.title")}</h1>
             <p className="text-sm text-muted-foreground mt-1">
-              {profile?.full_name ? `ברוך הבא, ${profile.full_name}` : "מרכז הבקרה של הפלטפורמה"}
+              {profile?.full_name
+                ? t("platformHub.welcome", { name: profile.full_name })
+                : t("platformHub.welcomeFallback")}
             </p>
           </div>
         </div>
@@ -79,7 +91,7 @@ function PlatformDashboardPage() {
       {/* Stat cards (clickable navigation) */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
         <StatCard
-          label="בעלי מערכת פעילים"
+          label={t("platformHub.stats.activeOwners")}
           value={stats.activeCount}
           icon={UserCheck}
           tone="emerald"
@@ -87,7 +99,7 @@ function PlatformDashboardPage() {
           onClick={() => navigate({ to: "/platform/owners", search: { status: "active" } })}
         />
         <StatCard
-          label="מושעים"
+          label={t("platformHub.stats.suspended")}
           value={stats.suspendedCount}
           icon={UserX}
           tone="rose"
@@ -95,7 +107,7 @@ function PlatformDashboardPage() {
           onClick={() => navigate({ to: "/platform/owners", search: { status: "suspended" } })}
         />
         <StatCard
-          label="בעל מערכת ראשי"
+          label={t("platformHub.stats.primaryOwner")}
           value={stats.primary?.full_name ?? "—"}
           icon={Crown}
           tone="amber"
@@ -111,7 +123,7 @@ function PlatformDashboardPage() {
           disabled={!stats.primary}
         />
         <StatCard
-          label="אירועי יומן (30 יום)"
+          label={t("platformHub.stats.auditEvents30d")}
           value={stats.events30d}
           icon={Activity}
           tone="sky"
@@ -125,7 +137,7 @@ function PlatformDashboardPage() {
           or reflects any single Branch (see requirements in this phase). */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
         <StatCard
-          label="חברות בפלטפורמה"
+          label={t("platformHub.stats.companies")}
           value={companies.length}
           icon={Building2}
           tone="emerald"
@@ -133,7 +145,7 @@ function PlatformDashboardPage() {
           onClick={() => navigate({ to: "/platform/companies" })}
         />
         <StatCard
-          label="סניפים בפלטפורמה"
+          label={t("platformHub.stats.branches")}
           value={allBranchesQuery.data?.length ?? 0}
           icon={GitBranch}
           tone="sky"
@@ -148,25 +160,25 @@ function PlatformDashboardPage() {
           <Button asChild variant="outline" size="sm" className="gap-2">
             <Link to="/platform/owners">
               <Crown className="size-4" />
-              ניהול בעלי מערכת
+              {t("platformHub.quick.manageOwners")}
             </Link>
           </Button>
           <Button asChild variant="outline" size="sm" className="gap-2">
             <Link to="/platform/audit-log">
               <ShieldCheck className="size-4" />
-              יומן פעילות פלטפורמה
+              {t("platformHub.quick.auditLog")}
             </Link>
           </Button>
           <Button asChild variant="outline" size="sm" className="gap-2">
             <Link to="/platform/companies">
               <Building2 className="size-4" />
-              ניהול חברות
+              {t("platformHub.quick.manageCompanies")}
             </Link>
           </Button>
           <Button asChild variant="outline" size="sm" className="gap-2">
             <Link to="/platform/branches">
               <GitBranch className="size-4" />
-              ניהול סניפים
+              {t("platformHub.quick.manageBranches")}
             </Link>
           </Button>
         </div>
@@ -177,11 +189,11 @@ function PlatformDashboardPage() {
         <div className="flex items-center justify-between p-4 border-b">
           <h2 className="text-base font-semibold flex items-center gap-2">
             <Activity className="size-4 text-primary" />
-            פעילות אחרונה
+            {t("platformHub.recentActivity")}
           </h2>
           <Button asChild variant="ghost" size="sm" className="gap-1">
             <Link to="/platform/audit-log">
-              ליומן המלא
+              {t("platformHub.fullLog")}
               <ArrowLeft className="size-4" />
             </Link>
           </Button>
@@ -191,7 +203,7 @@ function PlatformDashboardPage() {
             <Loader2 className="size-5 animate-spin text-primary" />
           </div>
         ) : latestEvents.length === 0 ? (
-          <div className="p-6 text-sm text-muted-foreground text-center">אין פעילות אחרונה</div>
+          <div className="p-6 text-sm text-muted-foreground text-center">{t("platformHub.noRecentActivity")}</div>
         ) : (
           <ul className="divide-y">
             {latestEvents.map((ev) => {
@@ -204,10 +216,10 @@ function PlatformDashboardPage() {
                   <span className="text-xs text-muted-foreground tabular-nums shrink-0 w-32">
                     {new Date(ev.created_at).toLocaleString("he-IL")}
                   </span>
-                  <span className="font-medium">{PLATFORM_EVENT_LABELS[ev.event] ?? ev.event}</span>
+                  <span className="font-medium">{getPlatformEventLabel(ev.event)}</span>
                   <span className="text-xs text-muted-foreground truncate">
-                    {actor ? `מבצע: ${actor}` : ""}
-                    {target ? ` · יעד: ${target}` : ""}
+                    {actor ? t("platformHub.actor", { name: actor }) : ""}
+                    {target ? ` · ${t("platformHub.target", { name: target })}` : ""}
                   </span>
                 </li>
               );
@@ -222,23 +234,23 @@ function PlatformDashboardPage() {
           branch-specific, company-specific or employee-specific data ever
           appears on this dashboard. */}
       <section>
-        <h2 className="text-sm font-semibold text-muted-foreground mb-3">מודולי פלטפורמה</h2>
+        <h2 className="text-sm font-semibold text-muted-foreground mb-3">{t("platformHub.modulesSection")}</h2>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
           <ModuleTile
             icon={Building2}
-            label="ניהול חברות"
-            hint={`${companies.length} חברות`}
+            label={t("platformHub.modules.companies")}
+            hint={t("platformHub.hints.companies", { count: companies.length })}
             onClick={() => navigate({ to: "/platform/companies" })}
           />
           <ModuleTile
             icon={GitBranch}
-            label="ניהול סניפים"
-            hint={`${allBranchesQuery.data?.length ?? 0} סניפים`}
+            label={t("platformHub.modules.branches")}
+            hint={t("platformHub.hints.branches", { count: allBranchesQuery.data?.length ?? 0 })}
             onClick={() => navigate({ to: "/platform/branches" })}
           />
           <ModuleTile
             icon={Activity}
-            label="ניטור וזמינות"
+            label={t("platformHub.modules.monitoring")}
             hint="Health Checks"
             onClick={() => navigate({ to: "/platform/monitoring" })}
           />
@@ -256,49 +268,49 @@ function PlatformDashboardPage() {
           />
           <ModuleTile
             icon={Radio}
-            label="ניהול Real-Time"
+            label={t("platformHub.modules.realtime")}
             hint="Realtime Manager"
             onClick={() => navigate({ to: "/platform/realtime" })}
           />
           <ModuleTile
             icon={CreditCard}
-            label="חיוב ומנויים"
+            label={t("platformHub.modules.billing")}
             hint="Billing & Subscriptions"
             onClick={() => navigate({ to: "/platform/billing" })}
           />
           <ModuleTile
             icon={Flag}
-            label="דגלי פיצ'רים"
+            label={t("platformHub.modules.featureFlags")}
             hint="Feature Flags"
             onClick={() => navigate({ to: "/platform/feature-flags" })}
           />
           <ModuleTile
             icon={BarChart3}
-            label="אנליטיקס גלובלי"
+            label={t("platformHub.modules.analytics")}
             hint="Global Analytics"
             onClick={() => navigate({ to: "/platform/analytics" })}
           />
           <ModuleTile
             icon={Crown}
-            label="בעלי מערכת"
-            hint={`${stats.activeCount + stats.suspendedCount} בעלי מערכת`}
+            label={t("platformHub.modules.owners")}
+            hint={t("platformHub.hints.owners", { count: stats.activeCount + stats.suspendedCount })}
             onClick={() => navigate({ to: "/platform/owners" })}
           />
           <ModuleTile
             icon={ShieldCheck}
-            label="יומן פעילות פלטפורמה"
+            label={t("platformHub.modules.auditLog")}
             hint="Audit Log"
             onClick={() => navigate({ to: "/platform/audit-log" })}
           />
           <ModuleTile
             icon={Bell}
-            label="התראות פלטפורמה"
+            label={t("platformHub.modules.notifications")}
             hint="Notification Manager"
             onClick={() => navigate({ to: "/platform/notifications" })}
           />
           <ModuleTile
             icon={Settings}
-            label="הגדרות פלטפורמה"
+            label={t("platformHub.modules.settings")}
             hint="Platform Settings"
             onClick={() => navigate({ to: "/platform/settings" })}
           />

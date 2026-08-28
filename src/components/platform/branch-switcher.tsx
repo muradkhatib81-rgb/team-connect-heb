@@ -1,4 +1,5 @@
 import { GitBranch } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import {
   Select,
   SelectContent,
@@ -16,6 +17,7 @@ import { useBranchContext } from "@/platform";
  * `@/components/branch-switcher`, which is unrelated and untouched.
  */
 export function PlatformBranchSwitcher() {
+  const { t } = useTranslation();
   const { branches, activeBranchId, setActiveBranchId, isLoading } = useBranchContext();
 
   if (isLoading || branches.length === 0) return null;
@@ -30,7 +32,7 @@ export function PlatformBranchSwitcher() {
     >
       <SelectTrigger className="w-full sm:w-64 gap-2">
         <GitBranch className="size-4 text-muted-foreground shrink-0" />
-        <SelectValue placeholder="בחירת סניף פעיל" />
+        <SelectValue placeholder={t("platformBranches.selectActiveBranch")} />
       </SelectTrigger>
       <SelectContent>
         {branches.map((branch) => (

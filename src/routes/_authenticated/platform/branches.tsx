@@ -1,5 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useState } from "react";
+import { useTranslation } from "react-i18next";
 import {
   Building2,
   GitBranch,
@@ -34,6 +35,7 @@ export const Route = createFileRoute("/_authenticated/platform/branches")({
 });
 
 function BranchesPage() {
+  const { t } = useTranslation();
   const {
     activeCompany,
     activeCompanyId,
@@ -57,11 +59,11 @@ function BranchesPage() {
           <GitBranch className="size-6" />
         </div>
         <div className="min-w-0">
-          <h1 className="truncate text-2xl sm:text-3xl font-bold">סניפים</h1>
+          <h1 className="truncate text-2xl sm:text-3xl font-bold">{t("platformBranches.title")}</h1>
           <p className="text-sm text-muted-foreground mt-1">
             {activeCompany
-              ? `ניהול הסניפים של ${activeCompany.name}`
-              : "ניהול הסניפים של החברות בפלטפורמה"}
+              ? t("platformBranches.subtitleWithCompany", { name: activeCompany.name })
+              : t("platformBranches.subtitleDefault")}
           </p>
         </div>
       </div>
@@ -72,7 +74,7 @@ function BranchesPage() {
             <PlatformBranchSwitcher />
             <Button onClick={() => setOpenCreate(true)} className="gap-2">
               <Plus className="size-4" />
-              שיוך סניף קיים
+              {t("platformBranches.assignExisting")}
             </Button>
           </>
         )}
@@ -85,11 +87,11 @@ function BranchesPage() {
       <div className="space-y-6">
         {header}
         <Card className="p-8 text-sm text-muted-foreground text-center space-y-3">
-          <p>יש ליצור חברה בפלטפורמה לפני ניהול סניפים.</p>
+          <p>{t("platformBranches.needCompanyFirst")}</p>
           <Button asChild size="sm" className="gap-2">
             <Link to="/platform/companies">
               <Building2 className="size-4" />
-              ניהול חברות
+              {t("platformBranches.manageCompanies")}
             </Link>
           </Button>
         </Card>
@@ -108,21 +110,25 @@ function BranchesPage() {
           </div>
         ) : !activeCompanyId ? (
           <div className="p-8 text-sm text-muted-foreground text-center">
-            יש לבחור חברה פעילה (מהבורר מעלה) כדי לראות ולנהל את הסניפים שלה.
+            {t("platformBranches.selectCompanyHint")}
           </div>
         ) : branches.length === 0 ? (
           <div className="p-8 text-sm text-muted-foreground text-center">
-            אין עדיין סניפים משויכים לחברה הפעילה. ניתן לשייך סניף קיים מהכפתור מעלה.
+            {t("platformBranches.noBranches")} {t("platformBranches.assignHint")}
           </div>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead className="text-xs text-muted-foreground bg-muted/40">
                 <tr>
-                  <th className="text-right p-3 font-medium">שם הסניף</th>
-                  <th className="text-right p-3 font-medium hidden md:table-cell">מזהה</th>
-                  <th className="text-right p-3 font-medium hidden lg:table-cell">נוצר</th>
-                  <th className="text-right p-3 font-medium">סטטוס</th>
+                  <th className="text-right p-3 font-medium">{t("platformBranches.cols.name")}</th>
+                  <th className="text-right p-3 font-medium hidden md:table-cell">
+                    {t("platformBranches.cols.id")}
+                  </th>
+                  <th className="text-right p-3 font-medium hidden lg:table-cell">
+                    {t("platformBranches.cols.created")}
+                  </th>
+                  <th className="text-right p-3 font-medium">{t("platformBranches.cols.status")}</th>
                   <th className="p-3 w-10" />
                 </tr>
               </thead>
@@ -152,10 +158,10 @@ function BranchesPage() {
                       {branch.id === activeBranchId ? (
                         <Badge className="gap-1 bg-emerald-100 text-emerald-800 hover:bg-emerald-100 dark:bg-emerald-950/30 dark:text-emerald-400">
                           <Star className="size-3" />
-                          פעיל
+                          {t("platformBranches.badges.active")}
                         </Badge>
                       ) : (
-                        <Badge variant="outline">לא פעיל</Badge>
+                        <Badge variant="outline">{t("platformBranches.badges.inactive")}</Badge>
                       )}
                     </td>
                     <td className="p-3">
@@ -172,19 +178,19 @@ function BranchesPage() {
                               className="gap-2"
                             >
                               <Star className="size-4" />
-                              הפוך לפעיל
+                              {t("platformBranches.actions.makeActive")}
                             </DropdownMenuItem>
                           )}
                           <DropdownMenuItem onClick={() => setEditBranch(branch)} className="gap-2">
                             <Pencil className="size-4" />
-                            פרטים / סנכרון
+                            {t("platformBranches.actions.detailsSync")}
                           </DropdownMenuItem>
                           <DropdownMenuItem
                             onClick={() => setDeleteBranch(branch)}
                             className="gap-2 text-destructive focus:text-destructive"
                           >
                             <Trash2 className="size-4" />
-                            הסרת שיוך
+                            {t("platformBranches.actions.unassign")}
                           </DropdownMenuItem>
                         </DropdownMenuContent>
                       </DropdownMenu>

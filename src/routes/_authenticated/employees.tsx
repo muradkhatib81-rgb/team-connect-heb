@@ -22,7 +22,7 @@ import {
 import { useAuth } from "@/lib/use-auth";
 import { useJobTitles } from "@/lib/use-job-titles";
 import {
-  ROLE_LABELS,
+  getRoleLabel,
   ROLE_OPTIONS,
   isAdmin,
   isPlatformOwner,
@@ -112,16 +112,6 @@ function csvCell(value: unknown): string {
   return `"${text.replaceAll('"', '""')}"`;
 }
 
-const FILTER_LABELS: Record<FilterMode, string> = {
-  all: "👥 כל העובדים",
-  active: "🟢 עובדים פעילים",
-  inactive: "🔴 עובדים לא פעילים",
-  on_leave: "🏖️ בחופשה",
-  on_break: "☕ בהפסקה",
-  managers: "👔 מנהלים",
-  workers: "👤 עובדים",
-};
-
 /** Org-level managers only — department_manager counts as an employee in filters/stats. */
 const ORG_MANAGER_ROLES = new Set<AppRole>([
   "system_admin",
@@ -191,6 +181,7 @@ function avatarUrlFor(path: string | null | undefined): string | null {
 }
 
 function EmployeesPage() {
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const search = useSearch({ from: "/_authenticated/employees" });
   const { data: me, isLoading: meLoading } = useAuth();
@@ -248,12 +239,19 @@ function EmployeesPage() {
 
   function exportEmployeesCsv() {
     const rows = [
-      ["שם", "מחלקה", "תפקיד", "סטטוס", "ת.ז", "טלפון"],
+      [
+        t("employeesPage.csv.name"),
+        t("employeesPage.csv.department"),
+        t("employeesPage.csv.jobTitle"),
+        t("employeesPage.csv.status"),
+        t("employeesPage.csv.idNumber"),
+        t("employeesPage.csv.phone"),
+      ],
       ...employees.map((employee) => [
         formatEmployeeName(employee),
         employee.department_id ? (deptMap[employee.department_id] ?? "") : "",
         employee.job_title ?? "",
-        employee.is_active ? "פעיל" : "לא פעיל",
+        employee.is_active ? t("employeesPage.csv.active") : t("employeesPage.csv.inactive"),
         employee.id_number ?? "",
         employee.phone ?? "",
       ]),
@@ -275,14 +273,14 @@ function EmployeesPage() {
     mutationFn: async (userId: string) =>
       setActiveFn({ data: { user_id: userId, is_active: true } }),
     onSuccess: () => {
-      toast.success("העובד הופעל מחדש");
+      toast.success(t("employeesPage.reactivated"));
       qcPage.invalidateQueries({ queryKey: ["employees"] });
       qcPage.invalidateQueries({ queryKey: ["all-roles"] });
       qcPage.invalidateQueries({ queryKey: ["departments"] });
       qcPage.invalidateQueries({ queryKey: ["dashboard", "stats"] });
       qcPage.invalidateQueries({ queryKey: ["dashboard", "employees-total", "active"] });
     },
-    onError: (e: any) => toast.error(e?.message ?? "שגיאה בהפעלת העובד"),
+    onError: (e: any) => toast.error(e?.message ?? t("employeesPage.reactivateError")),
   });
 
 
@@ -509,23 +507,29 @@ function EmployeesPage() {
   if (!allowed) {
     return (
       <Card className="card-elevated p-8 text-center">
-        <h2 className="text-lg font-semibold">אין הרשאה</h2>
-        <p className="text-sm text-muted-foreground mt-2">העמוד הזה זמין למנהלים ולאחראי מחלקות.</p>
-        <Button className="mt-4" onClick={() => navigate({ to: "/dashboard" })}>חזרה</Button>
+        <h2 className="text-lg font-semibold">{t("employeesPage.noAccessTitle")}</h2>
+        <p className="text-sm text-muted-foreground mt-2">{t("employeesPage.noAccessDesc")}</p>
+        <Button className="mt-4" onClick={() => navigate({ to: "/dashboard" })}>{t("common.back")}</Button>
       </Card>
     );
   }
 
-  const headerSubtitle = `${filtered.filter(isCountedInHeadcount).length} מתוך ${countedEmployees.length} עובדים · ${FILTER_LABELS[filterMode]}${deptFilter !== "all" && deptMap[deptFilter] ? ` · ${deptMap[deptFilter]}` : ""}`;
+  const headerSubtitle = t("employeesPage.headerSubtitle", {
+    shown: filtered.filter(isCountedInHeadcount).length,
+    total: countedEmployees.length,
+    filter: t(`employeesPage.filters.${filterMode}`),
+    deptSuffix:
+      deptFilter !== "all" && deptMap[deptFilter] ? ` · ${deptMap[deptFilter]}` : "",
+  });
 
   return (
     <div className="space-y-6">
       <header className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h1 className="text-2xl sm:text-3xl font-bold">ניהול עובדים</h1>
+          <h1 className="text-2xl sm:text-3xl font-bold">{t("employeesPage.title")}</h1>
           {isDeptManagerOnly && me?.department_id && deptMap[me.department_id] && (
             <p className="text-sm font-medium text-primary mt-1">
-              מחלקה: {deptMap[me.department_id]}
+              {t("employeesPage.departmentLabel", { name: deptMap[me.department_id] })}
             </p>
           )}
           <p className="text-sm text-muted-foreground mt-1">{headerSubtitle}</p>
@@ -534,13 +538,13 @@ function EmployeesPage() {
           {canExportEmployees && (
             <Button variant="outline" className="gap-2" onClick={exportEmployeesCsv}>
               <Download className="size-4" />
-              ייצוא עובדים
+              {t("employeesPage.exportEmployees")}
             </Button>
           )}
           {canAddEmployee && (
             <Button className="gap-2" onClick={() => setCreating(true)}>
               <UserPlus className="size-4" />
-              הוספת עובד
+              {t("employeesPage.addEmployee")}
             </Button>
           )}
         </div>
@@ -548,11 +552,11 @@ function EmployeesPage() {
 
       {!isDeptManagerOnly && (
         <section className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
-          <SummaryStatCard label="עובדים" value={summaryStats.workers} icon={<Users className="size-5" />} tone="primary" emoji="👤" active={filterMode === "workers"} onClick={() => setFilter("workers")} />
-          <SummaryStatCard label="מנהלים" value={summaryStats.managers} icon={<Shield className="size-5" />} tone="indigo" emoji="👔" active={filterMode === "managers"} onClick={() => setFilter("managers")} />
-          <SummaryStatCard label="עובדים פעילים" value={summaryStats.active} icon={<UserCheck className="size-5" />} tone="green" emoji="🟢" active={filterMode === "active"} onClick={() => setFilter("active")} />
-          <SummaryStatCard label="בחופשה" value={summaryStats.onLeave} icon={<Plane className="size-5" />} tone="sky" emoji="🏖️" active={filterMode === "on_leave"} onClick={() => setFilter("on_leave")} />
-          <SummaryStatCard label="לא פעילים" value={summaryStats.inactive} icon={<UserX className="size-5" />} tone="red" emoji="❌" active={filterMode === "inactive"} onClick={() => setFilter("inactive")} />
+          <SummaryStatCard label={t("employeesPage.stats.workers")} value={summaryStats.workers} icon={<Users className="size-5" />} tone="primary" emoji="👤" active={filterMode === "workers"} onClick={() => setFilter("workers")} />
+          <SummaryStatCard label={t("employeesPage.stats.managers")} value={summaryStats.managers} icon={<Shield className="size-5" />} tone="indigo" emoji="👔" active={filterMode === "managers"} onClick={() => setFilter("managers")} />
+          <SummaryStatCard label={t("employeesPage.stats.active")} value={summaryStats.active} icon={<UserCheck className="size-5" />} tone="green" emoji="🟢" active={filterMode === "active"} onClick={() => setFilter("active")} />
+          <SummaryStatCard label={t("employeesPage.stats.onLeave")} value={summaryStats.onLeave} icon={<Plane className="size-5" />} tone="sky" emoji="🏖️" active={filterMode === "on_leave"} onClick={() => setFilter("on_leave")} />
+          <SummaryStatCard label={t("employeesPage.stats.inactive")} value={summaryStats.inactive} icon={<UserX className="size-5" />} tone="red" emoji="❌" active={filterMode === "inactive"} onClick={() => setFilter("inactive")} />
         </section>
 
 
@@ -575,7 +579,7 @@ function EmployeesPage() {
               })()}
             </div>
             <div className="flex-1 min-w-0">
-              <div className="text-xs text-muted-foreground">👤 אחראי המחלקה</div>
+              <div className="text-xs text-muted-foreground">{t("employeesPage.deptHead")}</div>
               <div className="font-semibold truncate">{me.full_name}</div>
               <div className="text-sm text-muted-foreground truncate flex items-center gap-2 flex-wrap">
                 <span>
@@ -583,15 +587,15 @@ function EmployeesPage() {
                   {me.job_title ? ` · ${me.job_title}` : ""}
                 </span>
                 {isEmployeeCurrentlyOnLeave(me) && (
-                  <Badge variant="secondary" className="rounded-full text-xs">בחופש</Badge>
+                  <Badge variant="secondary" className="rounded-full text-xs">{t("employeesPage.badges.onLeave")}</Badge>
                 )}
               </div>
             </div>
             <div className="flex flex-wrap gap-2 justify-end">
-              <Badge variant="secondary">עובדים: {managerDeptStats.total}</Badge>
-              <Badge variant="outline">פעילים: {managerDeptStats.active}</Badge>
+              <Badge variant="secondary">{t("employeesPage.badges.employeesCount", { count: managerDeptStats.total })}</Badge>
+              <Badge variant="outline">{t("employeesPage.badges.activeCount", { count: managerDeptStats.active })}</Badge>
               {managerDeptStats.onLeave > 0 && (
-                <Badge variant="outline">בחופש: {managerDeptStats.onLeave}</Badge>
+                <Badge variant="outline">{t("employeesPage.badges.onLeaveCount", { count: managerDeptStats.onLeave })}</Badge>
               )}
             </div>
           </div>
@@ -601,7 +605,7 @@ function EmployeesPage() {
       {isDeptManagerOnly && managerDeptStats && (
         <section className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
           <SummaryStatCard
-            label="עובדי המחלקה"
+            label={t("employeesPage.stats.deptEmployees")}
             value={managerDeptStats.total}
             icon={<Users className="size-5" />}
             tone="primary"
@@ -610,7 +614,7 @@ function EmployeesPage() {
             onClick={() => setFilter("all")}
           />
           <SummaryStatCard
-            label="עובדים פעילים"
+            label={t("employeesPage.stats.active")}
             value={managerDeptStats.active}
             icon={<UserCheck className="size-5" />}
             tone="green"
@@ -619,7 +623,7 @@ function EmployeesPage() {
             onClick={() => setFilter("active")}
           />
           <SummaryStatCard
-            label="בחופשה"
+            label={t("employeesPage.stats.onLeave")}
             value={managerDeptStats.onLeave}
             icon={<Plane className="size-5" />}
             tone="sky"
@@ -628,7 +632,7 @@ function EmployeesPage() {
             onClick={() => setFilter("on_leave")}
           />
           <SummaryStatCard
-            label="לא פעילים"
+            label={t("employeesPage.stats.inactive")}
             value={managerDeptStats.inactive}
             icon={<UserX className="size-5" />}
             tone="red"
@@ -646,7 +650,7 @@ function EmployeesPage() {
           <div className="relative flex-1">
             <Search className="absolute right-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
             <Input
-              placeholder="חיפוש לפי שם, ת.ז, טלפון..."
+              placeholder={t("employeesPage.searchPlaceholder")}
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               className="pr-10"
@@ -657,13 +661,13 @@ function EmployeesPage() {
             <Select value={filterMode} onValueChange={(v) => setFilter(v as FilterMode)}>
               <SelectTrigger className="w-48"><SelectValue /></SelectTrigger>
               <SelectContent>
-                <SelectItem value="active">{FILTER_LABELS.active}</SelectItem>
-                <SelectItem value="inactive">{FILTER_LABELS.inactive}</SelectItem>
-                <SelectItem value="all">{FILTER_LABELS.all}</SelectItem>
-                <SelectItem value="managers">{FILTER_LABELS.managers}</SelectItem>
-                <SelectItem value="workers">{FILTER_LABELS.workers}</SelectItem>
-                <SelectItem value="on_leave">{FILTER_LABELS.on_leave}</SelectItem>
-                <SelectItem value="on_break">{FILTER_LABELS.on_break}</SelectItem>
+                <SelectItem value="active">{t("employeesPage.filters.active")}</SelectItem>
+                <SelectItem value="inactive">{t("employeesPage.filters.inactive")}</SelectItem>
+                <SelectItem value="all">{t("employeesPage.filters.all")}</SelectItem>
+                <SelectItem value="managers">{t("employeesPage.filters.managers")}</SelectItem>
+                <SelectItem value="workers">{t("employeesPage.filters.workers")}</SelectItem>
+                <SelectItem value="on_leave">{t("employeesPage.filters.on_leave")}</SelectItem>
+                <SelectItem value="on_break">{t("employeesPage.filters.on_break")}</SelectItem>
 
 
               </SelectContent>
@@ -672,7 +676,7 @@ function EmployeesPage() {
               <Select value={deptFilter} onValueChange={setDept}>
                 <SelectTrigger className="w-44"><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">כל המחלקות</SelectItem>
+                  <SelectItem value="all">{t("employeesPage.allDepartments")}</SelectItem>
                   {(deptsQuery.data ?? []).map((d) => (
                     <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>
                   ))}
@@ -687,13 +691,13 @@ function EmployeesPage() {
         <div className="flex justify-center py-12"><Loader2 className="size-6 animate-spin text-primary" /></div>
       ) : employeesQuery.isError ? (
         <Card className="card-elevated p-6 text-center space-y-3">
-          <div className="text-destructive font-medium">שגיאה בטעינת רשימת העובדים</div>
-          <div className="text-sm text-muted-foreground">{(employeesQuery.error as Error)?.message ?? "לא ניתן לטעון נתונים"}</div>
-          <Button variant="outline" onClick={() => employeesQuery.refetch()}>נסה שוב</Button>
+          <div className="text-destructive font-medium">{t("employeesPage.loadError")}</div>
+          <div className="text-sm text-muted-foreground">{(employeesQuery.error as Error)?.message ?? t("employeesPage.loadFailed")}</div>
+          <Button variant="outline" onClick={() => employeesQuery.refetch()}>{t("employeesPage.retry")}</Button>
         </Card>
       ) : filtered.length === 0 ? (
         <Card className="card-elevated p-10 text-center text-muted-foreground">
-          לא נמצאו עובדים
+          {t("employeesPage.noEmployees")}
         </Card>
       ) : (
 
@@ -779,6 +783,7 @@ function AvatarPicker({
   onFileSelected: (file: File) => void;
   onCleared?: () => void;
 }) {
+  const { t } = useTranslation();
   const inputRef = useRef<HTMLInputElement>(null);
   const [preview, setPreview] = useState<string | null>(initialUrl);
 
@@ -793,7 +798,7 @@ function AvatarPicker({
       </div>
       <div className="flex flex-wrap gap-2">
         <Button type="button" variant="outline" size="sm" onClick={() => inputRef.current?.click()}>
-          {preview ? "החלפת תמונה" : "העלאת תמונה"}
+          {preview ? t("employeesPage.changePhoto") : t("employeesPage.uploadPhoto")}
         </Button>
         {preview && onCleared && (
           <Button
@@ -819,7 +824,7 @@ function AvatarPicker({
           const f = e.target.files?.[0];
           if (!f) return;
           if (f.size > 5 * 1024 * 1024) {
-            toast.error("הקובץ גדול מדי (מקסימום 5MB)");
+            toast.error(t("employeesPage.fileTooLarge"));
             return;
           }
           setPreview(URL.createObjectURL(f));
@@ -899,11 +904,11 @@ export function CreateEmployeeDialog({
   const setActiveFn = useServerFn(setEmployeeActive);
 
   const runCreate = async (forceArchived: boolean) => {
-    if (!form.department_id) throw new Error("יש לבחור מחלקה");
-    if (!/^\d{5,15}$/.test(form.id_number)) throw new Error("מספר זהות חייב להכיל 5–15 ספרות");
-    if (form.password.length < 6) throw new Error("סיסמה ראשונית של 6 תווים לפחות");
-    if (!form.first_name.trim()) throw new Error("יש למלא שם פרטי");
-    if (!form.last_name.trim()) throw new Error("יש למלא שם משפחה");
+    if (!form.department_id) throw new Error(t("employeesPage.validation.selectDepartment"));
+    if (!/^\d{5,15}$/.test(form.id_number)) throw new Error(t("employeesPage.validation.idNumberDigits"));
+    if (form.password.length < 6) throw new Error(t("employeesPage.validation.passwordMin6"));
+    if (!form.first_name.trim()) throw new Error(t("employeesPage.validation.firstNameRequired"));
+    if (!form.last_name.trim()) throw new Error(t("employeesPage.validation.lastNameRequired"));
     const res = await createFn({
       data: { ...form, job_title: form.job_title || "", avatar_url: null, force_archived: forceArchived },
     });
@@ -912,7 +917,7 @@ export function CreateEmployeeDialog({
         const path = await uploadAvatar(avatarFile, res.id);
         await supabase.from("profiles").update({ avatar_url: path }).eq("id", res.id);
       } catch (e: any) {
-        toast.error("העובד נוצר אך העלאת התמונה נכשלה: " + (e?.message ?? ""));
+        toast.error(t("employeesPage.avatarUploadFailed", { message: e?.message ?? "" }));
       }
     }
   };
@@ -920,7 +925,7 @@ export function CreateEmployeeDialog({
   const mutation = useMutation({
     mutationFn: () => runCreate(false),
     onSuccess: () => {
-      toast.success("העובד נוצר. סיסמה ראשונית — העובד יחויב להחליפה בכניסה הראשונה.");
+      toast.success(t("employeesPage.createSuccess"));
       qc.invalidateQueries({ queryKey: ["employees"] });
       qc.invalidateQueries({ queryKey: ["all-roles"] });
       qc.invalidateQueries({ queryKey: ["departments"] });
@@ -929,7 +934,7 @@ export function CreateEmployeeDialog({
       onClose();
     },
     onError: (e: any) => {
-      const msg = extractServerFnErrorMessage(e, "שגיאה ביצירת עובד");
+      const msg = extractServerFnErrorMessage(e, t("employeesPage.createError"));
       const idx = msg.indexOf("DUPLICATE_EMPLOYEE::");
       if (idx >= 0) {
         try {
@@ -955,7 +960,7 @@ export function CreateEmployeeDialog({
       if (m) {
         setDuplicate({
           id: m[1],
-          name: m[2] || "עובד",
+          name: m[2] || t("employeesPage.defaultEmployeeName"),
           job_title: "",
           department_id: null,
           department_name: null,
@@ -971,7 +976,7 @@ export function CreateEmployeeDialog({
   const forceCreateMutation = useMutation({
     mutationFn: () => runCreate(true),
     onSuccess: () => {
-      toast.success("עובד חדש נוצר בהצלחה");
+      toast.success(t("employeesPage.createSuccessShort"));
       qc.invalidateQueries({ queryKey: ["employees"] });
       qc.invalidateQueries({ queryKey: ["all-roles"] });
       qc.invalidateQueries({ queryKey: ["departments"] });
@@ -981,7 +986,7 @@ export function CreateEmployeeDialog({
       onClose();
     },
     onError: (e: any) =>
-      toast.error(translateBillingError(extractServerFnErrorMessage(e, "שגיאה ביצירת עובד"), t)),
+      toast.error(translateBillingError(extractServerFnErrorMessage(e, t("employeesPage.createError")), t)),
   });
 
 
@@ -989,7 +994,7 @@ export function CreateEmployeeDialog({
     mutationFn: async (userId: string) =>
       setActiveFn({ data: { user_id: userId, is_active: true } }),
     onSuccess: () => {
-      toast.success("העובד הופעל מחדש");
+      toast.success(t("employeesPage.reactivated"));
       qc.invalidateQueries({ queryKey: ["employees"] });
       qc.invalidateQueries({ queryKey: ["all-roles"] });
       qc.invalidateQueries({ queryKey: ["departments"] });
@@ -998,7 +1003,7 @@ export function CreateEmployeeDialog({
       setDuplicate(null);
       onClose();
     },
-    onError: (e: any) => toast.error(e?.message ?? "שגיאה בהפעלת העובד"),
+    onError: (e: any) => toast.error(e?.message ?? t("employeesPage.reactivateError")),
   });
 
 
@@ -1006,7 +1011,7 @@ export function CreateEmployeeDialog({
     <Dialog open onOpenChange={(o) => !o && onClose()}>
       <DialogContent className="max-w-lg">
         <DialogHeader>
-          <DialogTitle>הוספת עובד חדש</DialogTitle>
+          <DialogTitle>{t("employeesPage.create.title")}</DialogTitle>
         </DialogHeader>
         <form
           onSubmit={(e) => {
@@ -1020,7 +1025,7 @@ export function CreateEmployeeDialog({
           <input type="text" name="username" autoComplete="username" className="hidden" tabIndex={-1} />
           <input type="password" name="password" autoComplete="current-password" className="hidden" tabIndex={-1} />
 
-          <Field label="תמונת פרופיל (אופציונלי)">
+          <Field label={t("employeesPage.fields.profilePhotoOptional")}>
             <AvatarPicker
               initialUrl={null}
               onFileSelected={setAvatarFile}
@@ -1029,7 +1034,7 @@ export function CreateEmployeeDialog({
           </Field>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <Field label="שם פרטי">
+            <Field label={t("employeesPage.fields.firstName")}>
               <Input
                 value={form.first_name}
                 onChange={(e) => setForm({ ...form, first_name: e.target.value })}
@@ -1039,7 +1044,7 @@ export function CreateEmployeeDialog({
                 name="emp_first_name"
               />
             </Field>
-            <Field label="שם משפחה">
+            <Field label={t("employeesPage.fields.lastName")}>
               <Input
                 value={form.last_name}
                 onChange={(e) => setForm({ ...form, last_name: e.target.value })}
@@ -1049,7 +1054,7 @@ export function CreateEmployeeDialog({
                 name="emp_last_name"
               />
             </Field>
-            <Field label="מספר זהות">
+            <Field label={t("employeesPage.fields.idNumber")}>
               <Input
                 value={form.id_number}
                 onChange={(e) => setForm({ ...form, id_number: e.target.value })}
@@ -1062,13 +1067,13 @@ export function CreateEmployeeDialog({
                 name="emp_id_number"
               />
             </Field>
-            <Field label="מחלקה">
+            <Field label={t("employeesPage.fields.department")}>
               <Select
                 value={form.department_id}
                 onValueChange={(v) => setForm({ ...form, department_id: v })}
                 disabled={!!lockDepartment}
               >
-                <SelectTrigger><SelectValue placeholder="בחר מחלקה" /></SelectTrigger>
+                <SelectTrigger><SelectValue placeholder={t("employeesPage.fields.selectDepartment")} /></SelectTrigger>
                 <SelectContent>
                   {depts.map((d) => (
                     <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>
@@ -1076,7 +1081,7 @@ export function CreateEmployeeDialog({
                 </SelectContent>
               </Select>
             </Field>
-            <Field label="טלפון">
+            <Field label={t("employeesPage.fields.phone")}>
               <Input
                 value={form.phone}
                 onChange={(e) => setForm({ ...form, phone: e.target.value })}
@@ -1086,32 +1091,32 @@ export function CreateEmployeeDialog({
                 name="emp_phone_new"
               />
             </Field>
-            <Field label="הרשאה">
+            <Field label={t("employeesPage.fields.permission")}>
               <Select value={form.role} onValueChange={(v) => setForm({ ...form, role: v as AppRole })}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
                   {roleOptions.map((r) => (
-                    <SelectItem key={r} value={r}>{ROLE_LABELS[r]}</SelectItem>
+                    <SelectItem key={r} value={r}>{getRoleLabel(r)}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
             </Field>
             {canEditJobTitle && (
-              <Field label="תפקיד">
+              <Field label={t("employeesPage.fields.jobTitle")}>
                 <Select value={form.job_title || "__none__"} onValueChange={(v) => setForm({ ...form, job_title: v === "__none__" ? "" : v })}>
-                  <SelectTrigger><SelectValue placeholder="ללא תפקיד" /></SelectTrigger>
+                  <SelectTrigger><SelectValue placeholder={t("employeesPage.fields.noJobTitle")} /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="__none__">ללא תפקיד</SelectItem>
-                    {(jobTitlesQ.data ?? []).map((t) => (
-                      <SelectItem key={t.id} value={t.name}>
-                        {t.name}{t.excluded_from_headcount ? " (לא נכלל במצבת)" : ""}
+                    <SelectItem value="__none__">{t("employeesPage.fields.noJobTitle")}</SelectItem>
+                    {(jobTitlesQ.data ?? []).map((jt) => (
+                      <SelectItem key={jt.id} value={jt.name}>
+                        {jt.name}{jt.excluded_from_headcount ? t("employeesPage.fields.excludedFromHeadcount") : ""}
                       </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
               </Field>
             )}
-            <Field label="סיסמה ראשונית">
+            <Field label={t("employeesPage.fields.initialPassword")}>
               <Input
                 type="password"
                 value={form.password}
@@ -1125,12 +1130,12 @@ export function CreateEmployeeDialog({
             </Field>
           </div>
           <p className="text-xs text-muted-foreground">
-            העובד יחויב להחליף את הסיסמה הראשונית בכניסה הראשונה למערכת.
+            {t("employeesPage.create.passwordHint")}
           </p>
           <DialogFooter className="gap-2 sm:gap-2">
-            <Button type="button" variant="outline" onClick={onClose}>ביטול</Button>
+            <Button type="button" variant="outline" onClick={onClose}>{t("common.cancel")}</Button>
             <Button type="submit" disabled={mutation.isPending}>
-              {mutation.isPending ? <Loader2 className="size-4 animate-spin" /> : "צור עובד"}
+              {mutation.isPending ? <Loader2 className="size-4 animate-spin" /> : t("employeesPage.create.submit")}
             </Button>
           </DialogFooter>
         </form>
@@ -1140,25 +1145,25 @@ export function CreateEmployeeDialog({
           <AlertDialogContent>
             <AlertDialogHeader>
               <AlertDialogTitle>
-                ⚠️ {duplicate.is_active ? "עובד זה כבר רשום במערכת." : "עובד זה קיים במערכת ומסומן כלא פעיל."}
+                ⚠️ {duplicate.is_active ? t("employeesPage.duplicate.activeTitle") : t("employeesPage.duplicate.inactiveTitle")}
               </AlertDialogTitle>
               <AlertDialogDescription asChild>
                 <div className="space-y-3 text-right">
                   <p className="text-sm text-muted-foreground">
                     {duplicate.is_active
-                      ? "לא ניתן ליצור עובד נוסף עם אותו מספר זהות. להלן פרטי העובד הקיים:"
-                      : "כל הנתונים וההיסטוריה של העובד נשמרו. ניתן להפעיל אותו מחדש במקום ליצור רשומה חדשה."}
+                      ? t("employeesPage.duplicate.activeDesc")
+                      : t("employeesPage.duplicate.inactiveDesc")}
                   </p>
                   <div className="rounded-md border border-border bg-muted/40 p-3 text-sm space-y-1.5">
-                    <div>👤 <span className="text-muted-foreground">שם:</span> <strong>{duplicate.name || "—"}</strong></div>
-                    <div>💼 <span className="text-muted-foreground">תפקיד:</span> <strong>{duplicate.job_title || "—"}</strong></div>
-                    <div>🏬 <span className="text-muted-foreground">מחלקה:</span> <strong>{duplicate.department_name || "—"}</strong></div>
+                    <div>👤 <span className="text-muted-foreground">{t("employeesPage.duplicate.labelName")}</span> <strong>{duplicate.name || "—"}</strong></div>
+                    <div>💼 <span className="text-muted-foreground">{t("employeesPage.duplicate.labelJobTitle")}</span> <strong>{duplicate.job_title || "—"}</strong></div>
+                    <div>🏬 <span className="text-muted-foreground">{t("employeesPage.duplicate.labelDepartment")}</span> <strong>{duplicate.department_name || "—"}</strong></div>
                     <div>
-                      📌 <span className="text-muted-foreground">סטטוס:</span>{" "}
+                      📌 <span className="text-muted-foreground">{t("employeesPage.duplicate.labelStatus")}</span>{" "}
                       {duplicate.is_active ? (
-                        <span className="inline-flex items-center gap-1 font-semibold text-green-600">🟢 פעיל{duplicate.on_leave ? " (בחופשה)" : ""}</span>
+                        <span className="inline-flex items-center gap-1 font-semibold text-green-600">🟢 {t("employeesPage.badges.active")}{duplicate.on_leave ? t("employeesPage.badges.activeOnLeave") : ""}</span>
                       ) : (
-                        <span className="inline-flex items-center gap-1 font-semibold text-red-600">🔴 לא פעיל</span>
+                        <span className="inline-flex items-center gap-1 font-semibold text-red-600">🔴 {t("employeesPage.badges.inactive")}</span>
                       )}
                     </div>
                   </div>
@@ -1166,7 +1171,7 @@ export function CreateEmployeeDialog({
               </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter className="flex-col-reverse sm:flex-row sm:justify-end gap-2">
-              <AlertDialogCancel disabled={reactivateMutation.isPending}>❌ ביטול</AlertDialogCancel>
+              <AlertDialogCancel disabled={reactivateMutation.isPending}>{t("employeesPage.duplicate.cancel")}</AlertDialogCancel>
               {duplicate.is_active && onViewExisting && (
                 <Button
                   type="button"
@@ -1176,7 +1181,7 @@ export function CreateEmployeeDialog({
                     setDuplicate(null);
                   }}
                 >
-                  👁️ צפייה בכרטיס העובד
+                  {t("employeesPage.duplicate.viewCard")}
                 </Button>
               )}
               {onEditExisting && (
@@ -1188,7 +1193,7 @@ export function CreateEmployeeDialog({
                     setDuplicate(null);
                   }}
                 >
-                  ✏️ ערוך את פרטי העובד
+                  {t("employeesPage.duplicate.editDetails")}
                 </Button>
               )}
               {!duplicate.is_active && (
@@ -1200,7 +1205,7 @@ export function CreateEmployeeDialog({
                   }}
                   className="bg-green-600 hover:bg-green-700 text-white"
                 >
-                  {reactivateMutation.isPending ? <Loader2 className="size-4 animate-spin" /> : "✅ הפעל מחדש את העובד"}
+                  {reactivateMutation.isPending ? <Loader2 className="size-4 animate-spin" /> : t("employeesPage.duplicate.reactivate")}
                 </AlertDialogAction>
               )}
             </AlertDialogFooter>
@@ -1211,29 +1216,29 @@ export function CreateEmployeeDialog({
         <AlertDialog open onOpenChange={(o) => !o && setArchived(null)}>
           <AlertDialogContent>
             <AlertDialogHeader>
-              <AlertDialogTitle>ℹ️ עובד זה היה רשום בעבר במערכת.</AlertDialogTitle>
+              <AlertDialogTitle>{t("employeesPage.archived.title")}</AlertDialogTitle>
               <AlertDialogDescription asChild>
                 <div className="space-y-3 text-right">
                   <p className="text-sm text-muted-foreground">
-                    ניתן לשחזר את העובד הקודם עם כל הנתונים שנשמרו בארכיון, או לפתוח עבורו תקופת העסקה חדשה. ההיסטוריה הקודמת תישמר בארכיון בכל מקרה.
+                    {t("employeesPage.archived.desc")}
                   </p>
                   <div className="rounded-md border border-border bg-muted/40 p-3 text-sm space-y-1.5">
-                    <div>👤 <span className="text-muted-foreground">שם:</span> <strong>{formatEmployeeName(archived)}</strong></div>
-                    <div>💼 <span className="text-muted-foreground">תפקיד:</span> <strong>{archived.job_title || "—"}</strong></div>
-                    <div>🏬 <span className="text-muted-foreground">מחלקה:</span> <strong>{archived.department_name || "—"}</strong></div>
-                    <div>📁 <span className="text-muted-foreground">הועבר לארכיון:</span> <strong>{new Date(archived.archived_at).toLocaleString("he-IL")}</strong></div>
+                    <div>👤 <span className="text-muted-foreground">{t("employeesPage.duplicate.labelName")}</span> <strong>{formatEmployeeName(archived)}</strong></div>
+                    <div>💼 <span className="text-muted-foreground">{t("employeesPage.duplicate.labelJobTitle")}</span> <strong>{archived.job_title || "—"}</strong></div>
+                    <div>🏬 <span className="text-muted-foreground">{t("employeesPage.duplicate.labelDepartment")}</span> <strong>{archived.department_name || "—"}</strong></div>
+                    <div>📁 <span className="text-muted-foreground">{t("employeesPage.archived.archivedAt")}</span> <strong>{new Date(archived.archived_at).toLocaleString("he-IL")}</strong></div>
                   </div>
                 </div>
               </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter className="flex-col-reverse sm:flex-row sm:justify-end gap-2">
-              <AlertDialogCancel disabled={forceCreateMutation.isPending}>❌ ביטול</AlertDialogCancel>
+              <AlertDialogCancel disabled={forceCreateMutation.isPending}>{t("employeesPage.duplicate.cancel")}</AlertDialogCancel>
               <Button
                 type="button"
                 variant="outline"
                 onClick={() => setViewingArchive(archived)}
               >
-                👁️ הצג נתוני הארכיון
+                {t("employeesPage.archived.viewArchive")}
               </Button>
               <Button
                 type="button"
@@ -1257,7 +1262,7 @@ export function CreateEmployeeDialog({
                   setTimeout(() => forceCreateMutation.mutate(), 0);
                 }}
               >
-                ♻️ שחזר את העובד הקודם
+                {t("employeesPage.archived.restore")}
               </Button>
               <AlertDialogAction
                 disabled={forceCreateMutation.isPending}
@@ -1268,7 +1273,7 @@ export function CreateEmployeeDialog({
                   forceCreateMutation.mutate();
                 }}
               >
-                {forceCreateMutation.isPending ? <Loader2 className="size-4 animate-spin" /> : "🆕 פתח העסקה חדשה"}
+                {forceCreateMutation.isPending ? <Loader2 className="size-4 animate-spin" /> : t("employeesPage.archived.newEmployment")}
               </AlertDialogAction>
             </AlertDialogFooter>
           </AlertDialogContent>
@@ -1279,19 +1284,19 @@ export function CreateEmployeeDialog({
         <Dialog open onOpenChange={(o) => !o && setViewingArchive(null)}>
           <DialogContent className="max-w-md">
             <DialogHeader>
-              <DialogTitle>📁 נתוני ארכיון (לצפייה בלבד)</DialogTitle>
+              <DialogTitle>{t("employeesPage.archived.archiveViewTitle")}</DialogTitle>
             </DialogHeader>
             <div className="space-y-2 text-sm">
-              <div>👤 <span className="text-muted-foreground">שם:</span> <strong>{formatEmployeeName(viewingArchive)}</strong></div>
-              <div>💼 <span className="text-muted-foreground">תפקיד:</span> <strong>{viewingArchive.job_title || "—"}</strong></div>
-              <div>🏬 <span className="text-muted-foreground">מחלקה:</span> <strong>{viewingArchive.department_name || "—"}</strong></div>
+              <div>👤 <span className="text-muted-foreground">{t("employeesPage.duplicate.labelName")}</span> <strong>{formatEmployeeName(viewingArchive)}</strong></div>
+              <div>💼 <span className="text-muted-foreground">{t("employeesPage.duplicate.labelJobTitle")}</span> <strong>{viewingArchive.job_title || "—"}</strong></div>
+              <div>🏬 <span className="text-muted-foreground">{t("employeesPage.duplicate.labelDepartment")}</span> <strong>{viewingArchive.department_name || "—"}</strong></div>
               {viewingArchive.deactivated_at && (
-                <div>🔴 <span className="text-muted-foreground">הושבת:</span> <strong>{new Date(viewingArchive.deactivated_at).toLocaleString("he-IL")}</strong></div>
+                <div>🔴 <span className="text-muted-foreground">{t("employeesPage.archived.deactivatedAt")}</span> <strong>{new Date(viewingArchive.deactivated_at).toLocaleString("he-IL")}</strong></div>
               )}
-              <div>📁 <span className="text-muted-foreground">הועבר לארכיון:</span> <strong>{new Date(viewingArchive.archived_at).toLocaleString("he-IL")}</strong></div>
+              <div>📁 <span className="text-muted-foreground">{t("employeesPage.archived.archivedAt")}</span> <strong>{new Date(viewingArchive.archived_at).toLocaleString("he-IL")}</strong></div>
             </div>
             <DialogFooter>
-              <Button type="button" variant="outline" onClick={() => setViewingArchive(null)}>סגור</Button>
+              <Button type="button" variant="outline" onClick={() => setViewingArchive(null)}>{t("common.close")}</Button>
             </DialogFooter>
           </DialogContent>
         </Dialog>
@@ -1330,6 +1335,7 @@ function EmployeeRow({
   canDelete: boolean;
   canReactivate: boolean;
 }) {
+  const { t } = useTranslation();
   // Main admin override: final deletion is available immediately for any employee except self.
   const canFinalDelete = canDelete;
 
@@ -1348,10 +1354,10 @@ function EmployeeRow({
             <p className="font-semibold truncate">
               {formatEmployeeName(emp)}
               <span className="text-muted-foreground font-normal mx-1.5">·</span>
-              <span className="font-medium">{deptName ?? "ללא מחלקה"}</span>
+              <span className="font-medium">{deptName ?? t("employeesPage.noDepartment")}</span>
             </p>
-            {!emp.is_active && <Badge variant="destructive" className="rounded-full text-xs">לא פעיל</Badge>}
-            {isEmployeeCurrentlyOnLeave(emp) && <Badge variant="secondary" className="rounded-full text-xs">בחופש</Badge>}
+            {!emp.is_active && <Badge variant="destructive" className="rounded-full text-xs">{t("employeesPage.badges.inactive")}</Badge>}
+            {isEmployeeCurrentlyOnLeave(emp) && <Badge variant="secondary" className="rounded-full text-xs">{t("employeesPage.badges.onLeave")}</Badge>}
           </div>
           {isEmployeeCurrentlyOnLeave(emp) && formatLeaveDateRange(emp.leave_start_date, emp.leave_end_date) && (
             <p className="text-xs text-muted-foreground mt-0.5">
@@ -1367,7 +1373,7 @@ function EmployeeRow({
           {roles.length > 0 && (
             <div className="flex flex-wrap gap-1 mt-2">
               {roles.map((r) => (
-                <Badge key={r} variant="secondary" className="rounded-full text-xs">{ROLE_LABELS[r]}</Badge>
+                <Badge key={r} variant="secondary" className="rounded-full text-xs">{getRoleLabel(r)}</Badge>
               ))}
             </div>
           )}
@@ -1380,28 +1386,28 @@ function EmployeeRow({
               className="gap-1.5 bg-green-600 hover:bg-green-700 text-white"
               onClick={onReactivate}
               disabled={reactivating}
-              aria-label="הפעל עובד"
+              aria-label={t("employeesPage.row.reactivateAria")}
             >
               {reactivating ? <Loader2 className="size-4 animate-spin" /> : <Power className="size-4" />}
-              <span className="hidden sm:inline">✅ הפעל עובד</span>
+              <span className="hidden sm:inline">{t("employeesPage.row.reactivate")}</span>
             </Button>
           )}
           {canResetPassword && (
 
-            <Button variant="ghost" size="sm" className="gap-1.5" onClick={onResetPassword} aria-label="איפוס סיסמה">
+            <Button variant="ghost" size="sm" className="gap-1.5" onClick={onResetPassword} aria-label={t("employeesPage.row.resetPasswordAria")}>
               <KeyRound className="size-4" />
-              <span className="hidden sm:inline">איפוס סיסמה</span>
+              <span className="hidden sm:inline">{t("employeesPage.row.resetPassword")}</span>
             </Button>
           )}
           {canEdit && (
-            <Button variant="ghost" size="icon" onClick={onEdit} aria-label="עריכה">
+            <Button variant="ghost" size="icon" onClick={onEdit} aria-label={t("employeesPage.row.editAria")}>
               <Pencil className="size-4" />
             </Button>
           )}
           {canFinalDelete && (
-            <Button variant="ghost" size="sm" className="gap-1.5 text-destructive hover:text-destructive hover:bg-destructive/10" onClick={onDelete} aria-label="מחיקה סופית">
+            <Button variant="ghost" size="sm" className="gap-1.5 text-destructive hover:text-destructive hover:bg-destructive/10" onClick={onDelete} aria-label={t("employeesPage.row.deleteAria")}>
               <Trash2 className="size-4" />
-              <span>מחיקה מלאה</span>
+              <span>{t("employeesPage.row.fullDelete")}</span>
             </Button>
           )}
         </div>
@@ -1412,6 +1418,7 @@ function EmployeeRow({
 
 
 function DeleteEmployeeDialog({ employee, onClose }: { employee: ProfileRow; onClose: () => void }) {
+  const { t } = useTranslation();
   const qc = useQueryClient();
   const deleteFn = useServerFn(deleteEmployee);
   const mutation = useMutation({
@@ -1419,7 +1426,7 @@ function DeleteEmployeeDialog({ employee, onClose }: { employee: ProfileRow; onC
       await deleteFn({ data: { user_id: employee.id } });
     },
     onSuccess: () => {
-      toast.success("העובד נמחק לצמיתות והוסר מהמערכת");
+      toast.success(t("employeesPage.deleted"));
       qc.invalidateQueries({ queryKey: ["employees"] });
       qc.invalidateQueries({ queryKey: ["all-roles"] });
       qc.invalidateQueries({ queryKey: ["departments"] });
@@ -1427,24 +1434,24 @@ function DeleteEmployeeDialog({ employee, onClose }: { employee: ProfileRow; onC
       qc.invalidateQueries({ queryKey: ["dashboard", "employees-total", "active"] });
       onClose();
     },
-    onError: (e: any) => toast.error(e?.message ?? "שגיאה במחיקת העובד"),
+    onError: (e: any) => toast.error(e?.message ?? t("employeesPage.deleteError")),
   });
 
   return (
     <AlertDialog open onOpenChange={(o) => !o && !mutation.isPending && onClose()}>
       <AlertDialogContent>
         <AlertDialogHeader>
-          <AlertDialogTitle>מחיקה מלאה — {formatEmployeeName(employee)}</AlertDialogTitle>
+          <AlertDialogTitle>{t("employeesPage.delete.title", { name: formatEmployeeName(employee) })}</AlertDialogTitle>
           <AlertDialogDescription asChild>
             <div className="space-y-2 text-right">
               <p>
-                האם אתה בטוח שברצונך למחוק את העובד לצמיתות? פעולה זו אינה ניתנת לביטול.
+                {t("employeesPage.delete.confirm")}
               </p>
             </div>
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
-          <AlertDialogCancel disabled={mutation.isPending}>ביטול</AlertDialogCancel>
+          <AlertDialogCancel disabled={mutation.isPending}>{t("common.cancel")}</AlertDialogCancel>
           <AlertDialogAction
             disabled={mutation.isPending}
             onClick={(e) => {
@@ -1453,7 +1460,7 @@ function DeleteEmployeeDialog({ employee, onClose }: { employee: ProfileRow; onC
             }}
             className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
           >
-            {mutation.isPending ? <Loader2 className="size-4 animate-spin" /> : "מחק עובד"}
+            {mutation.isPending ? <Loader2 className="size-4 animate-spin" /> : t("employeesPage.delete.submit")}
           </AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>
@@ -1463,28 +1470,29 @@ function DeleteEmployeeDialog({ employee, onClose }: { employee: ProfileRow; onC
 
 
 function ResetPasswordDialog({ employee, onClose }: { employee: ProfileRow; onClose: () => void }) {
+  const { t } = useTranslation();
   const resetFn = useServerFn(resetEmployeePassword);
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
 
   const mutation = useMutation({
     mutationFn: async () => {
-      if (password.length < 6) throw new Error("סיסמה חייבת להכיל לפחות 6 תווים");
-      if (password !== confirm) throw new Error("הסיסמאות אינן תואמות");
+      if (password.length < 6) throw new Error(t("employeesPage.validation.passwordMin6Reset"));
+      if (password !== confirm) throw new Error(t("employeesPage.validation.passwordsMismatch"));
       await resetFn({ data: { user_id: employee.id, password } });
     },
     onSuccess: () => {
-      toast.success("הסיסמה אופסה. העובד יכול להתחבר עם הסיסמה החדשה.");
+      toast.success(t("employeesPage.resetPasswordSuccess"));
       onClose();
     },
-    onError: (e: any) => toast.error(e?.message ?? "שגיאה באיפוס הסיסמה"),
+    onError: (e: any) => toast.error(e?.message ?? t("employeesPage.resetPasswordError")),
   });
 
   return (
     <Dialog open onOpenChange={(o) => !o && onClose()}>
       <DialogContent className="max-w-md">
         <DialogHeader>
-          <DialogTitle>איפוס סיסמה — {formatEmployeeName(employee)}</DialogTitle>
+          <DialogTitle>{t("employeesPage.resetPassword.title", { name: formatEmployeeName(employee) })}</DialogTitle>
         </DialogHeader>
         <form
           onSubmit={(e) => {
@@ -1497,7 +1505,7 @@ function ResetPasswordDialog({ employee, onClose }: { employee: ProfileRow; onCl
           <input type="text" name="username" autoComplete="username" className="hidden" tabIndex={-1} />
           <input type="password" name="password" autoComplete="current-password" className="hidden" tabIndex={-1} />
 
-          <Field label="סיסמה חדשה">
+          <Field label={t("employeesPage.fields.newPassword")}>
             <Input
               type="password"
               value={password}
@@ -1509,7 +1517,7 @@ function ResetPasswordDialog({ employee, onClose }: { employee: ProfileRow; onCl
               name="reset_new_password"
             />
           </Field>
-          <Field label="אימות סיסמה">
+          <Field label={t("employeesPage.fields.confirmPassword")}>
             <Input
               type="password"
               value={confirm}
@@ -1522,12 +1530,12 @@ function ResetPasswordDialog({ employee, onClose }: { employee: ProfileRow; onCl
             />
           </Field>
           <p className="text-xs text-muted-foreground">
-            הסיסמה תישמר מיד והעובד יוכל להתחבר איתה — אין צורך בקישור או בתהליך נוסף.
+            {t("employeesPage.resetPassword.hint")}
           </p>
           <DialogFooter className="gap-2 sm:gap-2">
-            <Button type="button" variant="outline" onClick={onClose}>ביטול</Button>
+            <Button type="button" variant="outline" onClick={onClose}>{t("common.cancel")}</Button>
             <Button type="submit" disabled={mutation.isPending}>
-              {mutation.isPending ? <Loader2 className="size-4 animate-spin" /> : "אפס סיסמה"}
+              {mutation.isPending ? <Loader2 className="size-4 animate-spin" /> : t("employeesPage.resetPassword.submit")}
             </Button>
           </DialogFooter>
         </form>
@@ -1557,6 +1565,7 @@ function EditEmployeeDialog({
   onClose: () => void;
   currentUserRoles?: AppRole[];
 }) {
+  const { t } = useTranslation();
   const qc = useQueryClient();
   const updateFn = useServerFn(updateEmployee);
   const jobTitlesQ = useJobTitles();
@@ -1584,14 +1593,14 @@ function EditEmployeeDialog({
 
   const mutation = useMutation({
     mutationFn: async () => {
-      if (!form.department_id) throw new Error("יש לבחור מחלקה");
+      if (!form.department_id) throw new Error(t("employeesPage.validation.selectDepartment"));
       const selected = depts.find((d) => d.id === form.department_id);
-      if (!selected) throw new Error("מחלקה לא נמצאה");
+      if (!selected) throw new Error(t("employeesPage.validation.departmentNotFound"));
       if (form.on_leave && (!form.leave_start_date || !form.leave_end_date)) {
-        throw new Error("יש להזין תאריך התחלה וסיום לחופשה");
+        throw new Error(t("employeesPage.validation.leaveDatesRequired"));
       }
       if (form.on_leave && !form.leave_type_code) {
-        throw new Error("יש לבחור סוג חופשה (רגילה או מחלה)");
+        throw new Error(t("employeesPage.validation.leaveTypeRequired"));
       }
       if (
         form.on_leave &&
@@ -1599,7 +1608,7 @@ function EditEmployeeDialog({
         form.leave_start_date &&
         form.leave_end_date < form.leave_start_date
       ) {
-        throw new Error("תאריך סיום החופשה חייב להיות אחרי תאריך ההתחלה");
+        throw new Error(t("employeesPage.validation.leaveEndAfterStart"));
       }
 
       let avatar_url: string | null = form.avatar_url;
@@ -1634,7 +1643,7 @@ function EditEmployeeDialog({
       });
     },
     onSuccess: () => {
-      toast.success("העובד עודכן");
+      toast.success(t("employeesPage.updated"));
       qc.invalidateQueries({ queryKey: ["employees"] });
       qc.invalidateQueries({ queryKey: ["all-roles"] });
       qc.invalidateQueries({ queryKey: ["departments"] });
@@ -1650,7 +1659,7 @@ function EditEmployeeDialog({
       onClose();
     },
     onError: (e: any) => {
-      toast.error(e?.message ?? "שגיאה בעדכון");
+      toast.error(e?.message ?? t("employeesPage.updateError"));
     },
   });
 
@@ -1658,7 +1667,7 @@ function EditEmployeeDialog({
     <Dialog open onOpenChange={(o) => !o && onClose()}>
       <DialogContent className="max-w-lg max-md:top-4 max-md:translate-y-0 overflow-x-hidden">
         <DialogHeader>
-          <DialogTitle>עריכת עובד</DialogTitle>
+          <DialogTitle>{t("employeesPage.edit.title")}</DialogTitle>
         </DialogHeader>
         <form
           onSubmit={(e) => {
@@ -1668,7 +1677,7 @@ function EditEmployeeDialog({
           className="space-y-4 min-w-0"
           autoComplete="off"
         >
-          <Field label="תמונת פרופיל">
+          <Field label={t("employeesPage.fields.profilePhoto")}>
             <AvatarPicker
               initialUrl={avatarUrlFor(form.avatar_url)}
               onFileSelected={(f) => {
@@ -1683,22 +1692,22 @@ function EditEmployeeDialog({
           </Field>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3 min-w-0">
-            <Field label="שם פרטי">
+            <Field label={t("employeesPage.fields.firstName")}>
               <Input value={form.first_name} onChange={(e) => setForm({ ...form, first_name: e.target.value })} required autoComplete="off" maxLength={50} />
             </Field>
-            <Field label="שם משפחה">
+            <Field label={t("employeesPage.fields.lastName")}>
               <Input value={form.last_name} onChange={(e) => setForm({ ...form, last_name: e.target.value })} required autoComplete="off" maxLength={50} />
             </Field>
-            <Field label="מספר זהות">
+            <Field label={t("employeesPage.fields.idNumber")}>
               <Input value={form.id_number} onChange={(e) => setForm({ ...form, id_number: e.target.value })} dir="ltr" autoComplete="off" />
             </Field>
-            <Field label="טלפון">
+            <Field label={t("employeesPage.fields.phone")}>
               <Input value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} dir="ltr" autoComplete="off" />
               <ContactActions phone={form.phone} className="mt-2" />
             </Field>
-            <Field label="מחלקה">
+            <Field label={t("employeesPage.fields.department")}>
               <Select value={form.department_id} onValueChange={(v) => setForm({ ...form, department_id: v })}>
-                <SelectTrigger><SelectValue placeholder="בחר מחלקה" /></SelectTrigger>
+                <SelectTrigger><SelectValue placeholder={t("employeesPage.fields.selectDepartment")} /></SelectTrigger>
                 <SelectContent>
                   {depts.map((d) => (
                     <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>
@@ -1707,14 +1716,14 @@ function EditEmployeeDialog({
               </Select>
             </Field>
             {canEditJobTitle && (
-              <Field label="תפקיד">
+              <Field label={t("employeesPage.fields.jobTitle")}>
                 <Select value={form.job_title || "__none__"} onValueChange={(v) => setForm({ ...form, job_title: v === "__none__" ? "" : v })}>
-                  <SelectTrigger><SelectValue placeholder="ללא תפקיד" /></SelectTrigger>
+                  <SelectTrigger><SelectValue placeholder={t("employeesPage.fields.noJobTitle")} /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="__none__">ללא תפקיד</SelectItem>
-                    {(jobTitlesQ.data ?? []).map((t) => (
-                      <SelectItem key={t.id} value={t.name}>
-                        {t.name}{t.excluded_from_headcount ? " (לא נכלל במצבת)" : ""}
+                    <SelectItem value="__none__">{t("employeesPage.fields.noJobTitle")}</SelectItem>
+                    {(jobTitlesQ.data ?? []).map((jt) => (
+                      <SelectItem key={jt.id} value={jt.name}>
+                        {jt.name}{jt.excluded_from_headcount ? t("employeesPage.fields.excludedFromHeadcount") : ""}
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -1722,12 +1731,12 @@ function EditEmployeeDialog({
               </Field>
             )}
             {canEditRoles && (
-              <Field label="הרשאה">
+              <Field label={t("employeesPage.fields.permission")}>
                 <Select value={form.role} onValueChange={(v) => setForm({ ...form, role: v as AppRole })}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
                     {roleOptions.map((r) => (
-                      <SelectItem key={r} value={r}>{ROLE_LABELS[r]}</SelectItem>
+                      <SelectItem key={r} value={r}>{getRoleLabel(r)}</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
@@ -1737,9 +1746,9 @@ function EditEmployeeDialog({
 
           <div className="flex items-center justify-between rounded-lg border border-border p-3">
             <div>
-              <p className="text-sm font-medium">סטטוס</p>
+              <p className="text-sm font-medium">{t("employeesPage.fields.status")}</p>
               <p className="text-xs text-muted-foreground">
-                {form.is_active ? "העובד פעיל במערכת" : "העובד אינו פעיל"}
+                {form.is_active ? t("employeesPage.status.activeInSystem") : t("employeesPage.status.inactiveInSystem")}
               </p>
             </div>
             <Switch
@@ -1750,9 +1759,9 @@ function EditEmployeeDialog({
 
           <div className="flex items-center justify-between rounded-lg border border-border p-3">
             <div>
-              <p className="text-sm font-medium">בחופש</p>
+              <p className="text-sm font-medium">{t("employeesPage.fields.onLeave")}</p>
               <p className="text-xs text-muted-foreground">
-                {form.on_leave ? "העובד נמצא כעת בחופש" : "העובד אינו בחופש"}
+                {form.on_leave ? t("employeesPage.status.onLeaveNow") : t("employeesPage.status.notOnLeave")}
               </p>
             </div>
             <Switch
@@ -1772,7 +1781,7 @@ function EditEmployeeDialog({
           {form.on_leave && (
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 rounded-lg border border-border p-3">
               <div className="space-y-1.5 sm:col-span-2">
-                <Label>סוג חופשה</Label>
+                <Label>{t("employeesPage.fields.leaveType")}</Label>
                 <Select
                   value={form.leave_type_code || "regular"}
                   onValueChange={(v) =>
@@ -1780,23 +1789,23 @@ function EditEmployeeDialog({
                   }
                 >
                   <SelectTrigger>
-                    <SelectValue placeholder="בחרו סוג" />
+                    <SelectValue placeholder={t("employeesPage.fields.selectLeaveType")} />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="regular">חופש רגיל</SelectItem>
-                    <SelectItem value="sick">חופש מחלה</SelectItem>
+                    <SelectItem value="regular">{t("employeesPage.leaveTypes.regular")}</SelectItem>
+                    <SelectItem value="sick">{t("employeesPage.leaveTypes.sick")}</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
               <div className="space-y-1.5">
-                <Label htmlFor="leave_start">תאריך התחלת חופשה</Label>
+                <Label htmlFor="leave_start">{t("employeesPage.fields.leaveStart")}</Label>
                 <HebrewDateInput
                   value={form.leave_start_date}
                   onChange={(v) => setForm({ ...form, leave_start_date: v })}
                 />
               </div>
               <div className="space-y-1.5">
-                <Label htmlFor="leave_end">תאריך סיום חופשה</Label>
+                <Label htmlFor="leave_end">{t("employeesPage.fields.leaveEnd")}</Label>
                 <HebrewDateInput
                   value={form.leave_end_date}
                   min={form.leave_start_date || undefined}
@@ -1804,7 +1813,7 @@ function EditEmployeeDialog({
                 />
               </div>
               <p className="text-xs text-muted-foreground sm:col-span-2">
-                בימים אלו הסידור יסומן אוטומטית כ«חופש רגיל» או «חופש מחלה» לפי הסוג שנבחר.
+                {t("employeesPage.edit.leaveScheduleHint")}
               </p>
             </div>
           )}
@@ -1819,13 +1828,13 @@ function EditEmployeeDialog({
                 disabled={mutation.isPending}
               >
                 <Trash2 className="size-4" />
-                מחק עובד
+                {t("employeesPage.edit.deleteEmployee")}
               </Button>
             ) : <span />}
             <div className="flex gap-2">
-              <Button type="button" variant="outline" onClick={onClose}>ביטול</Button>
+              <Button type="button" variant="outline" onClick={onClose}>{t("common.cancel")}</Button>
               <Button type="submit" disabled={mutation.isPending}>
-                {mutation.isPending ? <Loader2 className="size-4 animate-spin" /> : "שמירה"}
+                {mutation.isPending ? <Loader2 className="size-4 animate-spin" /> : t("employeesPage.edit.save")}
               </Button>
             </div>
           </DialogFooter>

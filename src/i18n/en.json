@@ -319,6 +319,8 @@
     "markAllRead": "Mark all as read",
     "noNewNotifs": "No new notifications",
     "minutesShort": "min",
+    "startedAtShort": "Started at {{time}}",
+    "onBreakMeta": "🏬 {{dept}} · ☕ {{type}} · {{started}} · {{expectedReturn}}",
     "departmentColleagues": "Department colleagues",
     "noColleagues": "No other colleagues in this department",
     "colleagueOnLeave": "On leave",
@@ -1542,5 +1544,724 @@
     "archived": "Archived",
     "makeActive": "Set as active",
     "selectActiveCompany": "Select active company"
+  },
+  "employeesPage": {
+    "title": "Manage Employees",
+    "noAccessTitle": "No permission",
+    "noAccessDesc": "This page is available to managers and department heads.",
+    "departmentLabel": "Department: {{name}}",
+    "headerSubtitle": "{{shown}} of {{total}} employees · {{filter}}{{deptSuffix}}",
+    "exportEmployees": "Export employees",
+    "addEmployee": "Add employee",
+    "deptHead": "👤 Department head",
+    "searchPlaceholder": "Search by name, ID, phone…",
+    "allDepartments": "All departments",
+    "loadError": "Failed to load employee list",
+    "loadFailed": "Could not load data",
+    "retry": "Try again",
+    "noEmployees": "No employees found",
+    "noDepartment": "No department",
+    "changePhoto": "Change photo",
+    "uploadPhoto": "Upload photo",
+    "fileTooLarge": "File is too large (max 5MB)",
+    "reactivated": "Employee reactivated",
+    "reactivateError": "Failed to reactivate employee",
+    "createError": "Failed to create employee",
+    "createSuccess": "Employee created. Initial password — employee must change it on first login.",
+    "createSuccessShort": "New employee created successfully",
+    "avatarUploadFailed": "Employee created but photo upload failed: {{message}}",
+    "updated": "Employee updated",
+    "updateError": "Update failed",
+    "deleted": "Employee permanently deleted and removed from the system",
+    "deleteError": "Failed to delete employee",
+    "resetPasswordSuccess": "Password reset. Employee can sign in with the new password.",
+    "resetPasswordError": "Failed to reset password",
+    "defaultEmployeeName": "Employee",
+    "filters": {
+      "all": "👥 All employees",
+      "active": "🟢 Active employees",
+      "inactive": "🔴 Inactive employees",
+      "on_leave": "🏖️ On leave",
+      "on_break": "☕ On break",
+      "managers": "👔 Managers",
+      "workers": "👤 Employees"
+    },
+    "stats": {
+      "workers": "Employees",
+      "managers": "Managers",
+      "active": "Active employees",
+      "onLeave": "On leave",
+      "inactive": "Inactive",
+      "deptEmployees": "Department employees"
+    },
+    "badges": {
+      "onLeave": "On leave",
+      "inactive": "Inactive",
+      "active": "Active",
+      "activeOnLeave": " (on leave)",
+      "employeesCount": "Employees: {{count}}",
+      "activeCount": "Active: {{count}}",
+      "onLeaveCount": "On leave: {{count}}"
+    },
+    "csv": {
+      "name": "Name",
+      "department": "Department",
+      "jobTitle": "Job title",
+      "status": "Status",
+      "idNumber": "ID",
+      "phone": "Phone",
+      "active": "Active",
+      "inactive": "Inactive"
+    },
+    "fields": {
+      "profilePhotoOptional": "Profile photo (optional)",
+      "profilePhoto": "Profile photo",
+      "firstName": "First name",
+      "lastName": "Last name",
+      "idNumber": "ID number",
+      "department": "Department",
+      "phone": "Phone",
+      "permission": "Permission",
+      "jobTitle": "Job title",
+      "initialPassword": "Initial password",
+      "newPassword": "New password",
+      "confirmPassword": "Confirm password",
+      "selectDepartment": "Select department",
+      "noJobTitle": "No job title",
+      "excludedFromHeadcount": " (excluded from headcount)",
+      "status": "Status",
+      "onLeave": "On leave",
+      "leaveType": "Leave type",
+      "leaveStart": "Leave start date",
+      "leaveEnd": "Leave end date",
+      "selectLeaveType": "Select type"
+    },
+    "status": {
+      "activeInSystem": "Employee is active in the system",
+      "inactiveInSystem": "Employee is inactive",
+      "onLeaveNow": "Employee is currently on leave",
+      "notOnLeave": "Employee is not on leave"
+    },
+    "leaveTypes": {
+      "regular": "Regular leave",
+      "sick": "Sick leave"
+    },
+    "create": {
+      "title": "Add new employee",
+      "passwordHint": "Employee must change the initial password on first login.",
+      "submit": "Create employee"
+    },
+    "edit": {
+      "title": "Edit employee",
+      "leaveScheduleHint": "On these days the schedule will automatically show «regular leave» or «sick leave» based on the selected type.",
+      "deleteEmployee": "Delete employee",
+      "save": "Save"
+    },
+    "row": {
+      "reactivateAria": "Reactivate employee",
+      "reactivate": "✅ Reactivate employee",
+      "resetPasswordAria": "Reset password",
+      "resetPassword": "Reset password",
+      "editAria": "Edit",
+      "deleteAria": "Permanent delete",
+      "fullDelete": "Full delete"
+    },
+    "delete": {
+      "title": "Full delete — {{name}}",
+      "confirm": "Are you sure you want to permanently delete this employee? This cannot be undone.",
+      "submit": "Delete employee"
+    },
+    "resetPassword": {
+      "title": "Reset password — {{name}}",
+      "hint": "The password is saved immediately and the employee can sign in — no link or extra steps needed.",
+      "submit": "Reset password"
+    },
+    "duplicate": {
+      "activeTitle": "This employee is already registered in the system.",
+      "inactiveTitle": "This employee exists in the system and is marked inactive.",
+      "activeDesc": "Cannot create another employee with the same ID. Details of the existing employee:",
+      "inactiveDesc": "All employee data and history are preserved. You can reactivate instead of creating a new record.",
+      "viewCard": "👁️ View employee card",
+      "editDetails": "✏️ Edit employee details",
+      "reactivate": "✅ Reactivate employee",
+      "cancel": "❌ Cancel",
+      "labelName": "Name:",
+      "labelJobTitle": "Job title:",
+      "labelDepartment": "Department:",
+      "labelStatus": "Status:"
+    },
+    "archived": {
+      "title": "ℹ️ This employee was previously registered in the system.",
+      "desc": "You can restore the previous employee with all archived data, or open a new employment period. Previous history stays in the archive either way.",
+      "archivedAt": "Archived:",
+      "viewArchive": "👁️ View archive data",
+      "restore": "♻️ Restore previous employee",
+      "newEmployment": "🆕 Open new employment period",
+      "archiveViewTitle": "📁 Archive data (view only)",
+      "deactivatedAt": "Deactivated:"
+    },
+    "validation": {
+      "selectDepartment": "Select a department",
+      "idNumberDigits": "ID number must contain 5–15 digits",
+      "passwordMin6": "Initial password must be at least 6 characters",
+      "firstNameRequired": "First name is required",
+      "lastNameRequired": "Last name is required",
+      "departmentNotFound": "Department not found",
+      "leaveDatesRequired": "Enter leave start and end dates",
+      "leaveTypeRequired": "Select leave type (regular or sick)",
+      "leaveEndAfterStart": "Leave end date must be after start date",
+      "passwordMin6Reset": "Password must be at least 6 characters",
+      "passwordsMismatch": "Passwords do not match"
+    }
+  },
+  "platformSettings": {
+    "title": "Platform Settings",
+    "subtitle": "Global platform-scoped settings — via the existing Configuration Manager",
+    "platformId": "Platform ID",
+    "supportEmail": "Platform support email",
+    "whatsappNumber": "WhatsApp contact number (login screen)",
+    "whatsappPlaceholder": "0501234567 or 972501234567",
+    "whatsappHint": "Shown as a WhatsApp link at the bottom of the login screen. Leave empty to hide.",
+    "maintenanceMode": "Maintenance Mode",
+    "maintenanceHint": "Global flag only — does not block sign-in in practice at this stage",
+    "saveSettings": "Save settings",
+    "pwaIconTitle": "App install icon (PWA)",
+    "pwaIconDesc": "Only the platform owner can change this. Install name is set from the device system language (Hebrew / Arabic / English) before install and cannot be changed by users.",
+    "changeIcon": "Change icon",
+    "pwaIconFormat": "PNG / JPG / WebP · up to 5MB · converted to 512×512",
+    "invalidWhatsapp": "Invalid WhatsApp number",
+    "saveSuccess": "Platform settings saved",
+    "saveFailed": "Failed to save settings",
+    "iconUpdated": "App icon updated",
+    "iconUploadFailed": "Icon upload failed"
+  },
+  "platformHub": {
+    "title": "Platform Management",
+    "welcome": "Welcome, {{name}}",
+    "welcomeFallback": "Platform control center",
+    "pageNotFound": "Page not found",
+    "stats": {
+      "activeOwners": "Active system owners",
+      "suspended": "Suspended",
+      "primaryOwner": "Primary system owner",
+      "auditEvents30d": "Log events (30 days)",
+      "companies": "Companies on platform",
+      "branches": "Branches on platform"
+    },
+    "quick": {
+      "manageOwners": "Manage system owners",
+      "auditLog": "Platform activity log",
+      "manageCompanies": "Manage companies",
+      "manageBranches": "Manage branches"
+    },
+    "recentActivity": "Recent activity",
+    "fullLog": "Full log",
+    "noRecentActivity": "No recent activity",
+    "actor": "Actor: {{name}}",
+    "target": "Target: {{name}}",
+    "modulesSection": "Platform modules",
+    "modules": {
+      "companies": "Manage companies",
+      "branches": "Manage branches",
+      "monitoring": "Monitoring & availability",
+      "realtime": "Real-Time management",
+      "billing": "Billing & subscriptions",
+      "featureFlags": "Feature flags",
+      "analytics": "Global analytics",
+      "owners": "System owners",
+      "auditLog": "Platform activity log",
+      "notifications": "Platform notifications",
+      "settings": "Platform settings"
+    },
+    "hints": {
+      "companies": "{{count}} companies",
+      "branches": "{{count}} branches",
+      "owners": "{{count}} system owners"
+    }
+  },
+  "platformOwners": {
+    "title": "System Owners",
+    "subtitle": "Manage platform owner accounts",
+    "transferPrimary": "Transfer primary ownership",
+    "newOwner": "New system owner",
+    "searchPlaceholder": "Search by name, email, or phone…",
+    "filters": {
+      "allLevels": "All levels",
+      "primary": "Primary system owner",
+      "owner": "System owner",
+      "allStatuses": "All statuses",
+      "active": "Active",
+      "suspended": "Suspended"
+    },
+    "empty": "No system owners.",
+    "emptyFilter": "No results match the current filter.",
+    "cols": {
+      "name": "Name",
+      "email": "Email",
+      "phone": "Phone",
+      "level": "Level",
+      "status": "Status",
+      "created": "Created",
+      "lastSignIn": "Last sign-in"
+    },
+    "badges": {
+      "primaryShort": "Primary",
+      "primary": "Primary system owner",
+      "owner": "System owner",
+      "active": "Active",
+      "suspended": "Suspended"
+    },
+    "neverSignedIn": "Never signed in",
+    "actions": {
+      "editProfile": "Edit profile",
+      "suspend": "Suspend",
+      "restore": "Restore",
+      "delete": "Delete",
+      "edit": "Edit"
+    },
+    "toasts": {
+      "suspended": "System owner suspended",
+      "restored": "System owner restored",
+      "suspendFailed": "Suspend failed",
+      "restoreFailed": "Restore failed",
+      "created": "System owner created",
+      "createFailed": "Create failed",
+      "updated": "Profile updated",
+      "updateFailed": "Update failed",
+      "deleted": "System owner deleted",
+      "deleteFailed": "Delete failed",
+      "transferred": "Primary ownership transferred",
+      "transferFailed": "Transfer failed"
+    },
+    "detail": {
+      "notFound": "System owner not found",
+      "backToList": "Back to list",
+      "businessIdentity": "Business Identity",
+      "activitySummary": "Activity summary",
+      "fullLog": "Full log",
+      "noActivity": "No recorded activity",
+      "actor": "Actor",
+      "target": "Target",
+      "identity": "Identity",
+      "statusSection": "Status & sign-in",
+      "level": "Level",
+      "lastSignIn": "Last sign-in",
+      "created": "Created",
+      "capabilities": "Platform capabilities",
+      "primaryOnly": "Primary only",
+      "emailFutureHint": "Email change is a future capability — coming in the next platform management release."
+    },
+    "capabilities": {
+      "fullManagement": "Full platform management",
+      "manageOwners": "Create, suspend, and delete system owners",
+      "transferPrimary": "Transfer primary ownership",
+      "viewOwners": "View all system owners",
+      "viewAudit": "View platform activity log",
+      "crossBranch": "Cross-branch access"
+    },
+    "fields": {
+      "firstName": "First name",
+      "lastName": "Last name",
+      "email": "Email",
+      "password": "Password (min 8 characters)",
+      "phone": "Phone",
+      "idNumber": "ID"
+    },
+    "dialogs": {
+      "createTitle": "Add system owner",
+      "createDesc": "Create a new system owner account. Independent account — not tied to the signed-in user or any employee.",
+      "createSubmit": "Create",
+      "editTitle": "Edit system owner profile",
+      "editDesc": "Update system owner identity details",
+      "deleteTitle": "Delete system owner",
+      "deleteDesc": "This action cannot be undone",
+      "deleteWarning": "This permanently removes the system owner account. The primary owner cannot be deleted.",
+      "deleteConfirm": "To confirm, type the system owner's email:",
+      "deleteSubmit": "Delete permanently",
+      "transferTitle": "Transfer primary ownership",
+      "transferDesc": "Transfer the \"Primary system owner\" role to another owner",
+      "transferIrreversible": "Irreversible action",
+      "transferWarning": "After confirmation, {{current}} becomes a regular owner and the selected owner becomes the primary owner with full platform authority.",
+      "transferTarget": "Transfer target",
+      "transferSelectPlaceholder": "Select system owner",
+      "transferNoEligible": "No other active system owners",
+      "transferResult": "Result: {{name}} receives primary ownership. You become a regular owner.",
+      "transferConfirmLabel": "To confirm, type the target email:",
+      "transferSubmit": "Confirm and transfer",
+      "warning": "Warning"
+    },
+    "events": {
+      "created": "System owner created",
+      "suspended": "System owner suspended",
+      "restored": "System owner restored",
+      "deleted": "System owner deleted",
+      "primaryTransferred": "Primary ownership transferred",
+      "profileUpdated": "System owner profile updated"
+    }
+  },
+  "platformNotifications": {
+    "title": "Platform Notifications",
+    "subtitle": "Push system for platform owner only — enable by event type and grant to company or branch. Disabling Push keeps the silent notification bell active.",
+    "scopeTitle": "Grant to company / branch",
+    "scopeDesc": "While no scopes exist, Push is active for all branches. After the first scope, Push is sent only to companies/branches listed here.",
+    "scopeType": "Scope type",
+    "company": "Company",
+    "branch": "Branch",
+    "selectCompany": "Select company",
+    "selectBranch": "Select branch",
+    "grantPush": "Grant Push",
+    "loadingScopes": "Loading scopes…",
+    "noScopes": "No scopes yet — Push by event type applies to all branches.",
+    "removeScopeAria": "Remove scope",
+    "eventsTitle": "Enable / disable Web Push by event",
+    "eventsDesc": "Control which events send Push notifications (within granted scopes). Silent notifications are always kept.",
+    "loadingSettings": "Loading settings…",
+    "loadError": "Failed to load settings",
+    "pushUpdated": "Push setting updated",
+    "updateFailed": "Update failed",
+    "selectCompanyError": "Select a company",
+    "selectBranchError": "Select a branch",
+    "scopeAdded": "Scope added — Push active for it",
+    "scopeAddFailed": "Failed to add scope",
+    "scopeRemoved": "Scope removed",
+    "scopeRemoveFailed": "Remove failed",
+    "groups": {
+      "schedule": "Work schedules",
+      "leave": "Leave",
+      "break": "Breaks",
+      "custody": "Equipment management",
+      "ops": "General operations"
+    }
+  },
+  "platformRealtime": {
+    "title": "Real-Time Management",
+    "subtitle": "Platform-scoped Real-Time channels — via the existing Realtime Manager. No external Realtime provider connected.",
+    "openChannel": "Open channel",
+    "channelsHeader": "Channels ({{count}}) · open: {{open}}",
+    "noChannels": "No channels yet in the current session. Open a new channel using the button above.",
+    "visibility": {
+      "public": "Public",
+      "private": "Private",
+      "system": "System"
+    },
+    "status": {
+      "closed": "Closed",
+      "open": "Open"
+    },
+    "actions": {
+      "edit": "Edit",
+      "testEvent": "Send test event",
+      "reopen": "Reopen",
+      "close": "Close",
+      "delete": "Delete"
+    },
+    "stats": {
+      "clients": "Connected clients",
+      "subscriptions": "Active subscriptions",
+      "events": "Active events",
+      "lastActivity": "Last activity"
+    },
+    "toasts": {
+      "closed": "Channel closed",
+      "reopened": "Channel reopened",
+      "testSent": "Test event sent",
+      "deleted": "Channel deleted",
+      "updated": "Channel updated",
+      "opened": "Channel opened",
+      "failed": "Operation failed"
+    },
+    "delete": {
+      "title": "Delete channel",
+      "desc": "Delete channel \"{{name}}\"? This removes all active subscriptions and the channel event history."
+    },
+    "form": {
+      "editTitle": "Edit channel — {{name}}",
+      "createTitle": "Open new channel",
+      "desc": "Platform-scoped Real-Time channel, managed via the existing Realtime Manager for the current session.",
+      "name": "Channel name *",
+      "description": "Description (optional)",
+      "visibility": "Visibility",
+      "save": "Save",
+      "open": "Open channel"
+    }
+  },
+  "platformAuditLog": {
+    "title": "Platform activity log",
+    "subtitle": "All system owner actions are recorded here",
+    "searchPlaceholder": "Search by actor or target…",
+    "allEvents": "All events",
+    "noResults": "No matching records",
+    "cols": {
+      "date": "Date",
+      "event": "Event",
+      "actor": "Actor",
+      "target": "Target",
+      "details": "Details"
+    }
+  },
+  "platformBranches": {
+    "title": "Branches",
+    "subtitleWithCompany": "Manage branches for {{name}}",
+    "subtitleDefault": "Manage company branches on the platform",
+    "assignExisting": "Assign existing branch",
+    "needCompanyFirst": "Create a company on the platform before managing branches.",
+    "manageCompanies": "Manage companies",
+    "selectCompanyHint": "Select an active company (from the switcher above) to view and manage its branches.",
+    "noBranches": "No branches are assigned to the active company yet.",
+    "noBranchesForCompany": "This company has no assigned branches yet.",
+    "assignHint": "You can assign an existing branch using the button above.",
+    "selectActiveBranch": "Select active branch",
+    "cols": {
+      "name": "Branch name",
+      "id": "ID",
+      "created": "Created",
+      "status": "Status"
+    },
+    "badges": {
+      "active": "Active",
+      "inactive": "Inactive"
+    },
+    "actions": {
+      "makeActive": "Set as active",
+      "detailsSync": "Details / sync",
+      "unassign": "Unassign"
+    },
+    "backToList": "Back to branch list",
+    "notFound": "Branch not found",
+    "branchDetail": {
+      "activeBranch": "Active branch",
+      "makeActive": "Set as active",
+      "cannotEnterInactiveCompany": "Cannot enter branch mode for an inactive or suspended company.",
+      "tabs": {
+        "dashboard": "Overview",
+        "statistics": "Statistics",
+        "settings": "Settings"
+      }
+    },
+    "stats": {
+      "branchesInCompany": "Branches in company",
+      "branchAgeDays": "Branch age (days)",
+      "company": "Company",
+      "daysUnit": "{{count}} days",
+      "address": "Address",
+      "phone": "Phone",
+      "addressPlaceholder": "Street, number, city",
+      "phonePlaceholder": "03-1234567",
+      "saveSettings": "Save settings",
+      "settingsSaved": "Branch settings saved"
+    },
+    "rows": {
+      "createdAt": "Created at",
+      "updatedAt": "Last updated",
+      "branchAge": "Branch age",
+      "branchesInCompanyTotal": "Branches in company (total)"
+    }
+  },
+  "platformBranchDialogs": {
+    "createTitle": "Assign existing branch",
+    "createDesc": "Assign an existing branch in the system to this company. The branch and its data (employees, departments, schedules, etc.) remain unchanged — only a link is created between the company and the branch.",
+    "selectPlaceholder": "Select branch to assign",
+    "noAvailable": "All existing branches in the system are already assigned to companies on the platform. Create a new branch via system branch management.",
+    "assignSubmit": "Assign branch",
+    "assignSuccess": "Branch assigned to company successfully",
+    "selectRequired": "Select an existing branch to assign.",
+    "editTitle": "Branch details — {{name}}",
+    "editDesc": "Full branch details (including employees, departments, and schedules) are managed in system branch management. Here you can view the snapshot and sync it from the latest real data.",
+    "fields": {
+      "name": "Name",
+      "code": "Code",
+      "address": "Address",
+      "status": "Status"
+    },
+    "statusActive": "Active",
+    "statusInactive": "Inactive",
+    "sourceNotFound": "Original branch not found in the system (it may have been deleted). Showing the last saved snapshot.",
+    "syncFromReal": "Sync from real branch",
+    "syncSuccess": "Branch details synced",
+    "syncFailed": "Sync failed",
+    "loadSourceFailed": "Cannot load original branch details right now.",
+    "deleteTitle": "Unassign branch",
+    "deleteDesc": "Remove the assignment of branch \"{{name}}\" from this company? This only removes the link — the branch and all its data (employees, departments, schedules, etc.) remain in the system unchanged, and can be reassigned at any time.",
+    "unassignSubmit": "Unassign",
+    "unassignSuccess": "Branch assignment removed",
+    "actionFailed": "Operation failed"
+  },
+  "platformCompanyDetail": {
+    "notFound": "Company not found",
+    "backToList": "Back to company list",
+    "tabs": {
+      "dashboard": "Overview",
+      "statistics": "Statistics",
+      "branches": "Branches",
+      "managers": "Managers",
+      "users": "Users",
+      "reports": "Reports",
+      "settings": "Settings"
+    },
+    "stats": {
+      "companiesOnPlatform": "Companies on platform",
+      "companyAgeDays": "Company age (days)",
+      "assignedBranches": "Assigned branches",
+      "companiesOnPlatformTotal": "Companies on platform (total)",
+      "createdAt": "Created at",
+      "updatedAt": "Last updated",
+      "companyAge": "Company age",
+      "daysUnit": "{{count}} days"
+    },
+    "managers": {
+      "nameLabel": "Manager name",
+      "emailLabel": "Email (optional)",
+      "namePlaceholder": "Full name",
+      "add": "Add manager",
+      "added": "Manager added to company",
+      "addFailed": "Add failed",
+      "empty": "This company has no registered managers yet. Add one using the form above."
+    },
+    "users": {
+      "title": "No user library connected to this company yet",
+      "description": "Actual users (employees) are currently managed at the individual branch scope, not at company scope. This company has {{count}} branches — manage users from each branch separately."
+    },
+    "reports": {
+      "branchesInCompany": "Branches in company",
+      "avgBranchAgeDays": "Average branch age (days)",
+      "companyAgeDays": "Company age (days)",
+      "oldestBranch": "First branch created",
+      "newestBranch": "Latest branch created"
+    },
+    "settings": {
+      "contactEmail": "Contact email",
+      "billingEnabled": "Billing enabled",
+      "billingEnabledDesc": "Whether the company is included in the platform billing cycle",
+      "saveSettings": "Save settings",
+      "settingsSaved": "Company settings saved"
+    }
+  },
+  "platformCompanyDialogs": {
+    "fields": {
+      "name": "Company name *",
+      "logoUrl": "Logo URL",
+      "companyCode": "Company code",
+      "legalName": "Legal name",
+      "taxNumber": "Tax / business ID",
+      "phone": "Phone",
+      "email": "Email",
+      "address": "Address",
+      "currency": "Currency",
+      "language": "Language",
+      "timeZone": "Time zone",
+      "status": "Company status"
+    },
+    "statusHint": "An inactive company stays visible in the list but branch mode cannot be entered for it.",
+    "create": {
+      "title": "New company",
+      "desc": "Create a new company on the platform.",
+      "submit": "Create",
+      "success": "Company created successfully",
+      "failed": "Failed to create company"
+    },
+    "edit": {
+      "title": "Edit company",
+      "desc": "Update company details.",
+      "success": "Company updated",
+      "failed": "Update failed"
+    },
+    "delete": {
+      "title": "Delete company",
+      "desc": "Delete company \"{{name}}\"? This is a soft delete — it can be restored later.",
+      "checkingBranches": "Checking assigned branches…",
+      "blocked": "Cannot delete: this company has {{count}} assigned branches. Unassign all branches (in the \"Branches\" tab) before deleting.",
+      "success": "Company deleted",
+      "failed": "Delete failed"
+    }
+  },
+  "platformCompanyActions": {
+    "ariaLabel": "Manage company",
+    "menuLabel": "Manage company",
+    "editCompany": "Edit company",
+    "manageBranches": "Manage branches",
+    "companyManagers": "Company managers",
+    "companySettings": "Company settings",
+    "deactivateCompany": "Deactivate company",
+    "activateCompany": "Activate company",
+    "restoreFromArchive": "Restore from archive",
+    "archive": "Archive",
+    "deleteCompany": "Delete company",
+    "toasts": {
+      "deactivated": "Company deactivated",
+      "activated": "Company activated",
+      "archived": "Company archived",
+      "restored": "Company restored from archive",
+      "actionFailed": "Operation failed"
+    }
+  },
+  "platformFeatureFlags": {
+    "title": "Feature Flags",
+    "subtitle": "Enable/disable flags at platform scope — via the existing Feature Flag Manager",
+    "newFlag": "New flag",
+    "searchPlaceholder": "Search by name or key",
+    "filters": {
+      "allScopes": "All scopes",
+      "allStatuses": "All statuses",
+      "enabled": "Enabled",
+      "disabled": "Disabled",
+      "archived": "Archived"
+    },
+    "sort": {
+      "name": "Name",
+      "scope": "Scope",
+      "status": "Status",
+      "updated": "Last updated"
+    },
+    "loading": "Loading…",
+    "empty": "No feature flags registered",
+    "actionSuccess": "Operation completed",
+    "system": "System",
+    "scopes": {
+      "platform": "Platform",
+      "company": "Company",
+      "branch": "Branch"
+    },
+    "details": {
+      "noDescription": "No description",
+      "created": "Created",
+      "updated": "Updated",
+      "notes": "Notes"
+    },
+    "delete": {
+      "title": "Delete flag",
+      "desc": "Delete {{name}}? This cannot be undone."
+    },
+    "dialog": {
+      "createTitle": "New flag",
+      "editTitle": "Edit flag",
+      "displayName": "Display name",
+      "key": "Key",
+      "description": "Description",
+      "scope": "Scope",
+      "notes": "Notes",
+      "saved": "Flag saved",
+      "nameKeyRequired": "Name and key are required fields."
+    }
+  },
+  "platformAnalytics": {
+    "title": "Global analytics",
+    "subtitle": "Aggregated data across the platform — companies, branches, and active users",
+    "stats": {
+      "companies": "Companies",
+      "branches": "Branches",
+      "activeSessions": "Users with active session",
+      "avgBranchesPerCompany": "Average branches per company"
+    },
+    "companiesByBranches": "Companies by branch count",
+    "loading": "Loading…",
+    "noCompanies": "No companies on the platform yet",
+    "branchCount": "{{count}} branches",
+    "oldestCompany": "Oldest company on platform",
+    "newestCompany": "Newest company on platform"
+  },
+  "platformAiRedirect": {
+    "title": "Company and branch allocations moved to billing",
+    "description": "Plan selection, AI minutes, and branch scope are managed in Billing & subscriptions. Providers, usage log, and platform settings remain here.",
+    "link": "Go to billing & subscriptions"
   }
 }

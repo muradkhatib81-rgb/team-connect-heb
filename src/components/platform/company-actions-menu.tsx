@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
+import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 import {
   Archive,
@@ -42,6 +43,7 @@ export function CompanyActionsMenu({
   company: Company;
   onDeleted?: () => void;
 }) {
+  const { t } = useTranslation();
   const { platform } = usePlatformContext();
   const { setActiveCompanyId } = useCompanyContext();
   const queryClient = useQueryClient();
@@ -68,10 +70,14 @@ export function CompanyActionsMenu({
         company.status === "active" ? "inactive" : "active",
       ),
     onSuccess: async () => {
-      toast.success(company.status === "active" ? "החברה הושבתה" : "החברה הופעלה");
+      toast.success(
+        company.status === "active"
+          ? t("platformCompanyActions.toasts.deactivated")
+          : t("platformCompanyActions.toasts.activated"),
+      );
       await invalidate();
     },
-    onError: (e: Error) => toast.error(e.message ?? "הפעולה נכשלה"),
+    onError: (e: Error) => toast.error(e.message ?? t("platformCompanyActions.toasts.actionFailed")),
   });
 
   const archiveMut = useMutation({
@@ -80,49 +86,53 @@ export function CompanyActionsMenu({
         ? companyService.unarchiveCompany(company.id)
         : companyService.archiveCompany(company.id),
     onSuccess: async () => {
-      toast.success(company.archivedAt ? "החברה שוחזרה מהארכיון" : "החברה הועברה לארכיון");
+      toast.success(
+        company.archivedAt
+          ? t("platformCompanyActions.toasts.restored")
+          : t("platformCompanyActions.toasts.archived"),
+      );
       await invalidate();
     },
-    onError: (e: Error) => toast.error(e.message ?? "הפעולה נכשלה"),
+    onError: (e: Error) => toast.error(e.message ?? t("platformCompanyActions.toasts.actionFailed")),
   });
 
   return (
     <>
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
-          <Button variant="ghost" size="icon" className="size-8" aria-label="ניהול חברה">
+          <Button variant="ghost" size="icon" className="size-8" aria-label={t("platformCompanyActions.ariaLabel")}>
             <MoreHorizontal className="size-4" />
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="w-56">
-          <DropdownMenuLabel>ניהול חברה</DropdownMenuLabel>
+          <DropdownMenuLabel>{t("platformCompanyActions.menuLabel")}</DropdownMenuLabel>
           <DropdownMenuItem onClick={() => setEditOpen(true)} className="gap-2">
             <Pencil className="size-4" />
-            ערוך חברה
+            {t("platformCompanyActions.editCompany")}
           </DropdownMenuItem>
           <DropdownMenuItem onSelect={() => goToCompanyTab("branches")} className="gap-2">
             <GitBranch className="size-4" />
-            נהל סניפים
+            {t("platformCompanyActions.manageBranches")}
           </DropdownMenuItem>
           <DropdownMenuItem onSelect={() => goToCompanyTab("managers")} className="gap-2">
             <UserCog className="size-4" />
-            מנהלי החברה
+            {t("platformCompanyActions.companyManagers")}
           </DropdownMenuItem>
           <DropdownMenuItem onSelect={() => goToCompanyTab("settings")} className="gap-2">
             <SettingsIcon className="size-4" />
-            הגדרות החברה
+            {t("platformCompanyActions.companySettings")}
           </DropdownMenuItem>
           <DropdownMenuSeparator />
           <DropdownMenuItem onClick={() => toggleStatusMut.mutate()} className="gap-2">
             {company.status === "active" ? (
               <>
                 <PowerOff className="size-4" />
-                השבת חברה
+                {t("platformCompanyActions.deactivateCompany")}
               </>
             ) : (
               <>
                 <Power className="size-4" />
-                הפעל חברה
+                {t("platformCompanyActions.activateCompany")}
               </>
             )}
           </DropdownMenuItem>
@@ -130,12 +140,12 @@ export function CompanyActionsMenu({
             {company.archivedAt ? (
               <>
                 <ArchiveRestore className="size-4" />
-                שחזור מהארכיון
+                {t("platformCompanyActions.restoreFromArchive")}
               </>
             ) : (
               <>
                 <Archive className="size-4" />
-                ארכיון
+                {t("platformCompanyActions.archive")}
               </>
             )}
           </DropdownMenuItem>
@@ -145,7 +155,7 @@ export function CompanyActionsMenu({
             className="gap-2 text-destructive focus:text-destructive"
           >
             <Trash2 className="size-4" />
-            מחק חברה
+            {t("platformCompanyActions.deleteCompany")}
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>

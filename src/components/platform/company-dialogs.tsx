@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
+import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 import { Building2, Loader2 } from "lucide-react";
 import {
@@ -38,11 +39,7 @@ import { syncBranchCompanyName } from "@/lib/branches.functions";
 import { usePlatformContext, useCompanyContext } from "@/platform";
 
 const CURRENCIES = ["ILS", "USD", "EUR", "GBP"] as const;
-const LANGUAGES: { value: string; label: string }[] = [
-  { value: "he", label: "עברית" },
-  { value: "en", label: "English" },
-  { value: "ar", label: "العربية" },
-];
+const LANGUAGE_CODES = ["he", "en", "ar"] as const;
 const TIME_ZONES = [
   "Asia/Jerusalem",
   "Europe/London",
@@ -108,10 +105,12 @@ function CompanyFormFields({
   form: CompanyFormState;
   onChange: (patch: Partial<CompanyFormState>) => void;
 }) {
+  const { t } = useTranslation();
+
   return (
     <div className="grid gap-3 sm:grid-cols-2">
       <div className="space-y-1 sm:col-span-2">
-        <Label htmlFor={`${idPrefix}-name`}>שם החברה *</Label>
+        <Label htmlFor={`${idPrefix}-name`}>{t("platformCompanyDialogs.fields.name")}</Label>
         <Input
           id={`${idPrefix}-name`}
           value={form.name}
@@ -123,7 +122,7 @@ function CompanyFormFields({
       </div>
 
       <div className="space-y-1 sm:col-span-2">
-        <Label htmlFor={`${idPrefix}-logo`}>כתובת לוגו (URL)</Label>
+        <Label htmlFor={`${idPrefix}-logo`}>{t("platformCompanyDialogs.fields.logoUrl")}</Label>
         <div className="flex items-center gap-2">
           <Avatar className="size-9 rounded-md shrink-0">
             <AvatarImage src={form.logoUrl || undefined} alt={form.name} />
@@ -144,7 +143,7 @@ function CompanyFormFields({
       </div>
 
       <div className="space-y-1">
-        <Label htmlFor={`${idPrefix}-code`}>קוד חברה</Label>
+        <Label htmlFor={`${idPrefix}-code`}>{t("platformCompanyDialogs.fields.companyCode")}</Label>
         <Input
           id={`${idPrefix}-code`}
           value={form.companyCode}
@@ -155,7 +154,7 @@ function CompanyFormFields({
         />
       </div>
       <div className="space-y-1">
-        <Label htmlFor={`${idPrefix}-legal-name`}>שם משפטי</Label>
+        <Label htmlFor={`${idPrefix}-legal-name`}>{t("platformCompanyDialogs.fields.legalName")}</Label>
         <Input
           id={`${idPrefix}-legal-name`}
           value={form.legalName}
@@ -165,7 +164,7 @@ function CompanyFormFields({
       </div>
 
       <div className="space-y-1">
-        <Label htmlFor={`${idPrefix}-tax`}>מספר עוסק / ח.פ.</Label>
+        <Label htmlFor={`${idPrefix}-tax`}>{t("platformCompanyDialogs.fields.taxNumber")}</Label>
         <Input
           id={`${idPrefix}-tax`}
           value={form.taxNumber}
@@ -175,7 +174,7 @@ function CompanyFormFields({
         />
       </div>
       <div className="space-y-1">
-        <Label htmlFor={`${idPrefix}-phone`}>טלפון</Label>
+        <Label htmlFor={`${idPrefix}-phone`}>{t("platformCompanyDialogs.fields.phone")}</Label>
         <Input
           id={`${idPrefix}-phone`}
           type="tel"
@@ -187,7 +186,7 @@ function CompanyFormFields({
       </div>
 
       <div className="space-y-1 sm:col-span-2">
-        <Label htmlFor={`${idPrefix}-email`}>אימייל</Label>
+        <Label htmlFor={`${idPrefix}-email`}>{t("platformCompanyDialogs.fields.email")}</Label>
         <Input
           id={`${idPrefix}-email`}
           type="email"
@@ -198,7 +197,7 @@ function CompanyFormFields({
         />
       </div>
       <div className="space-y-1 sm:col-span-2">
-        <Label htmlFor={`${idPrefix}-address`}>כתובת</Label>
+        <Label htmlFor={`${idPrefix}-address`}>{t("platformCompanyDialogs.fields.address")}</Label>
         <Input
           id={`${idPrefix}-address`}
           value={form.address}
@@ -208,7 +207,7 @@ function CompanyFormFields({
       </div>
 
       <div className="space-y-1">
-        <Label>מטבע</Label>
+        <Label>{t("platformCompanyDialogs.fields.currency")}</Label>
         <Select value={form.currency} onValueChange={(v) => onChange({ currency: v })}>
           <SelectTrigger>
             <SelectValue />
@@ -223,22 +222,22 @@ function CompanyFormFields({
         </Select>
       </div>
       <div className="space-y-1">
-        <Label>שפה</Label>
+        <Label>{t("platformCompanyDialogs.fields.language")}</Label>
         <Select value={form.language} onValueChange={(v) => onChange({ language: v })}>
           <SelectTrigger>
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            {LANGUAGES.map((l) => (
-              <SelectItem key={l.value} value={l.value}>
-                {l.label}
+            {LANGUAGE_CODES.map((code) => (
+              <SelectItem key={code} value={code}>
+                {t(`contentTranslation.lang.${code}`)}
               </SelectItem>
             ))}
           </SelectContent>
         </Select>
       </div>
       <div className="space-y-1 sm:col-span-2">
-        <Label>אזור זמן</Label>
+        <Label>{t("platformCompanyDialogs.fields.timeZone")}</Label>
         <Select value={form.timeZone} onValueChange={(v) => onChange({ timeZone: v })}>
           <SelectTrigger>
             <SelectValue />
@@ -265,6 +264,7 @@ export function CompanyCreateDialog({
   open: boolean;
   onOpenChange: (v: boolean) => void;
 }) {
+  const { t } = useTranslation();
   const { platform } = usePlatformContext();
   const { refresh, setActiveCompanyId } = useCompanyContext();
   const [form, setForm] = useState<CompanyFormState>(emptyForm);
@@ -272,21 +272,21 @@ export function CompanyCreateDialog({
   const mut = useMutation({
     mutationFn: () => companyService.createCompany(platform.id, form),
     onSuccess: async (company) => {
-      toast.success("החברה נוצרה בהצלחה");
+      toast.success(t("platformCompanyDialogs.create.success"));
       await refresh();
       setActiveCompanyId(company.id);
       onOpenChange(false);
       setForm(emptyForm());
     },
-    onError: (e: Error) => toast.error(e.message ?? "יצירת החברה נכשלה"),
+    onError: (e: Error) => toast.error(e.message ?? t("platformCompanyDialogs.create.failed")),
   });
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-h-[85vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>חברה חדשה</DialogTitle>
-          <DialogDescription>יצירת חברה חדשה בפלטפורמה.</DialogDescription>
+          <DialogTitle>{t("platformCompanyDialogs.create.title")}</DialogTitle>
+          <DialogDescription>{t("platformCompanyDialogs.create.desc")}</DialogDescription>
         </DialogHeader>
         <form
           onSubmit={(e) => {
@@ -302,11 +302,11 @@ export function CompanyCreateDialog({
           />
           <DialogFooter>
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
-              ביטול
+              {t("common.cancel")}
             </Button>
             <Button type="submit" disabled={mut.isPending || !form.name.trim()} className="gap-2">
               {mut.isPending && <Loader2 className="size-4 animate-spin" />}
-              יצירה
+              {t("platformCompanyDialogs.create.submit")}
             </Button>
           </DialogFooter>
         </form>
@@ -326,6 +326,7 @@ export function CompanyEditDialog({
   onOpenChange: (v: boolean) => void;
   company: Company;
 }) {
+  const { t } = useTranslation();
   const { refresh } = useCompanyContext();
   const [form, setForm] = useState<CompanyFormState>(() => formFromCompany(company));
   const [status, setStatus] = useState<CompanyStatus>(company.status);
@@ -353,19 +354,19 @@ export function CompanyEditDialog({
       return updated;
     },
     onSuccess: async () => {
-      toast.success("החברה עודכנה");
+      toast.success(t("platformCompanyDialogs.edit.success"));
       await refresh();
       onOpenChange(false);
     },
-    onError: (e: Error) => toast.error(e.message ?? "העדכון נכשל"),
+    onError: (e: Error) => toast.error(e.message ?? t("platformCompanyDialogs.edit.failed")),
   });
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-h-[85vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>עריכת חברה</DialogTitle>
-          <DialogDescription>עדכון פרטי החברה.</DialogDescription>
+          <DialogTitle>{t("platformCompanyDialogs.edit.title")}</DialogTitle>
+          <DialogDescription>{t("platformCompanyDialogs.edit.desc")}</DialogDescription>
         </DialogHeader>
         <div className="space-y-3">
           <CompanyFormFields
@@ -374,27 +375,25 @@ export function CompanyEditDialog({
             onChange={(patch) => setForm((prev) => ({ ...prev, ...patch }))}
           />
           <div className="space-y-1">
-            <Label>סטטוס חברה</Label>
+            <Label>{t("platformCompanyDialogs.fields.status")}</Label>
             <Select value={status} onValueChange={(v) => setStatus(v as CompanyStatus)}>
               <SelectTrigger>
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="active">פעילה</SelectItem>
-                <SelectItem value="inactive">לא פעילה</SelectItem>
-                <SelectItem value="suspended">מושהית</SelectItem>
+                <SelectItem value="active">{t("platformCompanies.statusActive")}</SelectItem>
+                <SelectItem value="inactive">{t("platformCompanies.statusInactive")}</SelectItem>
+                <SelectItem value="suspended">{t("platformCompanies.statusSuspended")}</SelectItem>
               </SelectContent>
             </Select>
             {status !== "active" && (
-              <p className="text-xs text-muted-foreground">
-                חברה שאינה פעילה נשארת גלויה ברשימה אך לא ניתן להיכנס למצב סניף עבורה.
-              </p>
+              <p className="text-xs text-muted-foreground">{t("platformCompanyDialogs.statusHint")}</p>
             )}
           </div>
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>
-            ביטול
+            {t("common.cancel")}
           </Button>
           <Button
             onClick={() => mut.mutate()}
@@ -402,7 +401,7 @@ export function CompanyEditDialog({
             className="gap-2"
           >
             {mut.isPending && <Loader2 className="size-4 animate-spin" />}
-            שמירה
+            {t("common.save")}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -423,6 +422,7 @@ export function CompanyDeleteDialog({
   company: Company;
   onDeleted?: () => void;
 }) {
+  const { t } = useTranslation();
   const { refresh } = useCompanyContext();
 
   const branchesQuery = useQuery({
@@ -436,35 +436,36 @@ export function CompanyDeleteDialog({
   const mut = useMutation({
     mutationFn: () => companyService.deleteCompany(company.id),
     onSuccess: async () => {
-      toast.success("החברה נמחקה");
+      toast.success(t("platformCompanyDialogs.delete.success"));
       await refresh();
       onOpenChange(false);
       onDeleted?.();
     },
-    onError: (e: Error) => toast.error(e.message ?? "המחיקה נכשלה"),
+    onError: (e: Error) => toast.error(e.message ?? t("platformCompanyDialogs.delete.failed")),
   });
 
   return (
     <AlertDialog open={open} onOpenChange={onOpenChange}>
       <AlertDialogContent>
         <AlertDialogHeader>
-          <AlertDialogTitle>מחיקת חברה</AlertDialogTitle>
+          <AlertDialogTitle>{t("platformCompanyDialogs.delete.title")}</AlertDialogTitle>
           <AlertDialogDescription asChild>
             <div className="space-y-2">
-              <p>האם למחוק את החברה &quot;{company.name}&quot;? זו מחיקה רכה — ניתן לשחזר בעתיד.</p>
+              <p>{t("platformCompanyDialogs.delete.desc", { name: company.name })}</p>
               {branchesQuery.isLoading ? (
-                <p className="text-xs text-muted-foreground">בודק סניפים משויכים…</p>
+                <p className="text-xs text-muted-foreground">
+                  {t("platformCompanyDialogs.delete.checkingBranches")}
+                </p>
               ) : branchCount > 0 ? (
                 <p className="text-xs font-medium text-destructive">
-                  לא ניתן למחוק: לחברה זו משויכים {branchCount} סניפים. יש להסיר את השיוך של כל
-                  הסניפים (בלשונית &quot;סניפים&quot;) לפני המחיקה.
+                  {t("platformCompanyDialogs.delete.blocked", { count: branchCount })}
                 </p>
               ) : null}
             </div>
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
-          <AlertDialogCancel>ביטול</AlertDialogCancel>
+          <AlertDialogCancel>{t("common.cancel")}</AlertDialogCancel>
           <AlertDialogAction
             onClick={(e) => {
               e.preventDefault();
@@ -474,7 +475,7 @@ export function CompanyDeleteDialog({
             className="bg-destructive text-destructive-foreground hover:bg-destructive/90 gap-2"
           >
             {mut.isPending && <Loader2 className="size-4 animate-spin" />}
-            מחיקה
+            {t("common.delete")}
           </AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>

@@ -55,7 +55,18 @@ export function usePlatformAuditQuery() {
   });
 }
 
-/** Human-readable Hebrew label for every audit event we emit. */
+import i18n from "@/i18n";
+
+const PLATFORM_EVENT_I18N: Record<string, string> = {
+  "owner.created": "platformOwners.events.created",
+  "owner.suspended": "platformOwners.events.suspended",
+  "owner.restored": "platformOwners.events.restored",
+  "owner.deleted": "platformOwners.events.deleted",
+  "owner.primary_transferred": "platformOwners.events.primaryTransferred",
+  "owner.profile_updated": "platformOwners.events.profileUpdated",
+};
+
+/** @deprecated Use getPlatformEventLabel — kept for any external imports */
 export const PLATFORM_EVENT_LABELS: Record<string, string> = {
   "owner.created": "בעל מערכת נוצר",
   "owner.suspended": "בעל מערכת הושעה",
@@ -64,6 +75,11 @@ export const PLATFORM_EVENT_LABELS: Record<string, string> = {
   "owner.primary_transferred": "הועברה בעלות ראשית",
   "owner.profile_updated": "פרטי בעל מערכת עודכנו",
 };
+
+export function getPlatformEventLabel(event: string): string {
+  const key = PLATFORM_EVENT_I18N[event];
+  return key ? i18n.t(key) : event;
+}
 
 export function usePlatformStats() {
   const owners = usePlatformOwnersQuery();

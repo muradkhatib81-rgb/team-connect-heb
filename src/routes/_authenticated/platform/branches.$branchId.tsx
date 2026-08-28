@@ -1,6 +1,7 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState, type ComponentType } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 import {
   ArrowRight,
@@ -31,13 +32,21 @@ import { ContactActions } from "@/components/contact-actions";
 
 export const Route = createFileRoute("/_authenticated/platform/branches/$branchId")({
   component: BranchDetailsPage,
-  notFoundComponent: () => <div className="p-6 text-sm text-muted-foreground">הסניף לא נמצא</div>,
+  notFoundComponent: BranchDetailsNotFound,
 });
+
+function BranchDetailsNotFound() {
+  const { t } = useTranslation();
+  return (
+    <div className="p-6 text-sm text-muted-foreground">{t("platformBranches.notFound")}</div>
+  );
+}
 
 const ADDRESS_KEY = "address";
 const PHONE_KEY = "phone";
 
 function BranchDetailsPage() {
+  const { t } = useTranslation();
   const { branchId } = Route.useParams();
   const navigate = useNavigate();
   const { companies, setActiveCompanyId } = useCompanyContext();
@@ -72,10 +81,12 @@ function BranchDetailsPage() {
         <Button asChild variant="ghost" size="sm" className="gap-2">
           <Link to="/platform/branches">
             <ArrowRight className="size-4" />
-            חזרה לרשימת הסניפים
+            {t("platformBranches.backToList")}
           </Link>
         </Button>
-        <Card className="p-8 text-sm text-muted-foreground text-center">הסניף לא נמצא</Card>
+        <Card className="p-8 text-sm text-muted-foreground text-center">
+          {t("platformBranches.notFound")}
+        </Card>
       </div>
     );
   }
@@ -88,7 +99,7 @@ function BranchDetailsPage() {
       <Button asChild variant="ghost" size="sm" className="gap-2">
         <Link to="/platform/branches">
           <ArrowRight className="size-4" />
-          חזרה לרשימת הסניפים
+          {t("platformBranches.backToList")}
         </Link>
       </Button>
 
@@ -103,7 +114,7 @@ function BranchDetailsPage() {
               {isActive && (
                 <Badge className="gap-1 bg-emerald-100 text-emerald-800 hover:bg-emerald-100 dark:bg-emerald-950/30 dark:text-emerald-400">
                   <Star className="size-3" />
-                  סניף פעיל
+                  {t("platformBranches.branchDetail.activeBranch")}
                 </Badge>
               )}
             </div>
@@ -129,7 +140,7 @@ function BranchDetailsPage() {
                 size="sm"
                 onClick={() => {
                   if (company && company.status !== "active") {
-                    toast.error("לא ניתן להיכנס למצב סניף עבור חברה לא פעילה או מושהית.");
+                    toast.error(t("platformBranches.branchDetail.cannotEnterInactiveCompany"));
                     return;
                   }
                   setActiveCompanyId(branch.companyId);
@@ -138,12 +149,12 @@ function BranchDetailsPage() {
                 className="gap-2"
               >
                 <Star className="size-4" />
-                הפוך לפעיל
+                {t("platformBranches.branchDetail.makeActive")}
               </Button>
             )}
             <Button variant="outline" size="sm" onClick={() => setEditOpen(true)} className="gap-2">
               <Pencil className="size-4" />
-              פרטים / סנכרון
+              {t("platformBranches.actions.detailsSync")}
             </Button>
             <Button
               variant="outline"
@@ -152,7 +163,7 @@ function BranchDetailsPage() {
               className="gap-2 text-destructive hover:text-destructive"
             >
               <Trash2 className="size-4" />
-              הסרת שיוך
+              {t("platformBranches.actions.unassign")}
             </Button>
           </div>
         </div>
@@ -162,15 +173,15 @@ function BranchDetailsPage() {
         <TabsList>
           <TabsTrigger value="dashboard" className="gap-2">
             <LayoutDashboard className="size-4" />
-            סקירה כללית
+            {t("platformBranches.branchDetail.tabs.dashboard")}
           </TabsTrigger>
           <TabsTrigger value="statistics" className="gap-2">
             <BarChart3 className="size-4" />
-            סטטיסטיקות
+            {t("platformBranches.branchDetail.tabs.statistics")}
           </TabsTrigger>
           <TabsTrigger value="settings" className="gap-2">
             <SettingsIcon className="size-4" />
-            הגדרות
+            {t("platformBranches.branchDetail.tabs.settings")}
           </TabsTrigger>
         </TabsList>
 
@@ -216,6 +227,8 @@ function BranchDashboardTab({
   isLoading: boolean;
   companyName?: string;
 }) {
+  const { t } = useTranslation();
+
   if (isLoading || !snapshot) {
     return (
       <div className="p-8 flex justify-center">
@@ -228,11 +241,15 @@ function BranchDashboardTab({
     <div className="grid gap-4 md:grid-cols-3">
       <StatCard
         icon={GitBranch}
-        label="סניפים בחברה"
+        label={t("platformBranches.stats.branchesInCompany")}
         value={snapshot.statistics.totalBranchesInCompany}
       />
-      <StatCard icon={Calendar} label="גיל הסניף (ימים)" value={snapshot.statistics.ageInDays} />
-      <StatCard icon={Building2} label="חברה" value={companyName ?? "—"} />
+      <StatCard
+        icon={Calendar}
+        label={t("platformBranches.stats.branchAgeDays")}
+        value={snapshot.statistics.ageInDays}
+      />
+      <StatCard icon={Building2} label={t("platformBranches.stats.company")} value={companyName ?? "—"} />
     </div>
   );
 }
@@ -244,6 +261,8 @@ function BranchStatisticsTab({
   snapshot?: BranchDashboardSnapshot;
   isLoading: boolean;
 }) {
+  const { t } = useTranslation();
+
   if (isLoading || !snapshot) {
     return (
       <div className="p-8 flex justify-center">
@@ -254,15 +273,28 @@ function BranchStatisticsTab({
 
   return (
     <Card className="card-elevated p-5 space-y-3">
-      <Row label="סניפים בחברה (סה״כ)" value={String(snapshot.statistics.totalBranchesInCompany)} />
-      <Row label="נוצר בתאריך" value={snapshot.statistics.createdAt.toLocaleString("he-IL")} />
-      <Row label="עודכן לאחרונה" value={snapshot.statistics.updatedAt.toLocaleString("he-IL")} />
-      <Row label="גיל הסניף" value={`${snapshot.statistics.ageInDays} ימים`} />
+      <Row
+        label={t("platformBranches.rows.branchesInCompanyTotal")}
+        value={String(snapshot.statistics.totalBranchesInCompany)}
+      />
+      <Row
+        label={t("platformBranches.rows.createdAt")}
+        value={snapshot.statistics.createdAt.toLocaleString("he-IL")}
+      />
+      <Row
+        label={t("platformBranches.rows.updatedAt")}
+        value={snapshot.statistics.updatedAt.toLocaleString("he-IL")}
+      />
+      <Row
+        label={t("platformBranches.rows.branchAge")}
+        value={t("platformBranches.stats.daysUnit", { count: snapshot.statistics.ageInDays })}
+      />
     </Card>
   );
 }
 
 function BranchSettingsTab({ branchId }: { branchId: UUID }) {
+  const { t } = useTranslation();
   const [address, setAddress] = useState("");
   const [phone, setPhone] = useState("");
   const [saving, setSaving] = useState(false);
@@ -277,7 +309,7 @@ function BranchSettingsTab({ branchId }: { branchId: UUID }) {
     try {
       branchService.setBranchSetting(branchId, ADDRESS_KEY, address.trim());
       branchService.setBranchSetting(branchId, PHONE_KEY, phone.trim());
-      toast.success("הגדרות הסניף נשמרו");
+      toast.success(t("platformBranches.stats.settingsSaved"));
     } finally {
       setSaving(false);
     }
@@ -288,20 +320,20 @@ function BranchSettingsTab({ branchId }: { branchId: UUID }) {
       <div className="space-y-2">
         <Label htmlFor="branch-address" className="flex items-center gap-1.5">
           <MapPin className="size-3.5" />
-          כתובת
+          {t("platformBranches.stats.address")}
         </Label>
         <Input
           id="branch-address"
           value={address}
           onChange={(e) => setAddress(e.target.value)}
           maxLength={200}
-          placeholder="רחוב, מספר, עיר"
+          placeholder={t("platformBranches.stats.addressPlaceholder")}
         />
       </div>
       <div className="space-y-2">
         <Label htmlFor="branch-phone" className="flex items-center gap-1.5">
           <Phone className="size-3.5" />
-          טלפון
+          {t("platformBranches.stats.phone")}
         </Label>
         <Input
           id="branch-phone"
@@ -310,14 +342,14 @@ function BranchSettingsTab({ branchId }: { branchId: UUID }) {
           value={phone}
           onChange={(e) => setPhone(e.target.value)}
           maxLength={30}
-          placeholder="03-1234567"
+          placeholder={t("platformBranches.stats.phonePlaceholder")}
         />
         <ContactActions phone={phone} className="pt-1" />
       </div>
       <div className="flex justify-end">
         <Button onClick={handleSave} disabled={saving} size="sm" className="gap-2">
           {saving && <Loader2 className="size-4 animate-spin" />}
-          שמירת הגדרות
+          {t("platformBranches.stats.saveSettings")}
         </Button>
       </div>
     </Card>

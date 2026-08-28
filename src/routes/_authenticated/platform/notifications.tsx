@@ -3,6 +3,7 @@ import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
+import { useTranslation } from "react-i18next";
 import { Bell, Plus, Trash2 } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -28,13 +29,7 @@ export const Route = createFileRoute("/_authenticated/platform/notifications")({
   component: PlatformNotificationsPage,
 });
 
-const GROUP_LABELS: Record<string, string> = {
-  schedule: "סידור עבודה",
-  leave: "חופשות",
-  break: "הפסקות",
-  custody: "ניהול ציוד",
-  ops: "תפעול כללי",
-};
+const PUSH_GROUPS = ["schedule", "leave", "break", "custody", "ops"] as const;
 
 type PushSettingRow = {
   key: PlatformPushEventKey;
@@ -45,6 +40,7 @@ type PushSettingRow = {
 };
 
 function PlatformNotificationsPage() {
+  const { t } = useTranslation();
   const queryClient = useQueryClient();
   const [scopeMode, setScopeMode] = useState<"company" | "branch">("company");
   const [selectedCompanyId, setSelectedCompanyId] = useState("");
@@ -70,36 +66,36 @@ function PlatformNotificationsPage() {
       setFn({ data: input }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["platform-push-settings"] });
-      toast.success("הגדרת ה-Push עודכנה");
+      toast.success(t("platformNotifications.pushUpdated"));
     },
-    onError: (error: Error) => toast.error(error.message ?? "העדכון נכשל"),
+    onError: (error: Error) => toast.error(error.message ?? t("platformNotifications.updateFailed")),
   });
 
   const addScopeMut = useMutation({
     mutationFn: async () => {
       if (scopeMode === "company") {
-        if (!selectedCompanyId) throw new Error("יש לבחור חברה");
+        if (!selectedCompanyId) throw new Error(t("platformNotifications.selectCompanyError"));
         return addScopeFn({ data: { companyId: selectedCompanyId } });
       }
-      if (!selectedBranchId) throw new Error("יש לבחור סניף");
+      if (!selectedBranchId) throw new Error(t("platformNotifications.selectBranchError"));
       return addScopeFn({ data: { branchId: selectedBranchId } });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["platform-push-scopes"] });
       setSelectedCompanyId("");
       setSelectedBranchId("");
-      toast.success("ההיקף נוסף — Push פעיל עבורו");
+      toast.success(t("platformNotifications.scopeAdded"));
     },
-    onError: (error: Error) => toast.error(error.message ?? "הוספת ההיקף נכשלה"),
+    onError: (error: Error) => toast.error(error.message ?? t("platformNotifications.scopeAddFailed")),
   });
 
   const removeScopeMut = useMutation({
     mutationFn: async (id: string) => removeScopeFn({ data: { id } }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["platform-push-scopes"] });
-      toast.success("ההיקף הוסר");
+      toast.success(t("platformNotifications.scopeRemoved"));
     },
-    onError: (error: Error) => toast.error(error.message ?? "ההסרה נכשלה"),
+    onError: (error: Error) => toast.error(error.message ?? t("platformNotifications.scopeRemoveFailed")),
   });
 
   const grouped = (settingsQ.data ?? []).reduce<Record<string, PushSettingRow[]>>((acc, row) => {
@@ -130,25 +126,23 @@ function PlatformNotificationsPage() {
           <Bell className="size-6" />
         </div>
         <div className="min-w-0">
-          <h1 className="truncate text-2xl sm:text-3xl font-bold">התראות פלטפורמה</h1>
+          <h1 className="truncate text-2xl sm:text-3xl font-bold">{t("platformNotifications.title")}</h1>
           <p className="text-sm text-muted-foreground mt-1">
-            מערכת Push לבעל המערכת בלבד — הפעלה לפי סוג אירוע, והענקה לחברה או לסניף.
-            כיבוי Push משאיר את פעמון ההתראות השקט פעיל.
+            {t("platformNotifications.subtitle")}
           </p>
         </div>
       </header>
 
       <Card className="card-elevated p-4 sm:p-6 space-y-5">
         <div>
-          <h2 className="text-lg font-semibold">הענקה לחברה / סניף</h2>
+          <h2 className="text-lg font-semibold">{t("platformNotifications.scopeTitle")}</h2>
           <p className="text-sm text-muted-foreground mt-1">
-            כל עוד אין היקפים — Push פעיל לכל הסניפים. אחרי הוספת היקף ראשון, Push יישלח
-            רק לחברות/סניפים שמופיעים כאן.
+            {t("platformNotifications.scopeDesc")}
           </p>
         </div>
         <div className="flex flex-wrap items-end gap-3">
           <div className="space-y-2 min-w-[140px]">
-            <Label>סוג היקף</Label>
+            <Label>{t("platformNotifications.scopeType")}</Label>
             <Select
               value={scopeMode}
               onValueChange={(v) => setScopeMode(v as "company" | "branch")}
@@ -157,17 +151,17 @@ function PlatformNotificationsPage() {
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="company">חברה</SelectItem>
-                <SelectItem value="branch">סניף</SelectItem>
+                <SelectItem value="company">{t("platformNotifications.company")}</SelectItem>
+                <SelectItem value="branch">{t("platformNotifications.branch")}</SelectItem>
               </SelectContent>
             </Select>
           </div>
           {scopeMode === "company" ? (
             <div className="space-y-2 min-w-[220px] flex-1">
-              <Label>חברה</Label>
+              <Label>{t("platformNotifications.company")}</Label>
               <Select value={selectedCompanyId} onValueChange={setSelectedCompanyId}>
                 <SelectTrigger>
-                  <SelectValue placeholder="בחר חברה" />
+                  <SelectValue placeholder={t("platformNotifications.selectCompany")} />
                 </SelectTrigger>
                 <SelectContent>
                   {availableCompanies.map((c) => (
@@ -180,10 +174,10 @@ function PlatformNotificationsPage() {
             </div>
           ) : (
             <div className="space-y-2 min-w-[220px] flex-1">
-              <Label>סניף</Label>
+              <Label>{t("platformNotifications.branch")}</Label>
               <Select value={selectedBranchId} onValueChange={setSelectedBranchId}>
                 <SelectTrigger>
-                  <SelectValue placeholder="בחר סניף" />
+                  <SelectValue placeholder={t("platformNotifications.selectBranch")} />
                 </SelectTrigger>
                 <SelectContent>
                   {availableBranches.map((b) => (
@@ -202,14 +196,14 @@ function PlatformNotificationsPage() {
             onClick={() => addScopeMut.mutate()}
           >
             <Plus className="size-4" />
-            הענק Push
+            {t("platformNotifications.grantPush")}
           </Button>
         </div>
         {scopesQ.isLoading ? (
-          <p className="text-sm text-muted-foreground">טוען היקפים…</p>
+          <p className="text-sm text-muted-foreground">{t("platformNotifications.loadingScopes")}</p>
         ) : (scopesQ.data?.scopes?.length ?? 0) === 0 ? (
           <p className="text-sm text-muted-foreground rounded-lg border border-dashed p-4">
-            עדיין אין היקפים — Push לפי סוגי האירועים חל על כל הסניפים.
+            {t("platformNotifications.noScopes")}
           </p>
         ) : (
           <ul className="divide-y rounded-lg border">
@@ -222,7 +216,7 @@ function PlatformNotificationsPage() {
                   className="text-destructive"
                   disabled={removeScopeMut.isPending}
                   onClick={() => removeScopeMut.mutate(s.id)}
-                  aria-label="הסר היקף"
+                  aria-label={t("platformNotifications.removeScopeAria")}
                 >
                   <Trash2 className="size-4" />
                 </Button>
@@ -234,26 +228,27 @@ function PlatformNotificationsPage() {
 
       <Card className="card-elevated p-4 sm:p-6 space-y-5">
         <div>
-          <h2 className="text-lg font-semibold">הפעלה / כיבוי של Web Push לפי אירוע</h2>
+          <h2 className="text-lg font-semibold">{t("platformNotifications.eventsTitle")}</h2>
           <p className="text-sm text-muted-foreground mt-1">
-            שליטה באירועים שישלחו התראת Push (בתוך ההיקפים שהוענקו). ההתראה השקטה תמיד
-            נשמרת.
+            {t("platformNotifications.eventsDesc")}
           </p>
         </div>
         {settingsQ.isLoading ? (
-          <p className="text-sm text-muted-foreground">טוען הגדרות…</p>
+          <p className="text-sm text-muted-foreground">{t("platformNotifications.loadingSettings")}</p>
         ) : settingsQ.isError ? (
           <p className="text-sm text-destructive">
-            {(settingsQ.error as Error)?.message ?? "שגיאה בטעינת ההגדרות"}
+            {(settingsQ.error as Error)?.message ?? t("platformNotifications.loadError")}
           </p>
         ) : (
           <div className="space-y-6">
-            {Object.entries(GROUP_LABELS).map(([group, label]) => {
+            {PUSH_GROUPS.map((group) => {
               const rows = grouped[group] ?? [];
               if (!rows.length) return null;
               return (
                 <div key={group} className="space-y-3">
-                  <h3 className="text-sm font-semibold text-muted-foreground">{label}</h3>
+                  <h3 className="text-sm font-semibold text-muted-foreground">
+                    {t(`platformNotifications.groups.${group}`)}
+                  </h3>
                   <ul className="divide-y rounded-lg border">
                     {rows.map((row) => (
                       <li

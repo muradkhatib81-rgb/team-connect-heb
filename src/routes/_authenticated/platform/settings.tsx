@@ -1,6 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 import { Settings, Loader2, ImagePlus } from "lucide-react";
 import { Card } from "@/components/ui/card";
@@ -28,6 +29,7 @@ const MAINTENANCE_MODE_KEY = "maintenanceMode";
 const PLATFORM_SETTINGS_QUERY_KEY = ["platform-settings"] as const;
 
 function PlatformSettingsPage() {
+  const { t } = useTranslation();
   const { runtime, platform } = usePlatformContext();
   const qc = useQueryClient();
   const fileRef = useRef<HTMLInputElement>(null);
@@ -75,7 +77,7 @@ function PlatformSettingsPage() {
   async function handleSave() {
     const trimmed = whatsappNumber.trim();
     if (trimmed && !normalizeWhatsAppPhone(trimmed)) {
-      toast.error("מספר וואטסאפ לא תקין");
+      toast.error(t("platformSettings.invalidWhatsapp"));
       return;
     }
     setSaving(true);
@@ -92,9 +94,9 @@ function PlatformSettingsPage() {
       if (error) throw error;
 
       await qc.invalidateQueries({ queryKey: PLATFORM_SETTINGS_QUERY_KEY });
-      toast.success("הגדרות הפלטפורמה נשמרו");
+      toast.success(t("platformSettings.saveSuccess"));
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "שמירת ההגדרות נכשלה");
+      toast.error(err instanceof Error ? err.message : t("platformSettings.saveFailed"));
     } finally {
       setSaving(false);
     }
@@ -107,9 +109,9 @@ function PlatformSettingsPage() {
       const url = await uploadPlatformPwaIcon(file);
       await qc.invalidateQueries({ queryKey: PWA_ICON_QUERY_KEY });
       applyPwaBranding(url);
-      toast.success("אייקון האפליקציה עודכן");
+      toast.success(t("platformSettings.iconUpdated"));
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "העלאת האייקון נכשלה");
+      toast.error(err instanceof Error ? err.message : t("platformSettings.iconUploadFailed"));
     } finally {
       setUploadingIcon(false);
       if (fileRef.current) fileRef.current.value = "";
@@ -123,9 +125,9 @@ function PlatformSettingsPage() {
           <Settings className="size-6" />
         </div>
         <div className="min-w-0">
-          <h1 className="truncate text-2xl sm:text-3xl font-bold">הגדרות פלטפורמה</h1>
+          <h1 className="truncate text-2xl sm:text-3xl font-bold">{t("platformSettings.title")}</h1>
           <p className="text-sm text-muted-foreground mt-1">
-            הגדרות גלובליות בהיקף הפלטפורמה — דרך ה-Configuration Manager הקיים
+            {t("platformSettings.subtitle")}
           </p>
         </div>
       </header>
@@ -133,7 +135,7 @@ function PlatformSettingsPage() {
       <Card className="card-elevated p-5 space-y-2">
         <div className="flex items-center justify-between">
           <div>
-            <p className="text-sm font-medium">מזהה פלטפורמה</p>
+            <p className="text-sm font-medium">{t("platformSettings.platformId")}</p>
             <p className="text-xs text-muted-foreground font-mono" dir="ltr">
               {platform.id}
             </p>
@@ -144,7 +146,7 @@ function PlatformSettingsPage() {
 
       <Card className="card-elevated p-6 space-y-5">
         <div className="space-y-2">
-          <Label htmlFor="platform-support-email">אימייל תמיכה של הפלטפורמה</Label>
+          <Label htmlFor="platform-support-email">{t("platformSettings.supportEmail")}</Label>
           <Input
             id="platform-support-email"
             type="email"
@@ -156,7 +158,7 @@ function PlatformSettingsPage() {
           />
         </div>
         <div className="space-y-2">
-          <Label htmlFor="platform-whatsapp">מספר וואטסאפ ליצירת קשר (מסך התחברות)</Label>
+          <Label htmlFor="platform-whatsapp">{t("platformSettings.whatsappNumber")}</Label>
           <Input
             id="platform-whatsapp"
             type="tel"
@@ -164,18 +166,18 @@ function PlatformSettingsPage() {
             value={whatsappNumber}
             onChange={(e) => setWhatsappNumber(e.target.value)}
             maxLength={20}
-            placeholder="0501234567 או 972501234567"
+            placeholder={t("platformSettings.whatsappPlaceholder")}
             disabled={settingsQ.isLoading}
           />
           <p className="text-xs text-muted-foreground">
-            יוצג כקישור וואטסאפ בתחתית מסך ההתחברות. השאר ריק כדי להסתיר.
+            {t("platformSettings.whatsappHint")}
           </p>
         </div>
         <div className="flex items-center justify-between rounded-lg border p-3">
           <div>
-            <p className="text-sm font-medium">מצב תחזוקה (Maintenance Mode)</p>
+            <p className="text-sm font-medium">{t("platformSettings.maintenanceMode")}</p>
             <p className="text-xs text-muted-foreground">
-              דגל גלובלי בלבד — אינו חוסם כניסה בפועל בשלב זה
+              {t("platformSettings.maintenanceHint")}
             </p>
           </div>
           <Switch checked={maintenanceMode} onCheckedChange={setMaintenanceMode} />
@@ -183,17 +185,16 @@ function PlatformSettingsPage() {
         <div className="flex justify-end">
           <Button onClick={handleSave} disabled={saving} size="sm" className="gap-2">
             {saving && <Loader2 className="size-4 animate-spin" />}
-            שמירת הגדרות
+            {t("platformSettings.saveSettings")}
           </Button>
         </div>
       </Card>
 
       <Card className="card-elevated p-6 space-y-4">
         <div>
-          <p className="text-sm font-medium">אייקון התקנת האפליקציה (PWA)</p>
+          <p className="text-sm font-medium">{t("platformSettings.pwaIconTitle")}</p>
           <p className="text-xs text-muted-foreground mt-1">
-            רק בעל הפלטפורמה יכול לשנות. שם ההתקנה נקבע לפי שפת מערכת המכשיר (עברית /
-            ערבית / אנגלית) לפני ההתקנה, ואינו ניתן לשינוי על ידי משתמשים.
+            {t("platformSettings.pwaIconDesc")}
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-4">
@@ -225,9 +226,9 @@ function PlatformSettingsPage() {
               ) : (
                 <ImagePlus className="size-4" />
               )}
-              החלפת אייקון
+              {t("platformSettings.changeIcon")}
             </Button>
-            <p className="text-xs text-muted-foreground">PNG / JPG / WebP · עד 5MB · יומר ל־512×512</p>
+            <p className="text-xs text-muted-foreground">{t("platformSettings.pwaIconFormat")}</p>
           </div>
         </div>
       </Card>
