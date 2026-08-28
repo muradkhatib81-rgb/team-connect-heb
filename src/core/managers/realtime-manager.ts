@@ -47,6 +47,8 @@ export interface ChannelSnapshot {
   activeSubscriptions: number;
   eventsPublished: number;
   lastActivityAt: Date | null;
+  /** Supabase Realtime subscribe status for RealtimeBridge channels only. */
+  supabaseSubscribeStatus?: string | null;
 }
 
 class InMemoryRealtimeChannel implements IRealtimeChannel {
@@ -77,13 +79,29 @@ interface ChannelRecord {
   createdAt: Date;
   updatedAt: Date;
   closedAt: Date | null;
+  supabaseSubscribeStatus: string | null;
 }
 
 export class RealtimeManager extends BaseManager {
   private readonly records = new Map<string, ChannelRecord>();
+  private readonly snapshotListeners = new Set<() => void>();
 
   constructor() {
     super("realtime-manager");
+  }
+
+  /** Live UI refresh when channel stats change (e.g. RealtimeBridge postgres activity). */
+  subscribeSnapshots(listener: () => void): () => void {
+    this.snapshotListeners.add(listener);
+    return () => {
+      this.snapshotListeners.delete(listener);
+    };
+  }
+
+  private emitSnapshotChange(): void {
+    for (const listener of this.snapshotListeners) {
+      listener();
+    }
   }
 
   /** Raw pub/sub handle for a channel, creating it (open, public) if it doesn't exist yet. */
@@ -102,6 +120,7 @@ export class RealtimeManager extends BaseManager {
         createdAt: now,
         updatedAt: now,
         closedAt: null,
+        supabaseSubscribeStatus: null,
       };
       this.records.set(name, record);
     }
@@ -132,8 +151,10 @@ export class RealtimeManager extends BaseManager {
         createdAt: now,
         updatedAt: now,
         closedAt: null,
+        supabaseSubscribeStatus: null,
       });
     }
+    this.emitSnapshotChange();
     return this.getSnapshot(name)!;
   }
 
@@ -145,6 +166,7 @@ export class RealtimeManager extends BaseManager {
     if (input.description !== undefined) record.description = input.description?.trim() || null;
     if (input.visibility !== undefined) record.visibility = input.visibility;
     record.updatedAt = new Date();
+    this.emitSnapshotChange();
     return this.getSnapshot(name)!;
   }
 
@@ -155,6 +177,7 @@ export class RealtimeManager extends BaseManager {
     }
     record.closedAt = new Date();
     record.updatedAt = record.closedAt;
+    this.emitSnapshotChange();
     return this.getSnapshot(name)!;
   }
 
@@ -163,6 +186,7 @@ export class RealtimeManager extends BaseManager {
       throw new Error("הערוץ לא נמצא.");
     }
     this.records.delete(name);
+    this.emitSnapshotChange();
   }
 
   getSnapshot(name: string): ChannelSnapshot | null {
@@ -179,6 +203,7 @@ export class RealtimeManager extends BaseManager {
       activeSubscriptions: record.channel.subscriberCount,
       eventsPublished: record.channel.eventsPublished,
       lastActivityAt: record.channel.lastActivityAt,
+      supabaseSubscribeStatus: record.supabaseSubscribeStatus,
     };
   }
 
@@ -196,6 +221,15 @@ export class RealtimeManager extends BaseManager {
     record.channel.eventsPublished += 1;
     record.channel.lastActivityAt = new Date();
     record.updatedAt = new Date();
+    this.emitSnapshotChange();
+  }
+
+  setBridgeSupabaseStatus(name: string, status: string): void {
+    const record = this.records.get(name);
+    if (!record) return;
+    record.supabaseSubscribeStatus = status;
+    record.updatedAt = new Date();
+    this.emitSnapshotChange();
   }
 
   /** @deprecated kept for backward compatibility — prefer `listChannels()`. */

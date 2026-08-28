@@ -4,6 +4,7 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/use-auth";
+import { pulseBridgeActivity } from "@/lib/realtime-bridge-sync";
 import i18n from "@/i18n";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -1365,6 +1366,7 @@ function SchedulesPage() {
     onSuccess: (r: any) => {
       toast.success(r?.published ? i18n.t("schedules.published") : r?.approved ? i18n.t("schedules.approvedPending") : i18n.t("schedules.sentForApproval"));
       editsDirtyRef.current = false;
+      if (me?.id && r?.published) pulseBridgeActivity(me.id, 1);
       qc.invalidateQueries({ queryKey: ["schedule"] });
       qc.invalidateQueries({ queryKey: ["schedule-shifts", visible?.id] });
       qc.invalidateQueries({ queryKey: ["schedules-pending"] });
@@ -1391,6 +1393,7 @@ function SchedulesPage() {
     onSuccess: (r: any) => {
       toast.success(r?.published ? i18n.t("schedules.published") : i18n.t("schedules.approvedPending"));
       editsDirtyRef.current = false;
+      if (me?.id && r?.published) pulseBridgeActivity(me.id, 1);
       qc.invalidateQueries({ queryKey: ["schedule"] });
       qc.invalidateQueries({ queryKey: ["schedule-shifts", visible?.id] });
       qc.invalidateQueries({ queryKey: ["schedules-pending"] });
@@ -1416,6 +1419,7 @@ function SchedulesPage() {
     onSuccess: () => {
       toast.success(i18n.t("schedules.published"));
       editsDirtyRef.current = false;
+      if (me?.id) pulseBridgeActivity(me.id, 1);
       qc.invalidateQueries({ queryKey: ["schedule"] });
       qc.invalidateQueries({ queryKey: ["schedule-shifts", visible?.id] });
       qc.invalidateQueries({ queryKey: ["schedules-approved"] });

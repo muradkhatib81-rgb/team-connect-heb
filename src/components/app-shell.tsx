@@ -72,10 +72,14 @@ import { fetchCustodyUserCaps, invalidateCustodyQueries } from "@/lib/custody-wo
 import { invalidateShiftVisibleQueries } from "@/lib/shift-visible-rpc";
 import { notifyOwnBreakStatusTransition } from "@/lib/break-self-realtime";
 import {
-  bridgeChannelName,
+  bridgeMonitorName,
+  bridgePostgresOn,
+  bridgeSupabaseChannelName,
   createBridgeChannel,
-  syncBridgeChannelClose,
-  syncBridgeChannelOpen,
+  notifyBridgeOperationalActivity,
+  syncBridgeMonitorClose,
+  syncBridgeMonitorOpen,
+  syncBridgeSupabaseStatus,
 } from "@/lib/realtime-bridge-sync";
 import { useAiAccess } from "@/lib/use-ai-access";
 import { bindPushToneListener } from "@/lib/alert-tone";
@@ -941,6 +945,20 @@ function RealtimeBridge({ uid }: { uid: string }) {
   useEffect(() => bindPushToneListener(), []);
 
   useEffect(() => {
+    return () => syncBridgeMonitorClose(bridgeMonitorName(uid));
+  }, [uid]);
+
+  useEffect(() => {
+    const onBridgeActivity = (event: Event) => {
+      const detail = (event as CustomEvent<{ uid?: string; count?: number }>).detail;
+      if (!detail?.uid || detail.uid !== uid) return;
+      notifyBridgeOperationalActivity(uid, detail.count ?? 1);
+    };
+    window.addEventListener("tc-bridge-activity", onBridgeActivity);
+    return () => window.removeEventListener("tc-bridge-activity", onBridgeActivity);
+  }, [uid]);
+
+  useEffect(() => {
     let scheduleBumpTimer: ReturnType<typeof setTimeout> | null = null;
     let notifBumpTimer: ReturnType<typeof setTimeout> | null = null;
     const bumpScheduleQueries = () => {
@@ -966,13 +984,25 @@ function RealtimeBridge({ uid }: { uid: string }) {
       }, 50);
     };
 
-    const channelName = bridgeChannelName(uid, activeBranchId);
-    syncBridgeChannelOpen({ name: channelName, userId: uid, branchId: activeBranchId });
-    const { raw: rawBridgeChannel, channel: channelBase } = createBridgeChannel(channelName);
+    const monitorName = bridgeMonitorName(uid);
+    const supabaseChannelName = bridgeSupabaseChannelName(uid, activeBranchId);
+    syncBridgeMonitorOpen({
+      monitorName,
+      userId: uid,
+      branchId: activeBranchId,
+      supabaseChannel: supabaseChannelName,
+    });
+    syncBridgeSupabaseStatus(monitorName, "connecting");
+    const { raw: rawBridgeChannel, channel: channelBase } = createBridgeChannel(supabaseChannelName);
+    let ch = channelBase;
+    const onPg = (
+      config: Parameters<typeof bridgePostgresOn>[2],
+      handler: (payload: unknown) => void,
+    ) => {
+      ch = bridgePostgresOn(ch, monitorName, config, handler);
+    };
 
-    channelBase
-      .on(
-        "postgres_changes",
+    onPg(
         { event: "*", schema: "public", table: "user_roles" },
         (payload: any) => {
           qc.invalidateQueries({ queryKey: ["all-roles"] });
@@ -988,9 +1018,8 @@ function RealtimeBridge({ uid }: { uid: string }) {
           qc.invalidateQueries({ queryKey: ["user-perms"] });
           qc.invalidateQueries({ queryKey: ["route-guard"] });
         },
-      )
-      .on(
-        "postgres_changes",
+      );
+    onPg(
         { event: "*", schema: "public", table: "user_task_permissions" },
         (payload: any) => {
           qc.invalidateQueries({ queryKey: ["permissions-list"] });
@@ -1005,9 +1034,8 @@ function RealtimeBridge({ uid }: { uid: string }) {
           }
           qc.invalidateQueries({ queryKey: ["route-guard"] });
         },
-      )
-      .on(
-        "postgres_changes",
+      );
+    onPg(
         { event: "*", schema: "public", table: "profiles" },
         (payload: any) => {
           const affected = payload?.new?.id ?? payload?.old?.id;
@@ -1024,8 +1052,8 @@ function RealtimeBridge({ uid }: { uid: string }) {
           qc.invalidateQueries({ queryKey: ["dept-employees-for-manager"] });
           qc.invalidateQueries({ queryKey: ["eom", "current"] });
         },
-      )
-      .on("postgres_changes", { event: "*", schema: "public", table: "departments" }, () => {
+      );
+    onPg({ event: "*", schema: "public", table: "departments" }, () => {
         // Do not invalidate auth/me here — that re-spins the whole shell for every dept tweak.
         qc.invalidateQueries({ queryKey: ["departments"] });
         qc.invalidateQueries({ queryKey: ["dashboard", "stats"] });
@@ -1033,60 +1061,58 @@ function RealtimeBridge({ uid }: { uid: string }) {
         qc.invalidateQueries({ queryKey: ["departments-list"] });
         qc.invalidateQueries({ queryKey: ["dept-employees-for-manager"] });
         qc.invalidateQueries({ queryKey: ["other-dept-managers"] });
-      })
-      .on("postgres_changes", { event: "*", schema: "public", table: "job_titles" }, () => {
+      });
+    onPg({ event: "*", schema: "public", table: "job_titles" }, () => {
         qc.invalidateQueries({ queryKey: ["job-titles"] });
         qc.invalidateQueries({ queryKey: ["employees"] });
         qc.invalidateQueries({ queryKey: ["dashboard", "stats"] });
         qc.invalidateQueries({ queryKey: ["can-request-break"] });
-      })
-      .on("postgres_changes", { event: "*", schema: "public", table: "task_assignees" }, () =>
+      });
+    onPg({ event: "*", schema: "public", table: "task_assignees" }, () =>
         qc.invalidateQueries({ queryKey: ["tasks"] }),
-      )
-      .on("postgres_changes", { event: "*", schema: "public", table: "task_departments" }, () =>
+      );
+    onPg({ event: "*", schema: "public", table: "task_departments" }, () =>
         qc.invalidateQueries({ queryKey: ["tasks"] }),
-      )
-      .on("postgres_changes", { event: "*", schema: "public", table: "task_comments" }, () => {
+      );
+    onPg({ event: "*", schema: "public", table: "task_comments" }, () => {
         qc.invalidateQueries({ queryKey: ["task-activity"] });
         qc.invalidateQueries({ queryKey: ["task-comments"] });
-      })
-      .on("postgres_changes", { event: "*", schema: "public", table: "task_activity_log" }, () =>
+      });
+    onPg({ event: "*", schema: "public", table: "task_activity_log" }, () =>
         qc.invalidateQueries({ queryKey: ["task-activity"] }),
-      )
-      .on("postgres_changes", { event: "*", schema: "public", table: "tasks" }, () => {
+      );
+    onPg({ event: "*", schema: "public", table: "tasks" }, () => {
         qc.invalidateQueries({ queryKey: ["tasks"] });
         qc.invalidateQueries({ queryKey: ["dashboard", "tasks-stats"] });
-      })
-      .on("postgres_changes", { event: "*", schema: "public", table: "task_recurrences" }, () =>
+      });
+    onPg({ event: "*", schema: "public", table: "task_recurrences" }, () =>
         qc.invalidateQueries({ queryKey: ["recurrences"] }),
-      )
-      .on("postgres_changes", { event: "*", schema: "public", table: "task_images" }, () =>
+      );
+    onPg({ event: "*", schema: "public", table: "task_images" }, () =>
         qc.invalidateQueries({ queryKey: ["task-images"] }),
-      )
-      .on("postgres_changes", { event: "*", schema: "public", table: "schedules" }, () => {
+      );
+    onPg({ event: "*", schema: "public", table: "schedules" }, () => {
         bumpScheduleQueries();
         invalidateShiftVisibleQueries(qc, uid, activeBranchId);
-      })
-      .on("postgres_changes", { event: "*", schema: "public", table: "schedule_shifts" }, () => {
+      });
+    onPg({ event: "*", schema: "public", table: "schedule_shifts" }, () => {
         bumpScheduleQueries();
         if (activeBranchId) {
           invalidateShiftVisibleQueries(qc, uid, activeBranchId);
         }
-      })
-      .on("postgres_changes", { event: "*", schema: "public", table: "shift_definitions" }, () => {
+      });
+    onPg({ event: "*", schema: "public", table: "shift_definitions" }, () => {
         qc.invalidateQueries({ queryKey: ["shift-definitions"] });
         qc.invalidateQueries({ queryKey: ["shift-definitions-active"] });
-      })
-      .on(
-        "postgres_changes",
+      });
+    onPg(
         { event: "*", schema: "public", table: "shift_definition_day_hours" },
         () => {
           qc.invalidateQueries({ queryKey: ["shift-definitions"] });
           qc.invalidateQueries({ queryKey: ["shift-definitions-active"] });
         },
-      )
-      .on(
-        "postgres_changes",
+      );
+    onPg(
         { event: "*", schema: "public", table: "break_requests" },
         (payload: any) => {
           qc.invalidateQueries({ queryKey: ["breaks"] });
@@ -1115,17 +1141,17 @@ function RealtimeBridge({ uid }: { uid: string }) {
             }
           }
         },
-      )
-      .on("postgres_changes", { event: "*", schema: "public", table: "break_settings" }, () => {
+      );
+    onPg({ event: "*", schema: "public", table: "break_settings" }, () => {
         qc.invalidateQueries({ queryKey: ["break-settings"] });
         qc.invalidateQueries({ queryKey: ["break-settings-active"] });
-      })
-      .on("postgres_changes", { event: "*", schema: "public", table: "break_policy" }, () => {
+      });
+    onPg({ event: "*", schema: "public", table: "break_policy" }, () => {
         qc.invalidateQueries({ queryKey: ["break-policy"] });
         qc.invalidateQueries({ queryKey: ["break-policy-effective"] });
         qc.invalidateQueries({ queryKey: ["can-request-break"] });
-      })
-      .on("postgres_changes", { event: "*", schema: "public", table: "leave_requests" }, () => {
+      });
+    onPg({ event: "*", schema: "public", table: "leave_requests" }, () => {
         qc.invalidateQueries({ queryKey: ["my-leave-requests"] });
         qc.invalidateQueries({ queryKey: ["leave-admin-requests"] });
         qc.invalidateQueries({ queryKey: ["leave-admin-on-leave"] });
@@ -1135,43 +1161,41 @@ function RealtimeBridge({ uid }: { uid: string }) {
         qc.invalidateQueries({ queryKey: ["my-leave-balances"] });
         qc.invalidateQueries({ queryKey: ["leave-admin-balances"] });
         qc.invalidateQueries({ queryKey: ["auth", "me"] });
-      })
-      .on("postgres_changes", { event: "*", schema: "public", table: "ops_error_entries" }, () => {
+      });
+    onPg({ event: "*", schema: "public", table: "ops_error_entries" }, () => {
         qc.invalidateQueries({ queryKey: ["ops-error-entries"] });
         qc.invalidateQueries({ queryKey: ["ops-error-caps"] });
-      })
-      .on("postgres_changes", { event: "*", schema: "public", table: "leave_balances" }, () => {
+      });
+    onPg({ event: "*", schema: "public", table: "leave_balances" }, () => {
         qc.invalidateQueries({ queryKey: ["my-leave-balances"] });
         qc.invalidateQueries({ queryKey: ["leave-admin-balances"] });
-      })
-      .on(
-        "postgres_changes",
+      });
+    onPg(
         { event: "*", schema: "public", table: "leave_employee_accrual_rates" },
         () => {
           qc.invalidateQueries({ queryKey: ["leave-emp-accrual-rates"] });
         },
-      )
-      .on("postgres_changes", { event: "*", schema: "public", table: "messages" }, () => {
+      );
+    onPg({ event: "*", schema: "public", table: "messages" }, () => {
         qc.invalidateQueries({ queryKey: ["communications"] });
         qc.invalidateQueries({ queryKey: ["comm"] });
         qc.invalidateQueries({ queryKey: ["shell-comm-unread", uid] });
         qc.invalidateQueries({ queryKey: ["notif", "messages"] });
         qc.invalidateQueries({ queryKey: ["emp-dash-msgs"] });
-      })
-      .on("postgres_changes", { event: "*", schema: "public", table: "message_recipients" }, () => {
+      });
+    onPg({ event: "*", schema: "public", table: "message_recipients" }, () => {
         qc.invalidateQueries({ queryKey: ["communications"] });
         qc.invalidateQueries({ queryKey: ["comm"] });
         qc.invalidateQueries({ queryKey: ["shell-comm-unread", uid] });
         qc.invalidateQueries({ queryKey: ["notif", "messages"] });
         qc.invalidateQueries({ queryKey: ["emp-dash-msgs"] });
-      })
-      .on("postgres_changes", { event: "*", schema: "public", table: "message_targets" }, () => {
+      });
+    onPg({ event: "*", schema: "public", table: "message_targets" }, () => {
         qc.invalidateQueries({ queryKey: ["communications"] });
         qc.invalidateQueries({ queryKey: ["comm"] });
         qc.invalidateQueries({ queryKey: ["emp-dash-msgs"] });
-      })
-      .on(
-        "postgres_changes",
+      });
+    onPg(
         {
           event: "*",
           schema: "public",
@@ -1186,11 +1210,11 @@ function RealtimeBridge({ uid }: { uid: string }) {
             qc.invalidateQueries({ queryKey: ["emp-dash-notif"] });
           }, 400);
         },
-      )
-      .on("postgres_changes", { event: "*", schema: "public", table: "company_settings" }, () =>
+      );
+    onPg({ event: "*", schema: "public", table: "company_settings" }, () =>
         qc.invalidateQueries({ queryKey: ["company-settings"] }),
-      )
-      .on("postgres_changes", { event: "*", schema: "public", table: "employee_of_month" }, () => {
+      );
+    onPg({ event: "*", schema: "public", table: "employee_of_month" }, () => {
         qc.invalidateQueries({ queryKey: ["employee-of-month"] });
         qc.invalidateQueries({ queryKey: ["eom", "current"] });
       });
@@ -1205,12 +1229,9 @@ function RealtimeBridge({ uid }: { uid: string }) {
       invalidateCustodyQueries(qc, activeBranchId, uid);
     };
 
-    let ch = channelBase;
     if (activeBranchId) {
       const branchFilter = `branch_id=eq.${activeBranchId}`;
-      ch = ch
-        .on(
-          "postgres_changes",
+      onPg(
           {
             event: "*",
             schema: "public",
@@ -1220,9 +1241,8 @@ function RealtimeBridge({ uid }: { uid: string }) {
           () => {
             qc.invalidateQueries({ queryKey: ["morning-board", activeBranchId] });
           },
-        )
-        .on(
-          "postgres_changes",
+      );
+      onPg(
           {
             event: "INSERT",
             schema: "public",
@@ -1230,9 +1250,8 @@ function RealtimeBridge({ uid }: { uid: string }) {
             filter: branchFilter,
           },
           bumpManagementOnShift,
-        )
-        .on(
-          "postgres_changes",
+      );
+      onPg(
           {
             event: "UPDATE",
             schema: "public",
@@ -1240,14 +1259,12 @@ function RealtimeBridge({ uid }: { uid: string }) {
             filter: branchFilter,
           },
           bumpManagementOnShift,
-        )
-        .on(
-          "postgres_changes",
+      );
+      onPg(
           { event: "DELETE", schema: "public", table: "management_on_shift" },
           bumpManagementOnShift,
-        )
-        .on(
-          "postgres_changes",
+      );
+      onPg(
           {
             event: "*",
             schema: "public",
@@ -1255,9 +1272,8 @@ function RealtimeBridge({ uid }: { uid: string }) {
             filter: branchFilter,
           },
           bumpCustodyForBranch,
-        )
-        .on(
-          "postgres_changes",
+      );
+      onPg(
           {
             event: "*",
             schema: "public",
@@ -1265,9 +1281,8 @@ function RealtimeBridge({ uid }: { uid: string }) {
             filter: branchFilter,
           },
           bumpCustodyForBranch,
-        )
-        .on(
-          "postgres_changes",
+      );
+      onPg(
           {
             event: "*",
             schema: "public",
@@ -1275,9 +1290,8 @@ function RealtimeBridge({ uid }: { uid: string }) {
             filter: branchFilter,
           },
           bumpCustodyForBranch,
-        )
-        .on(
-          "postgres_changes",
+      );
+      onPg(
           {
             event: "INSERT",
             schema: "public",
@@ -1285,9 +1299,8 @@ function RealtimeBridge({ uid }: { uid: string }) {
             filter: branchFilter,
           },
           bumpCustodyForBranch,
-        )
-        .on(
-          "postgres_changes",
+      );
+      onPg(
           {
             event: "*",
             schema: "public",
@@ -1297,14 +1310,18 @@ function RealtimeBridge({ uid }: { uid: string }) {
           () => {
             qc.invalidateQueries({ queryKey: ["branch-banner", activeBranchId] });
           },
-        );
+      );
     }
 
-    ch.subscribe();
+    ch.subscribe((status, err) => {
+      const errLabel =
+        err == null ? status : `error:${err instanceof Error ? err.message : String(err)}`;
+      syncBridgeSupabaseStatus(monitorName, errLabel);
+    });
     return () => {
       if (scheduleBumpTimer) clearTimeout(scheduleBumpTimer);
       if (notifBumpTimer) clearTimeout(notifBumpTimer);
-      syncBridgeChannelClose(channelName);
+      syncBridgeSupabaseStatus(monitorName, "reconnecting");
       void supabase.removeChannel(rawBridgeChannel);
     };
   }, [uid, qc, activeBranchId]);

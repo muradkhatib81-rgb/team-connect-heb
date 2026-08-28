@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { useTranslation } from "react-i18next";
@@ -37,6 +37,7 @@ import {
 } from "@/components/ui/select";
 import { usePlatformContext } from "@/platform";
 import type { ChannelSnapshot, ChannelVisibility } from "@/core";
+import { getRealtimeManager } from "@/core/bootstrap";
 import { isBridgeChannelName } from "@/lib/realtime-bridge-sync";
 
 export const Route = createFileRoute("/_authenticated/platform/realtime")({
@@ -84,6 +85,12 @@ function PlatformRealtimePage() {
     queryFn: () => runtime.listRealtimeChannels(),
     refetchInterval: 5000,
   });
+
+  useEffect(() => {
+    return getRealtimeManager().subscribeSnapshots(() => {
+      qc.invalidateQueries({ queryKey: CHANNELS_QUERY_KEY });
+    });
+  }, [qc]);
 
   const closeMut = useMutation({
     mutationFn: async (name: string) => runtime.closeRealtimeChannel(name),
@@ -187,6 +194,11 @@ function PlatformRealtimePage() {
                     </div>
                     {channel.description && (
                       <p className="text-sm text-muted-foreground">{channel.description}</p>
+                    )}
+                    {isSystemBridge && channel.supabaseSubscribeStatus && (
+                      <p className="text-xs text-muted-foreground font-mono" dir="ltr">
+                        WebSocket: {channel.supabaseSubscribeStatus}
+                      </p>
                     )}
                   </div>
                   <div className="flex items-center gap-1.5 shrink-0">
