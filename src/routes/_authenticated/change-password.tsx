@@ -11,6 +11,7 @@ import { Loader2, KeyRound } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "@/lib/use-auth";
 import i18n from "@/i18n";
+import { clearBiometricLogin } from "@/lib/biometric-login";
 
 export const Route = createFileRoute("/_authenticated/change-password")({
   component: ChangePasswordPage,
@@ -40,6 +41,7 @@ function ChangePasswordPage() {
     setLoading(true);
     try {
       await changeFn({ data: { password: pw } });
+      await clearBiometricLogin();
       toast.success(i18n.t("changePassword.success"));
       await qc.invalidateQueries({ queryKey: ["auth", "me"] });
       navigate({ to: "/dashboard", replace: true });

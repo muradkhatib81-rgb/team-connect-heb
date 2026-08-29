@@ -21,6 +21,11 @@ const config: CapacitorConfig = {
     allowMixedContent: false,
     backgroundColor: "#0f172a",
   },
+  ios: {
+    backgroundColor: "#0f172a",
+    /** Future iOS build: add NSFaceIDUsageDescription only if App Store requires it; app uses Touch ID / fingerprint only. */
+    contentInset: "automatic",
+  },
   plugins: {
     SplashScreen: {
       launchShowDuration: 0,

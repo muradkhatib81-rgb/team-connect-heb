@@ -15,12 +15,17 @@ import { seedIdleSessionOnLogin } from "@/lib/use-idle-logout";
 import { useCompanySettings } from "@/lib/use-company-settings";
 import { toWhatsAppUrl } from "@/lib/whatsapp";
 import { WhatsAppIcon } from "@/components/whatsapp-icon";
-import { Store, Loader2 } from "lucide-react";
+import { Store, Loader2, Fingerprint } from "lucide-react";
 import { LanguageSwitcher } from "@/components/language-switcher";
 import { PasswordInput, PasswordVisibilityToggle } from "@/components/ui/password-input";
 import { useTranslation } from "react-i18next";
 import i18n from "@/i18n";
 import { toWesternDigits } from "@/lib/app-locale";
+import {
+  biometricQuickLogin,
+  getBiometricLoginState,
+  syncBiometricLoginSession,
+} from "@/lib/biometric-login";
 
 const searchSchema = z.object({ redirect: z.string().optional() });
 
@@ -53,6 +58,9 @@ function AuthPage() {
   const [checking, setChecking] = useState(true);
   const [hasUsers, setHasUsers] = useState<boolean | null>(null);
   const [showPassword, setShowPassword] = useState(false);
+  const [quickLoginReady, setQuickLoginReady] = useState(false);
+  const [quickLoginId, setQuickLoginId] = useState<string | null>(null);
+  const [quickLoginBusy, setQuickLoginBusy] = useState(false);
 
   const whatsappQ = useQuery({
     queryKey: ["platform-settings-whatsapp-public"],
@@ -96,7 +104,55 @@ function AuthPage() {
     return () => {
       cancelled = true;
     };
-  }, [navigate, search.redirect]);
+  }, [navigate, search.redirect, router]);
+
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      const state = await getBiometricLoginState();
+      if (cancelled) return;
+      setQuickLoginReady(state.enabled);
+      setQuickLoginId(state.idNumber);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  async function finishLogin(userId: string, idNumber?: string) {
+    seedIdleSessionOnLogin(userId);
+    if (idNumber) await syncBiometricLoginSession(idNumber);
+    const explicit = search.redirect as string | undefined;
+    const target = safeInternalRedirectPath(
+      explicit || (await resolveLandingPath(userId)),
+    );
+    router.history.replace(target);
+  }
+
+  async function handleQuickLogin() {
+    setQuickLoginBusy(true);
+    try {
+      const result = await biometricQuickLogin();
+      if (!result.ok) {
+        if (result.reason === "expired") {
+          toast.error(t("biometricLogin.sessionExpired"));
+          setQuickLoginReady(false);
+          setQuickLoginId(null);
+        } else if (result.reason === "failed") {
+          toast.error(t("biometricLogin.loginFailed"));
+          setQuickLoginReady(false);
+          setQuickLoginId(null);
+        }
+        return;
+      }
+      toast.success(t("auth.loginSuccess"));
+      await finishLogin(result.userId);
+    } catch (err: unknown) {
+      toast.error((err as Error)?.message ?? t("biometricLogin.loginFailed"));
+    } finally {
+      setQuickLoginBusy(false);
+    }
+  }
 
   async function handleSignIn(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -127,13 +183,8 @@ function AuthPage() {
     }
     toast.success(t("auth.loginSuccess"));
     const { data: userData } = await supabase.auth.getUser();
-    if (userData.user) seedIdleSessionOnLogin(userData.user.id);
     setLoading(false);
-    const explicit = search.redirect as string | undefined;
-    const target = safeInternalRedirectPath(
-      explicit || (userData.user ? await resolveLandingPath(userData.user.id) : "/dashboard"),
-    );
-    router.history.replace(target);
+    if (userData.user) await finishLogin(userData.user.id, idNumber);
   }
 
   async function handleBootstrap(e: React.FormEvent<HTMLFormElement>) {
@@ -274,6 +325,41 @@ function AuthPage() {
                 </form>
               </>
             ) : (
+              <>
+                {quickLoginReady && (
+                  <div className="space-y-3 mb-6">
+                    <Button
+                      type="button"
+                      variant="default"
+                      className="w-full gap-2"
+                      size="lg"
+                      disabled={quickLoginBusy || loading}
+                      onClick={() => void handleQuickLogin()}
+                    >
+                      {quickLoginBusy ? (
+                        <Loader2 className="size-5 animate-spin" />
+                      ) : (
+                        <Fingerprint className="size-5" />
+                      )}
+                      {t("auth.quickLogin")}
+                    </Button>
+                    {quickLoginId && (
+                      <p className="text-xs text-center text-muted-foreground">
+                        {t("auth.quickLoginAs", { id: quickLoginId })}
+                      </p>
+                    )}
+                    <div className="relative py-1">
+                      <div className="absolute inset-0 flex items-center">
+                        <span className="w-full border-t border-border" />
+                      </div>
+                      <div className="relative flex justify-center text-xs uppercase">
+                        <span className="bg-card px-2 text-muted-foreground">
+                          {t("auth.orUseIdPassword")}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                )}
               <form onSubmit={handleSignIn} className="space-y-4">
                 <div className="space-y-2">
                   <Label htmlFor="id-in">{t("auth.idNumber")}</Label>
@@ -330,6 +416,7 @@ function AuthPage() {
                   )}
                 </div>
               </form>
+              </>
             )}
           </Card>
 

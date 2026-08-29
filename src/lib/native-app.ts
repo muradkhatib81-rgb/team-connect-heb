@@ -17,6 +17,14 @@ export function isNativeAndroid(): boolean {
   }
 }
 
+export function isNativeIOS(): boolean {
+  try {
+    return Capacitor.isNativePlatform() && Capacitor.getPlatform() === "ios";
+  } catch {
+    return false;
+  }
+}
+
 export function nativePlatform(): "android" | "ios" | "web" {
   try {
     if (!Capacitor.isNativePlatform()) return "web";

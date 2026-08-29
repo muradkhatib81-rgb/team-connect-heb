@@ -24,7 +24,27 @@
     "loginSuccess": "Logged in successfully",
     "loginPageTitle": "Sign in",
     "showPassword": "Show password",
-    "hidePassword": "Hide password"
+    "hidePassword": "Hide password",
+    "quickLogin": "Quick sign-in with fingerprint",
+    "quickLoginAs": "Saved account: {{id}}",
+    "orUseIdPassword": "or ID and password"
+  },
+  "biometricLogin": {
+    "title": "Quick sign-in with fingerprint",
+    "description": "Sign in faster on this device after logging out. Fingerprint only — Face ID is not used.",
+    "webUnsupported": "Quick fingerprint sign-in is available in the installed Android/iPhone app, not in the browser.",
+    "unsupported": "This device does not support fingerprint sign-in, or fingerprint is not enrolled.",
+    "faceIdNotSupported": "This device uses Face ID. Quick sign-in supports fingerprint / Touch ID only.",
+    "enabled": "Quick fingerprint sign-in enabled",
+    "disabled": "Quick fingerprint sign-in disabled",
+    "enableError": "Could not enable fingerprint sign-in",
+    "disableError": "Could not disable fingerprint sign-in",
+    "noSession": "Sign in with ID and password first, then enable fingerprint here.",
+    "missingId": "Your profile must include an ID number before enabling fingerprint sign-in.",
+    "authenticateReason": "Confirm your fingerprint to enable quick sign-in",
+    "quickLoginReason": "Confirm your fingerprint to sign in",
+    "sessionExpired": "Saved sign-in expired. Use ID and password, then re-enable fingerprint if needed.",
+    "loginFailed": "Fingerprint sign-in failed. Use ID and password."
   },
   "profile": {
     "title": "My Profile",
