@@ -63,7 +63,10 @@ type PreferencesApi = {
   remove: (opts: { key: string }) => Promise<void>;
 };
 
-const NATIVE_MS = 3_500;
+/** JS chunk fetch from Vercel can be slow on mobile; keep generous. */
+const IMPORT_MS = 15_000;
+/** Native bridge calls should return quickly once the plugin is loaded. */
+const BRIDGE_MS = 8_000;
 /** User may take time on the fingerprint prompt. */
 const AUTH_PROMPT_MS = 45_000;
 
@@ -86,7 +89,7 @@ function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
 async function loadPreferences(): Promise<PreferencesApi | null> {
   if (!isNativeApp()) return null;
   try {
-    const { Preferences } = await withTimeout(import("@capacitor/preferences"), NATIVE_MS);
+    const { Preferences } = await withTimeout(import("@capacitor/preferences"), IMPORT_MS);
     return Preferences;
   } catch {
     return null;
@@ -98,7 +101,7 @@ async function loadBiometricAuth(): Promise<BiometricAuthApi | null> {
   try {
     const { BiometricAuth } = await withTimeout(
       import("@aparajita/capacitor-biometric-auth"),
-      NATIVE_MS,
+      IMPORT_MS,
     );
     return BiometricAuth;
   } catch {
@@ -111,11 +114,22 @@ async function loadSecureStorage(): Promise<SecureStorageApi | null> {
   try {
     const { SecureStorage } = await withTimeout(
       import("@aparajita/capacitor-secure-storage"),
-      NATIVE_MS,
+      IMPORT_MS,
     );
     return SecureStorage;
   } catch {
     return null;
+  }
+}
+
+/** True only when JS loaded but native APK shell never registered the plugin. */
+async function isBiometricNativeMissing(): Promise<boolean> {
+  try {
+    const { Capacitor } = await import("@capacitor/core");
+    // Must run AFTER importing @aparajita/... so the plugin self-registers.
+    return !Capacitor.isPluginAvailable("BiometricAuthNative");
+  } catch {
+    return true;
   }
 }
 
@@ -197,15 +211,20 @@ export async function getBiometricLoginState(): Promise<BiometricLoginState> {
   try {
     const BiometricAuth = await loadBiometricAuth();
     if (!BiometricAuth) {
+      // Chunk failed to load (network) — not the same as a missing native plugin.
+      return empty;
+    }
+
+    if (await isBiometricNativeMissing()) {
       return { ...empty, needsAppUpdate: true };
     }
 
     let bio: CheckBiometryResult;
     try {
-      bio = await withTimeout(BiometricAuth.checkBiometry(), NATIVE_MS);
+      bio = await withTimeout(BiometricAuth.checkBiometry(), BRIDGE_MS);
     } catch {
-      // Hang / missing native bridge → treat as APK without working plugin.
-      return { ...empty, needsAppUpdate: true };
+      // Plugin is present but check stalled/failed — device/OS issue, not "rebuild APK".
+      return empty;
     }
 
     const blockedByFaceOnly = hasOnlyFaceHardware(bio) && bio.isAvailable;
@@ -213,20 +232,20 @@ export async function getBiometricLoginState(): Promise<BiometricLoginState> {
 
     const Preferences = await loadPreferences();
     const { value: opt } = Preferences
-      ? await withTimeout(Preferences.get({ key: BIOMETRIC_LOGIN_OPT_IN_KEY }), NATIVE_MS)
+      ? await withTimeout(Preferences.get({ key: BIOMETRIC_LOGIN_OPT_IN_KEY }), BRIDGE_MS)
       : { value: null };
     const enabled = supported && opt === "1";
     let idNumber: string | null = null;
     if (opt === "1" && Preferences) {
       const { value } = await withTimeout(
         Preferences.get({ key: BIOMETRIC_LOGIN_ID_NUMBER_KEY }),
-        NATIVE_MS,
+        BRIDGE_MS,
       );
       idNumber = value?.trim() || null;
     }
     return { supported, enabled, idNumber, blockedByFaceOnly, needsAppUpdate: false };
   } catch {
-    return { ...empty, needsAppUpdate: true };
+    return empty;
   }
 }
 

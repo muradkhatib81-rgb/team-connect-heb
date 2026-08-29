@@ -32,12 +32,10 @@ export function BiometricLoginSettings() {
       return;
     }
     let cancelled = false;
+    /** Stop spinner only — never claim "rebuild APK" from a timeout race. */
     const failSafe = window.setTimeout(() => {
-      if (!cancelled) {
-        setState((s) => ({ ...s, needsAppUpdate: true, supported: false }));
-        setProbing(false);
-      }
-    }, 4_000);
+      if (!cancelled) setProbing(false);
+    }, 20_000);
 
     void (async () => {
       try {
@@ -46,7 +44,7 @@ export function BiometricLoginSettings() {
         if (cancelled) return;
         setState(next);
       } catch {
-        if (!cancelled) setState({ ...emptyState(), needsAppUpdate: true });
+        if (!cancelled) setState(emptyState());
       } finally {
         if (!cancelled) setProbing(false);
         window.clearTimeout(failSafe);
