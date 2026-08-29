@@ -27,7 +27,7 @@ import {
 } from "@/lib/platform-health.functions";
 import { usePlatformContext } from "@/platform";
 import type { HealthState } from "@/core/monitoring/types";
-import { intlLocaleForApp } from "@/lib/app-locale";
+import { formatAppDateTime } from "@/lib/app-locale";
 
 export const Route = createFileRoute("/_authenticated/platform/monitoring")({
   component: PlatformMonitoringPage,
@@ -50,7 +50,7 @@ const STATE_CLASS: Record<HealthState, string> = {
 function formatWhen(iso: string | null | undefined, lang: string): string {
   if (!iso) return "—";
   try {
-    return new Date(iso).toLocaleString(intlLocaleForApp(lang), { timeZone: "Asia/Jerusalem" });
+    return formatAppDateTime(iso, { dateStyle: "short", timeStyle: "short" }, lang);
   } catch {
     return iso;
   }

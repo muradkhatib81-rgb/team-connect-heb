@@ -42,7 +42,7 @@ import {
 import type { BillingPlan } from "@/core/managers/billing-manager";
 import { useTranslation } from "react-i18next";
 import { aiErrorCode, translateAiError } from "@/lib/ai-errors";
-import { intlLocaleForApp } from "@/lib/app-locale";
+import { formatAppDateTime } from "@/lib/app-locale";
 
 export const Route = createFileRoute("/_authenticated/platform/ai")({
   component: PlatformAiPage,
@@ -56,7 +56,6 @@ const ENTITLEMENTS_KEY = ["platform-ai-entitlements"] as const;
 
 function PlatformAiPage() {
   const { t, i18n } = useTranslation();
-  const dateLocale = intlLocaleForApp(i18n.language);
   const qc = useQueryClient();
   const { companies } = useCompanyContext();
   const [grantOpen, setGrantOpen] = useState(false);
@@ -270,7 +269,7 @@ function PlatformAiPage() {
                     <span>{u.provider_code}</span>
                     <span className="text-muted-foreground">{u.model}</span>
                     <span className="ms-auto tabular-nums text-xs text-muted-foreground">
-                      {new Date(u.created_at).toLocaleString(dateLocale)}
+                      {formatAppDateTime(u.created_at, { dateStyle: "short", timeStyle: "short" }, i18n.language)}
                     </span>
                   </li>
                 ))}

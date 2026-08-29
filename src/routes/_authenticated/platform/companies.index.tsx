@@ -12,7 +12,7 @@ import { useCompanyContext } from "@/platform";
 import { CompanySwitcher } from "@/components/platform/company-switcher";
 import { CompanyActionsMenu } from "@/components/platform/company-actions-menu";
 import { CompanyCreateDialog } from "@/components/platform/company-dialogs";
-import { intlLocaleForApp } from "@/lib/app-locale";
+import { formatAppDateTime } from "@/lib/app-locale";
 
 export const Route = createFileRoute("/_authenticated/platform/companies/")({
   component: CompaniesPage,
@@ -50,8 +50,6 @@ function CompaniesPage() {
   const { companies, activeCompanyId, setActiveCompanyId, isLoading } = useCompanyContext();
   const [openCreate, setOpenCreate] = useState(false);
   const [showArchived, setShowArchived] = useState(false);
-
-  const dateLocale = intlLocaleForApp(i18n.language);
 
   const visibleCompanies = useMemo(
     () => companies.filter((c) => showArchived || !c.archivedAt),
@@ -153,7 +151,7 @@ function CompaniesPage() {
                       {company.id.slice(0, 8)}…
                     </td>
                     <td className="p-3 hidden lg:table-cell text-xs text-muted-foreground tabular-nums">
-                      {company.createdAt.toLocaleDateString(dateLocale)}
+                      {formatAppDateTime(company.createdAt, { dateStyle: "short" }, i18n.language)}
                     </td>
                     <td className="p-3">
                       <div className="flex flex-wrap items-center gap-1.5">

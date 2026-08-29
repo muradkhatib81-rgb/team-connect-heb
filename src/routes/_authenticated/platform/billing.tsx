@@ -44,7 +44,7 @@ import {
   mbToGbInput,
   mbToGbLabel,
 } from "@/lib/billing-storage";
-import { intlLocaleForApp } from "@/lib/app-locale";
+import { formatAppDateTime } from "@/lib/app-locale";
 
 export const Route = createFileRoute("/_authenticated/platform/billing")({
   component: PlatformBillingPage,
@@ -64,7 +64,6 @@ const OVERVIEW_KEY = ["platform-billing-overview"] as const;
 
 function PlatformBillingPage() {
   const { t, i18n } = useTranslation();
-  const locale = intlLocaleForApp(i18n.language);
   const planLabel = (plan: BillingPlan) => t(`platformBilling.plans.${plan}`);
   const statusLabel = (status: string) =>
     t(`platformBilling.status.${status}`, { defaultValue: status });
@@ -296,7 +295,7 @@ function PlatformBillingPage() {
     onSuccess: (res) => {
       toast.success(
         t("platformBilling.trialStarted", {
-          date: new Date(res.trialEndsAt).toLocaleDateString(locale),
+          date: formatAppDateTime(res.trialEndsAt, { dateStyle: "short" }, i18n.language),
         }),
       );
       void qc.invalidateQueries({ queryKey: OVERVIEW_KEY });
@@ -460,12 +459,12 @@ function PlatformBillingPage() {
                     : ""}
                   {selectedRow?.currentPeriodEnd
                     ? ` · ${t("platformBilling.periodUntil", {
-                        date: new Date(selectedRow.currentPeriodEnd).toLocaleDateString(locale),
+                        date: formatAppDateTime(selectedRow.currentPeriodEnd, { dateStyle: "short" }, i18n.language),
                       })}`
                     : ""}
                   {selectedRow?.trialEndsAt && !selectedRow.isTrialActive
                     ? ` · ${t("platformBilling.trialEndedOn", {
-                        date: new Date(selectedRow.trialEndsAt).toLocaleDateString(locale),
+                        date: formatAppDateTime(selectedRow.trialEndsAt, { dateStyle: "short" }, i18n.language),
                       })}`
                     : ""}
                   {isCompanyScope
@@ -790,8 +789,8 @@ function PlatformBillingPage() {
               <li key={p.id} className="flex items-center justify-between gap-3 p-3">
                 <span className="text-muted-foreground">
                   {p.paid_at
-                    ? new Date(p.paid_at).toLocaleString(locale)
-                    : new Date(p.created_at).toLocaleString(locale)}
+                    ? formatAppDateTime(p.paid_at, { dateStyle: "short", timeStyle: "short" }, i18n.language)
+                    : formatAppDateTime(p.created_at, { dateStyle: "short", timeStyle: "short" }, i18n.language)}
                   {" · "}
                   {p.status}
                 </span>

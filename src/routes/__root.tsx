@@ -10,7 +10,7 @@ import {
 import { useEffect, useState, type ReactNode } from "react";
 import { I18nextProvider, useTranslation } from "react-i18next";
 import i18n from "@/i18n";
-import { htmlLangAttribute } from "@/lib/app-locale";
+import { htmlLangAttribute, installWesternDigitsEnforcer } from "@/lib/app-locale";
 
 import appCss from "../styles.css?url";
 import { reportLovableError } from "../lib/lovable-error-reporting";
@@ -216,6 +216,7 @@ function RootShell({ children }: { children: ReactNode }) {
       setLang(next);
       document.documentElement.dir = next === "en" ? "ltr" : "rtl";
       document.documentElement.lang = htmlLangAttribute(next);
+      document.body.lang = htmlLangAttribute(next);
       document.title = i18n.t("common.appName");
     };
     i18n.on("languageChanged", onChange);
@@ -224,6 +225,8 @@ function RootShell({ children }: { children: ReactNode }) {
       i18n.off("languageChanged", onChange);
     };
   }, []);
+
+  useEffect(() => installWesternDigitsEnforcer(), []);
 
   useEffect(() => {
     applyPwaBranding(pwaIconUrl);
@@ -234,7 +237,7 @@ function RootShell({ children }: { children: ReactNode }) {
       <head>
         <HeadContent />
       </head>
-      <body>
+      <body lang={htmlLangAttribute(lang)}>
         {children}
         <Scripts />
       </body>

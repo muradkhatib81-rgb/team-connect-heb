@@ -40,7 +40,7 @@ import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { useAuth } from "@/lib/use-auth";
+import { useAuth, type AuthProfile } from "@/lib/use-auth";
 import { useCompanySettings } from "@/lib/use-company-settings";
 import {
   getRoleLabel,
@@ -183,31 +183,34 @@ export function AppShell({ children }: { children: ReactNode }) {
     // Plain employees may now access /dashboard directly (clean employee view).
   }, [profile?.is_active, profile?.must_change_password, profile, pathname, navigate]);
 
-  // Language chosen on the login screen must survive sign-in.
-  // Apply the guest pick once per session, then let the profile / in-app switcher own it.
-  const appliedGuestForUser = useRef<string | null>(null);
+  // Apply guest/profile language once per user. Later picks belong to LanguageSwitcher;
+  // re-applying the cached profile language here was reverting the UI until refresh.
+  const appliedLangForUser = useRef<string | null>(null);
   useEffect(() => {
-    if (!profile?.id) return;
+    if (!profile?.id) {
+      appliedLangForUser.current = null;
+      return;
+    }
+    if (appliedLangForUser.current === profile.id) return;
+
     const guestLang = getGuestLanguage();
-    const applyGuest =
-      !!guestLang && appliedGuestForUser.current !== profile.id;
-    const lang = applyGuest
-      ? guestLang
-      : (profile.preferred_language ?? getSavedLanguage(profile.id));
+    const lang = guestLang ?? profile.preferred_language ?? getSavedLanguage(profile.id);
+    appliedLangForUser.current = profile.id;
     saveLanguage(lang, profile.id);
     saveLanguage(lang);
     if (i18n.language !== lang) {
       void i18n.changeLanguage(lang);
       document.documentElement.dir = lang === "en" ? "ltr" : "rtl";
       document.documentElement.lang = htmlLangAttribute(lang);
+      document.body.lang = htmlLangAttribute(lang);
     }
-    if (applyGuest) {
-      appliedGuestForUser.current = profile.id;
-      if (guestLang !== profile.preferred_language) {
-        void syncLangFn({ data: { lang: guestLang } }).catch(() => {});
-      }
+    if (guestLang && guestLang !== profile.preferred_language) {
+      qc.setQueryData<AuthProfile | null>(["auth", "me"], (prev) =>
+        prev ? { ...prev, preferred_language: guestLang } : prev,
+      );
+      void syncLangFn({ data: { lang: guestLang } }).catch(() => {});
     }
-  }, [profile?.id, profile?.preferred_language, i18n, syncLangFn]);
+  }, [profile?.id, profile?.preferred_language, i18n, syncLangFn, qc]);
 
   const breakSelfServiceNav = useBreakSelfServiceNavVisible();
   const { canManageBreaks } = useCanManageBreaks();

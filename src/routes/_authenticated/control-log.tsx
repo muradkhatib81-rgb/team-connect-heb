@@ -21,7 +21,7 @@ import { useActiveBranch } from "@/lib/use-active-branch";
 import { useAuth } from "@/lib/use-auth";
 import { supabase } from "@/integrations/supabase/client";
 import { opsErrorTypeLabel } from "@/lib/ops-error-type-label";
-import { intlLocaleForApp } from "@/lib/app-locale";
+import { formatAppDateTime } from "@/lib/app-locale";
 import {
   createOpsErrorEntry,
   deleteOpsErrorEntry,
@@ -178,7 +178,6 @@ function OpsErrorsPage() {
     onError: (e: Error) => toast.error(e.message),
   });
 
-  const dateLocale = intlLocaleForApp(i18n.language);
 
   const typeLabel = (ty: {
     name_he: string;
@@ -412,7 +411,7 @@ function OpsErrorsPage() {
                   </p>
                   <p>
                     <span className="text-muted-foreground">{t("opsErrors.loggedAt")}: </span>
-                    {new Date(e.created_at).toLocaleString(dateLocale)}
+                    {formatAppDateTime(e.created_at, { dateStyle: "short", timeStyle: "short" }, i18n.language)}
                   </p>
                   <p>
                     <span className="text-muted-foreground">{t("opsErrors.loggedBy")}: </span>

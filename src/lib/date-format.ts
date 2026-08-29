@@ -1,6 +1,6 @@
 // Date/time formatting helpers locked to Asia/Jerusalem; locale follows active app language.
 import i18n from "@/i18n";
-import { intlLocaleForApp } from "@/lib/app-locale";
+import { intlLocaleForApp, WESTERN_DIGITS_DATE } from "@/lib/app-locale";
 
 const TZ = "Asia/Jerusalem";
 
@@ -16,8 +16,7 @@ export function formatHeDateTime(value: string | Date | null | undefined): strin
     timeZone: TZ,
     dateStyle: "short",
     timeStyle: "short",
-    numberingSystem: "latn",
-    calendar: "gregory",
+    ...WESTERN_DIGITS_DATE,
   }).format(d);
 }
 
@@ -28,8 +27,7 @@ export function formatHeDate(value: string | Date | null | undefined): string {
   return new Intl.DateTimeFormat(intlLocale(), {
     timeZone: TZ,
     dateStyle: "short",
-    numberingSystem: "latn",
-    calendar: "gregory",
+    ...WESTERN_DIGITS_DATE,
   }).format(d);
 }
 

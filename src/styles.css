@@ -134,8 +134,8 @@
   html {
     direction: rtl;
     overscroll-behavior-y: contain;
-    font-variant-numeric: lining-nums;
-    font-feature-settings: "lnum" 1;
+    font-variant-numeric: lining-nums tabular-nums;
+    font-feature-settings: "lnum" 1, "tnum" 1;
   }
 
   body {
@@ -144,14 +144,21 @@
     font-family: var(--font-sans);
     -webkit-font-smoothing: antialiased;
     text-rendering: optimizeLegibility;
+    font-variant-numeric: lining-nums tabular-nums;
+    font-feature-settings: "lnum" 1, "tnum" 1;
+  }
+
+  body,
+  body * {
     font-variant-numeric: lining-nums;
+    font-feature-settings: "lnum" 1;
   }
 
   input,
   textarea,
   select {
-    font-variant-numeric: lining-nums;
-    font-feature-settings: "lnum" 1;
+    font-variant-numeric: lining-nums tabular-nums;
+    font-feature-settings: "lnum" 1, "tnum" 1;
   }
 
   h1, h2, h3, h4 {

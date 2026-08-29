@@ -1,8 +1,10 @@
 import { useTranslation } from "react-i18next";
+import { useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { saveLanguage, type AppLanguage } from "@/i18n";
 import { htmlLangAttribute } from "@/lib/app-locale";
 import { syncPreferredLanguage } from "@/lib/translate-content.functions";
+import type { AuthProfile } from "@/lib/use-auth";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -24,16 +26,22 @@ interface LanguageSwitcherProps {
 
 export function LanguageSwitcher({ userId }: LanguageSwitcherProps = {}) {
   const { i18n, t } = useTranslation();
+  const qc = useQueryClient();
   const syncLangFn = useServerFn(syncPreferredLanguage);
-  const current = LANGUAGES.find((l) => l.code === i18n.language) ?? LANGUAGES[0]!;
+  const currentLang = (i18n.language ?? "he").split("-")[0];
+  const current = LANGUAGES.find((l) => l.code === currentLang) ?? LANGUAGES[0]!;
 
   function handleChange(code: AppLanguage) {
-    i18n.changeLanguage(code);
+    void i18n.changeLanguage(code);
     saveLanguage(code, userId);
     saveLanguage(code);
     document.documentElement.dir = code === "en" ? "ltr" : "rtl";
     document.documentElement.lang = htmlLangAttribute(code);
+    document.body.lang = htmlLangAttribute(code);
     if (userId) {
+      qc.setQueryData<AuthProfile | null>(["auth", "me"], (prev) =>
+        prev ? { ...prev, preferred_language: code } : prev,
+      );
       void syncLangFn({ data: { lang: code } }).catch(() => {});
     }
   }
@@ -51,7 +59,7 @@ export function LanguageSwitcher({ userId }: LanguageSwitcherProps = {}) {
           <DropdownMenuItem
             key={lang.code}
             onClick={() => handleChange(lang.code)}
-            className={i18n.language === lang.code ? "font-semibold bg-muted" : ""}
+            className={currentLang === lang.code ? "font-semibold bg-muted" : ""}
           >
             {t(lang.labelKey)}
           </DropdownMenuItem>
