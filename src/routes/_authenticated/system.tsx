@@ -14,7 +14,7 @@ export const Route = createFileRoute("/_authenticated/system")({
   beforeLoad: async ({ context, location }) => {
     const userId = (context as any)?.user?.id;
     if (!userId) {
-      throw redirect({ to: "/auth", search: { redirect: location.href } });
+      throw redirect({ to: "/auth", search: { redirect: location.href }, replace: true });
     }
     const { data, error } = await supabase
       .from("user_roles")
@@ -23,7 +23,7 @@ export const Route = createFileRoute("/_authenticated/system")({
       .eq("role", "system_admin")
       .maybeSingle();
     if (error || !data) {
-      throw redirect({ to: "/dashboard" });
+      throw redirect({ to: "/dashboard", replace: true });
     }
   },
   component: () => <Outlet />,

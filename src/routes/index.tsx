@@ -10,6 +10,6 @@ export const Route = createFileRoute("/")({
     // Anonymous visitors fall through to "/dashboard", which itself
     // redirects to "/auth" via the `_authenticated` layout.
     const target = data.user ? await resolveLandingPath(data.user.id) : "/dashboard";
-    throw redirect({ to: target });
+    throw redirect({ to: target, replace: true });
   },
 });

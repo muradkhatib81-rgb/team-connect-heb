@@ -15,7 +15,7 @@ export const Route = createFileRoute("/_authenticated")({
   beforeLoad: async ({ location, context }) => {
     const { data, error } = await supabase.auth.getUser();
     if (error || !data.user) {
-      throw redirect({ to: "/auth", search: { redirect: location.href } });
+      throw redirect({ to: "/auth", search: { redirect: location.href }, replace: true });
     }
     const userId = data.user.id;
     let roles: Awaited<ReturnType<typeof fetchRouteGuardRoles>>;
@@ -34,7 +34,7 @@ export const Route = createFileRoute("/_authenticated")({
         }),
       ]);
     } catch {
-      throw redirect({ to: "/auth", search: { redirect: location.href } });
+      throw redirect({ to: "/auth", search: { redirect: location.href }, replace: true });
     }
 
     const isActive = await context.queryClient.ensureQueryData({
@@ -44,10 +44,10 @@ export const Route = createFileRoute("/_authenticated")({
     });
     const onInactivePage = location.pathname === "/inactive";
     if (!isActive && !onInactivePage) {
-      throw redirect({ to: "/inactive" });
+      throw redirect({ to: "/inactive", replace: true });
     }
     if (isActive && onInactivePage) {
-      throw redirect({ to: "/dashboard" });
+      throw redirect({ to: "/dashboard", replace: true });
     }
 
     if (
@@ -57,7 +57,7 @@ export const Route = createFileRoute("/_authenticated")({
         permissions,
       })
     ) {
-      throw redirect({ to: "/dashboard" });
+      throw redirect({ to: "/dashboard", replace: true });
     }
     return { user: data.user };
   },
