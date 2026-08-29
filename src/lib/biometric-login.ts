@@ -63,10 +63,30 @@ type PreferencesApi = {
   remove: (opts: { key: string }) => Promise<void>;
 };
 
+const NATIVE_MS = 3_500;
+/** User may take time on the fingerprint prompt. */
+const AUTH_PROMPT_MS = 45_000;
+
+function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = window.setTimeout(() => reject(new Error("native-timeout")), ms);
+    promise.then(
+      (v) => {
+        window.clearTimeout(timer);
+        resolve(v);
+      },
+      (e) => {
+        window.clearTimeout(timer);
+        reject(e);
+      },
+    );
+  });
+}
+
 async function loadPreferences(): Promise<PreferencesApi | null> {
   if (!isNativeApp()) return null;
   try {
-    const { Preferences } = await import("@capacitor/preferences");
+    const { Preferences } = await withTimeout(import("@capacitor/preferences"), NATIVE_MS);
     return Preferences;
   } catch {
     return null;
@@ -76,7 +96,10 @@ async function loadPreferences(): Promise<PreferencesApi | null> {
 async function loadBiometricAuth(): Promise<BiometricAuthApi | null> {
   if (!isNativeApp()) return null;
   try {
-    const { BiometricAuth } = await import("@aparajita/capacitor-biometric-auth");
+    const { BiometricAuth } = await withTimeout(
+      import("@aparajita/capacitor-biometric-auth"),
+      NATIVE_MS,
+    );
     return BiometricAuth;
   } catch {
     return null;
@@ -86,7 +109,10 @@ async function loadBiometricAuth(): Promise<BiometricAuthApi | null> {
 async function loadSecureStorage(): Promise<SecureStorageApi | null> {
   if (!isNativeApp()) return null;
   try {
-    const { SecureStorage } = await import("@aparajita/capacitor-secure-storage");
+    const { SecureStorage } = await withTimeout(
+      import("@aparajita/capacitor-secure-storage"),
+      NATIVE_MS,
+    );
     return SecureStorage;
   } catch {
     return null;
@@ -117,8 +143,7 @@ function hasOnlyFaceHardware(result: CheckBiometryResult): boolean {
 function fingerprintUsable(result: CheckBiometryResult): boolean {
   if (!hasFingerprintHardware(result)) return false;
   if (hasOnlyFaceHardware(result)) return false;
-  // Prefer strong biometry (fingerprint on most Androids); fall back to isAvailable
-  // when the primary type is already fingerprint/Touch ID.
+  // Strong biometry = fingerprint on most Android devices.
   if (result.strongBiometryIsAvailable) return true;
   const primary = result.biometryType;
   return (
@@ -177,9 +202,9 @@ export async function getBiometricLoginState(): Promise<BiometricLoginState> {
 
     let bio: CheckBiometryResult;
     try {
-      bio = await BiometricAuth.checkBiometry();
+      bio = await withTimeout(BiometricAuth.checkBiometry(), NATIVE_MS);
     } catch {
-      // Native bridge missing / unimplemented → APK needs rebuild with plugins.
+      // Hang / missing native bridge → treat as APK without working plugin.
       return { ...empty, needsAppUpdate: true };
     }
 
@@ -188,17 +213,20 @@ export async function getBiometricLoginState(): Promise<BiometricLoginState> {
 
     const Preferences = await loadPreferences();
     const { value: opt } = Preferences
-      ? await Preferences.get({ key: BIOMETRIC_LOGIN_OPT_IN_KEY })
+      ? await withTimeout(Preferences.get({ key: BIOMETRIC_LOGIN_OPT_IN_KEY }), NATIVE_MS)
       : { value: null };
     const enabled = supported && opt === "1";
     let idNumber: string | null = null;
     if (opt === "1" && Preferences) {
-      const { value } = await Preferences.get({ key: BIOMETRIC_LOGIN_ID_NUMBER_KEY });
+      const { value } = await withTimeout(
+        Preferences.get({ key: BIOMETRIC_LOGIN_ID_NUMBER_KEY }),
+        NATIVE_MS,
+      );
       idNumber = value?.trim() || null;
     }
     return { supported, enabled, idNumber, blockedByFaceOnly, needsAppUpdate: false };
   } catch {
-    return empty;
+    return { ...empty, needsAppUpdate: true };
   }
 }
 
@@ -241,7 +269,7 @@ export async function enableBiometricLogin(idNumber: string): Promise<void> {
   const token = data.session?.refresh_token;
   if (!token) throw new Error(i18n.t("biometricLogin.noSession"));
 
-  await BiometricAuth.authenticate(authOptions());
+  await withTimeout(BiometricAuth.authenticate(authOptions()), AUTH_PROMPT_MS);
   await persistSession(token, idNumber.trim());
 }
 
@@ -279,7 +307,7 @@ export async function biometricQuickLogin(): Promise<BiometricQuickLoginResult> 
   if (!BiometricAuth || !SecureStorage) return { ok: false, reason: "failed" };
 
   try {
-    await BiometricAuth.authenticate(quickAuthOptions());
+    await withTimeout(BiometricAuth.authenticate(quickAuthOptions()), AUTH_PROMPT_MS);
   } catch (err) {
     if (isBiometricUserCancel(err)) return { ok: false, reason: "cancelled" };
     throw err;
