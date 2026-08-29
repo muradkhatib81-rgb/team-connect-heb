@@ -21,11 +21,7 @@ import { PasswordInput, PasswordVisibilityToggle } from "@/components/ui/passwor
 import { useTranslation } from "react-i18next";
 import i18n from "@/i18n";
 import { toWesternDigits } from "@/lib/app-locale";
-import {
-  biometricQuickLogin,
-  getBiometricLoginState,
-  syncBiometricLoginSession,
-} from "@/lib/biometric-login";
+import { isNativeApp } from "@/lib/native-app";
 
 const searchSchema = z.object({ redirect: z.string().optional() });
 
@@ -80,39 +76,48 @@ function AuthPage() {
   useEffect(() => {
     let cancelled = false;
     (async () => {
-      const { data } = await supabase.auth.getSession();
-      if (cancelled) return;
-      if (data.session) {
-        const explicit = search.redirect as string | undefined;
-        const target = safeInternalRedirectPath(
-          explicit || (await resolveLandingPath(data.session.user.id)),
-        );
-        router.history.replace(target);
-        return;
+      try {
+        const { data } = await supabase.auth.getSession();
+        if (cancelled) return;
+        if (data.session) {
+          const explicit = search.redirect as string | undefined;
+          const target = safeInternalRedirectPath(
+            explicit || (await resolveLandingPath(data.session.user.id)),
+          );
+          router.history.replace(target);
+          return;
+        }
+        const { data: hasAdmin, error: rpcErr } = await (supabase as any).rpc("has_main_admin");
+        if (cancelled) return;
+        if (rpcErr) {
+          setHasUsers(true);
+        } else {
+          setHasUsers(!!hasAdmin);
+        }
+      } catch {
+        if (!cancelled) setHasUsers(true);
+      } finally {
+        if (!cancelled) setChecking(false);
       }
-      // Check if a main admin already exists — if so, only show login.
-      const { data: hasAdmin, error: rpcErr } = await (supabase as any).rpc("has_main_admin");
-      if (cancelled) return;
-      if (rpcErr) {
-        // Fail safe: assume admin exists so we don't allow accidental bootstrap.
-        setHasUsers(true);
-      } else {
-        setHasUsers(!!hasAdmin);
-      }
-      setChecking(false);
     })();
     return () => {
       cancelled = true;
     };
-  }, [navigate, search.redirect, router]);
+  }, [search.redirect, router]);
 
   useEffect(() => {
+    if (!isNativeApp()) return;
     let cancelled = false;
     void (async () => {
-      const state = await getBiometricLoginState();
-      if (cancelled) return;
-      setQuickLoginReady(state.enabled);
-      setQuickLoginId(state.idNumber);
+      try {
+        const { getBiometricLoginState } = await import("@/lib/biometric-login");
+        const state = await getBiometricLoginState();
+        if (cancelled) return;
+        setQuickLoginReady(state.enabled);
+        setQuickLoginId(state.idNumber);
+      } catch {
+        /* biometric is optional — never block login */
+      }
     })();
     return () => {
       cancelled = true;
@@ -121,7 +126,14 @@ function AuthPage() {
 
   async function finishLogin(userId: string, idNumber?: string) {
     seedIdleSessionOnLogin(userId);
-    if (idNumber) await syncBiometricLoginSession(idNumber);
+    if (idNumber && isNativeApp()) {
+      try {
+        const { syncBiometricLoginSession } = await import("@/lib/biometric-login");
+        await syncBiometricLoginSession(idNumber);
+      } catch {
+        /* optional */
+      }
+    }
     const explicit = search.redirect as string | undefined;
     const target = safeInternalRedirectPath(
       explicit || (await resolveLandingPath(userId)),
@@ -132,6 +144,7 @@ function AuthPage() {
   async function handleQuickLogin() {
     setQuickLoginBusy(true);
     try {
+      const { biometricQuickLogin } = await import("@/lib/biometric-login");
       const result = await biometricQuickLogin();
       if (!result.ok) {
         if (result.reason === "expired") {
