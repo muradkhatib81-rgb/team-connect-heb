@@ -21,6 +21,7 @@ import { registerPwaServiceWorker } from "@/lib/register-pwa";
 import { initNativePush, isNativePushOptedIn, type NativePushToken } from "@/lib/native-push";
 import { NATIVE_FCM_TOKEN_EVENT } from "@/lib/fcm-endpoints";
 import { isNativeApp } from "@/lib/native-app";
+import { hideNativeSplash } from "@/lib/native-boot";
 import { installNativeBackButton } from "@/lib/native-back-button";
 import { saveFcmToken } from "@/lib/push.functions";
 import { applyPwaBranding, fetchPlatformPwaIconUrl } from "@/lib/pwa-branding";
@@ -261,6 +262,10 @@ function RootComponent() {
   }, []);
 
   useEffect(() => installNativeBackButton(), []);
+
+  useEffect(() => {
+    void hideNativeSplash();
+  }, []);
 
   useEffect(() => {
     if (!isNativeApp()) return;

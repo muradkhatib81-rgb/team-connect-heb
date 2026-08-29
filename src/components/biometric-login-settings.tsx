@@ -32,11 +32,18 @@ export function BiometricLoginSettings() {
       setLoading(false);
       return;
     }
-    const state = await getBiometricLoginState();
-    setSupported(state.supported);
-    setEnabled(state.enabled);
-    setBlockedByFaceOnly(state.blockedByFaceOnly);
-    setLoading(false);
+    try {
+      const state = await getBiometricLoginState();
+      setSupported(state.supported);
+      setEnabled(state.enabled);
+      setBlockedByFaceOnly(state.blockedByFaceOnly);
+    } catch {
+      setSupported(false);
+      setEnabled(false);
+      setBlockedByFaceOnly(false);
+    } finally {
+      setLoading(false);
+    }
   }, [native]);
 
   useEffect(() => {

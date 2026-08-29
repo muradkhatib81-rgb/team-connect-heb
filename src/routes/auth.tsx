@@ -105,34 +105,50 @@ function AuthPage() {
     };
   }, [search.redirect, router]);
 
+  /**
+   * Quick-login hint only — Preferences flag, never BiometricAuth/SecureStorage.
+   * Deferred until after the password form is interactive so a stuck native
+   * bridge cannot freeze first paint into a static login "screenshot".
+   */
   useEffect(() => {
-    if (!isNativeApp()) return;
+    if (checking || !isNativeApp()) return;
     let cancelled = false;
-    void (async () => {
-      try {
-        const { getBiometricLoginState } = await import("@/lib/biometric-login");
-        const state = await getBiometricLoginState();
-        if (cancelled) return;
-        setQuickLoginReady(state.enabled);
-        setQuickLoginId(state.idNumber);
-      } catch {
-        /* biometric is optional — never block login */
-      }
-    })();
+    const run = () => {
+      void (async () => {
+        try {
+          const { peekQuickLoginHint } = await import("@/lib/biometric-login");
+          const hint = await peekQuickLoginHint();
+          if (cancelled) return;
+          setQuickLoginReady(hint.ready);
+          setQuickLoginId(hint.idNumber);
+        } catch {
+          /* optional — password login must keep working */
+        }
+      })();
+    };
+    let idleId: number | undefined;
+    let timeoutId: ReturnType<typeof setTimeout> | undefined;
+    if (typeof window !== "undefined" && "requestIdleCallback" in window) {
+      idleId = window.requestIdleCallback(run, { timeout: 2000 });
+    } else {
+      timeoutId = setTimeout(run, 400);
+    }
     return () => {
       cancelled = true;
+      if (idleId != null && "cancelIdleCallback" in window) {
+        window.cancelIdleCallback(idleId);
+      }
+      if (timeoutId != null) clearTimeout(timeoutId);
     };
-  }, []);
+  }, [checking]);
 
   async function finishLogin(userId: string, idNumber?: string) {
     seedIdleSessionOnLogin(userId);
     if (idNumber && isNativeApp()) {
-      try {
-        const { syncBiometricLoginSession } = await import("@/lib/biometric-login");
-        await syncBiometricLoginSession(idNumber);
-      } catch {
-        /* optional */
-      }
+      // Fire-and-forget — never await biometric sync before navigating.
+      void import("@/lib/biometric-login")
+        .then(({ syncBiometricLoginSession }) => syncBiometricLoginSession(idNumber))
+        .catch(() => {});
     }
     const explicit = search.redirect as string | undefined;
     const target = safeInternalRedirectPath(
