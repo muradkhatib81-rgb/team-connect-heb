@@ -23,12 +23,14 @@ export function BiometricLoginSettings() {
   const [supported, setSupported] = useState(false);
   const [enabled, setEnabled] = useState(false);
   const [blockedByFaceOnly, setBlockedByFaceOnly] = useState(false);
+  const [needsAppUpdate, setNeedsAppUpdate] = useState(false);
 
   const refresh = useCallback(async () => {
     if (!native) {
       setSupported(false);
       setEnabled(false);
       setBlockedByFaceOnly(false);
+      setNeedsAppUpdate(false);
       setLoading(false);
       return;
     }
@@ -37,10 +39,12 @@ export function BiometricLoginSettings() {
       setSupported(state.supported);
       setEnabled(state.enabled);
       setBlockedByFaceOnly(state.blockedByFaceOnly);
+      setNeedsAppUpdate(state.needsAppUpdate);
     } catch {
       setSupported(false);
       setEnabled(false);
       setBlockedByFaceOnly(false);
+      setNeedsAppUpdate(false);
     } finally {
       setLoading(false);
     }
@@ -96,6 +100,18 @@ export function BiometricLoginSettings() {
         <div>
           <p className="font-medium">{t("biometricLogin.title")}</p>
           <p className="text-sm text-muted-foreground mt-1">{t("biometricLogin.webUnsupported")}</p>
+        </div>
+      </Card>
+    );
+  }
+
+  if (needsAppUpdate) {
+    return (
+      <Card className="p-6 flex items-start gap-3">
+        <Fingerprint className="size-5 text-muted-foreground mt-0.5 shrink-0" />
+        <div>
+          <p className="font-medium">{t("biometricLogin.title")}</p>
+          <p className="text-sm text-muted-foreground mt-1">{t("biometricLogin.needsAppUpdate")}</p>
         </div>
       </Card>
     );

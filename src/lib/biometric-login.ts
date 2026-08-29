@@ -1,13 +1,13 @@
 /**
- * Fingerprint quick login (Touch ID / Android fingerprint only — no Face ID).
+ * Fingerprint quick login only (Touch ID / Android fingerprint).
+ * Face ID / face unlock are never offered.
  *
- * Critical: Capacitor plugin packages are NEVER imported at module top-level.
- * Top-level imports were what crashed the APK auth screen (plugins evaluated
- * when the auth JS chunk loaded). All native plugins load only inside functions,
- * and BiometricAuth/SecureStorage run only on an explicit user action
- * (profile toggle or quick-login tap) — never while painting /auth.
+ * Capacitor biometric packages are loaded only via dynamic import() —
+ * never at module top-level (that crashed APK auth).
+ *
+ * Do NOT call Capacitor.isPluginAvailable before importing the plugin:
+ * the plugin registers itself on import, so a pre-check always fails.
  */
-import { Capacitor } from "@capacitor/core";
 import { supabase } from "@/integrations/supabase/client";
 import { isNativeApp } from "@/lib/native-app";
 import {
@@ -17,7 +17,9 @@ import {
 } from "@/lib/biometric-login.constants";
 import i18n from "@/i18n";
 
+/** Mirror of aparajita BiometryType — avoid static package import. */
 const BiometryType = {
+  none: 0,
   touchId: 1,
   faceId: 2,
   fingerprintAuthentication: 3,
@@ -25,46 +27,120 @@ const BiometryType = {
   irisAuthentication: 5,
 } as const;
 
-type CheckBiometryResult = { isAvailable: boolean; biometryType: number };
+/** Mirror of AndroidBiometryStrength.strong — fingerprint, not weak face unlock. */
+const ANDROID_BIOMETRY_STRONG = 1;
+
+type CheckBiometryResult = {
+  isAvailable: boolean;
+  strongBiometryIsAvailable?: boolean;
+  biometryType: number;
+  biometryTypes?: number[];
+};
 
 export type BiometricLoginState = {
   supported: boolean;
   enabled: boolean;
   idNumber: string | null;
   blockedByFaceOnly: boolean;
+  /** Native plugin missing from this APK build (needs android:sync + rebuild). */
+  needsAppUpdate: boolean;
 };
 
-async function loadPreferences() {
-  if (!isNativeApp() || !Capacitor.isPluginAvailable("Preferences")) return null;
-  const { Preferences } = await import("@capacitor/preferences");
-  return Preferences;
+type BiometricAuthApi = {
+  checkBiometry: () => Promise<CheckBiometryResult>;
+  authenticate: (options?: Record<string, unknown>) => Promise<void>;
+};
+
+type SecureStorageApi = {
+  get: (key: string) => Promise<unknown>;
+  set: (key: string, data: string) => Promise<void>;
+  remove: (key: string) => Promise<boolean>;
+};
+
+type PreferencesApi = {
+  get: (opts: { key: string }) => Promise<{ value: string | null }>;
+  set: (opts: { key: string; value: string }) => Promise<void>;
+  remove: (opts: { key: string }) => Promise<void>;
+};
+
+async function loadPreferences(): Promise<PreferencesApi | null> {
+  if (!isNativeApp()) return null;
+  try {
+    const { Preferences } = await import("@capacitor/preferences");
+    return Preferences;
+  } catch {
+    return null;
+  }
 }
 
-async function loadBiometricAuth() {
-  if (!isNativeApp() || !Capacitor.isPluginAvailable("BiometricAuthNative")) return null;
-  const { BiometricAuth } = await import("@aparajita/capacitor-biometric-auth");
-  return BiometricAuth;
+async function loadBiometricAuth(): Promise<BiometricAuthApi | null> {
+  if (!isNativeApp()) return null;
+  try {
+    const { BiometricAuth } = await import("@aparajita/capacitor-biometric-auth");
+    return BiometricAuth;
+  } catch {
+    return null;
+  }
 }
 
-async function loadSecureStorage() {
-  if (!isNativeApp() || !Capacitor.isPluginAvailable("SecureStorage")) return null;
-  const { SecureStorage } = await import("@aparajita/capacitor-secure-storage");
-  return SecureStorage;
+async function loadSecureStorage(): Promise<SecureStorageApi | null> {
+  if (!isNativeApp()) return null;
+  try {
+    const { SecureStorage } = await import("@aparajita/capacitor-secure-storage");
+    return SecureStorage;
+  } catch {
+    return null;
+  }
 }
 
-function isFingerprint(result: CheckBiometryResult): boolean {
-  const t = result.biometryType;
-  if (t === BiometryType.faceId || t === BiometryType.faceAuthentication) return false;
-  if (t === BiometryType.irisAuthentication) return false;
-  return t === BiometryType.touchId || t === BiometryType.fingerprintAuthentication;
+function allTypes(result: CheckBiometryResult): number[] {
+  if (result.biometryTypes && result.biometryTypes.length > 0) return result.biometryTypes;
+  return [result.biometryType];
 }
 
-function isFaceOnly(result: CheckBiometryResult): boolean {
-  const t = result.biometryType;
-  return t === BiometryType.faceId || t === BiometryType.faceAuthentication;
+function hasFingerprintHardware(result: CheckBiometryResult): boolean {
+  return allTypes(result).some(
+    (t) => t === BiometryType.touchId || t === BiometryType.fingerprintAuthentication,
+  );
 }
 
-/** Auth-safe: Preferences opt-in only. Does not touch BiometricAuth / SecureStorage. */
+function hasOnlyFaceHardware(result: CheckBiometryResult): boolean {
+  const types = allTypes(result).filter((t) => t !== BiometryType.none);
+  if (types.length === 0) return false;
+  if (hasFingerprintHardware(result)) return false;
+  return types.every(
+    (t) => t === BiometryType.faceId || t === BiometryType.faceAuthentication,
+  );
+}
+
+/** Fingerprint enrolled / usable — never treat face-only as supported. */
+function fingerprintUsable(result: CheckBiometryResult): boolean {
+  if (!hasFingerprintHardware(result)) return false;
+  if (hasOnlyFaceHardware(result)) return false;
+  // Prefer strong biometry (fingerprint on most Androids); fall back to isAvailable
+  // when the primary type is already fingerprint/Touch ID.
+  if (result.strongBiometryIsAvailable) return true;
+  const primary = result.biometryType;
+  return (
+    !!result.isAvailable &&
+    (primary === BiometryType.touchId || primary === BiometryType.fingerprintAuthentication)
+  );
+}
+
+const authOptions = () => ({
+  reason: i18n.t("biometricLogin.authenticateReason"),
+  cancelTitle: i18n.t("common.cancel"),
+  allowDeviceCredential: false,
+  /** Reject weak face unlock; require fingerprint-class biometry on Android. */
+  androidBiometryStrength: ANDROID_BIOMETRY_STRONG,
+});
+
+const quickAuthOptions = () => ({
+  ...authOptions(),
+  reason: i18n.t("biometricLogin.quickLoginReason"),
+});
+
+/** Auth-safe: Preferences opt-in only. */
 export async function peekQuickLoginHint(): Promise<{ ready: boolean; idNumber: string | null }> {
   try {
     const Preferences = await loadPreferences();
@@ -79,14 +155,8 @@ export async function peekQuickLoginHint(): Promise<{ ready: boolean; idNumber: 
 }
 
 export async function isBiometricLoginSupported(): Promise<boolean> {
-  try {
-    const BiometricAuth = await loadBiometricAuth();
-    if (!BiometricAuth) return false;
-    const bio = await BiometricAuth.checkBiometry();
-    return !!bio?.isAvailable && isFingerprint(bio);
-  } catch {
-    return false;
-  }
+  const state = await getBiometricLoginState();
+  return state.supported;
 }
 
 export async function getBiometricLoginState(): Promise<BiometricLoginState> {
@@ -95,14 +165,27 @@ export async function getBiometricLoginState(): Promise<BiometricLoginState> {
     enabled: false,
     idNumber: null,
     blockedByFaceOnly: false,
+    needsAppUpdate: false,
   };
   if (!isNativeApp()) return empty;
+
   try {
     const BiometricAuth = await loadBiometricAuth();
-    if (!BiometricAuth) return empty;
-    const bio = await BiometricAuth.checkBiometry();
-    const blockedByFaceOnly = !!bio && isFaceOnly(bio) && bio.isAvailable;
-    const supported = !!bio && bio.isAvailable && isFingerprint(bio);
+    if (!BiometricAuth) {
+      return { ...empty, needsAppUpdate: true };
+    }
+
+    let bio: CheckBiometryResult;
+    try {
+      bio = await BiometricAuth.checkBiometry();
+    } catch {
+      // Native bridge missing / unimplemented → APK needs rebuild with plugins.
+      return { ...empty, needsAppUpdate: true };
+    }
+
+    const blockedByFaceOnly = hasOnlyFaceHardware(bio) && bio.isAvailable;
+    const supported = fingerprintUsable(bio);
+
     const Preferences = await loadPreferences();
     const { value: opt } = Preferences
       ? await Preferences.get({ key: BIOMETRIC_LOGIN_OPT_IN_KEY })
@@ -113,7 +196,7 @@ export async function getBiometricLoginState(): Promise<BiometricLoginState> {
       const { value } = await Preferences.get({ key: BIOMETRIC_LOGIN_ID_NUMBER_KEY });
       idNumber = value?.trim() || null;
     }
-    return { supported, enabled, idNumber, blockedByFaceOnly };
+    return { supported, enabled, idNumber, blockedByFaceOnly, needsAppUpdate: false };
   } catch {
     return empty;
   }
@@ -122,7 +205,9 @@ export async function getBiometricLoginState(): Promise<BiometricLoginState> {
 async function persistSession(refreshToken: string, idNumber: string): Promise<void> {
   const SecureStorage = await loadSecureStorage();
   const Preferences = await loadPreferences();
-  if (!SecureStorage || !Preferences) throw new Error(i18n.t("biometricLogin.unsupported"));
+  if (!SecureStorage || !Preferences) {
+    throw new Error(i18n.t("biometricLogin.needsAppUpdate"));
+  }
   await SecureStorage.set(BIOMETRIC_REFRESH_TOKEN_KEY, refreshToken);
   await Preferences.set({ key: BIOMETRIC_LOGIN_OPT_IN_KEY, value: "1" });
   await Preferences.set({ key: BIOMETRIC_LOGIN_ID_NUMBER_KEY, value: idNumber });
@@ -144,21 +229,19 @@ export async function syncBiometricLoginSession(idNumber: string): Promise<void>
 }
 
 export async function enableBiometricLogin(idNumber: string): Promise<void> {
-  if (!(await isBiometricLoginSupported())) {
-    throw new Error(i18n.t("biometricLogin.unsupported"));
-  }
+  const state = await getBiometricLoginState();
+  if (state.needsAppUpdate) throw new Error(i18n.t("biometricLogin.needsAppUpdate"));
+  if (state.blockedByFaceOnly) throw new Error(i18n.t("biometricLogin.faceIdNotSupported"));
+  if (!state.supported) throw new Error(i18n.t("biometricLogin.unsupported"));
+
   const BiometricAuth = await loadBiometricAuth();
-  if (!BiometricAuth) throw new Error(i18n.t("biometricLogin.unsupported"));
+  if (!BiometricAuth) throw new Error(i18n.t("biometricLogin.needsAppUpdate"));
 
   const { data } = await supabase.auth.getSession();
   const token = data.session?.refresh_token;
   if (!token) throw new Error(i18n.t("biometricLogin.noSession"));
 
-  await BiometricAuth.authenticate({
-    reason: i18n.t("biometricLogin.authenticateReason"),
-    cancelTitle: i18n.t("common.cancel"),
-    allowDeviceCredential: false,
-  });
+  await BiometricAuth.authenticate(authOptions());
   await persistSession(token, idNumber.trim());
 }
 
@@ -196,11 +279,7 @@ export async function biometricQuickLogin(): Promise<BiometricQuickLoginResult> 
   if (!BiometricAuth || !SecureStorage) return { ok: false, reason: "failed" };
 
   try {
-    await BiometricAuth.authenticate({
-      reason: i18n.t("biometricLogin.quickLoginReason"),
-      cancelTitle: i18n.t("common.cancel"),
-      allowDeviceCredential: false,
-    });
+    await BiometricAuth.authenticate(quickAuthOptions());
   } catch (err) {
     if (isBiometricUserCancel(err)) return { ok: false, reason: "cancelled" };
     throw err;
