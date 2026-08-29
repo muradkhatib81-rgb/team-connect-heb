@@ -15,9 +15,10 @@ import { seedIdleSessionOnLogin } from "@/lib/use-idle-logout";
 import { useCompanySettings } from "@/lib/use-company-settings";
 import { toWhatsAppUrl } from "@/lib/whatsapp";
 import { WhatsAppIcon } from "@/components/whatsapp-icon";
-import { Store, Loader2, Fingerprint } from "lucide-react";
+import { Store, Loader2 } from "lucide-react";
 import { LanguageSwitcher } from "@/components/language-switcher";
 import { PasswordInput, PasswordVisibilityToggle } from "@/components/ui/password-input";
+import { AuthQuickLogin } from "@/components/auth-quick-login";
 import { useTranslation } from "react-i18next";
 import i18n from "@/i18n";
 import { toWesternDigits } from "@/lib/app-locale";
@@ -54,9 +55,6 @@ function AuthPage() {
   const [checking, setChecking] = useState(true);
   const [hasUsers, setHasUsers] = useState<boolean | null>(null);
   const [showPassword, setShowPassword] = useState(false);
-  const [quickLoginReady, setQuickLoginReady] = useState(false);
-  const [quickLoginId, setQuickLoginId] = useState<string | null>(null);
-  const [quickLoginBusy, setQuickLoginBusy] = useState(false);
 
   const whatsappQ = useQuery({
     queryKey: ["platform-settings-whatsapp-public"],
@@ -80,11 +78,17 @@ function AuthPage() {
         const { data } = await supabase.auth.getSession();
         if (cancelled) return;
         if (data.session) {
+          setHasUsers(true);
+          setChecking(false);
           const explicit = search.redirect as string | undefined;
-          const target = safeInternalRedirectPath(
-            explicit || (await resolveLandingPath(data.session.user.id)),
-          );
-          router.history.replace(target);
+          try {
+            const target = safeInternalRedirectPath(
+              explicit || (await resolveLandingPath(data.session.user.id)),
+            );
+            if (!cancelled) router.history.replace(target);
+          } catch {
+            /* show login form if landing resolve fails */
+          }
           return;
         }
         const { data: hasAdmin, error: rpcErr } = await (supabase as any).rpc("has_main_admin");
@@ -103,85 +107,7 @@ function AuthPage() {
     return () => {
       cancelled = true;
     };
-  }, [search.redirect, router]);
-
-  /**
-   * Quick-login hint only — Preferences flag, never BiometricAuth/SecureStorage.
-   * Deferred until after the password form is interactive so a stuck native
-   * bridge cannot freeze first paint into a static login "screenshot".
-   */
-  useEffect(() => {
-    if (checking || !isNativeApp()) return;
-    let cancelled = false;
-    const run = () => {
-      void (async () => {
-        try {
-          const { peekQuickLoginHint } = await import("@/lib/biometric-login");
-          const hint = await peekQuickLoginHint();
-          if (cancelled) return;
-          setQuickLoginReady(hint.ready);
-          setQuickLoginId(hint.idNumber);
-        } catch {
-          /* optional — password login must keep working */
-        }
-      })();
-    };
-    let idleId: number | undefined;
-    let timeoutId: ReturnType<typeof setTimeout> | undefined;
-    if (typeof window !== "undefined" && "requestIdleCallback" in window) {
-      idleId = window.requestIdleCallback(run, { timeout: 2000 });
-    } else {
-      timeoutId = setTimeout(run, 400);
-    }
-    return () => {
-      cancelled = true;
-      if (idleId != null && "cancelIdleCallback" in window) {
-        window.cancelIdleCallback(idleId);
-      }
-      if (timeoutId != null) clearTimeout(timeoutId);
-    };
-  }, [checking]);
-
-  async function finishLogin(userId: string, idNumber?: string) {
-    seedIdleSessionOnLogin(userId);
-    if (idNumber && isNativeApp()) {
-      // Fire-and-forget — never await biometric sync before navigating.
-      void import("@/lib/biometric-login")
-        .then(({ syncBiometricLoginSession }) => syncBiometricLoginSession(idNumber))
-        .catch(() => {});
-    }
-    const explicit = search.redirect as string | undefined;
-    const target = safeInternalRedirectPath(
-      explicit || (await resolveLandingPath(userId)),
-    );
-    router.history.replace(target);
-  }
-
-  async function handleQuickLogin() {
-    setQuickLoginBusy(true);
-    try {
-      const { biometricQuickLogin } = await import("@/lib/biometric-login");
-      const result = await biometricQuickLogin();
-      if (!result.ok) {
-        if (result.reason === "expired") {
-          toast.error(t("biometricLogin.sessionExpired"));
-          setQuickLoginReady(false);
-          setQuickLoginId(null);
-        } else if (result.reason === "failed") {
-          toast.error(t("biometricLogin.loginFailed"));
-          setQuickLoginReady(false);
-          setQuickLoginId(null);
-        }
-        return;
-      }
-      toast.success(t("auth.loginSuccess"));
-      await finishLogin(result.userId);
-    } catch (err: unknown) {
-      toast.error((err as Error)?.message ?? t("biometricLogin.loginFailed"));
-    } finally {
-      setQuickLoginBusy(false);
-    }
-  }
+  }, [navigate, search.redirect, router]);
 
   async function handleSignIn(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -212,8 +138,20 @@ function AuthPage() {
     }
     toast.success(t("auth.loginSuccess"));
     const { data: userData } = await supabase.auth.getUser();
+    if (userData.user) {
+      seedIdleSessionOnLogin(userData.user.id);
+      if (isNativeApp()) {
+        void import("@/lib/biometric-login")
+          .then(({ syncBiometricLoginSession }) => syncBiometricLoginSession(idNumber))
+          .catch(() => {});
+      }
+    }
     setLoading(false);
-    if (userData.user) await finishLogin(userData.user.id, idNumber);
+    const explicit = search.redirect as string | undefined;
+    const target = safeInternalRedirectPath(
+      explicit || (userData.user ? await resolveLandingPath(userData.user.id) : "/dashboard"),
+    );
+    router.history.replace(target);
   }
 
   async function handleBootstrap(e: React.FormEvent<HTMLFormElement>) {
@@ -355,40 +293,17 @@ function AuthPage() {
               </>
             ) : (
               <>
-                {quickLoginReady && (
-                  <div className="space-y-3 mb-6">
-                    <Button
-                      type="button"
-                      variant="default"
-                      className="w-full gap-2"
-                      size="lg"
-                      disabled={quickLoginBusy || loading}
-                      onClick={() => void handleQuickLogin()}
-                    >
-                      {quickLoginBusy ? (
-                        <Loader2 className="size-5 animate-spin" />
-                      ) : (
-                        <Fingerprint className="size-5" />
-                      )}
-                      {t("auth.quickLogin")}
-                    </Button>
-                    {quickLoginId && (
-                      <p className="text-xs text-center text-muted-foreground">
-                        {t("auth.quickLoginAs", { id: quickLoginId })}
-                      </p>
-                    )}
-                    <div className="relative py-1">
-                      <div className="absolute inset-0 flex items-center">
-                        <span className="w-full border-t border-border" />
-                      </div>
-                      <div className="relative flex justify-center text-xs uppercase">
-                        <span className="bg-card px-2 text-muted-foreground">
-                          {t("auth.orUseIdPassword")}
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-                )}
+                <AuthQuickLogin
+                  disabled={loading}
+                  onSuccess={async (userId) => {
+                    seedIdleSessionOnLogin(userId);
+                    const explicit = search.redirect as string | undefined;
+                    const target = safeInternalRedirectPath(
+                      explicit || (await resolveLandingPath(userId)),
+                    );
+                    router.history.replace(target);
+                  }}
+                />
               <form onSubmit={handleSignIn} className="space-y-4">
                 <div className="space-y-2">
                   <Label htmlFor="id-in">{t("auth.idNumber")}</Label>
