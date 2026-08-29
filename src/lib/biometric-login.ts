@@ -153,17 +153,25 @@ function hasOnlyFaceHardware(result: CheckBiometryResult): boolean {
   );
 }
 
-/** Fingerprint enrolled / usable — never treat face-only as supported. */
+/**
+ * Fingerprint enrolled / usable — never treat face-only as supported.
+ *
+ * Prefer BiometricManager STRONG (strongBiometryIsAvailable) over
+ * PackageManager FEATURE_FINGERPRINT. Many OEMs omit FEATURE_FINGERPRINT for
+ * in-display / side sensors even when fingerprint is enrolled and works — that
+ * false negative is what showed "unsupported" while other apps on the same phone worked.
+ */
 function fingerprintUsable(result: CheckBiometryResult): boolean {
-  if (!hasFingerprintHardware(result)) return false;
-  if (hasOnlyFaceHardware(result)) return false;
-  // Strong biometry = fingerprint on most Android devices.
   if (result.strongBiometryIsAvailable) return true;
+
+  if (hasOnlyFaceHardware(result)) return false;
+
+  // iOS: strong mirrors isAvailable; primary touchId is enough when enrolled.
   const primary = result.biometryType;
-  return (
-    !!result.isAvailable &&
-    (primary === BiometryType.touchId || primary === BiometryType.fingerprintAuthentication)
-  );
+  if (primary === BiometryType.touchId && result.isAvailable) return true;
+
+  // Android without STRONG: only weak face (or nothing) is enrolled — not fingerprint.
+  return false;
 }
 
 const authOptions = () => ({
@@ -227,7 +235,8 @@ export async function getBiometricLoginState(): Promise<BiometricLoginState> {
       return empty;
     }
 
-    const blockedByFaceOnly = hasOnlyFaceHardware(bio) && bio.isAvailable;
+    const blockedByFaceOnly =
+      !bio.strongBiometryIsAvailable && hasOnlyFaceHardware(bio) && !!bio.isAvailable;
     const supported = fingerprintUsable(bio);
 
     const Preferences = await loadPreferences();
