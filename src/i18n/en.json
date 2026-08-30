@@ -24,28 +24,7 @@
     "loginSuccess": "Logged in successfully",
     "loginPageTitle": "Sign in",
     "showPassword": "Show password",
-    "hidePassword": "Hide password",
-    "quickLogin": "Quick sign-in with fingerprint",
-    "quickLoginAs": "Saved account: {{id}}",
-    "orUseIdPassword": "or ID and password"
-  },
-  "biometricLogin": {
-    "title": "Enable fingerprint",
-    "description": "Enable fingerprint for quick sign-in on this device.",
-    "webUnsupported": "Fingerprint is available in the installed Android/iPhone app, not in the browser.",
-    "unsupported": "This device does not support fingerprint, or fingerprint is not enrolled in device settings.",
-    "needsAppUpdate": "This app build does not include fingerprint support. Rebuild the APK after android:sync and reinstall.",
-    "faceIdNotSupported": "This device does not support enabling fingerprint.",
-    "enabled": "Fingerprint enabled",
-    "disabled": "Fingerprint disabled",
-    "enableError": "Could not enable fingerprint",
-    "disableError": "Could not disable fingerprint",
-    "noSession": "Sign in with ID and password first, then enable fingerprint here.",
-    "missingId": "Your profile must include an ID number before enabling fingerprint.",
-    "authenticateReason": "Confirm your fingerprint to enable",
-    "quickLoginReason": "Confirm your fingerprint to sign in",
-    "sessionExpired": "Saved sign-in expired. Use ID and password, then re-enable fingerprint if needed.",
-    "loginFailed": "Fingerprint sign-in failed. Use ID and password."
+    "hidePassword": "Hide password"
   },
   "profile": {
     "title": "My Profile",

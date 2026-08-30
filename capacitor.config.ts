@@ -23,7 +23,6 @@ const config: CapacitorConfig = {
   },
   ios: {
     backgroundColor: "#0f172a",
-    /** Future iOS build: add NSFaceIDUsageDescription only if App Store requires it; app uses Touch ID / fingerprint only. */
     contentInset: "automatic",
   },
   plugins: {

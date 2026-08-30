@@ -18,11 +18,9 @@ import { WhatsAppIcon } from "@/components/whatsapp-icon";
 import { Store, Loader2 } from "lucide-react";
 import { LanguageSwitcher } from "@/components/language-switcher";
 import { PasswordInput, PasswordVisibilityToggle } from "@/components/ui/password-input";
-import { AuthQuickLogin } from "@/components/auth-quick-login";
 import { useTranslation } from "react-i18next";
 import i18n from "@/i18n";
 import { toWesternDigits } from "@/lib/app-locale";
-import { isNativeApp } from "@/lib/native-app";
 
 const searchSchema = z.object({ redirect: z.string().optional() });
 
@@ -138,14 +136,7 @@ function AuthPage() {
     }
     toast.success(t("auth.loginSuccess"));
     const { data: userData } = await supabase.auth.getUser();
-    if (userData.user) {
-      seedIdleSessionOnLogin(userData.user.id);
-      if (isNativeApp()) {
-        void import("@/lib/biometric-login")
-          .then(({ syncBiometricLoginSession }) => syncBiometricLoginSession(idNumber))
-          .catch(() => {});
-      }
-    }
+    if (userData.user) seedIdleSessionOnLogin(userData.user.id);
     setLoading(false);
     const explicit = search.redirect as string | undefined;
     const target = safeInternalRedirectPath(
@@ -293,17 +284,6 @@ function AuthPage() {
               </>
             ) : (
               <>
-                <AuthQuickLogin
-                  disabled={loading}
-                  onSuccess={async (userId) => {
-                    seedIdleSessionOnLogin(userId);
-                    const explicit = search.redirect as string | undefined;
-                    const target = safeInternalRedirectPath(
-                      explicit || (await resolveLandingPath(userId)),
-                    );
-                    router.history.replace(target);
-                  }}
-                />
               <form onSubmit={handleSignIn} className="space-y-4">
                 <div className="space-y-2">
                   <Label htmlFor="id-in">{t("auth.idNumber")}</Label>
