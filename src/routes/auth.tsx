@@ -12,7 +12,6 @@ import { APP_NAME } from "@/lib/constants";
 import { bootstrapPlatformOwner } from "@/lib/auth-bootstrap.functions";
 import { resolveLandingPath } from "@/lib/use-auth";
 import { seedIdleSessionOnLogin } from "@/lib/use-idle-logout";
-import { useCompanySettings } from "@/lib/use-company-settings";
 import { toWhatsAppUrl } from "@/lib/whatsapp";
 import { WhatsAppIcon } from "@/components/whatsapp-icon";
 import { Store, Loader2 } from "lucide-react";
@@ -39,7 +38,6 @@ function AuthPage() {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const router = useRouter();
-  const { data: company } = useCompanySettings({ allowUnscoped: true });
   const [loading, setLoading] = useState(false);
   const [checking, setChecking] = useState(true);
   const [hasUsers, setHasUsers] = useState<boolean | null>(null);
@@ -202,15 +200,10 @@ function AuthPage() {
         <div className="w-full max-w-md">
           <div className="flex flex-col items-center gap-3 mb-8">
             <div className="size-16 rounded-2xl gradient-brand flex items-center justify-center shadow-card overflow-hidden">
-              {company?.logo_url ? (
-                <img src={company.logo_url} alt={company.company_name} className="size-full object-contain bg-white" />
-              ) : (
-                <Store className="size-7 text-primary-foreground" />
-              )}
+              <Store className="size-7 text-primary-foreground" />
             </div>
             <div className="text-center">
               <h1 className="text-2xl font-bold text-foreground">{t("auth.appName")}</h1>
-              <p className="text-sm text-muted-foreground mt-1">{company?.company_name}</p>
             </div>
           </div>
 
