@@ -3121,6 +3121,9 @@
     "previous": "Previous",
     "next": "Next"
   },
+  "native": {
+    "pressBackAgainToExit": "Press back again to exit the app"
+  },
   "root": {
     "notFoundTitle": "Page not found",
     "notFoundDesc": "The page you searched for does not exist or was moved.",

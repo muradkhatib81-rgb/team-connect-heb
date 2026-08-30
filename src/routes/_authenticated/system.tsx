@@ -11,10 +11,10 @@ import { supabase } from "@/integrations/supabase/client";
  * are the real source of truth.
  */
 export const Route = createFileRoute("/_authenticated/system")({
-  beforeLoad: async ({ context, location }) => {
+  beforeLoad: async ({ context }) => {
     const userId = (context as any)?.user?.id;
     if (!userId) {
-      throw redirect({ to: "/auth", search: { redirect: location.href }, replace: true });
+      throw redirect({ to: "/auth", replace: true });
     }
     const { data, error } = await supabase
       .from("user_roles")

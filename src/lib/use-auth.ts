@@ -79,11 +79,10 @@ async function fetchSessionAndProfile(): Promise<AuthProfile | null> {
 }
 
 /**
- * Where a signed-in user must land: the Platform Dashboard for Platform
- * Owners (system_admin / main_admin — they must never be dropped into a
- * Branch automatically, see use-active-branch.tsx), `/dashboard` for
- * everyone else. Used by `/auth` and the `/` root redirect so every entry
- * point into the app agrees on the same landing rule.
+ * Where a signed-in user must land after login or `/`:
+ * Platform Dashboard for Platform Owners, `/dashboard` (לוח ראשי) for
+ * everyone else, `/inactive` when the profile is disabled.
+ * Login always uses this — never a stale deep-link from another session.
  */
 export async function resolveLandingPath(
   userId: string,

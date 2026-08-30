@@ -3121,6 +3121,9 @@
     "previous": "הקודם",
     "next": "הבא"
   },
+  "native": {
+    "pressBackAgainToExit": "לחצו שוב על חזרה כדי לצאת מהאפליקציה"
+  },
   "root": {
     "notFoundTitle": "העמוד לא נמצא",
     "notFoundDesc": "העמוד שחיפשת לא קיים או הועבר למיקום אחר.",

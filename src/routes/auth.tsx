@@ -1,4 +1,4 @@
-import { createFileRoute, useNavigate, useRouter, useSearch } from "@tanstack/react-router";
+import { createFileRoute, useNavigate, useRouter } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { z } from "zod";
@@ -22,16 +22,8 @@ import { useTranslation } from "react-i18next";
 import i18n from "@/i18n";
 import { toWesternDigits } from "@/lib/app-locale";
 
+/** Kept so old /auth?redirect=… bookmarks still validate; login ignores it. */
 const searchSchema = z.object({ redirect: z.string().optional() });
-
-/** Same-origin path only — blocks //evil, /\evil, and protocol URLs. */
-function safeInternalRedirectPath(raw: string | undefined, fallback = "/dashboard"): string {
-  if (!raw) return fallback;
-  const path = raw.trim();
-  if (!path.startsWith("/") || path.startsWith("//") || path.startsWith("/\\")) return fallback;
-  if (path.includes("://") || path.includes("\\") || /[\u0000-\u001f]/.test(path)) return fallback;
-  return path;
-}
 
 export const Route = createFileRoute("/auth")({
   validateSearch: searchSchema,
@@ -47,7 +39,6 @@ function AuthPage() {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const router = useRouter();
-  const search = useSearch({ from: "/auth" });
   const { data: company } = useCompanySettings({ allowUnscoped: true });
   const [loading, setLoading] = useState(false);
   const [checking, setChecking] = useState(true);
@@ -78,11 +69,9 @@ function AuthPage() {
         if (data.session) {
           setHasUsers(true);
           setChecking(false);
-          const explicit = search.redirect as string | undefined;
+          // Always land on this user's home — never reuse a prior account's path.
           try {
-            const target = safeInternalRedirectPath(
-              explicit || (await resolveLandingPath(data.session.user.id)),
-            );
+            const target = await resolveLandingPath(data.session.user.id);
             if (!cancelled) router.history.replace(target);
           } catch {
             /* show login form if landing resolve fails */
@@ -105,7 +94,7 @@ function AuthPage() {
     return () => {
       cancelled = true;
     };
-  }, [navigate, search.redirect, router]);
+  }, [navigate, router]);
 
   async function handleSignIn(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -138,10 +127,11 @@ function AuthPage() {
     const { data: userData } = await supabase.auth.getUser();
     if (userData.user) seedIdleSessionOnLogin(userData.user.id);
     setLoading(false);
-    const explicit = search.redirect as string | undefined;
-    const target = safeInternalRedirectPath(
-      explicit || (userData.user ? await resolveLandingPath(userData.user.id) : "/dashboard"),
-    );
+    // Fresh login always opens the role home (לוח ראשי / platform), never a
+    // stale ?redirect= from another account or a previous deep link.
+    const target = userData.user
+      ? await resolveLandingPath(userData.user.id)
+      : "/dashboard";
     router.history.replace(target);
   }
 

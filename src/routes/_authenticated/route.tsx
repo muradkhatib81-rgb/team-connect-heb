@@ -15,7 +15,8 @@ export const Route = createFileRoute("/_authenticated")({
   beforeLoad: async ({ location, context }) => {
     const { data, error } = await supabase.auth.getUser();
     if (error || !data.user) {
-      throw redirect({ to: "/auth", search: { redirect: location.href }, replace: true });
+      // No ?redirect= — next login must open that user's home, not this path.
+      throw redirect({ to: "/auth", replace: true });
     }
     const userId = data.user.id;
     let roles: Awaited<ReturnType<typeof fetchRouteGuardRoles>>;
@@ -34,7 +35,7 @@ export const Route = createFileRoute("/_authenticated")({
         }),
       ]);
     } catch {
-      throw redirect({ to: "/auth", search: { redirect: location.href }, replace: true });
+      throw redirect({ to: "/auth", replace: true });
     }
 
     const isActive = await context.queryClient.ensureQueryData({
