@@ -374,7 +374,7 @@ export function AppShell({ children }: { children: ReactNode }) {
       to: "/ai-assistant",
       label: t("nav.aiAssistant"),
       icon: Sparkles,
-      visible: !!aiAccessQ.data?.allowed,
+      visible: false,
       section: branchSection,
     },
     {
@@ -502,7 +502,7 @@ export function AppShell({ children }: { children: ReactNode }) {
       to: "/ai-assistant",
       label: t("nav.aiAssistant"),
       icon: Sparkles,
-      visible: isPlatformOwner && !!aiAccessQ.data?.allowed,
+      visible: false,
       section: t("nav.platformSection"),
     },
     {
@@ -906,6 +906,13 @@ export function AppShell({ children }: { children: ReactNode }) {
           <div className="flex items-center gap-1 shrink-0">
             <LanguageSwitcher userId={profile?.id} />
             <ThemeSwitcher userId={profile?.id} currentTheme={(profile?.preferred_theme as AppTheme | undefined) ?? "system"} />
+            {!!aiAccessQ.data?.allowed && (
+              <Button variant="ghost" size="icon" className="size-8" asChild>
+                <Link to="/ai-assistant" onClick={() => setMobileOpen(false)}>
+                  <Sparkles className="size-4" />
+                </Link>
+              </Button>
+            )}
             <NotificationsBell />
           </div>
         </header>
@@ -918,6 +925,15 @@ export function AppShell({ children }: { children: ReactNode }) {
           <div className="bg-background/95 backdrop-blur border rounded-full shadow-soft">
             <ThemeSwitcher userId={profile?.id} currentTheme={(profile?.preferred_theme as AppTheme | undefined) ?? "system"} />
           </div>
+          {!!aiAccessQ.data?.allowed && (
+            <div className="bg-background/95 backdrop-blur border rounded-full shadow-soft">
+              <Button variant="ghost" size="sm" className="px-2 h-8" asChild>
+                <Link to="/ai-assistant">
+                  <Sparkles className="size-3.5" />
+                </Link>
+              </Button>
+            </div>
+          )}
           <div className="bg-background/95 backdrop-blur border rounded-full shadow-soft">
             <NotificationsBell />
           </div>
