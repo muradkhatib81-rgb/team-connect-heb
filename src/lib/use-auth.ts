@@ -25,6 +25,7 @@ export interface AuthProfile {
   roles: AppRole[];
   branch_id: string | null;
   preferred_language: AppLanguage;
+  preferred_theme: "light" | "dark" | "system";
 }
 
 async function fetchSessionAndProfile(): Promise<AuthProfile | null> {
@@ -44,7 +45,7 @@ async function fetchSessionAndProfile(): Promise<AuthProfile | null> {
   const profilesFrom = unscopedFrom("profiles") as ReturnType<typeof supabase.from>;
   const [{ data: profile }, { data: roles }, { data: contactRows }] = await Promise.all([
     profilesFrom
-      .select("id, first_name, last_name, full_name, department_id, job_title, is_active, on_leave, leave_start_date, leave_end_date, branch_id, preferred_language, departments(name)")
+      .select("id, first_name, last_name, full_name, department_id, job_title, is_active, on_leave, leave_start_date, leave_end_date, branch_id, preferred_language, preferred_theme, departments(name)")
       .eq("id", user.id)
       .maybeSingle(),
     supabase.from("user_roles").select("role").eq("user_id", user.id),
@@ -75,6 +76,10 @@ async function fetchSessionAndProfile(): Promise<AuthProfile | null> {
       p.preferred_language === "he" || p.preferred_language === "ar" || p.preferred_language === "en"
         ? p.preferred_language
         : "he",
+    preferred_theme:
+      p.preferred_theme === "light" || p.preferred_theme === "dark" || p.preferred_theme === "system"
+        ? p.preferred_theme
+        : "system",
   };
 }
 

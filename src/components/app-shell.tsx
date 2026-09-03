@@ -59,6 +59,8 @@ import { OnlinePresencePublisher } from "@/components/online-presence-publisher"
 import { NotificationsBell } from "@/components/notifications-bell";
 import { PullToRefresh } from "@/components/pull-to-refresh";
 import { LanguageSwitcher } from "@/components/language-switcher";
+import { ThemeSwitcher, applyTheme } from "@/components/theme-switcher";
+import type { AppTheme } from "@/lib/translate-content.functions";
 import { useActiveBranch } from "@/lib/use-active-branch";
 import { useBreakSelfServiceNavVisible } from "@/lib/use-shift-self-service-visible";
 import { useCanManageBreaks, canManageBreaksQueryKey } from "@/lib/break-permissions";
@@ -211,6 +213,11 @@ export function AppShell({ children }: { children: ReactNode }) {
       void syncLangFn({ data: { lang: guestLang } }).catch(() => {});
     }
   }, [profile?.id, profile?.preferred_language, i18n, syncLangFn, qc]);
+
+  useEffect(() => {
+    if (!profile?.id) return;
+    applyTheme((profile.preferred_theme as AppTheme | undefined) ?? "system");
+  }, [profile?.id, profile?.preferred_theme]);
 
   const breakSelfServiceNav = useBreakSelfServiceNavVisible();
   const { canManageBreaks } = useCanManageBreaks();
@@ -898,6 +905,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           </div>
           <div className="flex items-center gap-1 shrink-0">
             <LanguageSwitcher userId={profile?.id} />
+            <ThemeSwitcher userId={profile?.id} currentTheme={(profile?.preferred_theme as AppTheme | undefined) ?? "system"} />
             <NotificationsBell />
           </div>
         </header>
@@ -906,6 +914,9 @@ export function AppShell({ children }: { children: ReactNode }) {
         <div className="hidden lg:flex fixed top-4 end-4 z-40 items-center gap-2">
           <div className="bg-background/95 backdrop-blur border rounded-full shadow-soft">
             <LanguageSwitcher userId={profile?.id} />
+          </div>
+          <div className="bg-background/95 backdrop-blur border rounded-full shadow-soft">
+            <ThemeSwitcher userId={profile?.id} currentTheme={(profile?.preferred_theme as AppTheme | undefined) ?? "system"} />
           </div>
           <div className="bg-background/95 backdrop-blur border rounded-full shadow-soft">
             <NotificationsBell />

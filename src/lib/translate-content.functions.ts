@@ -48,4 +48,19 @@ export const syncPreferredLanguage = createServerFn({ method: "POST" })
     return { ok: true as const, lang: data.lang };
   });
 
+const themeSchema = z.enum(["light", "dark", "system"]);
+export type AppTheme = z.infer<typeof themeSchema>;
+
+export const syncPreferredTheme = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((raw: unknown) => z.object({ theme: themeSchema }).parse(raw))
+  .handler(async ({ context, data }) => {
+    const { error } = await context.supabase
+      .from("profiles")
+      .update({ preferred_theme: data.theme, updated_at: new Date().toISOString() })
+      .eq("id", context.userId);
+    if (error) throw new Error(error.message);
+    return { ok: true as const, theme: data.theme };
+  });
+
 export type { ContentEntityType, ContentField, TranslateContentResult };
