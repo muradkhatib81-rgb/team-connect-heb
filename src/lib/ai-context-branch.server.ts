@@ -492,39 +492,59 @@ async function loadScheduleLastModified(supabase: Db, branchId: string, weekStar
     .order("updated_at", { ascending: false })
     .limit(20);
 
-  const results = [];
-  for (const sched of scheds ?? []) {
-    const { data: audit } = await supabase
-      .from("schedule_audit_log")
-      .select("action, created_at, actor_id")
-      .eq("schedule_id", sched.id)
-      .order("created_at", { ascending: false })
-      .limit(1)
-      .maybeSingle();
+  if (!scheds?.length) return [];
 
-    let actorName: string | null = null;
-    if (audit?.actor_id) {
-      const { data: actor } = await supabase
-        .from("profiles")
-        .select("full_name, first_name, last_name")
-        .eq("id", audit.actor_id)
-        .maybeSingle();
-      if (actor) {
-        actorName = formatEmployeeName(actor);
-      }
+  const scheduleIds = scheds.map((s) => s.id);
+  const { data: audits } = await supabase
+    .from("schedule_audit_log")
+    .select("schedule_id, action, created_at, actor_id")
+    .in("schedule_id", scheduleIds)
+    .order("created_at", { ascending: false });
+
+  const latestBySchedule = new Map<
+    string,
+    { action: string; created_at: string; actor_id: string | null }
+  >();
+  for (const row of audits ?? []) {
+    if (!latestBySchedule.has(row.schedule_id)) {
+      latestBySchedule.set(row.schedule_id, {
+        action: row.action,
+        created_at: row.created_at,
+        actor_id: row.actor_id,
+      });
     }
+  }
 
-    results.push({
+  const actorIds = [
+    ...new Set(
+      [...latestBySchedule.values()]
+        .map((a) => a.actor_id)
+        .filter((id): id is string => !!id),
+    ),
+  ];
+  const actorNameById = new Map<string, string>();
+  if (actorIds.length) {
+    const { data: actors } = await supabase
+      .from("profiles")
+      .select("id, full_name, first_name, last_name")
+      .in("id", actorIds);
+    for (const actor of actors ?? []) {
+      actorNameById.set(actor.id, formatEmployeeName(actor));
+    }
+  }
+
+  return scheds.map((sched) => {
+    const audit = latestBySchedule.get(sched.id);
+    return {
       department: (sched as { departments?: { name?: string | null } }).departments?.name ?? null,
       weekStart: sched.week_start,
       status: sched.status,
       lastAction: audit?.action ?? null,
       lastModifiedAt: audit?.created_at ?? sched.updated_at,
-      lastModifiedBy: actorName,
+      lastModifiedBy: audit?.actor_id ? (actorNameById.get(audit.actor_id) ?? null) : null,
       publishedAt: sched.published_at,
-    });
-  }
-  return results;
+    };
+  });
 }
 
 function canAccessCustody(roles: AppRole[], perms: UserTaskPermissions | null): boolean {
@@ -542,35 +562,18 @@ function canAccessCustody(roles: AppRole[], perms: UserTaskPermissions | null): 
   );
 }
 
-async function canManageBreaksServer(
-  supabase: Db,
-  userId: string,
-  roles: AppRole[],
-): Promise<boolean> {
+/** Same rules as before — uses already-loaded perms (no extra DB round-trip). */
+function canManageBreaksFromPerms(roles: AppRole[], perms: UserTaskPermissions | null): boolean {
   if (roles.includes("main_admin") || roles.includes("system_admin")) return true;
   if (!roles.includes("branch_manager") && !roles.includes("assistant_manager")) return false;
-  const { data } = await supabase
-    .from("user_task_permissions")
-    .select("can_manage_breaks")
-    .eq("user_id", userId)
-    .maybeSingle();
-  return !!data?.can_manage_breaks;
+  return !!perms?.can_manage_breaks;
 }
 
-async function canManageEomServer(
-  supabase: Db,
-  userId: string,
-  roles: AppRole[],
-): Promise<boolean> {
+function canManageEomFromPerms(roles: AppRole[], perms: UserTaskPermissions | null): boolean {
   if (roles.includes("main_admin") || roles.includes("system_admin")) return true;
   if (roles.includes("branch_manager")) return true;
   if (!roles.includes("assistant_manager")) return false;
-  const { data } = await supabase
-    .from("user_task_permissions")
-    .select("can_manage_employee_of_month")
-    .eq("user_id", userId)
-    .maybeSingle();
-  return !!data?.can_manage_employee_of_month;
+  return !!perms?.can_manage_employee_of_month;
 }
 
 function eomMonthKey(year: number, month: number): number {
@@ -674,13 +677,17 @@ async function loadEmployeeOfMonthHistory(
 }
 
 /** Read-only branch operator snapshot (BM / assistant manager), gated by grants. */
-export async function buildBranchOperatorSnapshot(supabase: Db, userId: string) {
+export async function buildBranchOperatorSnapshot(
+  supabase: Db,
+  userId: string,
+  preloadedRoles?: AppRole[],
+) {
   const today = jerusalemTodayIso();
   const tomorrow = addDaysIso(today, 1);
   const { weekStart } = getScheduleWeek(new Date(`${today}T12:00:00Z`));
 
   const [roles, perms] = await Promise.all([
-    loadRoles(supabase, userId),
+    preloadedRoles ? Promise.resolve(preloadedRoles) : loadRoles(supabase, userId),
     loadPermissions(supabase, userId),
   ]);
 
@@ -689,17 +696,18 @@ export async function buildBranchOperatorSnapshot(supabase: Db, userId: string) 
     throw new Error("Not a branch operator");
   }
 
-  const [{ data: profile }, canManageBreaks, canManageEmployeeOfMonth, personal] =
-    await Promise.all([
-      supabase
-        .from("profiles")
-        .select("branch_id, full_name, first_name, last_name, job_title")
-        .eq("id", userId)
-        .maybeSingle(),
-      canManageBreaksServer(supabase, userId, roles),
-      canManageEomServer(supabase, userId, roles),
-      buildEmployeeSnapshot(supabase, userId),
-    ]);
+  const canManageBreaks = canManageBreaksFromPerms(roles, perms);
+  const canManageEmployeeOfMonth = canManageEomFromPerms(roles, perms);
+
+  const [{ data: profile }, personal] = await Promise.all([
+    supabase
+      .from("profiles")
+      .select("branch_id, full_name, first_name, last_name, job_title")
+      .eq("id", userId)
+      .maybeSingle(),
+    // Lite personal: avoid nesting full schedule/ops rebuild inside branch snapshot.
+    buildEmployeeSnapshot(supabase, userId, { mode: "lite" }),
+  ]);
 
   const branchId = (profile?.branch_id as string | null) ?? null;
   const leaveAccess = resolveLeaveAccess(roles, perms);

@@ -1,12 +1,18 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Loader2, Send, Sparkles } from "lucide-react";
+import { useServerFn } from "@tanstack/react-start";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Card } from "@/components/ui/card";
 import type { AiAssistantKind } from "@/modules/ai";
 import { useTranslation } from "react-i18next";
 import { cn } from "@/lib/utils";
-import { streamAiChatMessage, translateStreamError } from "@/lib/ai-stream-client";
+import {
+  streamAiChatMessage,
+  translateStreamError,
+  type AiStreamPhase,
+} from "@/lib/ai-stream-client";
+import { warmAiContext } from "@/lib/ai.functions";
 
 type ChatMessage = { role: "user" | "assistant"; content: string };
 
@@ -20,14 +26,23 @@ export function AiChatPanel({
   const { t, i18n } = useTranslation();
   const locale = (i18n.language?.slice(0, 2) ?? "he") as "he" | "ar" | "en";
   const title = t(`ai.assistantTitle.${assistantKind}`);
+  const warmContext = useServerFn(warmAiContext);
 
   const [input, setInput] = useState("");
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [remaining, setRemaining] = useState<number | null>(remainingMinutes);
   const [streamingText, setStreamingText] = useState<string | null>(null);
   const [isStreaming, setIsStreaming] = useState(false);
+  const [phase, setPhase] = useState<AiStreamPhase | null>(null);
   const [error, setError] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
+
+  // Warm server context cache while the user reads the empty chat.
+  useEffect(() => {
+    void warmContext().catch(() => {
+      /* best-effort warmup */
+    });
+  }, [warmContext]);
 
   async function handleSend() {
     const text = input.trim();
@@ -38,6 +53,7 @@ export function AiChatPanel({
     setInput("");
     setError(null);
     setStreamingText(null);
+    setPhase("auth");
     setIsStreaming(true);
 
     try {
@@ -47,6 +63,7 @@ export function AiChatPanel({
           setStreamingText(partial);
           scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
         },
+        (nextPhase) => setPhase(nextPhase),
       );
 
       setMessages((prev) => [...prev, { role: "assistant", content: result.text }]);
@@ -55,9 +72,17 @@ export function AiChatPanel({
       setError(translateStreamError(err, t));
     } finally {
       setStreamingText(null);
+      setPhase(null);
       setIsStreaming(false);
     }
   }
+
+  const thinkingLabel =
+    phase === "context"
+      ? t("ai.preparingContext")
+      : phase === "generating"
+        ? t("ai.generating")
+        : t("ai.thinking");
 
   return (
     <Card className="flex flex-col h-[min(70vh,640px)] overflow-hidden">
@@ -101,7 +126,7 @@ export function AiChatPanel({
         {isStreaming && !streamingText && (
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
             <Loader2 className="size-4 animate-spin" />
-            {t("ai.thinking")}
+            {thinkingLabel}
           </div>
         )}
         {error && <p className="text-sm text-destructive">{error}</p>}

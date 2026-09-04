@@ -11,6 +11,8 @@ export type AiStreamResult = {
   providerCode: string;
 };
 
+export type AiStreamPhase = "auth" | "context" | "generating";
+
 export async function streamAiChatMessage(
   input: {
     message: string;
@@ -18,6 +20,7 @@ export async function streamAiChatMessage(
     locale?: string;
   },
   onDelta: (text: string) => void,
+  onPhase?: (phase: AiStreamPhase) => void,
 ): Promise<AiStreamResult> {
   const { data: sessionData } = await supabase.auth.getSession();
   const token = sessionData.session?.access_token;
@@ -62,12 +65,21 @@ export async function streamAiChatMessage(
         type: string;
         text?: string;
         message?: string;
+        phase?: string;
         remainingMinutes?: number | null;
         model?: string;
         providerCode?: string;
       };
 
-      if (payload.type === "chunk" && payload.text) {
+      if (payload.type === "status" && payload.phase) {
+        if (
+          payload.phase === "auth" ||
+          payload.phase === "context" ||
+          payload.phase === "generating"
+        ) {
+          onPhase?.(payload.phase);
+        }
+      } else if (payload.type === "chunk" && payload.text) {
         fullText += payload.text;
         onDelta(fullText);
       } else if (payload.type === "done") {

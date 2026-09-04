@@ -690,10 +690,10 @@ async function loadHealthSummary(supabase: Db) {
     return { result, ms: Date.now() - start };
   };
 
-  const [dbProbe, apiProbe, storageProbe] = await Promise.all([
+  // Skip storage list probe — it is slow and rarely the answer users need from chat.
+  const [dbProbe, apiProbe] = await Promise.all([
     timed(() => supabase.from("platform_settings").select("id").eq("id", 1).maybeSingle()),
     timed(() => supabase.auth.getUser()),
-    timed(() => supabase.storage.from("avatars").list("", { limit: 1 })),
   ]);
 
   checks.push({
@@ -706,13 +706,6 @@ async function loadHealthSummary(supabase: Db) {
     state: latencyState(apiProbe.ms, !apiProbe.result.error),
     message: apiProbe.result.error ? apiProbe.result.error.message : `API ${apiProbe.ms}ms`,
   });
-  checks.push({
-    target: "storage",
-    state: latencyState(storageProbe.ms, !storageProbe.result.error),
-    message: storageProbe.result.error
-      ? storageProbe.result.error.message
-      : `Storage ${storageProbe.ms}ms`,
-  });
 
   const healthyCount = checks.filter((c) => c.state === "healthy").length;
 
@@ -720,7 +713,7 @@ async function loadHealthSummary(supabase: Db) {
     healthyCount,
     totalChecks: checks.length,
     checks,
-    note: "Server-side probes only (configuration, database, api, storage). Realtime/queue not probed here.",
+    note: "Server-side probes only (configuration, database, api). Storage not probed on chat path.",
   };
 }
 
@@ -956,13 +949,6 @@ export async function buildPlatformOwnerSnapshot(supabase: Db, userId: string) {
     .eq("id", userId)
     .maybeSingle();
 
-  const { data: accessRaw } = await supabase.rpc("get_my_ai_access");
-  const callerAiAccess = accessRaw as {
-    allowed?: boolean;
-    remaining_minutes?: number | null;
-    quota_minutes?: number | null;
-  } | null;
-
   const tenantsPromise = loadTenantsSummary(supabase);
   const [owners, tenantsRaw, ai, audit, settings, health, branchDirectories] = await Promise.all([
     loadPlatformOwnersSummary(supabase),
@@ -989,11 +975,6 @@ export async function buildPlatformOwnerSnapshot(supabase: Db, userId: string) {
     asOfDate: today,
     caller: {
       name: profile ? formatEmployeeName(profile) : null,
-      aiAccess: {
-        allowed: !!callerAiAccess?.allowed,
-        remainingMinutes: callerAiAccess?.remaining_minutes ?? null,
-        quotaMinutes: callerAiAccess?.quota_minutes ?? null,
-      },
     },
     owners,
     tenants,

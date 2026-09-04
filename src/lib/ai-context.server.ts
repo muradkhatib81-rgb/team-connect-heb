@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/integrations/supabase/types";
 import type { AiAssistantKind } from "@/modules/ai";
+import type { AppRole } from "@/lib/constants";
 import { getScheduleWeek } from "@/lib/schedule-week";
 import { todayJerusalemDate } from "@/lib/break-workflow";
 import { isEmployeeCurrentlyOnLeave } from "@/lib/employee-leave";
@@ -48,17 +49,20 @@ function leaveAvailable(row: {
 }
 
 /** Best-effort monthly ops-errors summary (isolated feature; never throws). */
-async function loadOpsErrorsAiSummary(supabase: Db, userId: string) {
+async function loadOpsErrorsAiSummary(supabase: Db, userId: string, branchId?: string | null) {
   try {
-    const { data: profile } = await supabase
-      .from("profiles")
-      .select("branch_id")
-      .eq("id", userId)
-      .maybeSingle();
-    const branchId = (profile as { branch_id?: string | null } | null)?.branch_id;
-    if (!branchId) return null;
+    let resolvedBranchId = branchId ?? null;
+    if (!resolvedBranchId) {
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("branch_id")
+        .eq("id", userId)
+        .maybeSingle();
+      resolvedBranchId = (profile as { branch_id?: string | null } | null)?.branch_id ?? null;
+    }
+    if (!resolvedBranchId) return null;
     const { data, error } = await (supabase as any).rpc("summarize_ops_errors_for_branch", {
-      _branch_id: branchId,
+      _branch_id: resolvedBranchId,
       _year_month: null,
     });
     if (error || !data) return null;
@@ -78,15 +82,25 @@ function memberStatus(row: CoworkerRow, today: string): "active" | "on_leave" | 
   return "active";
 }
 
-export async function buildEmployeeSnapshot(supabase: Db, userId: string) {
+export type EmployeeSnapshotOptions = {
+  /** Skip week schedule + recent leave requests (used when nested inside manager snapshots). */
+  mode?: "full" | "lite";
+};
+
+export async function buildEmployeeSnapshot(
+  supabase: Db,
+  userId: string,
+  opts?: EmployeeSnapshotOptions,
+) {
   const today = jerusalemTodayIso();
+  const lite = opts?.mode === "lite";
   const { weekStart, weekDays } = getScheduleWeek(new Date(`${today}T12:00:00Z`));
 
-  const [profileRes, balancesRes, requestsRes, breaksRes, opsErrorsSummary] = await Promise.all([
+  const [profileRes, balancesRes, requestsRes, breaksRes] = await Promise.all([
     supabase
       .from("profiles")
       .select(
-        "full_name, first_name, last_name, job_title, department_id, on_leave, leave_start_date, leave_end_date, departments(name)",
+        "full_name, first_name, last_name, job_title, department_id, branch_id, on_leave, leave_start_date, leave_end_date, departments(name)",
       )
       .eq("id", userId)
       .maybeSingle(),
@@ -94,19 +108,22 @@ export async function buildEmployeeSnapshot(supabase: Db, userId: string) {
       .from("leave_balances")
       .select("manual_balance, accrued_days, used_days, reserved_days, leave_types(name, code)")
       .eq("user_id", userId),
-    (supabase as any)
-      .from("leave_requests")
-      .select("status, start_date, end_date, submitted_at, leave_types(name, code)")
-      .eq("user_id", userId)
-      .order("submitted_at", { ascending: false })
-      .limit(5),
-    supabase
-      .from("break_requests")
-      .select("status, duration_minutes, requested_at, started_at, ends_at, created_at")
-      .eq("user_id", userId)
-      .order("created_at", { ascending: false })
-      .limit(10),
-    loadOpsErrorsAiSummary(supabase, userId),
+    lite
+      ? Promise.resolve({ data: null })
+      : (supabase as any)
+          .from("leave_requests")
+          .select("status, start_date, end_date, submitted_at, leave_types(name, code)")
+          .eq("user_id", userId)
+          .order("submitted_at", { ascending: false })
+          .limit(5),
+    lite
+      ? Promise.resolve({ data: null })
+      : supabase
+          .from("break_requests")
+          .select("status, duration_minutes, requested_at, started_at, ends_at, created_at")
+          .eq("user_id", userId)
+          .order("created_at", { ascending: false })
+          .limit(10),
   ]);
 
   const profile = profileRes.data as {
@@ -115,6 +132,7 @@ export async function buildEmployeeSnapshot(supabase: Db, userId: string) {
     last_name?: string | null;
     job_title?: string | null;
     department_id?: string | null;
+    branch_id?: string | null;
     on_leave?: boolean | null;
     leave_start_date?: string | null;
     leave_end_date?: string | null;
@@ -138,65 +156,71 @@ export async function buildEmployeeSnapshot(supabase: Db, userId: string) {
     availableDays: Math.round(leaveAvailable(row) * 100) / 100,
   }));
 
-  const recentLeaveRequests = ((requestsRes.data ?? []) as Array<{
-    status?: string;
-    start_date?: string;
-    end_date?: string;
-    leave_types?: { name?: string | null; code?: string | null } | null;
-  }>).map((row) => ({
-    type: row.leave_types?.name ?? row.leave_types?.code ?? "leave",
-    status: row.status ?? "unknown",
-    from: row.start_date ?? "",
-    to: row.end_date ?? "",
-  }));
+  const recentLeaveRequests = lite
+    ? []
+    : ((requestsRes.data ?? []) as Array<{
+        status?: string;
+        start_date?: string;
+        end_date?: string;
+        leave_types?: { name?: string | null; code?: string | null } | null;
+      }>).map((row) => ({
+        type: row.leave_types?.name ?? row.leave_types?.code ?? "leave",
+        status: row.status ?? "unknown",
+        from: row.start_date ?? "",
+        to: row.end_date ?? "",
+      }));
 
-  const breakRows = (breaksRes.data ?? []) as Array<{
-    status?: string;
-    duration_minutes?: number;
-    requested_at?: string;
-    started_at?: string | null;
-    ends_at?: string | null;
-    created_at?: string;
-  }>;
+  const breakRows = lite
+    ? []
+    : ((breaksRes.data ?? []) as Array<{
+        status?: string;
+        duration_minutes?: number;
+        requested_at?: string;
+        started_at?: string | null;
+        ends_at?: string | null;
+        created_at?: string;
+      }>);
 
   const breaksToday = breakRows.filter((row) => {
     const stamp = row.started_at ?? row.requested_at ?? row.created_at ?? "";
     return stamp.slice(0, 10) === today;
   });
 
-  let weekSchedule: Array<{ date: string; shift: string; leaveCode?: string | null }> = [];
+  const opsPromise = loadOpsErrorsAiSummary(supabase, userId, profile?.branch_id ?? null);
 
-  if (profile?.department_id) {
-    const { data: scheds } = await supabase
-      .from("schedules")
-      .select("id")
-      .eq("department_id", profile.department_id)
-      .eq("week_start", weekStart)
-      .eq("status", "approved")
-      .not("published_at", "is", null);
+  let weekSchedulePromise: Promise<
+    Array<{ date: string; shift: string; leaveCode?: string | null }>
+  > = Promise.resolve([]);
 
-    const scheduleIds = (scheds ?? []).map((s) => s.id);
-    if (scheduleIds.length > 0) {
-      const { data: shiftRows } = await (supabase as any)
-        .from("schedule_shifts")
-        .select("day_date, shift, leave_type_code")
-        .eq("employee_id", userId)
-        .in("schedule_id", scheduleIds)
-        .in("day_date", weekDays);
-
-      weekSchedule = ((shiftRows ?? []) as Array<{
-        day_date: string;
-        shift: string;
-        leave_type_code?: string | null;
-      }>)
-        .map((row) => ({
-          date: row.day_date,
-          shift: row.shift,
-          leaveCode: row.leave_type_code ?? null,
-        }))
-        .sort((a, b) => a.date.localeCompare(b.date));
-    }
+  if (!lite && profile?.department_id) {
+    // One round-trip via inner join instead of schedules → shifts sequentially.
+    weekSchedulePromise = (supabase as any)
+      .from("schedule_shifts")
+      .select(
+        "day_date, shift, leave_type_code, schedules!inner(status, published_at, week_start, department_id)",
+      )
+      .eq("employee_id", userId)
+      .eq("schedules.department_id", profile.department_id)
+      .eq("schedules.week_start", weekStart)
+      .eq("schedules.status", "approved")
+      .not("schedules.published_at", "is", null)
+      .in("day_date", weekDays)
+      .then((res: { data?: Array<{ day_date: string; shift: string; leave_type_code?: string | null }> | null }) =>
+        ((res.data ?? []) as Array<{
+          day_date: string;
+          shift: string;
+          leave_type_code?: string | null;
+        }>)
+          .map((row) => ({
+            date: row.day_date,
+            shift: row.shift,
+            leaveCode: row.leave_type_code ?? null,
+          }))
+          .sort((a, b) => a.date.localeCompare(b.date)),
+      );
   }
+
+  const [opsErrorsSummary, weekSchedule] = await Promise.all([opsPromise, weekSchedulePromise]);
 
   return {
     asOfDate: today,
@@ -208,14 +232,18 @@ export async function buildEmployeeSnapshot(supabase: Db, userId: string) {
       leaveUntil: profile?.on_leave ? profile.leave_end_date : null,
     },
     leaveBalances: balances,
-    recentLeaveRequests,
-    breaksToday: breaksToday.map((row) => ({
-      status: row.status ?? "unknown",
-      durationMinutes: row.duration_minutes ?? null,
-    })),
-    scheduleThisWeek: weekSchedule.length
-      ? { weekStart, days: weekSchedule }
-      : { weekStart, days: [], note: "No published schedule shifts found for this week." },
+    ...(lite
+      ? {}
+      : {
+          recentLeaveRequests,
+          breaksToday: breaksToday.map((row) => ({
+            status: row.status ?? "unknown",
+            durationMinutes: row.duration_minutes ?? null,
+          })),
+          scheduleThisWeek: weekSchedule.length
+            ? { weekStart, days: weekSchedule }
+            : { weekStart, days: [], note: "No published schedule shifts found for this week." },
+        }),
     operationalErrorsThisMonth: opsErrorsSummary,
   };
 }
@@ -387,7 +415,7 @@ async function buildDeptHeadSnapshot(supabase: Db, userId: string) {
         .limit(10),
       (supabase as any).rpc("list_managed_department_active_breaks"),
       (supabase as any).rpc("list_managed_department_daily_breaks"),
-      buildEmployeeSnapshot(supabase, userId),
+      buildEmployeeSnapshot(supabase, userId, { mode: "lite" }),
     ]);
 
   const managerProfile = managerProfileRes.data as {
@@ -507,7 +535,7 @@ function toContextJson(value: unknown): string {
   return JSON.stringify(value);
 }
 
-const CONTEXT_CACHE_TTL_MS = 60_000;
+const CONTEXT_CACHE_TTL_MS = 120_000;
 const contextCache = new Map<string, { expiresAt: number; value: string | null }>();
 
 async function loadUserRoles(supabase: Db, userId: string): Promise<string[]> {
@@ -539,7 +567,9 @@ export async function buildAiUserContext(
       const roles = await loadUserRoles(supabase, userId);
       if (roles.includes("branch_manager") || roles.includes("assistant_manager")) {
         const { buildBranchOperatorSnapshot } = await import("@/lib/ai-context-branch.server");
-        value = toContextJson(await buildBranchOperatorSnapshot(supabase, userId));
+        value = toContextJson(
+          await buildBranchOperatorSnapshot(supabase, userId, roles as AppRole[]),
+        );
       } else if (roles.includes("department_manager")) {
         value = toContextJson(await buildDeptHeadSnapshot(supabase, userId));
       }
@@ -553,4 +583,13 @@ export async function buildAiUserContext(
   } catch {
     return null;
   }
+}
+
+/** Warm the in-process context cache so the first chat token is not blocked on a cold snapshot. */
+export async function warmAiUserContext(
+  supabase: Db,
+  assistantKind: AiAssistantKind,
+): Promise<{ ok: true }> {
+  await buildAiUserContext(supabase, assistantKind);
+  return { ok: true };
 }

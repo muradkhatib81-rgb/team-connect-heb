@@ -1132,6 +1132,8 @@
     "remainingMinutes": "{{count}} דק׳ נותרו",
     "emptyChat": "שאל/י שאלה — העוזר עונה בהתאם להרשאות שלך.",
     "thinking": "חושב…",
+    "preparingContext": "טוען נתונים…",
+    "generating": "כותב תשובה…",
     "inputPlaceholder": "הקלד/י שאלה…",
     "scope": {
       "company": "חברה",

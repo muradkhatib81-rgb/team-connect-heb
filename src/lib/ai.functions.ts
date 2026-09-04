@@ -39,6 +39,19 @@ export const getMyAiAccess = createServerFn({ method: "GET" })
     return mapAccess((data ?? {}) as RawAccess);
   });
 
+/** Prefetch live snapshot into the server process cache (speeds first chat reply). */
+export const warmAiContext = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    const { data, error } = await context.supabase.rpc("get_my_ai_access");
+    if (error) throw new Error(error.message);
+    const access = mapAccess((data ?? {}) as RawAccess);
+    if (!access.allowed) return { ok: false as const };
+    const { warmAiUserContext } = await import("@/lib/ai-context.server");
+    await warmAiUserContext(context.supabase, access.assistantKind);
+    return { ok: true as const };
+  });
+
 const chatInput = z.object({
   message: z.string().trim().min(1).max(4000),
   history: z

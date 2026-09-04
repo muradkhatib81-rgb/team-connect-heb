@@ -1132,6 +1132,8 @@
     "remainingMinutes": "متبقي {{count}} د",
     "emptyChat": "اسأل سؤالك — المساعد يجيب ضمن صلاحياتك.",
     "thinking": "جاري التفكير…",
+    "preparingContext": "جاري تحميل البيانات…",
+    "generating": "جاري كتابة الرد…",
     "inputPlaceholder": "اكتب سؤالك…",
     "scope": {
       "company": "شركة",

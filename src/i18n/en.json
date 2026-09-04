@@ -1132,6 +1132,8 @@
     "remainingMinutes": "{{count}} min left",
     "emptyChat": "Ask a question — the assistant answers within your permissions.",
     "thinking": "Thinking…",
+    "preparingContext": "Loading data…",
+    "generating": "Writing reply…",
     "inputPlaceholder": "Type your question…",
     "scope": {
       "company": "Company",

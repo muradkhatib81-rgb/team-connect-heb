@@ -35,37 +35,36 @@ export async function createAiChatSseResponse(
 ): Promise<Response> {
   const data = streamInput.parse(rawBody);
 
-  const { data: accessRaw, error: accessErr } = await supabase.rpc("get_my_ai_access");
-  if (accessErr) {
-    return new Response(sseEvent({ type: "error", message: accessErr.message }), {
-      status: 403,
-      headers: { "Content-Type": "text/event-stream; charset=utf-8", "Cache-Control": "no-cache" },
-    });
-  }
-
-  const access = mapAiAccess((accessRaw ?? {}) as RawAiAccess);
-  if (!access.allowed) {
-    return new Response(sseEvent({ type: "error", message: aiErrorCode("noAccess") }), {
-      status: 403,
-      headers: { "Content-Type": "text/event-stream; charset=utf-8", "Cache-Control": "no-cache" },
-    });
-  }
-
-  const started = Date.now();
-
-  let fullText = "";
-  let inputTokens = 0;
-  let outputTokens = 0;
-  let model = "gemini";
-
-  // Open the SSE immediately so the client is not blocked on context prep.
-  // Context + Gemini happen inside the stream body.
+  // Open SSE immediately — access + context run inside the stream so the
+  // client can show progress instead of waiting on a silent HTTP stall.
   const stream = new ReadableStream<Uint8Array>({
     async start(controller) {
       const encoder = new TextEncoder();
       const push = (payload: unknown) => controller.enqueue(encoder.encode(sseEvent(payload)));
 
+      let fullText = "";
+      let inputTokens = 0;
+      let outputTokens = 0;
+      let model = "gemini";
+      const started = Date.now();
+
       try {
+        push({ type: "status", phase: "auth" });
+
+        const { data: accessRaw, error: accessErr } = await supabase.rpc("get_my_ai_access");
+        if (accessErr) {
+          push({ type: "error", message: accessErr.message });
+          controller.close();
+          return;
+        }
+
+        const access = mapAiAccess((accessRaw ?? {}) as RawAiAccess);
+        if (!access.allowed) {
+          push({ type: "error", message: aiErrorCode("noAccess") });
+          controller.close();
+          return;
+        }
+
         push({ type: "status", phase: "context" });
 
         const contextBlock = await buildAiUserContext(supabase, access.assistantKind);
@@ -96,7 +95,24 @@ export async function createAiChatSseResponse(
           }
         }
 
+        if (!fullText.trim()) {
+          throw new Error("AI_ERROR:emptyResponse");
+        }
+
         const minutes = estimateAiMinutes(Date.now() - started, inputTokens, outputTokens);
+        const remainingMinutes =
+          access.remainingMinutes != null
+            ? Math.max(0, Math.round((access.remainingMinutes - minutes) * 100) / 100)
+            : null;
+
+        // Tell the client the answer is ready before billing RPC (UI waits on "done").
+        push({
+          type: "done",
+          text: fullText,
+          remainingMinutes,
+          providerCode: access.providerCode,
+          model,
+        });
 
         const { error: consumeErr } = await supabase.rpc("consume_ai_minutes", {
           _grant_id: access.grantId,
@@ -108,29 +124,23 @@ export async function createAiChatSseResponse(
           _output_tokens: outputTokens,
           _duration_ms: Date.now() - started,
         });
-        if (consumeErr) throw new Error(consumeErr.message);
-
-        const remainingMinutes =
-          access.remainingMinutes != null
-            ? Math.max(0, Math.round((access.remainingMinutes - minutes) * 100) / 100)
-            : null;
-
-        if (!fullText.trim()) {
-          throw new Error("AI_ERROR:emptyResponse");
+        if (consumeErr) {
+          console.error("[ai-stream] consume_ai_minutes failed:", consumeErr.message);
         }
 
-        push({
-          type: "done",
-          text: fullText,
-          remainingMinutes,
-          providerCode: access.providerCode,
-          model,
-        });
         controller.close();
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
-        push({ type: "error", message });
-        controller.close();
+        try {
+          push({ type: "error", message });
+        } catch {
+          /* stream may already be closed */
+        }
+        try {
+          controller.close();
+        } catch {
+          /* ignore */
+        }
       }
     },
   });
