@@ -53,21 +53,6 @@ async function loadPermissions(supabase: Db, userId: string): Promise<UserTaskPe
   return data;
 }
 
-async function canManageBreaksServer(
-  supabase: Db,
-  userId: string,
-  roles: AppRole[],
-): Promise<boolean> {
-  if (roles.includes("main_admin") || roles.includes("system_admin")) return true;
-  if (!roles.includes("branch_manager") && !roles.includes("assistant_manager")) return false;
-  const { data } = await supabase
-    .from("user_task_permissions")
-    .select("can_manage_breaks")
-    .eq("user_id", userId)
-    .maybeSingle();
-  return !!data?.can_manage_breaks;
-}
-
 function branchOperatorRole(roles: AppRole[]): "branch_manager" | "assistant_manager" | null {
   if (roles.includes("branch_manager")) return "branch_manager";
   if (roles.includes("assistant_manager")) return "assistant_manager";
@@ -557,6 +542,21 @@ function canAccessCustody(roles: AppRole[], perms: UserTaskPermissions | null): 
   );
 }
 
+async function canManageBreaksServer(
+  supabase: Db,
+  userId: string,
+  roles: AppRole[],
+): Promise<boolean> {
+  if (roles.includes("main_admin") || roles.includes("system_admin")) return true;
+  if (!roles.includes("branch_manager") && !roles.includes("assistant_manager")) return false;
+  const { data } = await supabase
+    .from("user_task_permissions")
+    .select("can_manage_breaks")
+    .eq("user_id", userId)
+    .maybeSingle();
+  return !!data?.can_manage_breaks;
+}
+
 async function canManageEomServer(
   supabase: Db,
   userId: string,
@@ -689,27 +689,29 @@ export async function buildBranchOperatorSnapshot(supabase: Db, userId: string) 
     throw new Error("Not a branch operator");
   }
 
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("branch_id, full_name, first_name, last_name, job_title")
-    .eq("id", userId)
-    .maybeSingle();
+  const [{ data: profile }, canManageBreaks, canManageEmployeeOfMonth, personal] =
+    await Promise.all([
+      supabase
+        .from("profiles")
+        .select("branch_id, full_name, first_name, last_name, job_title")
+        .eq("id", userId)
+        .maybeSingle(),
+      canManageBreaksServer(supabase, userId, roles),
+      canManageEomServer(supabase, userId, roles),
+      buildEmployeeSnapshot(supabase, userId),
+    ]);
 
   const branchId = (profile?.branch_id as string | null) ?? null;
   const leaveAccess = resolveLeaveAccess(roles, perms);
-  const canManageBreaks = await canManageBreaksServer(supabase, userId, roles);
   const canViewSchedule = hasBranchActionPermission(roles, perms, "can_view_schedule");
   const canViewTasks = hasBranchActionPermission(roles, perms, "can_view_tasks");
   const canViewCustody = canAccessCustody(roles, perms);
-
   const canViewEmployeeDetails = hasBranchActionPermission(
     roles,
     perms,
     "can_view_employee_details",
   );
-  const canManageEmployeeOfMonth = await canManageEomServer(supabase, userId, roles);
 
-  const personal = await buildEmployeeSnapshot(supabase, userId);
   const snapshot: Record<string, unknown> = {
     role: operatorRole,
     asOfDate: today,
@@ -733,20 +735,19 @@ export async function buildBranchOperatorSnapshot(supabase: Db, userId: string) 
     return snapshot;
   }
 
-  const staff = await loadBranchStaff(supabase, branchId);
+  const [staff, activeBreaksRes, deptsRes] = await Promise.all([
+    loadBranchStaff(supabase, branchId),
+    supabase.from("break_requests").select("user_id").eq("status", "active"),
+    supabase
+      .from("departments")
+      .select("id, name")
+      .eq("branch_id", branchId)
+      .eq("is_active", true),
+  ]);
+
   const counted = staff.filter((p) => !p.excluded_from_headcount);
-
-  const { data: activeBreaks } = await supabase
-    .from("break_requests")
-    .select("user_id")
-    .eq("status", "active");
-  const onBreakIds = new Set((activeBreaks ?? []).map((b) => b.user_id));
-
-  const { data: depts } = await supabase
-    .from("departments")
-    .select("id, name")
-    .eq("branch_id", branchId)
-    .eq("is_active", true);
+  const onBreakIds = new Set((activeBreaksRes.data ?? []).map((b) => b.user_id));
+  const depts = deptsRes.data;
 
   const byDept: Record<string, { name: string; count: number }> = {};
   for (const d of depts ?? []) {
@@ -769,55 +770,64 @@ export async function buildBranchOperatorSnapshot(supabase: Db, userId: string) 
     byDepartment: Object.values(byDept),
   };
 
-  snapshot.departmentsDirectory = await loadBranchDepartmentsDirectory(
-    supabase,
-    branchId,
-    staff,
-    today,
-    {
-      includeLeaveBalances: leaveAccess.canView,
-      includeContactDetails: canViewEmployeeDetails,
-    },
-  );
-
-  snapshot.employeeOfMonth = await loadEmployeeOfMonthHistory(
-    supabase,
-    branchId,
-    today,
-    canManageEmployeeOfMonth,
-  );
-
-  if (canViewSchedule) {
-    snapshot.tomorrowSchedule = await loadTomorrowScheduleCounts(
-      supabase,
-      branchId,
-      tomorrow,
-      weekStart,
-    );
-    snapshot.scheduleLastModified = await loadScheduleLastModified(supabase, branchId, weekStart);
-  }
-
   snapshot.leaveTomorrow = summarizeLeaveOnDate(counted, tomorrow);
 
-  if (canManageBreaks) {
-    snapshot.breakJournal = await loadBreakJournal(supabase, today);
+  const [
+    departmentsDirectory,
+    employeeOfMonth,
+    scheduleParts,
+    breakJournal,
+    custodyJournal,
+    pendingAdminRes,
+    tasksRes,
+  ] = await Promise.all([
+    loadBranchDepartmentsDirectory(supabase, branchId, staff, today, {
+      includeLeaveBalances: leaveAccess.canView,
+      includeContactDetails: canViewEmployeeDetails,
+    }),
+    loadEmployeeOfMonthHistory(supabase, branchId, today, canManageEmployeeOfMonth),
+    canViewSchedule
+      ? Promise.all([
+          loadTomorrowScheduleCounts(supabase, branchId, tomorrow, weekStart),
+          loadScheduleLastModified(supabase, branchId, weekStart),
+        ])
+      : Promise.resolve(null),
+    canManageBreaks ? loadBreakJournal(supabase, today) : Promise.resolve(null),
+    canViewCustody ? loadCustodyJournal(supabase, branchId, today) : Promise.resolve(null),
+    leaveAccess.canView
+      ? (supabase as any)
+          .from("leave_requests")
+          .select(
+            "status, start_date, end_date, leave_types(name, code), profiles!user_id(full_name, first_name, last_name)",
+          )
+          .eq("status", "pending_admin")
+          .order("submitted_at", { ascending: false })
+          .limit(15)
+      : Promise.resolve({ data: null }),
+    canViewTasks
+      ? supabase
+          .from("tasks")
+          .select("title, status, due_at, created_at, department_id, departments(name)")
+          .eq("branch_id", branchId)
+          .neq("status", "closed")
+          .order("created_at", { ascending: false })
+          .limit(5)
+      : Promise.resolve({ data: null }),
+  ]);
+
+  snapshot.departmentsDirectory = departmentsDirectory;
+  snapshot.employeeOfMonth = employeeOfMonth;
+
+  if (scheduleParts) {
+    snapshot.tomorrowSchedule = scheduleParts[0];
+    snapshot.scheduleLastModified = scheduleParts[1];
   }
 
-  if (canViewCustody) {
-    snapshot.custodyJournal = await loadCustodyJournal(supabase, branchId, today);
-  }
+  if (breakJournal) snapshot.breakJournal = breakJournal;
+  if (custodyJournal) snapshot.custodyJournal = custodyJournal;
 
   if (leaveAccess.canView) {
-    const { data: pendingAdmin } = await (supabase as any)
-      .from("leave_requests")
-      .select(
-        "status, start_date, end_date, leave_types(name, code), profiles!user_id(full_name, first_name, last_name)",
-      )
-      .eq("status", "pending_admin")
-      .order("submitted_at", { ascending: false })
-      .limit(15);
-
-    snapshot.pendingAdminLeaveRequests = ((pendingAdmin ?? []) as Array<{
+    snapshot.pendingAdminLeaveRequests = ((pendingAdminRes.data ?? []) as Array<{
       status?: string;
       start_date?: string;
       end_date?: string;
@@ -840,16 +850,8 @@ export async function buildBranchOperatorSnapshot(supabase: Db, userId: string) 
     }));
   }
 
-  if (canViewTasks) {
-    const { data: tasks } = await supabase
-      .from("tasks")
-      .select("title, status, due_at, created_at, department_id, departments(name)")
-      .eq("branch_id", branchId)
-      .neq("status", "closed")
-      .order("created_at", { ascending: false })
-      .limit(5);
-
-    snapshot.recentBranchTasks = (tasks ?? []).map((t) => ({
+  if (canViewTasks && tasksRes.data) {
+    snapshot.recentBranchTasks = tasksRes.data.map((t) => ({
       title: t.title,
       status: t.status,
       dueAt: t.due_at,

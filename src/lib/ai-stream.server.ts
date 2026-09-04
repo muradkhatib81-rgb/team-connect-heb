@@ -52,26 +52,33 @@ export async function createAiChatSseResponse(
   }
 
   const started = Date.now();
-  const contextBlock = await buildAiUserContext(supabase, access.assistantKind);
-  const messages = buildAiChatMessages({
-    assistantKind: access.assistantKind,
-    message: data.message,
-    history: data.history,
-    locale: data.locale,
-    contextBlock,
-  });
 
   let fullText = "";
   let inputTokens = 0;
   let outputTokens = 0;
   let model = "gemini";
 
+  // Open the SSE immediately so the client is not blocked on context prep.
+  // Context + Gemini happen inside the stream body.
   const stream = new ReadableStream<Uint8Array>({
     async start(controller) {
       const encoder = new TextEncoder();
       const push = (payload: unknown) => controller.enqueue(encoder.encode(sseEvent(payload)));
 
       try {
+        push({ type: "status", phase: "context" });
+
+        const contextBlock = await buildAiUserContext(supabase, access.assistantKind);
+        const messages = buildAiChatMessages({
+          assistantKind: access.assistantKind,
+          message: data.message,
+          history: data.history,
+          locale: data.locale,
+          contextBlock,
+        });
+
+        push({ type: "status", phase: "generating" });
+
         const gemini = await streamGeminiChat({
           providerCode: access.providerCode,
           messages,

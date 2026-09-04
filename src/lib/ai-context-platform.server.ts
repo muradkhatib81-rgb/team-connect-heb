@@ -684,35 +684,34 @@ async function loadHealthSummary(supabase: Db) {
         : "Missing Supabase URL or publishable key",
   });
 
-  const dbStart = Date.now();
-  const { error: dbErr } = await supabase
-    .from("platform_settings")
-    .select("id")
-    .eq("id", 1)
-    .maybeSingle();
-  const dbMs = Date.now() - dbStart;
+  const timed = async <T>(fn: () => Promise<T>): Promise<{ result: T; ms: number }> => {
+    const start = Date.now();
+    const result = await fn();
+    return { result, ms: Date.now() - start };
+  };
+
+  const [dbProbe, apiProbe, storageProbe] = await Promise.all([
+    timed(() => supabase.from("platform_settings").select("id").eq("id", 1).maybeSingle()),
+    timed(() => supabase.auth.getUser()),
+    timed(() => supabase.storage.from("avatars").list("", { limit: 1 })),
+  ]);
+
   checks.push({
     target: "database",
-    state: latencyState(dbMs, !dbErr),
-    message: dbErr ? dbErr.message : `DB ${dbMs}ms`,
+    state: latencyState(dbProbe.ms, !dbProbe.result.error),
+    message: dbProbe.result.error ? dbProbe.result.error.message : `DB ${dbProbe.ms}ms`,
   });
-
-  const apiStart = Date.now();
-  const { error: apiErr } = await supabase.auth.getUser();
-  const apiMs = Date.now() - apiStart;
   checks.push({
     target: "api",
-    state: latencyState(apiMs, !apiErr),
-    message: apiErr ? apiErr.message : `API ${apiMs}ms`,
+    state: latencyState(apiProbe.ms, !apiProbe.result.error),
+    message: apiProbe.result.error ? apiProbe.result.error.message : `API ${apiProbe.ms}ms`,
   });
-
-  const storageStart = Date.now();
-  const { error: storageErr } = await supabase.storage.from("avatars").list("", { limit: 1 });
-  const storageMs = Date.now() - storageStart;
   checks.push({
     target: "storage",
-    state: latencyState(storageMs, !storageErr),
-    message: storageErr ? storageErr.message : `Storage ${storageMs}ms`,
+    state: latencyState(storageProbe.ms, !storageProbe.result.error),
+    message: storageProbe.result.error
+      ? storageProbe.result.error.message
+      : `Storage ${storageProbe.ms}ms`,
   });
 
   const healthyCount = checks.filter((c) => c.state === "healthy").length;

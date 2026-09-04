@@ -78,11 +78,6 @@ function memberStatus(row: CoworkerRow, today: string): "active" | "on_leave" | 
   return "active";
 }
 
-async function userHasRole(supabase: Db, userId: string, role: string): Promise<boolean> {
-  const { data } = await supabase.from("user_roles").select("role").eq("user_id", userId);
-  return (data ?? []).some((r) => r.role === role);
-}
-
 export async function buildEmployeeSnapshot(supabase: Db, userId: string) {
   const today = jerusalemTodayIso();
   const { weekStart, weekDays } = getScheduleWeek(new Date(`${today}T12:00:00Z`));
@@ -474,13 +469,12 @@ async function buildDeptHeadSnapshot(supabase: Db, userId: string) {
     durationMinutes: row.duration_minutes ?? null,
   }));
 
-  const scheduleThisWeek = departmentId
-    ? await buildDepartmentScheduleSummary(supabase, departmentId, weekStart, weekDays)
-    : { weekStart, days: [], note: "Department not set on profile." };
-
-  const recentDepartmentTasks = departmentId
-    ? await loadDepartmentTasks(supabase, userId, departmentId, 3)
-    : [];
+  const [scheduleThisWeek, recentDepartmentTasks] = departmentId
+    ? await Promise.all([
+        buildDepartmentScheduleSummary(supabase, departmentId, weekStart, weekDays),
+        loadDepartmentTasks(supabase, userId, departmentId, 3),
+      ])
+    : [{ weekStart, days: [] as Array<{ date: string; morning: number; evening: number; off: number; onLeave: number }>, note: "Department not set on profile." }, []];
 
   return {
     role: "department_head",
@@ -508,6 +502,19 @@ async function buildDeptHeadSnapshot(supabase: Db, userId: string) {
   };
 }
 
+/** Compact JSON for prompts — prettier formatting only wastes tokens/latency. */
+function toContextJson(value: unknown): string {
+  return JSON.stringify(value);
+}
+
+const CONTEXT_CACHE_TTL_MS = 60_000;
+const contextCache = new Map<string, { expiresAt: number; value: string | null }>();
+
+async function loadUserRoles(supabase: Db, userId: string): Promise<string[]> {
+  const { data } = await supabase.from("user_roles").select("role").eq("user_id", userId);
+  return (data ?? []).map((r) => r.role);
+}
+
 /** Read-only context for AI prompts. Uses the caller's session (RLS). */
 export async function buildAiUserContext(
   supabase: Db,
@@ -517,33 +524,32 @@ export async function buildAiUserContext(
   if (authErr || !authData.user?.id) return null;
 
   const userId = authData.user.id;
+  const cacheKey = `${userId}:${assistantKind}`;
+  const cached = contextCache.get(cacheKey);
+  if (cached && cached.expiresAt > Date.now()) {
+    return cached.value;
+  }
 
   try {
+    let value: string | null = null;
+
     if (assistantKind === "employee") {
-      return JSON.stringify(await buildEmployeeSnapshot(supabase, userId), null, 2);
-    }
-
-    if (assistantKind === "manager") {
-      const isBranchOp =
-        (await userHasRole(supabase, userId, "branch_manager")) ||
-        (await userHasRole(supabase, userId, "assistant_manager"));
-      if (isBranchOp) {
+      value = toContextJson(await buildEmployeeSnapshot(supabase, userId));
+    } else if (assistantKind === "manager") {
+      const roles = await loadUserRoles(supabase, userId);
+      if (roles.includes("branch_manager") || roles.includes("assistant_manager")) {
         const { buildBranchOperatorSnapshot } = await import("@/lib/ai-context-branch.server");
-        return JSON.stringify(await buildBranchOperatorSnapshot(supabase, userId), null, 2);
+        value = toContextJson(await buildBranchOperatorSnapshot(supabase, userId));
+      } else if (roles.includes("department_manager")) {
+        value = toContextJson(await buildDeptHeadSnapshot(supabase, userId));
       }
-      const isDeptHead = await userHasRole(supabase, userId, "department_manager");
-      if (isDeptHead) {
-        return JSON.stringify(await buildDeptHeadSnapshot(supabase, userId), null, 2);
-      }
-      return null;
-    }
-
-    if (assistantKind === "platform_owner") {
+    } else if (assistantKind === "platform_owner") {
       const { buildPlatformOwnerSnapshot } = await import("@/lib/ai-context-platform.server");
-      return JSON.stringify(await buildPlatformOwnerSnapshot(supabase, userId), null, 2);
+      value = toContextJson(await buildPlatformOwnerSnapshot(supabase, userId));
     }
 
-    return null;
+    contextCache.set(cacheKey, { expiresAt: Date.now() + CONTEXT_CACHE_TTL_MS, value });
+    return value;
   } catch {
     return null;
   }
