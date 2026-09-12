@@ -58,16 +58,21 @@ function AuthPage() {
   useEffect(() => {
     let cancelled = false;
     (async () => {
+      // When a session exists and we navigate away, keep the spinner up so the
+      // login form never flashes (finally must not clear checking in that case).
+      let stayOnLoader = false;
       try {
         const { data } = await supabase.auth.getSession();
         if (cancelled) return;
         if (data.session) {
           setHasUsers(true);
-          setChecking(false);
-          // Always land on this user's home — never reuse a prior account's path.
           try {
             const target = await resolveLandingPath(data.session.user.id);
-            if (!cancelled) router.history.replace(target);
+            if (!cancelled) {
+              stayOnLoader = true;
+              router.history.replace(target);
+            }
+            return;
           } catch {
             /* show login form if landing resolve fails */
           }
@@ -83,7 +88,7 @@ function AuthPage() {
       } catch {
         if (!cancelled) setHasUsers(true);
       } finally {
-        if (!cancelled) setChecking(false);
+        if (!cancelled && !stayOnLoader) setChecking(false);
       }
     })();
     return () => {

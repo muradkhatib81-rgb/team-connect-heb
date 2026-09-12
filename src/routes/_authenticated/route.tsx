@@ -13,14 +13,28 @@ import { BranchProvider, CompanyProvider } from "@/platform";
 
 export const Route = createFileRoute("/_authenticated")({
   beforeLoad: async ({ location, context }) => {
-    const { data, error } = await supabase.auth.getUser();
-    if (error || !data.user) {
-      // No ?redirect= — next login must open that user's home, not this path.
+    // Prefer local session first so a refresh does not flash /auth while
+    // getUser() (network) is still restoring. Only bounce when there is
+    // truly no session in storage.
+    const { data: sessionData } = await supabase.auth.getSession();
+    const sessionUser = sessionData.session?.user ?? null;
+    if (!sessionUser) {
       throw redirect({ to: "/auth", replace: true });
     }
-    const userId = data.user.id;
-    let roles: Awaited<ReturnType<typeof fetchRouteGuardRoles>>;
-    let permissions: Awaited<ReturnType<typeof fetchRouteGuardPermissions>>;
+
+    // Soft-validate with getUser; if it fails but session exists, keep going
+    // with the session user so a transient auth API blip does not log them out.
+    let user = sessionUser;
+    try {
+      const { data, error } = await supabase.auth.getUser();
+      if (!error && data.user) user = data.user;
+    } catch {
+      /* keep sessionUser */
+    }
+
+    const userId = user.id;
+    let roles: Awaited<ReturnType<typeof fetchRouteGuardRoles>> = [];
+    let permissions: Awaited<ReturnType<typeof fetchRouteGuardPermissions>> = null;
     try {
       [roles, permissions] = await Promise.all([
         context.queryClient.ensureQueryData({
@@ -35,14 +49,25 @@ export const Route = createFileRoute("/_authenticated")({
         }),
       ]);
     } catch {
-      throw redirect({ to: "/auth", replace: true });
+      // Do NOT redirect to /auth — a transient RLS/network error would flash
+      // the login page while the session is still valid. Empty guard data
+      // falls through to canAccessRoute → /dashboard when needed.
+      roles = [];
+      permissions = null;
     }
 
-    const isActive = await context.queryClient.ensureQueryData({
-      queryKey: ["route-guard", "is-active", userId],
-      queryFn: () => fetchRouteGuardProfileActive(userId),
-      staleTime: routeGuardStaleTime,
-    });
+    let isActive = true;
+    try {
+      isActive = await context.queryClient.ensureQueryData({
+        queryKey: ["route-guard", "is-active", userId],
+        queryFn: () => fetchRouteGuardProfileActive(userId),
+        staleTime: routeGuardStaleTime,
+      });
+    } catch {
+      // Same rule: keep the session; assume active until proven otherwise.
+      isActive = true;
+    }
+
     const onInactivePage = location.pathname === "/inactive";
     if (!isActive && !onInactivePage) {
       throw redirect({ to: "/inactive", replace: true });
@@ -60,7 +85,7 @@ export const Route = createFileRoute("/_authenticated")({
     ) {
       throw redirect({ to: "/dashboard", replace: true });
     }
-    return { user: data.user };
+    return { user };
   },
   component: AuthenticatedLayout,
 });
