@@ -1,6 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { z } from "zod";
 import { dispatchPushNotification } from "@/lib/push-dispatch.server";
+import { secretsEqual } from "@/lib/hook-secret.server";
 
 const payloadSchema = z.object({
   userIds: z.array(z.string().uuid()).min(1),
@@ -20,9 +21,8 @@ const HOLDER_ONLY_BREAK = new Set(["break_start", "break_end", "break_late"]);
 
 function authorizePushHook(request: Request): boolean {
   const expected = process.env.PUSH_DISPATCH_SECRET?.trim();
-  if (!expected) return false;
   const header = request.headers.get("x-push-secret")?.trim();
-  return !!header && header === expected;
+  return secretsEqual(header, expected);
 }
 
 export const Route = createFileRoute("/api/public/hooks/dispatch-push")({
@@ -60,8 +60,20 @@ export const Route = createFileRoute("/api/public/hooks/dispatch-push")({
           });
           return Response.json({ ok: true, ...result });
         } catch (e: unknown) {
-          console.warn("[push] dispatch-push hook skipped:", e);
-          return Response.json({ ok: true, sent: 0, failed: 0, skipped: true });
+          console.warn("[push] dispatch-push hook failed:", e);
+          const isClientError =
+            e instanceof z.ZodError ||
+            (e instanceof SyntaxError);
+          return new Response(
+            JSON.stringify({
+              ok: false,
+              error: isClientError ? "invalid_payload" : "dispatch_failed",
+            }),
+            {
+              status: isClientError ? 400 : 500,
+              headers: { "Content-Type": "application/json" },
+            },
+          );
         }
       },
     },

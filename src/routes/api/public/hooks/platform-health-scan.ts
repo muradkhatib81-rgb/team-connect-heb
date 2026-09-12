@@ -1,23 +1,26 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { runPlatformHealthScan } from "@/lib/platform-health.server";
+import { bearerMatchesCron, secretsEqual } from "@/lib/hook-secret.server";
 
-function authorizeHealthHook(request: Request): boolean {
-  const expected = process.env.PLATFORM_HEALTH_SECRET?.trim() || process.env.PUSH_DISPATCH_SECRET?.trim();
-  if (!expected) return false;
+/** Fail closed unless PLATFORM_HEALTH_SECRET header (POST/GET) or cron Bearer (GET). */
+function authorizeHealthSecret(request: Request): boolean {
+  const expected = process.env.PLATFORM_HEALTH_SECRET?.trim();
   const header = request.headers.get("x-platform-health-secret")?.trim();
-  return !!header && header === expected;
+  return secretsEqual(header, expected);
+}
+
+function unauthorized() {
+  return new Response(JSON.stringify({ ok: false, error: "unauthorized" }), {
+    status: 401,
+    headers: { "Content-Type": "application/json" },
+  });
 }
 
 export const Route = createFileRoute("/api/public/hooks/platform-health-scan")({
   server: {
     handlers: {
       POST: async ({ request }) => {
-        if (!authorizeHealthHook(request)) {
-          return new Response(JSON.stringify({ ok: false, error: "unauthorized" }), {
-            status: 401,
-            headers: { "Content-Type": "application/json" },
-          });
-        }
+        if (!authorizeHealthSecret(request)) return unauthorized();
         try {
           const result = await runPlatformHealthScan();
           return Response.json(result);
@@ -31,17 +34,12 @@ export const Route = createFileRoute("/api/public/hooks/platform-health-scan")({
       },
       GET: async ({ request }) => {
         // Vercel Cron uses GET by default unless configured otherwise.
-        if (!authorizeHealthHook(request)) {
-          const cronHeader = request.headers.get("authorization")?.trim();
-          const cronSecret = process.env.CRON_SECRET?.trim();
-          const okCron = !!cronSecret && cronHeader === `Bearer ${cronSecret}`;
-          if (!okCron) {
-            return new Response(JSON.stringify({ ok: false, error: "unauthorized" }), {
-              status: 401,
-              headers: { "Content-Type": "application/json" },
-            });
-          }
-        }
+        const okSecret = authorizeHealthSecret(request);
+        const okCron = bearerMatchesCron(
+          request.headers.get("authorization"),
+          process.env.CRON_SECRET?.trim(),
+        );
+        if (!okSecret && !okCron) return unauthorized();
         try {
           const result = await runPlatformHealthScan();
           return Response.json(result);
