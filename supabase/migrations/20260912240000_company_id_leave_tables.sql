@@ -3,10 +3,10 @@
 
 ALTER TABLE public.leave_types
   ADD COLUMN IF NOT EXISTS company_id uuid REFERENCES public.companies(id) ON DELETE SET NULL;
-UPDATE public.leave_types row
-SET company_id = public.company_id_of_branch(row.branch_id)
-WHERE row.company_id IS NULL AND row.branch_id IS NOT NULL
-  AND public.company_id_of_branch(row.branch_id) IS NOT NULL;
+UPDATE public.leave_types AS t
+SET company_id = public.company_id_of_branch(t.branch_id)
+WHERE t.company_id IS NULL AND t.branch_id IS NOT NULL
+  AND public.company_id_of_branch(t.branch_id) IS NOT NULL;
 CREATE INDEX IF NOT EXISTS leave_types_company_id_idx ON public.leave_types (company_id);
 DROP TRIGGER IF EXISTS trg_leave_types_sync_company ON public.leave_types;
 CREATE TRIGGER trg_leave_types_sync_company
@@ -15,10 +15,10 @@ CREATE TRIGGER trg_leave_types_sync_company
 
 ALTER TABLE public.leave_accrual_rules
   ADD COLUMN IF NOT EXISTS company_id uuid REFERENCES public.companies(id) ON DELETE SET NULL;
-UPDATE public.leave_accrual_rules row
-SET company_id = public.company_id_of_branch(row.branch_id)
-WHERE row.company_id IS NULL AND row.branch_id IS NOT NULL
-  AND public.company_id_of_branch(row.branch_id) IS NOT NULL;
+UPDATE public.leave_accrual_rules AS t
+SET company_id = public.company_id_of_branch(t.branch_id)
+WHERE t.company_id IS NULL AND t.branch_id IS NOT NULL
+  AND public.company_id_of_branch(t.branch_id) IS NOT NULL;
 CREATE INDEX IF NOT EXISTS leave_accrual_rules_company_id_idx ON public.leave_accrual_rules (company_id);
 DROP TRIGGER IF EXISTS trg_leave_accrual_rules_sync_company ON public.leave_accrual_rules;
 CREATE TRIGGER trg_leave_accrual_rules_sync_company
@@ -27,10 +27,10 @@ CREATE TRIGGER trg_leave_accrual_rules_sync_company
 
 ALTER TABLE public.leave_balances
   ADD COLUMN IF NOT EXISTS company_id uuid REFERENCES public.companies(id) ON DELETE SET NULL;
-UPDATE public.leave_balances row
-SET company_id = public.company_id_of_branch(row.branch_id)
-WHERE row.company_id IS NULL AND row.branch_id IS NOT NULL
-  AND public.company_id_of_branch(row.branch_id) IS NOT NULL;
+UPDATE public.leave_balances AS t
+SET company_id = public.company_id_of_branch(t.branch_id)
+WHERE t.company_id IS NULL AND t.branch_id IS NOT NULL
+  AND public.company_id_of_branch(t.branch_id) IS NOT NULL;
 CREATE INDEX IF NOT EXISTS leave_balances_company_id_idx ON public.leave_balances (company_id);
 DROP TRIGGER IF EXISTS trg_leave_balances_sync_company ON public.leave_balances;
 CREATE TRIGGER trg_leave_balances_sync_company
@@ -39,10 +39,10 @@ CREATE TRIGGER trg_leave_balances_sync_company
 
 ALTER TABLE public.leave_balance_adjustments
   ADD COLUMN IF NOT EXISTS company_id uuid REFERENCES public.companies(id) ON DELETE SET NULL;
-UPDATE public.leave_balance_adjustments row
-SET company_id = public.company_id_of_branch(row.branch_id)
-WHERE row.company_id IS NULL AND row.branch_id IS NOT NULL
-  AND public.company_id_of_branch(row.branch_id) IS NOT NULL;
+UPDATE public.leave_balance_adjustments AS t
+SET company_id = public.company_id_of_branch(t.branch_id)
+WHERE t.company_id IS NULL AND t.branch_id IS NOT NULL
+  AND public.company_id_of_branch(t.branch_id) IS NOT NULL;
 CREATE INDEX IF NOT EXISTS leave_balance_adjustments_company_id_idx ON public.leave_balance_adjustments (company_id);
 DROP TRIGGER IF EXISTS trg_leave_balance_adjustments_sync_company ON public.leave_balance_adjustments;
 CREATE TRIGGER trg_leave_balance_adjustments_sync_company
@@ -51,10 +51,10 @@ CREATE TRIGGER trg_leave_balance_adjustments_sync_company
 
 ALTER TABLE public.leave_employee_accrual_rates
   ADD COLUMN IF NOT EXISTS company_id uuid REFERENCES public.companies(id) ON DELETE SET NULL;
-UPDATE public.leave_employee_accrual_rates row
-SET company_id = public.company_id_of_branch(row.branch_id)
-WHERE row.company_id IS NULL AND row.branch_id IS NOT NULL
-  AND public.company_id_of_branch(row.branch_id) IS NOT NULL;
+UPDATE public.leave_employee_accrual_rates AS t
+SET company_id = public.company_id_of_branch(t.branch_id)
+WHERE t.company_id IS NULL AND t.branch_id IS NOT NULL
+  AND public.company_id_of_branch(t.branch_id) IS NOT NULL;
 CREATE INDEX IF NOT EXISTS leave_employee_accrual_rates_company_id_idx ON public.leave_employee_accrual_rates (company_id);
 DROP TRIGGER IF EXISTS trg_leave_employee_accrual_rates_sync_company ON public.leave_employee_accrual_rates;
 CREATE TRIGGER trg_leave_employee_accrual_rates_sync_company
@@ -63,10 +63,10 @@ CREATE TRIGGER trg_leave_employee_accrual_rates_sync_company
 
 ALTER TABLE public.leave_requests
   ADD COLUMN IF NOT EXISTS company_id uuid REFERENCES public.companies(id) ON DELETE SET NULL;
-UPDATE public.leave_requests row
-SET company_id = public.company_id_of_branch(row.branch_id)
-WHERE row.company_id IS NULL AND row.branch_id IS NOT NULL
-  AND public.company_id_of_branch(row.branch_id) IS NOT NULL;
+UPDATE public.leave_requests AS t
+SET company_id = public.company_id_of_branch(t.branch_id)
+WHERE t.company_id IS NULL AND t.branch_id IS NOT NULL
+  AND public.company_id_of_branch(t.branch_id) IS NOT NULL;
 CREATE INDEX IF NOT EXISTS leave_requests_company_id_idx ON public.leave_requests (company_id);
 DROP TRIGGER IF EXISTS trg_leave_requests_sync_company ON public.leave_requests;
 CREATE TRIGGER trg_leave_requests_sync_company
@@ -75,10 +75,10 @@ CREATE TRIGGER trg_leave_requests_sync_company
 
 ALTER TABLE public.leave_request_attachments
   ADD COLUMN IF NOT EXISTS company_id uuid REFERENCES public.companies(id) ON DELETE SET NULL;
-UPDATE public.leave_request_attachments row
-SET company_id = public.company_id_of_branch(row.branch_id)
-WHERE row.company_id IS NULL AND row.branch_id IS NOT NULL
-  AND public.company_id_of_branch(row.branch_id) IS NOT NULL;
+UPDATE public.leave_request_attachments AS t
+SET company_id = public.company_id_of_branch(t.branch_id)
+WHERE t.company_id IS NULL AND t.branch_id IS NOT NULL
+  AND public.company_id_of_branch(t.branch_id) IS NOT NULL;
 CREATE INDEX IF NOT EXISTS leave_request_attachments_company_id_idx ON public.leave_request_attachments (company_id);
 DROP TRIGGER IF EXISTS trg_leave_request_attachments_sync_company ON public.leave_request_attachments;
 CREATE TRIGGER trg_leave_request_attachments_sync_company
@@ -87,10 +87,10 @@ CREATE TRIGGER trg_leave_request_attachments_sync_company
 
 ALTER TABLE public.leave_audit_log
   ADD COLUMN IF NOT EXISTS company_id uuid REFERENCES public.companies(id) ON DELETE SET NULL;
-UPDATE public.leave_audit_log row
-SET company_id = public.company_id_of_branch(row.branch_id)
-WHERE row.company_id IS NULL AND row.branch_id IS NOT NULL
-  AND public.company_id_of_branch(row.branch_id) IS NOT NULL;
+UPDATE public.leave_audit_log AS t
+SET company_id = public.company_id_of_branch(t.branch_id)
+WHERE t.company_id IS NULL AND t.branch_id IS NOT NULL
+  AND public.company_id_of_branch(t.branch_id) IS NOT NULL;
 CREATE INDEX IF NOT EXISTS leave_audit_log_company_id_idx ON public.leave_audit_log (company_id);
 DROP TRIGGER IF EXISTS trg_leave_audit_log_sync_company ON public.leave_audit_log;
 CREATE TRIGGER trg_leave_audit_log_sync_company
