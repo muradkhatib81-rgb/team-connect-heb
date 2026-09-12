@@ -47,3 +47,6 @@ build-error.txt
 build2.txt
 build-check.txt
 supabase/.temp/
+
+.vercel
+.env*
