@@ -6,7 +6,7 @@
     },
     {
       "path": "/api/public/hooks/generate-recurring-tasks",
-      "schedule": "0 * * * *"
+      "schedule": "0 3 * * *"
     }
   ]
 }

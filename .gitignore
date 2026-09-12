@@ -49,4 +49,6 @@ build-check.txt
 supabase/.temp/
 
 .vercel
-.env*
+.env
+.env.local
+.env.*.local
