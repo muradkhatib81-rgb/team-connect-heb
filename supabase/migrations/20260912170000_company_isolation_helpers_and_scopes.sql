@@ -122,28 +122,3 @@ CREATE POLICY break_policy_select_scoped
     OR branch_id IS NULL
     OR public.branch_in_my_companies(branch_id)
   );
-
--- Attendance category/role punch settings (open SELECT)
-DROP POLICY IF EXISTS attendance_role_punch_select ON public.attendance_role_punch_settings;
-DROP POLICY IF EXISTS attendance_role_punch_select_scoped ON public.attendance_role_punch_settings;
-CREATE POLICY attendance_role_punch_select_scoped
-  ON public.attendance_role_punch_settings
-  FOR SELECT
-  TO authenticated
-  USING (
-    public.is_platform_owner(auth.uid())
-    OR branch_id IS NULL
-    OR public.branch_in_my_companies(branch_id)
-  );
-
-DROP POLICY IF EXISTS attendance_punch_category_select ON public.attendance_punch_category_settings;
-DROP POLICY IF EXISTS attendance_punch_category_select_scoped ON public.attendance_punch_category_settings;
-CREATE POLICY attendance_punch_category_select_scoped
-  ON public.attendance_punch_category_settings
-  FOR SELECT
-  TO authenticated
-  USING (
-    public.is_platform_owner(auth.uid())
-    OR branch_id IS NULL
-    OR public.branch_in_my_companies(branch_id)
-  );
