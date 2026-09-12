@@ -52,11 +52,11 @@ export async function probeApi(): Promise<HealthCheckOutcome> {
   }
 }
 
-/** Light DB read against public platform_settings (SELECT allowed). */
+/** Light DB read via get_public_platform_settings RPC. */
 export async function probeDatabase(): Promise<HealthCheckOutcome> {
   try {
     const { ms, value } = await timed(() =>
-      supabase.from("platform_settings").select("id").eq("id", 1).maybeSingle(),
+      (supabase as any).rpc("get_public_platform_settings"),
     );
     if (value.error) {
       return outcome("down", value.error.message);

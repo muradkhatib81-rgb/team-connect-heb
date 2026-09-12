@@ -46,13 +46,10 @@ function AuthPage() {
   const whatsappQ = useQuery({
     queryKey: ["platform-settings-whatsapp-public"],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("platform_settings")
-        .select("whatsapp_number")
-        .eq("id", 1)
-        .maybeSingle();
+      const { data, error } = await (supabase as any).rpc("get_public_platform_settings");
       if (error) throw error;
-      return data?.whatsapp_number ?? null;
+      const row = Array.isArray(data) ? data[0] : data;
+      return row?.whatsapp_number ?? null;
     },
     staleTime: 60_000,
   });

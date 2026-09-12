@@ -45,16 +45,13 @@ function setOrCreateLink(rel: string, href: string, attrs?: Record<string, strin
 
 /** Resolve public URL for the platform-owner PWA icon (or null = use defaults). */
 export async function fetchPlatformPwaIconUrl(): Promise<string | null> {
-  const { data, error } = await supabase
-    .from("platform_settings")
-    .select("pwa_icon_url")
-    .eq("id", 1)
-    .maybeSingle();
+  const { data, error } = await (supabase as any).rpc("get_public_platform_settings");
   if (error) {
     console.warn("[pwa] failed to load icon url", error.message);
     return null;
   }
-  const url = data?.pwa_icon_url?.trim();
+  const row = Array.isArray(data) ? data[0] : data;
+  const url = row?.pwa_icon_url?.trim();
   return url || null;
 }
 
