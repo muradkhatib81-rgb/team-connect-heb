@@ -350,7 +350,7 @@ export const createBillingCheckoutSession = createServerFn({ method: "POST" })
       mode: "subscription",
       customer: customerId,
       client_reference_id: data.companyId,
-      locale: "he",
+      locale: "auto", // Stripe has no he/ar; auto picks browser language
       line_items: [{ price: priceId, quantity: 1 }],
       success_url: `${base}/platform/billing?checkout=success`,
       cancel_url: `${base}/platform/billing?checkout=cancel`,
