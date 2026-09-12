@@ -1,8 +1,12 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { runGenerateDueRecurringTasks } from "@/lib/tasks.functions";
 import { bearerMatchesCron, secretsEqual } from "@/lib/hook-secret.server";
+import {
+  allowHookRequest,
+  clientKeyFromRequest,
+  rateLimitedResponse,
+} from "@/lib/hook-rate-limit.server";
 
-/** Fail closed unless RECURRING_TASKS_SECRET header or Vercel cron Bearer. */
 function authorizeRecurringHook(request: Request): boolean {
   const expected = process.env.RECURRING_TASKS_SECRET?.trim();
   const header = request.headers.get("x-recurring-tasks-secret")?.trim();
@@ -21,13 +25,18 @@ function unauthorized() {
 }
 
 async function handle(request: Request) {
+  if (
+    !allowHookRequest(clientKeyFromRequest(request, "recurring-tasks"), 30, 60_000)
+  ) {
+    return rateLimitedResponse();
+  }
   if (!authorizeRecurringHook(request)) return unauthorized();
   try {
     const result = await runGenerateDueRecurringTasks();
     return Response.json({ ok: true, ...result });
   } catch (e: unknown) {
-    const message = e instanceof Error ? e.message : "failed";
-    return new Response(JSON.stringify({ ok: false, error: message }), {
+    console.warn("[recurring-tasks] hook failed:", e instanceof Error ? e.name : "error");
+    return new Response(JSON.stringify({ ok: false, error: "failed" }), {
       status: 500,
       headers: { "Content-Type": "application/json" },
     });

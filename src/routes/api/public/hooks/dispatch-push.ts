@@ -2,6 +2,11 @@ import { createFileRoute } from "@tanstack/react-router";
 import { z } from "zod";
 import { dispatchPushNotification } from "@/lib/push-dispatch.server";
 import { secretsEqual } from "@/lib/hook-secret.server";
+import {
+  allowHookRequest,
+  clientKeyFromRequest,
+  rateLimitedResponse,
+} from "@/lib/hook-rate-limit.server";
 
 const payloadSchema = z.object({
   userIds: z.array(z.string().uuid()).min(1),
@@ -29,6 +34,11 @@ export const Route = createFileRoute("/api/public/hooks/dispatch-push")({
   server: {
     handlers: {
       POST: async ({ request }) => {
+        if (
+          !allowHookRequest(clientKeyFromRequest(request, "dispatch-push"), 120, 60_000)
+        ) {
+          return rateLimitedResponse();
+        }
         if (!authorizePushHook(request)) {
           return new Response(JSON.stringify({ ok: false, error: "unauthorized" }), {
             status: 401,
@@ -40,7 +50,6 @@ export const Route = createFileRoute("/api/public/hooks/dispatch-push")({
           const data = payloadSchema.parse(json);
           const eventKey = data.eventKey ?? null;
           const tone = data.tone ?? null;
-          // Break start/end/late: never deliver to anyone except the holder.
           const userIds =
             HOLDER_ONLY_BREAK.has(eventKey ?? "") || HOLDER_ONLY_BREAK.has(tone ?? "")
               ? data.userIds.slice(0, 1)
@@ -60,10 +69,8 @@ export const Route = createFileRoute("/api/public/hooks/dispatch-push")({
           });
           return Response.json({ ok: true, ...result });
         } catch (e: unknown) {
-          console.warn("[push] dispatch-push hook failed:", e);
-          const isClientError =
-            e instanceof z.ZodError ||
-            (e instanceof SyntaxError);
+          console.warn("[push] dispatch-push hook failed:", e instanceof Error ? e.name : "error");
+          const isClientError = e instanceof z.ZodError || e instanceof SyntaxError;
           return new Response(
             JSON.stringify({
               ok: false,
