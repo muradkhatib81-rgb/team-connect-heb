@@ -1310,7 +1310,7 @@
   "platformBilling": {
     "title": "חיוב ומנויים",
     "subtitle": "תשלום Stripe לפי חברה. דקות AI ונפח אחסון לפי חברה או סניף — נקבעים כאן, לא ב-Stripe.",
-    "stripeNotConfigured": "Stripe עדיין לא מוגדר בשרת. בחירת תוכנית ידנית נשמרת. כדי לקבל תשלום אמיתי הוסיפו STRIPE_SECRET_KEY, STRIPE_WEBHOOK_SECRET, STRIPE_PRICE_STANDARD ו-STRIPE_PRICE_ENTERPRISE.",
+    "stripeNotConfigured": "Stripe עדיין לא מוגדר במלואו בשרת. בחירת תוכנית ידנית נשמרת. ל-Checkout אמיתי נדרשים המשתנים שברשימה למטה.",
     "storageTablesMissing": "טבלאות מכסת האחסון עדיין לא הותקנו. הריצו ב-Supabase SQL את הקובץ 20260825130000_billing_storage_quotas.sql ואז רעננו את העמוד.",
     "platformSubscription": "מנוי הפלטפורמה",
     "source": "מקור: {{source}}",
@@ -1419,7 +1419,21 @@
       "stripeNoCheckoutUrl": "Stripe לא החזיר כתובת תשלום",
       "stripeNotConfigured": "Stripe אינו מוגדר.",
       "noStripeCustomer": "אין לקוח Stripe לחברה זו. התחילו בתשלום קודם."
-    }
+    },
+    "stripeSetupTitle": "Stripe עדיין לא מוגדר במלואו",
+    "envPresent": "מוגדר",
+    "envMissing": "חסר",
+    "stripeSetupStepsTitle": "הפעלת Checkout אמיתי ב-Vercel",
+    "stripeSetupStep1": "ב-Stripe Dashboard (מצב Test) העתיקו את המפתח הסודי וצרו מחירי מנוי ל-Standard ו-Enterprise.",
+    "stripeSetupStep2": "ב-Vercel → Project → Settings → Environment Variables הוסיפו STRIPE_SECRET_KEY, STRIPE_PRICE_STANDARD, STRIPE_PRICE_ENTERPRISE ו-STRIPE_WEBHOOK_SECRET.",
+    "stripeSetupStep3": "הוסיפו webhook ב-Stripe לכתובת https://team-connect-app.com/api/public/hooks/stripe-webhook עם האירועים checkout.session.completed, customer.subscription.*, invoice.paid ו-invoice.payment_failed.",
+    "stripeSetupStep4": "אופציונלי: APP_PUBLIC_URL=https://team-connect-app.com ואז Redeploy. Checkout ו-Portal יופעלו אוטומטית כשהמשתנים קיימים — בלי שינוי קוד.",
+    "stripeSetupManualOk": "בחירת תוכנית / דקות AI / אחסון ידנית למטה ממשיכה לעבוד לבעל הפלטפורמה גם בלי Stripe.",
+    "checkoutNeedsEnv": "הוסיפו STRIPE_SECRET_KEY ומזהי מחיר בשרת כדי להפעיל Checkout.",
+    "portalNeedsCustomer": "הפורטל נפתח אחרי שיש ללקוח Stripe (בדרך כלל אחרי Checkout ראשון).",
+    "colAiMinutes": "דקות AI",
+    "colStorage": "אחסון",
+    "invoice": "חשבונית"
   },
   "permissions": {
     "title": "ניהול הרשאות",

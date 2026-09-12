@@ -2,29 +2,68 @@
 
 import Stripe from "stripe";
 import type { BillingPlan } from "@/core/managers/billing-manager";
+import { readServerEnv } from "@/integrations/supabase/server-dotenv.server";
+
+export type StripeEnvPresence = {
+  secretKey: boolean;
+  webhookSecret: boolean;
+  priceStandard: boolean;
+  priceEnterprise: boolean;
+  appPublicUrl: boolean;
+};
 
 export function getStripeSecretKey(): string | undefined {
-  return process.env.STRIPE_SECRET_KEY?.trim() || undefined;
+  return readServerEnv("STRIPE_SECRET_KEY")?.trim() || undefined;
 }
 
 export function getStripeWebhookSecret(): string | undefined {
-  return process.env.STRIPE_WEBHOOK_SECRET?.trim() || undefined;
+  return readServerEnv("STRIPE_WEBHOOK_SECRET")?.trim() || undefined;
 }
 
 export function getStripePriceStandard(): string | undefined {
-  return process.env.STRIPE_PRICE_STANDARD?.trim() || undefined;
+  return readServerEnv("STRIPE_PRICE_STANDARD")?.trim() || undefined;
 }
 
 export function getStripePriceEnterprise(): string | undefined {
-  return process.env.STRIPE_PRICE_ENTERPRISE?.trim() || undefined;
+  return readServerEnv("STRIPE_PRICE_ENTERPRISE")?.trim() || undefined;
+}
+
+/** Booleans only — never return secret values to the client. */
+export function getStripeEnvPresence(): StripeEnvPresence {
+  return {
+    secretKey: !!getStripeSecretKey(),
+    webhookSecret: !!getStripeWebhookSecret(),
+    priceStandard: !!getStripePriceStandard(),
+    priceEnterprise: !!getStripePriceEnterprise(),
+    appPublicUrl: !!(
+      readServerEnv("APP_PUBLIC_URL")?.trim() ||
+      process.env.APP_PUBLIC_URL?.trim() ||
+      process.env.VITE_APP_URL?.trim() ||
+      process.env.NEXT_PUBLIC_URL?.trim()
+    ),
+  };
 }
 
 export function isStripeConfigured(): boolean {
   return !!getStripeSecretKey();
 }
 
+export function isStripeWebhookConfigured(): boolean {
+  return !!(getStripeSecretKey() && getStripeWebhookSecret());
+}
+
 export function isStripeCheckoutConfigured(): boolean {
   return !!(getStripeSecretKey() && (getStripePriceStandard() || getStripePriceEnterprise()));
+}
+
+export function missingStripeEnvKeys(): string[] {
+  const p = getStripeEnvPresence();
+  const missing: string[] = [];
+  if (!p.secretKey) missing.push("STRIPE_SECRET_KEY");
+  if (!p.webhookSecret) missing.push("STRIPE_WEBHOOK_SECRET");
+  if (!p.priceStandard) missing.push("STRIPE_PRICE_STANDARD");
+  if (!p.priceEnterprise) missing.push("STRIPE_PRICE_ENTERPRISE");
+  return missing;
 }
 
 let stripeClient: Stripe | null | undefined;
@@ -51,6 +90,7 @@ export function planFromPriceId(priceId: string | null | undefined): BillingPlan
 
 export function appPublicUrl(request?: Request | null): string {
   const fromEnv =
+    readServerEnv("APP_PUBLIC_URL")?.trim() ||
     process.env.APP_PUBLIC_URL?.trim() ||
     process.env.VITE_APP_URL?.trim() ||
     process.env.NEXT_PUBLIC_URL?.trim();

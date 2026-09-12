@@ -11,6 +11,7 @@ const SERVER_ENV_KEYS = new Set([
   "STRIPE_WEBHOOK_SECRET",
   "STRIPE_PRICE_STANDARD",
   "STRIPE_PRICE_ENTERPRISE",
+  "APP_PUBLIC_URL",
 ]);
 
 let loaded = false;

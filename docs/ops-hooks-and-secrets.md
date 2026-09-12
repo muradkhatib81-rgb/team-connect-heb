@@ -29,3 +29,20 @@ Pro plan is required for hourly crons.
 ## Rate limits
 
 Public hooks apply a best-effort per-IP in-memory throttle in addition to shared secrets.
+
+## Stripe billing
+
+| Variable | Used by | Notes |
+| --- | --- | --- |
+| `STRIPE_SECRET_KEY` | Checkout, Portal, webhook verify | Server-only (`sk_test_…` / `sk_live_…`) |
+| `STRIPE_WEBHOOK_SECRET` | `/api/public/hooks/stripe-webhook` | `whsec_…` from Stripe endpoint or CLI |
+| `STRIPE_PRICE_STANDARD` | Checkout line item | Recurring Price ID |
+| `STRIPE_PRICE_ENTERPRISE` | Checkout line item | Recurring Price ID |
+| `APP_PUBLIC_URL` | Checkout success/cancel + Portal return | e.g. `https://team-connect-app.com` |
+
+Webhook URL (production): `https://team-connect-app.com/api/public/hooks/stripe-webhook`
+
+Events: `checkout.session.completed`, `customer.subscription.created`, `customer.subscription.updated`, `customer.subscription.deleted`, `invoice.paid`, `invoice.payment_failed`.
+
+Platform Owner `/platform/billing` keeps working for **manual** plan / AI minutes / storage without these secrets. Checkout and Customer Portal appear enabled automatically once `STRIPE_SECRET_KEY` + at least one price ID are present on the host (Vercel env).
+

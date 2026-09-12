@@ -44,9 +44,13 @@ import { billingErrorCode } from "@/lib/billing-errors";
 import {
   appPublicUrl,
   getStripe,
+  getStripeEnvPresence,
   isStripeCheckoutConfigured,
   isStripeConfigured,
+  isStripeWebhookConfigured,
+  missingStripeEnvKeys,
   priceIdForPlan,
+  type StripeEnvPresence,
 } from "@/lib/billing-stripe.server";
 
 async function assertPlatformOwner(supabase: any, userId: string) {
@@ -58,6 +62,10 @@ async function assertPlatformOwner(supabase: any, userId: string) {
 export type BillingOverview = {
   stripeConfigured: boolean;
   checkoutConfigured: boolean;
+  webhookConfigured: boolean;
+  /** Presence flags only — no secret values. */
+  stripeEnv: StripeEnvPresence;
+  missingStripeEnv: string[];
   platform: {
     plan: BillingPlan;
     source: "manual" | "stripe" | null;
@@ -131,6 +139,9 @@ export const getBillingOverview = createServerFn({ method: "GET" })
     return {
       stripeConfigured: isStripeConfigured(),
       checkoutConfigured: isStripeCheckoutConfigured(),
+      webhookConfigured: isStripeWebhookConfigured(),
+      stripeEnv: getStripeEnvPresence(),
+      missingStripeEnv: missingStripeEnvKeys(),
       platform: platform
         ? {
             plan: effectivePlan(platform),

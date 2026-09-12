@@ -3,7 +3,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { useTranslation } from "react-i18next";
-import { Building2, CreditCard, Clock, ExternalLink, GitBranch, HardDrive, Loader2, Sparkles, Users } from "lucide-react";
+import { AlertTriangle, Building2, CheckCircle2, Circle, CreditCard, Clock, ExternalLink, GitBranch, HardDrive, Loader2, Sparkles, Users } from "lucide-react";
 import { toast } from "sonner";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -336,8 +336,54 @@ function PlatformBillingPage() {
         </Card>
       )}
 
-      {overview && !overview.stripeConfigured && (
-        <Card className="p-4 text-sm text-muted-foreground">{t("platformBilling.stripeNotConfigured")}</Card>
+      {overview && (!overview.stripeConfigured || !overview.checkoutConfigured || !overview.webhookConfigured) && (
+        <Card className="border-amber-200 bg-amber-50/80 p-5 space-y-3 dark:border-amber-900/50 dark:bg-amber-950/20">
+          <div className="flex items-start gap-3">
+            <AlertTriangle className="mt-0.5 size-5 shrink-0 text-amber-700 dark:text-amber-400" />
+            <div className="min-w-0 space-y-1">
+              <p className="text-sm font-semibold text-amber-950 dark:text-amber-100">
+                {t("platformBilling.stripeSetupTitle")}
+              </p>
+              <p className="text-sm text-amber-900/90 dark:text-amber-200/90">
+                {t("platformBilling.stripeNotConfigured")}
+              </p>
+            </div>
+          </div>
+          <ul className="space-y-1.5 text-sm">
+            {(
+              [
+                ["STRIPE_SECRET_KEY", overview.stripeEnv?.secretKey],
+                ["STRIPE_WEBHOOK_SECRET", overview.stripeEnv?.webhookSecret],
+                ["STRIPE_PRICE_STANDARD", overview.stripeEnv?.priceStandard],
+                ["STRIPE_PRICE_ENTERPRISE", overview.stripeEnv?.priceEnterprise],
+              ] as const
+            ).map(([name, ok]) => (
+              <li key={name} className="flex items-center gap-2 font-mono text-xs sm:text-sm">
+                {ok ? (
+                  <CheckCircle2 className="size-4 shrink-0 text-emerald-600" />
+                ) : (
+                  <Circle className="size-4 shrink-0 text-amber-700 dark:text-amber-400" />
+                )}
+                <span className={ok ? "text-emerald-800 dark:text-emerald-300" : "text-amber-950 dark:text-amber-100"}>
+                  {name}
+                  {ok ? ` — ${t("platformBilling.envPresent")}` : ` — ${t("platformBilling.envMissing")}`}
+                </span>
+              </li>
+            ))}
+          </ul>
+          <div className="rounded-md border border-amber-200/80 bg-white/70 px-3 py-2 text-xs text-amber-950 space-y-1 dark:border-amber-900/40 dark:bg-background/40 dark:text-amber-100">
+            <p className="font-medium">{t("platformBilling.stripeSetupStepsTitle")}</p>
+            <ol className="list-decimal ps-4 space-y-1">
+              <li>{t("platformBilling.stripeSetupStep1")}</li>
+              <li>{t("platformBilling.stripeSetupStep2")}</li>
+              <li>{t("platformBilling.stripeSetupStep3")}</li>
+              <li>{t("platformBilling.stripeSetupStep4")}</li>
+            </ol>
+            <p className="pt-1 text-muted-foreground dark:text-amber-200/70">
+              {t("platformBilling.stripeSetupManualOk")}
+            </p>
+          </div>
+        </Card>
       )}
 
       {overview && (overview.storageEntitlements?.length ?? 0) === 0 && (
@@ -617,11 +663,12 @@ function PlatformBillingPage() {
                       {t("platformBilling.startTrial", { days: DEFAULT_TRIAL_DAYS })}
                     </Button>
                   )}
-                  {overview?.checkoutConfigured && isCompanyScope && (
+                  {isCompanyScope && (
                     <>
                       <Select
                         value={checkoutPlan}
                         onValueChange={(v) => setCheckoutPlan(v as "standard" | "enterprise")}
+                        disabled={!overview?.checkoutConfigured}
                       >
                         <SelectTrigger className="w-44">
                           <SelectValue />
@@ -634,7 +681,12 @@ function PlatformBillingPage() {
                       <Button
                         size="sm"
                         variant="outline"
-                        disabled={checkoutMut.isPending}
+                        title={
+                          overview?.checkoutConfigured
+                            ? undefined
+                            : t("platformBilling.checkoutNeedsEnv")
+                        }
+                        disabled={!overview?.checkoutConfigured || checkoutMut.isPending}
                         onClick={() =>
                           checkoutMut.mutate({ companyId: selectedCompany.id, plan: checkoutPlan })
                         }
@@ -649,7 +701,18 @@ function PlatformBillingPage() {
                       <Button
                         size="sm"
                         variant="outline"
-                        disabled={!selectedRow?.stripeCustomerId || portalMut.isPending}
+                        title={
+                          !overview?.stripeConfigured
+                            ? t("platformBilling.checkoutNeedsEnv")
+                            : !selectedRow?.stripeCustomerId
+                              ? t("platformBilling.portalNeedsCustomer")
+                              : undefined
+                        }
+                        disabled={
+                          !overview?.stripeConfigured ||
+                          !selectedRow?.stripeCustomerId ||
+                          portalMut.isPending
+                        }
                         onClick={() => portalMut.mutate(selectedCompany.id)}
                       >
                         <ExternalLink className="size-4" />
@@ -748,12 +811,17 @@ function PlatformBillingPage() {
                 <th className="p-2 text-start font-medium">{t("platformBilling.colPlan")}</th>
                 <th className="p-2 text-start font-medium">{t("platformBilling.colEmployees")}</th>
                 <th className="p-2 text-start font-medium">{t("platformBilling.colBranches")}</th>
+                <th className="p-2 text-start font-medium">{t("platformBilling.colAiMinutes")}</th>
+                <th className="p-2 text-start font-medium">{t("platformBilling.colStorage")}</th>
                 <th className="p-2 text-start font-medium">{t("platformBilling.colRealtime")}</th>
                 <th className="p-2 text-start font-medium">{t("platformBilling.colTrial")}</th>
               </tr>
             </thead>
             <tbody>
-              {planEntitlements.map((row) => (
+              {planEntitlements.map((row) => {
+                const aiMinutes = entitlements.find((e) => e.billing_plan === row.billing_plan)?.monthly_minutes;
+                const storageMb = storageCatalogMb(row.billing_plan);
+                return (
                 <tr key={row.billing_plan} className="border-b last:border-0">
                   <td className="p-2 font-medium">{planLabel(row.billing_plan)}</td>
                   <td className="p-2 tabular-nums">
@@ -762,6 +830,8 @@ function PlatformBillingPage() {
                   <td className="p-2 tabular-nums">
                     {formatLimit(row.max_branches, t("platformBilling.branchesUnit"), unlimited)}
                   </td>
+                  <td className="p-2 tabular-nums">{catalogMinutesLabel(aiMinutes)}</td>
+                  <td className="p-2 tabular-nums">{mbToGbLabel(storageMb, unlimited)}</td>
                   <td className="p-2">
                     {row.realtime_enabled ? t("platformBilling.yes") : t("platformBilling.no")}
                   </td>
@@ -771,7 +841,8 @@ function PlatformBillingPage() {
                       : "—"}
                   </td>
                 </tr>
-              ))}
+                );
+              })}
             </tbody>
           </table>
         </div>
@@ -794,10 +865,21 @@ function PlatformBillingPage() {
                   {" · "}
                   {p.status}
                 </span>
-                <span className="font-medium">
+                <span className="flex items-center gap-2 font-medium">
                   {p.amount_cents != null
                     ? `${(p.amount_cents / 100).toFixed(2)} ${(p.currency ?? "").toUpperCase()}`
                     : "—"}
+                  {p.hosted_invoice_url ? (
+                    <a
+                      href={p.hosted_invoice_url}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="inline-flex items-center gap-1 text-xs text-primary underline-offset-2 hover:underline"
+                    >
+                      <ExternalLink className="size-3.5" />
+                      {t("platformBilling.invoice")}
+                    </a>
+                  ) : null}
                 </span>
               </li>
             ))}

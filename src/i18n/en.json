@@ -1310,7 +1310,7 @@
   "platformBilling": {
     "title": "Billing & Subscriptions",
     "subtitle": "Stripe payment is per company. AI minutes and storage are set here by company or branch — not in Stripe.",
-    "stripeNotConfigured": "Stripe is not configured on the server yet. Manual plan selection is saved. To accept real payments add STRIPE_SECRET_KEY, STRIPE_WEBHOOK_SECRET, STRIPE_PRICE_STANDARD, and STRIPE_PRICE_ENTERPRISE.",
+    "stripeNotConfigured": "Stripe is not fully configured on the server yet. Manual plan selection is saved. Real Checkout needs the env vars listed below.",
     "storageTablesMissing": "Storage quota tables are not installed yet. Run 20260825130000_billing_storage_quotas.sql in Supabase SQL, then refresh this page.",
     "platformSubscription": "Platform subscription",
     "source": "Source: {{source}}",
@@ -1419,7 +1419,21 @@
       "stripeNoCheckoutUrl": "Stripe did not return a checkout URL",
       "stripeNotConfigured": "Stripe is not configured.",
       "noStripeCustomer": "No Stripe customer for this company. Start a payment first."
-    }
+    },
+    "stripeSetupTitle": "Stripe is not fully configured",
+    "envPresent": "set",
+    "envMissing": "missing",
+    "stripeSetupStepsTitle": "Enable real Checkout on Vercel",
+    "stripeSetupStep1": "In Stripe Dashboard (Test mode), copy the Secret key and create recurring Prices for Standard and Enterprise.",
+    "stripeSetupStep2": "In Vercel → Project → Settings → Environment Variables, add STRIPE_SECRET_KEY, STRIPE_PRICE_STANDARD, STRIPE_PRICE_ENTERPRISE, and STRIPE_WEBHOOK_SECRET.",
+    "stripeSetupStep3": "Add a Stripe webhook endpoint to https://team-connect-app.com/api/public/hooks/stripe-webhook for checkout.session.completed, customer.subscription.*, invoice.paid, and invoice.payment_failed.",
+    "stripeSetupStep4": "Optionally set APP_PUBLIC_URL=https://team-connect-app.com, then redeploy. Checkout and Portal activate automatically when these env vars are present — no code change needed.",
+    "stripeSetupManualOk": "Manual plan / AI minutes / storage assignment below keeps working for Platform Owner without Stripe.",
+    "checkoutNeedsEnv": "Add STRIPE_SECRET_KEY and price IDs on the server to enable Checkout.",
+    "portalNeedsCustomer": "Portal opens after the company has a Stripe customer (usually after the first Checkout).",
+    "colAiMinutes": "AI minutes",
+    "colStorage": "Storage",
+    "invoice": "Invoice"
   },
   "permissions": {
     "title": "Permission Management",
