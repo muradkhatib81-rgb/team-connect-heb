@@ -1,3 +1,15 @@
+
+/** Stripe price ids are `price_…`; tolerate a doubled `price_price_` from env typos. */
+export function normalizeStripePriceId(raw: string | undefined): string | undefined {
+  if (!raw) return undefined;
+  let v = raw.trim();
+  while (v.startsWith("price_price_")) v = v.slice("price_".length);
+  if (v.length > 40 && v.length % 2 === 0) {
+    const half = v.length / 2;
+    if (v.slice(0, half) === v.slice(half)) v = v.slice(0, half);
+  }
+  return v || undefined;
+}
 /** Server-only Stripe helpers. Never import from client components. */
 
 import Stripe from "stripe";
@@ -21,11 +33,11 @@ export function getStripeWebhookSecret(): string | undefined {
 }
 
 export function getStripePriceStandard(): string | undefined {
-  return readServerEnv("STRIPE_PRICE_STANDARD")?.trim() || undefined;
+  return normalizeStripePriceId(readServerEnv("STRIPE_PRICE_STANDARD"));
 }
 
 export function getStripePriceEnterprise(): string | undefined {
-  return readServerEnv("STRIPE_PRICE_ENTERPRISE")?.trim() || undefined;
+  return normalizeStripePriceId(readServerEnv("STRIPE_PRICE_ENTERPRISE"));
 }
 
 /** Booleans only — never return secret values to the client. */
