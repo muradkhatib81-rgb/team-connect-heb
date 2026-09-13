@@ -330,12 +330,27 @@
     max-width: 100%;
   }
 
+  /* Any route: page chrome cannot outgrow the phone. */
+  main {
+    min-width: 0;
+    max-width: 100%;
+  }
+
   /* Dense admin rows: wrap the action cluster instead of widening the page. */
   .card-elevated.flex,
-  .card-elevated > .flex:not(.flex-col) {
+  .card-elevated > .flex:not(.flex-col),
+  main ul > li.flex,
+  main [class*="divide-y"] > .flex {
     flex-wrap: wrap;
     min-width: 0;
     max-width: 100%;
+  }
+
+  /* Wide tables scroll inside their wrapper — never grow document.scrollWidth. */
+  main .overflow-x-auto,
+  main .overflow-auto {
+    max-width: 100%;
+    min-width: 0;
   }
 
   h1, h2, h3, h4 {

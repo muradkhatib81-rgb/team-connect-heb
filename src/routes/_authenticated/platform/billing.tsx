@@ -415,7 +415,7 @@ function PlatformBillingPage() {
             }
             disabled={setPlanMut.isPending || overviewQ.isLoading}
           >
-            <SelectTrigger className="w-56">
+            <SelectTrigger className="w-full min-w-0 sm:w-56">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -670,7 +670,7 @@ function PlatformBillingPage() {
                         onValueChange={(v) => setCheckoutPlan(v as "standard" | "enterprise")}
                         disabled={!overview?.checkoutConfigured}
                       >
-                        <SelectTrigger className="w-44">
+                        <SelectTrigger className="w-full min-w-0 sm:w-44">
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>

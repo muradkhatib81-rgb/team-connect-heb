@@ -383,7 +383,7 @@ function OpsErrorsPage() {
           <div className="flex flex-wrap items-center gap-2">
             <Label className="text-sm">{t("opsErrors.monthLabel")}</Label>
             <Select value={ym} onValueChange={setYearMonth}>
-              <SelectTrigger className="w-[140px]">
+              <SelectTrigger className="w-full min-w-0 sm:w-[140px]">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>

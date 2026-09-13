@@ -1131,7 +1131,7 @@ function DeptManagerDashboard({
     <>
       {mgr && (
         <Card className="card-elevated p-4">
-          <div className="flex items-center gap-4">
+          <div className="flex flex-wrap items-center gap-4 min-w-0">
             <div className="size-16 rounded-full bg-accent overflow-hidden flex items-center justify-center shrink-0 border border-border text-xl font-semibold text-muted-foreground">
               {mgr.avatar_url ? (
                 <span>{mgrInitial}</span>
@@ -1157,7 +1157,7 @@ function DeptManagerDashboard({
                 </p>
               )}
             </div>
-            <div className="text-sm text-muted-foreground whitespace-nowrap">
+            <div className="text-sm text-muted-foreground sm:whitespace-nowrap">
               {i18n.t("dashboard.deptEmployeesCount").replace("{n}", String(total))}
             </div>
           </div>

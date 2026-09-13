@@ -314,7 +314,7 @@ function AttendancePage() {
               </p>
             </div>
             <Select value={yearMonth} onValueChange={setYearMonth}>
-              <SelectTrigger className="w-[9rem]">
+              <SelectTrigger className="w-full min-w-0 sm:w-[9rem]">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
