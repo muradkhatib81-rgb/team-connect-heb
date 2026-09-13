@@ -889,14 +889,14 @@ export function AppShell({ children }: { children: ReactNode }) {
       <NetworkStatusBanner />
       <IdleLogoutGuard userId={profile.id} onIdle={handleSignOut} />
       <BranchModeGuard isPlatformOwner={isPlatformOwner} />
-      <div className="flex flex-col min-h-screen bg-background">
+      <div className="flex flex-col min-h-screen min-w-0 w-full max-w-full bg-background">
         {/* Desktop sidebar (RTL: stick to right) */}
         <aside className="hidden lg:block fixed inset-y-0 start-0 w-64 border-e border-sidebar-border">
           {SidebarContent}
         </aside>
 
         {/* Mobile top bar */}
-        <header className="mobile-app-header lg:hidden sticky top-0 z-30 flex items-center justify-between gap-2 border-b border-border bg-background/95 backdrop-blur pb-2">
+        <header className="mobile-app-header lg:hidden sticky top-0 z-30 flex items-center justify-between gap-2 border-b border-border bg-background/95 backdrop-blur pb-2 min-w-0 w-full">
           <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
             <SheetTrigger asChild>
               <Button variant="ghost" size="icon" aria-label={t("common.menu")}>
@@ -931,7 +931,7 @@ export function AppShell({ children }: { children: ReactNode }) {
               <Button variant="ghost" size="sm" className="h-8 gap-1.5 px-2 text-xs font-medium shrink-0" asChild>
                 <Link to="/ai-assistant" onClick={() => setMobileOpen(false)}>
                   <Sparkles className="size-3.5 shrink-0" />
-                  <span className="max-w-[9.5rem] truncate max-[380px]:sr-only">{t("ai.askAssistant")}</span>
+                  <span className="sr-only md:not-sr-only md:inline max-w-[9.5rem] truncate">{t("ai.askAssistant")}</span>
                 </Link>
               </Button>
             )}
@@ -964,9 +964,9 @@ export function AppShell({ children }: { children: ReactNode }) {
           </div>
         </div>
 
-        <main className="lg:ms-64 flex-1">
+        <main className="lg:ms-64 flex-1 min-w-0 w-full max-w-full">
           <PullToRefresh>
-            <div className="mx-auto max-w-6xl px-4 sm:px-6 py-6 lg:py-10">{children}</div>
+            <div className="mx-auto max-w-6xl w-full min-w-0 px-4 sm:px-6 py-6 lg:py-10">{children}</div>
             <AppFooter />
           </PullToRefresh>
         </main>
