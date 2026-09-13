@@ -926,9 +926,10 @@ export function AppShell({ children }: { children: ReactNode }) {
             <LanguageSwitcher userId={profile?.id} />
             <ThemeSwitcher userId={profile?.id} currentTheme={(profile?.preferred_theme as AppTheme | undefined) ?? "system"} />
             {!!aiAccessQ.data?.allowed && (
-              <Button variant="ghost" size="icon" className="size-8" asChild>
+              <Button variant="ghost" size="sm" className="h-8 gap-1.5 px-2 text-xs font-medium" asChild>
                 <Link to="/ai-assistant" onClick={() => setMobileOpen(false)}>
-                  <Sparkles className="size-4" />
+                  <Sparkles className="size-3.5 shrink-0" />
+                  <span className="max-w-[9.5rem] truncate">{t("ai.askAssistant")}</span>
                 </Link>
               </Button>
             )}
@@ -948,9 +949,10 @@ export function AppShell({ children }: { children: ReactNode }) {
           </div>
           {!!aiAccessQ.data?.allowed && (
             <div className="bg-background/95 backdrop-blur border rounded-full shadow-soft">
-              <Button variant="ghost" size="sm" className="px-2 h-8" asChild>
+              <Button variant="ghost" size="sm" className="h-8 gap-1.5 px-3 text-xs font-medium" asChild>
                 <Link to="/ai-assistant">
-                  <Sparkles className="size-3.5" />
+                  <Sparkles className="size-3.5 shrink-0" />
+                  <span className="whitespace-nowrap">{t("ai.askAssistant")}</span>
                 </Link>
               </Button>
             </div>

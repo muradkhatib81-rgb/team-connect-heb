@@ -1193,7 +1193,8 @@
       "geminiNotConfigured": "Gemini API key is not configured on the server (GEMINI_API_KEY).",
       "emptyResponse": "No response from the assistant. Please try again.",
       "providerNotRegistered": "AI provider not registered: {{code}}"
-    }
+    },
+    "askAssistant": "Ask AI"
   },
   "contentTranslation": {
     "originalIn": "Original ({{lang}})",

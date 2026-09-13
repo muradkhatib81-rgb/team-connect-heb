@@ -1193,7 +1193,8 @@
       "geminiNotConfigured": "מפתח Gemini לא מוגדר בשרת (GEMINI_API_KEY).",
       "emptyResponse": "לא התקבלה תשובה מהעוזר. נסה שוב.",
       "providerNotRegistered": "ספק AI לא רשום: {{code}}"
-    }
+    },
+    "askAssistant": "שאל את העוזר החכם"
   },
   "contentTranslation": {
     "originalIn": "מקור ({{lang}})",
