@@ -6,6 +6,7 @@ import {
   normalizeAiLocale,
   type AiReplyLanguage,
 } from "@/lib/ai-language";
+import { isHardAiDenial, resolveAiAccessForUi } from "@/lib/ai-access-resolve";
 
 export type RawAiAccess = {
   allowed?: boolean;
@@ -27,7 +28,27 @@ export function mapAiAccess(raw: RawAiAccess): ResolvedAiAccess {
     remainingMinutes: raw.remaining_minutes ?? null,
     quotaMinutes: raw.quota_minutes ?? null,
     grantSource: (raw.grant_source as AiGrantSource | null) ?? null,
+    reason: raw.reason ?? null,
   };
+}
+
+/**
+ * Resolve AI access using the existing `get_my_ai_access` RPC, then expose the
+ * owner allow path via `is_platform_owner(userId)` when the RPC denied for a
+ * non-hard reason (typically `auth.uid()` empty / no branch on platform home).
+ */
+export async function loadResolvedAiAccess(supabase: any, userId: string): Promise<ResolvedAiAccess> {
+  const { data, error } = await supabase.rpc("get_my_ai_access");
+  if (error) throw new Error(error.message);
+  const mapped = mapAiAccess((data ?? {}) as RawAiAccess);
+  if (mapped.allowed || isHardAiDenial(mapped.reason)) return mapped;
+
+  const { data: isOwner, error: ownerErr } = await supabase.rpc("is_platform_owner", {
+    _user_id: userId,
+  });
+  if (ownerErr) throw new Error(ownerErr.message);
+  if (isOwner) return resolveAiAccessForUi(mapped, true);
+  return mapped;
 }
 
 export function buildAiSystemPrompt(
