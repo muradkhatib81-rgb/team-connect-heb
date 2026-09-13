@@ -5,7 +5,7 @@ import { AppShell } from "@/components/app-shell";
 import { ActiveBranchProvider } from "@/lib/use-active-branch";
 import { canAccessRoute } from "@/lib/route-access";
 import { consumeRestoredAppPath } from "@/lib/last-app-path";
-import { PageRemountBoundary, PageRemountProvider } from "@/lib/page-remount";
+import { PageRemountProvider, RemountingOutlet } from "@/lib/page-remount";
 import { hasStoredBrowserAuthToken, waitForClientSession } from "@/lib/session-restore";
 import {
   fetchRouteGuardPermissions,
@@ -136,9 +136,7 @@ function AuthenticatedLayout() {
         <BranchProvider>
           <PageRemountProvider>
             <AppShell>
-              <PageRemountBoundary>
-                <Outlet />
-              </PageRemountBoundary>
+              <RemountingOutlet />
             </AppShell>
           </PageRemountProvider>
         </BranchProvider>

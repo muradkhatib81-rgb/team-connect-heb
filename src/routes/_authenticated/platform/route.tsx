@@ -1,8 +1,9 @@
-import { createFileRoute, Outlet, Navigate } from "@tanstack/react-router";
+import { createFileRoute, Navigate } from "@tanstack/react-router";
 import { Loader2 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useAuth } from "@/lib/use-auth";
 import { isPlatformOwner } from "@/lib/constants";
+import { RemountingOutlet } from "@/lib/page-remount";
 
 /**
  * Platform Management layout gate.
@@ -51,5 +52,7 @@ function PlatformLayout() {
     return <Navigate to="/dashboard" replace />;
   }
 
-  return <Outlet />;
+  // Nested keyed outlet: /platform/* pages render here, not only in the
+  // authenticated parent outlet. Header refresh must remount this leaf.
+  return <RemountingOutlet />;
 }
