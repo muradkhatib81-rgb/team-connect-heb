@@ -1,28 +1,19 @@
 import { useCallback, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { useQueryClient } from "@tanstack/react-query";
-import { useRouter } from "@tanstack/react-router";
 import { RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { refreshPageData } from "@/lib/refresh-page-data";
 import { cn } from "@/lib/utils";
 
-/** Header refresh control (complements mobile pull-to-refresh). */
+/** Header refresh — full page reload (same as F5). */
 export function HeaderRefreshButton() {
   const { t } = useTranslation();
-  const qc = useQueryClient();
-  const router = useRouter();
   const [busy, setBusy] = useState(false);
 
-  const onClick = useCallback(async () => {
+  const onClick = useCallback(() => {
     if (busy) return;
     setBusy(true);
-    try {
-      await refreshPageData(qc, router);
-    } finally {
-      setBusy(false);
-    }
-  }, [busy, qc, router]);
+    window.location.reload();
+  }, [busy]);
 
   return (
     <Button
@@ -33,7 +24,7 @@ export function HeaderRefreshButton() {
       title={t("common.refresh")}
       aria-label={t("common.refresh")}
       disabled={busy}
-      onClick={() => void onClick()}
+      onClick={onClick}
     >
       <RefreshCw className={cn("size-4", busy && "animate-spin")} />
     </Button>
