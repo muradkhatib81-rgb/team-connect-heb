@@ -43,6 +43,9 @@ function createSupabaseClient() {
   const native = isNativeShell();
   if (native) discardNativePersistedAuth();
 
+  // Web: persist to localStorage (F5 can restore). Native: in-memory only —
+  // shared devices must not reopen as the last employee. Header refresh on
+  // native is an in-app remount, never document.reload().
   return createClient<Database>(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
     auth: {
       storage: native || typeof window === "undefined" ? undefined : localStorage,

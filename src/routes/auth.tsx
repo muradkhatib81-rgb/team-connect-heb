@@ -1,4 +1,4 @@
-import { createFileRoute, useNavigate, useRouter } from "@tanstack/react-router";
+import { createFileRoute, redirect, useNavigate, useRouter } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { z } from "zod";
@@ -10,6 +10,8 @@ import { Card } from "@/components/ui/card";
 import { toast } from "sonner";
 import { APP_NAME } from "@/lib/constants";
 import { bootstrapPlatformOwner } from "@/lib/auth-bootstrap.functions";
+import { consumeRestoredAppPath } from "@/lib/last-app-path";
+import { hasStoredBrowserAuthToken, waitForClientSession } from "@/lib/session-restore";
 import { resolveLandingPath } from "@/lib/use-auth";
 import { seedIdleSessionOnLogin } from "@/lib/use-idle-logout";
 import { toWhatsAppUrl } from "@/lib/whatsapp";
@@ -24,9 +26,27 @@ import { toWesternDigits } from "@/lib/app-locale";
 /** Kept so old /auth?redirect=… bookmarks still validate; login ignores it. */
 const searchSchema = z.object({ redirect: z.string().optional() });
 
+function AuthPending() {
+  return (
+    <div className="flex min-h-screen items-center justify-center bg-background">
+      <Loader2 className="size-6 animate-spin text-primary" />
+    </div>
+  );
+}
+
 export const Route = createFileRoute("/auth")({
   validateSearch: searchSchema,
+  // Never SSR the login card — a mistaken server redirect was the F5 flash.
+  ssr: false,
+  pendingComponent: AuthPending,
   head: () => ({ meta: [{ title: `${i18n.t("auth.loginPageTitle")} | ${APP_NAME}` }] }),
+  beforeLoad: async () => {
+    const user = await waitForClientSession();
+    if (!user) return;
+    const restored = consumeRestoredAppPath("/auth");
+    if (restored) throw redirect({ href: restored, replace: true });
+    throw redirect({ to: await resolveLandingPath(user.id), replace: true });
+  },
   component: AuthPage,
 });
 
@@ -64,17 +84,22 @@ function AuthPage() {
       try {
         const { data } = await supabase.auth.getSession();
         if (cancelled) return;
-        if (data.session) {
+        if (data.session || hasStoredBrowserAuthToken()) {
           setHasUsers(true);
           try {
-            const target = await resolveLandingPath(data.session.user.id);
-            if (!cancelled) {
+            const user = data.session?.user ?? (await waitForClientSession());
+            const restored = consumeRestoredAppPath("/auth");
+            const target =
+              restored ??
+              (user ? await resolveLandingPath(user.id) : null);
+            if (target && !cancelled) {
               stayOnLoader = true;
               router.history.replace(target);
             }
+            if (hasStoredBrowserAuthToken()) stayOnLoader = true;
             return;
           } catch {
-            /* show login form if landing resolve fails */
+            if (hasStoredBrowserAuthToken()) stayOnLoader = true;
           }
           return;
         }

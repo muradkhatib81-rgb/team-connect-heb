@@ -26,6 +26,8 @@ import { installNativeSafeArea } from "@/lib/native-safe-area";
 import { installNativeBackButton } from "@/lib/native-back-button";
 import { saveFcmToken } from "@/lib/push.functions";
 import { applyPwaBranding, fetchPlatformPwaIconUrl } from "@/lib/pwa-branding";
+import { installLastAppPathTracking } from "@/lib/last-app-path";
+import { SessionRestoreGate } from "@/components/session-restore-gate";
 
 function NotFoundComponent() {
   const { t } = useTranslation();
@@ -318,10 +320,20 @@ function RootComponent() {
   }, []);
 
   useEffect(() => {
+    return installLastAppPathTracking((onResolved) => router.subscribe("onResolved", onResolved));
+  }, [router]);
+
+  useEffect(() => {
     const { data: sub } = supabase.auth.onAuthStateChange((event) => {
-      if (event !== "SIGNED_IN" && event !== "SIGNED_OUT" && event !== "USER_UPDATED") return;
-      router.invalidate();
-      if (event !== "SIGNED_OUT") queryClient.invalidateQueries();
+      // SIGNED_IN after storage recovery must NOT rematch the tree — that
+      // re-runs beforeLoad and was flashing /auth then role home.
+      if (event === "SIGNED_OUT") {
+        router.invalidate();
+        return;
+      }
+      if (event === "USER_UPDATED") {
+        queryClient.invalidateQueries({ queryKey: ["auth", "me"] });
+      }
     });
     return () => sub.subscription.unsubscribe();
   }, [router, queryClient]);
@@ -332,9 +344,11 @@ function RootComponent() {
         <PlatformProvider>
           <NativeBootSplash />
           {localeReady ? (
-            <div className="app-viewport">
-              <Outlet />
-            </div>
+            <SessionRestoreGate>
+              <div className="app-viewport">
+                <Outlet />
+              </div>
+            </SessionRestoreGate>
           ) : (
             <div className="app-viewport" />
           )}

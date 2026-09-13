@@ -1,8 +1,12 @@
 import { createFileRoute, Outlet, redirect, useRouterState } from "@tanstack/react-router";
+import { Loader2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { AppShell } from "@/components/app-shell";
 import { ActiveBranchProvider } from "@/lib/use-active-branch";
 import { canAccessRoute } from "@/lib/route-access";
+import { consumeRestoredAppPath } from "@/lib/last-app-path";
+import { PageRemountBoundary, PageRemountProvider } from "@/lib/page-remount";
+import { hasStoredBrowserAuthToken, waitForClientSession } from "@/lib/session-restore";
 import {
   fetchRouteGuardPermissions,
   fetchRouteGuardProfileActive,
@@ -12,19 +16,45 @@ import {
 import { BranchProvider, CompanyProvider } from "@/platform";
 
 export const Route = createFileRoute("/_authenticated")({
+  // Client-only: session lives in browser storage. SSR beforeLoad sees no
+  // user and used to 302 → /auth → role home, so F5 on /tasks opened dashboard.
+  ssr: false,
+  pendingComponent: () => (
+    <div className="flex min-h-screen items-center justify-center bg-background">
+      <Loader2 className="size-6 animate-spin text-primary" />
+    </div>
+  ),
   beforeLoad: async ({ location, context }) => {
-    // Prefer local session first so a refresh does not flash /auth while
-    // getUser() (network) is still restoring. Only bounce when there is
-    // truly no session in storage.
-    const { data: sessionData } = await supabase.auth.getSession();
-    const sessionUser = sessionData.session?.user ?? null;
-    if (!sessionUser) {
+    // Client-only (ssr:false). Await storage recovery before any /auth
+    // redirect so a web F5 never paints the login card. Native has no
+    // stored token (persistSession:false); header refresh never reloads.
+    const sessionUser = await waitForClientSession();
+    if (!sessionUser && !hasStoredBrowserAuthToken()) {
       throw redirect({ to: "/auth", replace: true });
+    }
+
+    const restored = consumeRestoredAppPath(
+      typeof window !== "undefined"
+        ? `${window.location.pathname}${window.location.search}${window.location.hash}`
+        : location.pathname,
+    );
+    if (restored) {
+      throw redirect({ href: restored, replace: true });
+    }
+
+    const resolvedUser = sessionUser ?? (await waitForClientSession());
+    if (!resolvedUser) {
+      if (!hasStoredBrowserAuthToken()) {
+        throw redirect({ to: "/auth", replace: true });
+      }
+      // Token still on disk but session not readable yet — skip the rest of
+      // the gate rather than painting /auth. SessionRestoreGate covers paint.
+      return {};
     }
 
     // Soft-validate with getUser; if it fails but session exists, keep going
     // with the session user so a transient auth API blip does not log them out.
-    let user = sessionUser;
+    let user = resolvedUser;
     try {
       const { data, error } = await supabase.auth.getUser();
       if (!error && data.user) user = data.user;
@@ -104,9 +134,13 @@ function AuthenticatedLayout() {
     <ActiveBranchProvider>
       <CompanyProvider>
         <BranchProvider>
-          <AppShell>
-            <Outlet />
-          </AppShell>
+          <PageRemountProvider>
+            <AppShell>
+              <PageRemountBoundary>
+                <Outlet />
+              </PageRemountBoundary>
+            </AppShell>
+          </PageRemountProvider>
         </BranchProvider>
       </CompanyProvider>
     </ActiveBranchProvider>
