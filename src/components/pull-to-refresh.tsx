@@ -133,7 +133,7 @@ export function PullToRefresh({ children }: { children: ReactNode }) {
   const visible = pull > 4 || refreshing;
 
   return (
-    <div className="relative">
+    <div className="relative min-w-0 w-full max-w-full">
       <div
         className="pointer-events-none absolute inset-x-0 top-0 z-20 flex justify-center transition-opacity"
         style={{
