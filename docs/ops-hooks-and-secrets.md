@@ -38,9 +38,9 @@ Public hooks apply a best-effort per-IP in-memory throttle in addition to shared
 | `STRIPE_WEBHOOK_SECRET` | `/api/public/hooks/stripe-webhook` | `whsec_…` from Stripe endpoint or CLI |
 | `STRIPE_PRICE_STANDARD` | Checkout line item | Recurring Price ID |
 | `STRIPE_PRICE_ENTERPRISE` | Checkout line item | Recurring Price ID |
-| `APP_PUBLIC_URL` | Checkout success/cancel + Portal return | e.g. `https://team-connect-app.com` |
+| `APP_PUBLIC_URL` | Checkout success/cancel + Portal return | e.g. `https://www.team-connect-app.com` |
 
-Webhook URL (production): `https://team-connect-app.com/api/public/hooks/stripe-webhook`
+Webhook URL (production): `https://www.team-connect-app.com/api/public/hooks/stripe-webhook`
 
 Events: `checkout.session.completed`, `customer.subscription.created`, `customer.subscription.updated`, `customer.subscription.deleted`, `invoice.paid`, `invoice.payment_failed`.
 

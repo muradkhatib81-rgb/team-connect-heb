@@ -6,7 +6,7 @@ Prepared on Windows so the next step is Mac/Xcode only.
 - `@capacitor/ios`
 - `ios/` Capacitor native project (`App`)
 - Scripts: `ios:sync`, `cap:sync:ios`, `cap:open:ios`
-- Remote shell URL: `https://team-connect-app.com` (see `capacitor.config.ts`)
+- Remote shell URL: `https://www.team-connect-app.com` (see `capacitor.config.ts`)
 
 ## On a Mac (when ready)
 1. Install Xcode + CocoaPods

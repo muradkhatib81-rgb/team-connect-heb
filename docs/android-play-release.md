@@ -1,12 +1,15 @@
 # Google Play release prep (Team Connect Android)
 
+## Domain note
+Canonical app URL is `https://www.team-connect-app.com`. Apex `https://team-connect-app.com` 308-redirects to www — old links keep working.
+
 ## Already prepared in the repo
 - Capacitor Android shell (`android/`, `com.teamconnect.heb`)
-- Production shell URL: `https://team-connect-app.com`
+- Production shell URL: `https://www.team-connect-app.com`
 - Release signing wiring in `android/app/build.gradle` via `android/keystore.properties`
 - Example props: `android/keystore.properties.example`
 - Build script: `scripts/build-android-aab.ps1`
-- Public privacy page: `https://team-connect-app.com/privacy.html`
+- Public privacy page: `https://www.team-connect-app.com/privacy.html`
 
 ## Local secrets (NOT in git â€” back these up)
 On this machine only:
@@ -33,7 +36,7 @@ npm alias: `npm run android:aab`
 2. Create app: Team Connect / `com.teamconnect.heb`.
 3. Upload the AAB to **Internal testing** first.
 4. Store listing: title, short/full description (AR/HE/EN as needed), screenshots, feature graphic.
-5. Privacy policy URL: `https://team-connect-app.com/privacy.html`
+5. Privacy policy URL: `https://www.team-connect-app.com/privacy.html`
 6. Data safety form â€” declare:
    - App collects account info (email/name) via Supabase auth
    - App may use push notifications (FCM) when enabled
