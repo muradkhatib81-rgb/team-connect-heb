@@ -8,10 +8,10 @@ import { refreshPageData } from "@/lib/refresh-page-data";
 import { cn } from "@/lib/utils";
 
 /**
- * Header refresh — refetch active queries + router loaders.
- * Must NOT call window.location.reload(): native Capacitor sets
- * persistSession:false (shared-device policy), and a full F5 drops the
- * in-memory session so beforeLoad bounces to /auth.
+ * Header refresh — refetch the current page's active queries.
+ * Must NOT call window.location.reload() (native persistSession:false
+ * drops the session → /auth) or router.invalidate() (layout beforeLoad
+ * can redirect to /dashboard). Stay on the current route.
  */
 export function HeaderRefreshButton() {
   const { t } = useTranslation();
