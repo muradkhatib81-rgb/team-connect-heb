@@ -8,38 +8,55 @@ const THRESHOLD = 56;
 const MAX_PULL = 88;
 /** Ignore jitter so a tap is not treated as a pull (preventDefault cancels click). */
 const PULL_ARM_DELTA = 16;
+const AT_TOP_PAD = 1;
 
-function pageScrollTop(): number {
+function documentScrollTop(): number {
   return Math.max(
     window.scrollY || 0,
     document.documentElement.scrollTop || 0,
     document.body?.scrollTop || 0,
-    window.visualViewport?.pageTop || 0,
+  );
+}
+
+function appViewportScrollTop(): number {
+  const viewport = document.querySelector(".app-viewport");
+  return viewport instanceof HTMLElement ? viewport.scrollTop || 0 : 0;
+}
+
+function isYScroller(node: HTMLElement): boolean {
+  const { overflowY } = window.getComputedStyle(node);
+  return (
+    overflowY === "auto" ||
+    overflowY === "scroll" ||
+    overflowY === "overlay" ||
+    overflowY === "hidden"
   );
 }
 
 function nestedScrollerNotAtTop(target: EventTarget | null): boolean {
   let node = target instanceof HTMLElement ? target : null;
-  while (node && node !== document.body) {
-    const { overflowY } = window.getComputedStyle(node);
-    if ((overflowY === "auto" || overflowY === "scroll" || overflowY === "overlay") && node.scrollTop > 1) {
-      return true;
-    }
+  while (node && node !== document.body && node !== document.documentElement) {
+    if (isYScroller(node) && node.scrollTop > AT_TOP_PAD) return true;
     node = node.parentElement;
   }
   return false;
 }
 
-function isInteractiveTarget(target: EventTarget | null): boolean {
+/** True when the real page scroller (window or .app-viewport) is at the top. */
+function isAtRefreshOrigin(target: EventTarget | null): boolean {
+  if (documentScrollTop() > AT_TOP_PAD) return false;
+  if (appViewportScrollTop() > AT_TOP_PAD) return false;
+  if (nestedScrollerNotAtTop(target)) return false;
+  return true;
+}
+
+/** Only skip fields — cards/buttons must still be able to start a pull. */
+function isFieldTarget(target: EventTarget | null): boolean {
   let node = target instanceof Element ? target : null;
   while (node && node !== document.documentElement) {
     const tag = node.tagName;
-    if (/^(A|BUTTON|INPUT|SELECT|TEXTAREA|SUMMARY|LABEL)$/.test(tag)) return true;
-    const role = node.getAttribute("role");
-    if (role && /^(button|link|menuitem|menuitemradio|combobox|tab|switch|checkbox|slider)$/i.test(role)) {
-      return true;
-    }
-    if (node.getAttribute("aria-haspopup")) return true;
+    if (/^(INPUT|TEXTAREA|SELECT)$/.test(tag)) return true;
+    if (node instanceof HTMLElement && node.isContentEditable) return true;
     node = node.parentElement;
   }
   return false;
@@ -74,11 +91,11 @@ export function PullToRefresh({ children }: { children: ReactNode }) {
 
     const onStart = (e: TouchEvent) => {
       if (refreshing) return;
-      if (isInteractiveTarget(e.target)) {
+      if (isFieldTarget(e.target)) {
         armed.current = false;
         return;
       }
-      if (pageScrollTop() > 0 || nestedScrollerNotAtTop(e.target)) {
+      if (!isAtRefreshOrigin(e.target)) {
         armed.current = false;
         return;
       }
@@ -92,7 +109,7 @@ export function PullToRefresh({ children }: { children: ReactNode }) {
       const y = e.touches[0]?.clientY ?? 0;
       const delta = y - startY.current;
       if (delta < PULL_ARM_DELTA) return;
-      if (pageScrollTop() > 0) {
+      if (!isAtRefreshOrigin(e.target) && !pulling.current) {
         armed.current = false;
         pulling.current = false;
         setPull(0);

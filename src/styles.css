@@ -212,16 +212,21 @@
 
 /*
   Page shell: constrain inline size so flex/grid min-content cannot widen
-  the document. No overflow-x here — that would steal window scrolling.
-  contain:inline-size is Chromium/WebView + Safari 17+; width/max-width
-  still apply where contain is ignored.
+  the document. No overflow-x / contain:inline-size here — those steal
+  window scrolling (see comment inside the rule).
 */
 .app-viewport {
   width: 100%;
   max-width: 100%;
   min-width: 0;
   min-height: 100dvh;
-  contain: inline-size;
+  /*
+    Do not use contain:inline-size here. It computes overflow-x to clip,
+    CSS Overflow then promotes overflow-y:visible → auto, and this
+    min-h-dvh box becomes the vertical scrollport. window.scrollY stays 0,
+    pull-to-refresh never arms, and overflow-y:clip would also kill the
+    sticky mobile header. Width lock stays on html (overflow-x:clip).
+  */
 }
 
 /* Sticky/fixed top chrome: sit below the status bar, do not shrink h-14 into it. */
