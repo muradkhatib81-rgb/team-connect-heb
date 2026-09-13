@@ -2,7 +2,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { isPlatformOwner, type AppRole } from "@/lib/constants";
-import type { AiAssistantKind, AiGrantSource, AiProviderCode, ResolvedAiAccess } from "@/modules/ai";
+import type { AiAssistantKind } from "@/modules/ai";
 import { routeAiChat } from "@/modules/ai";
 import { ensureAiProvidersRegistered } from "@/lib/ai-providers.server";
 import { aiErrorCode } from "@/lib/ai-errors";
@@ -11,15 +11,8 @@ import { buildAiUserContext } from "@/lib/ai-context.server";
 import {
   buildAiChatMessages,
   estimateAiMinutes,
-  mapAiAccess,
-  type RawAiAccess,
+  loadResolvedAiAccess,
 } from "@/lib/ai-chat-core.server";
-
-type RawAccess = RawAiAccess;
-
-function mapAccess(raw: RawAccess) {
-  return mapAiAccess(raw);
-}
 
 async function assertCanManageAiGrants(supabase: any, userId: string) {
   const { data, error } = await supabase.rpc("can_manage_ai_grants", { _user_id: userId });
@@ -34,18 +27,14 @@ function estimateMinutes(durationMs: number, inputTokens: number, outputTokens: 
 export const getMyAiAccess = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
-    const { data, error } = await context.supabase.rpc("get_my_ai_access");
-    if (error) throw new Error(error.message);
-    return mapAccess((data ?? {}) as RawAccess);
+    return loadResolvedAiAccess(context.supabase, context.userId);
   });
 
 /** Prefetch live snapshot into the server process cache (speeds first chat reply). */
 export const warmAiContext = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
-    const { data, error } = await context.supabase.rpc("get_my_ai_access");
-    if (error) throw new Error(error.message);
-    const access = mapAccess((data ?? {}) as RawAccess);
+    const access = await loadResolvedAiAccess(context.supabase, context.userId);
     if (!access.allowed) return { ok: false as const };
     const { warmAiUserContext } = await import("@/lib/ai-context.server");
     await warmAiUserContext(context.supabase, access.assistantKind);
@@ -72,9 +61,7 @@ export const sendAiMessage = createServerFn({ method: "POST" })
   .handler(async ({ context, data }) => {
     ensureAiProvidersRegistered();
 
-    const { data: accessRaw, error: accessErr } = await context.supabase.rpc("get_my_ai_access");
-    if (accessErr) throw new Error(accessErr.message);
-    const access = mapAccess((accessRaw ?? {}) as RawAccess);
+    const access = await loadResolvedAiAccess(context.supabase, context.userId);
     if (!access.allowed) {
       throw new Error(aiErrorCode("noAccess"));
     }

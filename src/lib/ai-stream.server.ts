@@ -5,8 +5,7 @@ import { aiErrorCode } from "@/lib/ai-errors";
 import {
   buildAiChatMessages,
   estimateAiMinutes,
-  mapAiAccess,
-  type RawAiAccess,
+  loadResolvedAiAccess,
 } from "@/lib/ai-chat-core.server";
 import { buildAiUserContext } from "@/lib/ai-context.server";
 import { streamGeminiChat } from "@/modules/ai/providers/gemini.provider";
@@ -31,6 +30,7 @@ function sseEvent(payload: unknown): string {
 
 export async function createAiChatSseResponse(
   supabase: SupabaseClient<Database>,
+  userId: string,
   rawBody: unknown,
 ): Promise<Response> {
   const data = streamInput.parse(rawBody);
@@ -51,14 +51,17 @@ export async function createAiChatSseResponse(
       try {
         push({ type: "status", phase: "auth" });
 
-        const { data: accessRaw, error: accessErr } = await supabase.rpc("get_my_ai_access");
-        if (accessErr) {
-          push({ type: "error", message: accessErr.message });
+        let access;
+        try {
+          access = await loadResolvedAiAccess(supabase, userId);
+        } catch (accessErr) {
+          push({
+            type: "error",
+            message: accessErr instanceof Error ? accessErr.message : String(accessErr),
+          });
           controller.close();
           return;
         }
-
-        const access = mapAiAccess((accessRaw ?? {}) as RawAiAccess);
         if (!access.allowed) {
           push({ type: "error", message: aiErrorCode("noAccess") });
           controller.close();

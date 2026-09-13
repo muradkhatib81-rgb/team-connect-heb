@@ -98,6 +98,8 @@ export interface ResolvedAiAccess {
   remainingMinutes: number | null;
   quotaMinutes: number | null;
   grantSource: AiGrantSource | null;
+  /** Present when the RPC denied access (`no_grant`, `quota_exhausted`, …). */
+  reason?: string | null;
 }
 
 export const DEFAULT_AI_PROVIDER: AiProviderCode = "gemini";
