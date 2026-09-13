@@ -1,5 +1,6 @@
 import { supabase } from "@/integrations/supabase/client";
 import i18n from "@/i18n";
+import { assertFreshEdit } from "@/lib/edit-conflict";
 
 // ---------------- Types ----------------
 export type CommPriority = "low" | "normal" | "high" | "urgent";
@@ -223,6 +224,7 @@ export interface EditMessageInput {
   requires_acknowledgment?: boolean;
   targets?: MessageTargetsInput; // if provided, replaces recipients & target metadata
   file?: File | null;            // if provided, adds a new attachment
+  expectedUpdatedAt?: string | null;
 }
 
 export async function editMessage(messageId: string, input: EditMessageInput) {
@@ -232,10 +234,19 @@ export async function editMessage(messageId: string, input: EditMessageInput) {
 
   const { data: existing, error: exErr } = await supabase
     .from("messages")
-    .select("id, title, edit_count")
+    .select("id, title, edit_count, updated_at, edited_by")
     .eq("id", messageId)
     .single();
   if (exErr) throw exErr;
+
+  await assertFreshEdit({
+    supabase,
+    table: "messages",
+    id: messageId,
+    expectedUpdatedAt: input.expectedUpdatedAt,
+    actorUserId: userId,
+    updatedByColumn: "edited_by",
+  });
 
   const patch: any = {
     edited_at: new Date().toISOString(),

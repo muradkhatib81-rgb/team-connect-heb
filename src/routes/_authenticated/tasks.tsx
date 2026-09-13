@@ -1412,7 +1412,7 @@ function TaskFormDialog({
           }
         }
       } else if (task) {
-        await update({ data: { id: task.id, ...basePayload } as any });
+        await update({ data: { id: task.id, ...basePayload, expected_updated_at: task.updated_at ?? null } as any });
       }
     },
     onSuccess: () => {

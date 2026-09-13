@@ -21,6 +21,7 @@ import { SCHEDULE_NOTE_MAX, trimScheduleNote } from "@/lib/schedule-note";
 import {
   enforceSupersededPublishedSchedulePolicy,
 } from "@/lib/schedule-superseded";
+import { assertFreshEdit } from "@/lib/edit-conflict";
 import { notifyUsersWithPush } from "@/lib/push-dispatch.server";
 import { formatHeTime } from "@/lib/date-format";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
@@ -948,6 +949,7 @@ const saveShiftsSchema = z.object({
   ),
   /** Current device push endpoint — skip so the editor's Chrome/APK is never notified. */
   actor_push_endpoint: z.string().min(8).max(4096).optional().nullable(),
+  expected_updated_at: z.string().nullable().optional(),
 });
 
 export const saveScheduleShifts = createServerFn({ method: "POST" })
@@ -960,6 +962,13 @@ export const saveScheduleShifts = createServerFn({ method: "POST" })
       .eq("id", data.schedule_id)
       .single();
     if (se || !sched) throw new Error(i18n.t("serverErrors.schedules.notFound"));
+    await assertFreshEdit({
+      supabase: context.supabase,
+      table: "schedules",
+      id: data.schedule_id,
+      expectedUpdatedAt: data.expected_updated_at,
+      actorUserId: context.userId,
+    });
     const caps = await getCaps(context.supabase, context.userId);
     await enforceSupersededPublishedSchedulePolicy(
       context.supabase,

@@ -3623,5 +3623,12 @@
   "pwa": {
     "install": "Install app",
     "installed": "App installed"
+  },
+  "network": {
+    "offline": "No connection",
+    "online": "Currently online",
+    "conflictEditedBy": "Edited by {{name}}",
+    "conflictSomeone": "Someone else",
+    "conflictReload": "Reload and try again"
   }
 }

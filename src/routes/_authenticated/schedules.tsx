@@ -1336,7 +1336,7 @@ function SchedulesPage() {
 
   const saveMut = useMutation({
     mutationFn: () => {
-      return saveFn({ data: { schedule_id: visible!.id, shifts: prepareShiftPayloadForPersist() } });
+      return saveFn({ data: { schedule_id: visible!.id, shifts: prepareShiftPayloadForPersist(), expected_updated_at: (visible as { updated_at?: string | null } | null)?.updated_at ?? null } });
     },
     onSuccess: () => {
       toast.success(i18n.t("schedules.saved"));
@@ -1360,7 +1360,7 @@ function SchedulesPage() {
     mutationFn: async () => {
       // Persist any unsaved local edits before validating on the server,
       // so the validator sees the actual on-screen schedule.
-      await saveFn({ data: { schedule_id: visible!.id, shifts: prepareShiftPayloadForPersist() } });
+      await saveFn({ data: { schedule_id: visible!.id, shifts: prepareShiftPayloadForPersist(), expected_updated_at: (visible as { updated_at?: string | null } | null)?.updated_at ?? null } });
       return submitFn({ data: { schedule_id: visible!.id } });
     },
     onSuccess: (r: any) => {
@@ -1387,7 +1387,7 @@ function SchedulesPage() {
     mutationFn: async () => {
       // Persist any current edits made by the approver before publishing,
       // so the published version reflects exactly what's on screen.
-      await saveFn({ data: { schedule_id: visible!.id, shifts: prepareShiftPayloadForPersist() } });
+      await saveFn({ data: { schedule_id: visible!.id, shifts: prepareShiftPayloadForPersist(), expected_updated_at: (visible as { updated_at?: string | null } | null)?.updated_at ?? null } });
       return approveFn({ data: { schedule_id: visible!.id } });
     },
     onSuccess: (r: any) => {
@@ -1413,7 +1413,7 @@ function SchedulesPage() {
 
   const publishMut = useMutation({
     mutationFn: async () => {
-      await saveFn({ data: { schedule_id: visible!.id, shifts: prepareShiftPayloadForPersist() } });
+      await saveFn({ data: { schedule_id: visible!.id, shifts: prepareShiftPayloadForPersist(), expected_updated_at: (visible as { updated_at?: string | null } | null)?.updated_at ?? null } });
       return publishFn({ data: { schedule_id: visible!.id } });
     },
     onSuccess: () => {
@@ -1865,7 +1865,7 @@ function SchedulesPage() {
 
   const autoSaveMut = useMutation({
     mutationFn: () =>
-      saveFn({ data: { schedule_id: visible!.id, shifts: buildShiftPayload() } }),
+      saveFn({ data: { schedule_id: visible!.id, shifts: buildShiftPayload(), expected_updated_at: (visible as { updated_at?: string | null } | null)?.updated_at ?? null } }),
     onSuccess: () => {
       editsDirtyRef.current = false;
       qc.invalidateQueries({ queryKey: ["schedule-shifts", visible?.id] });

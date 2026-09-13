@@ -3623,5 +3623,12 @@
   "pwa": {
     "install": "התקן את האפליקציה",
     "installed": "האפליקציה מותקנת"
+  },
+  "network": {
+    "offline": "אין חיבור",
+    "online": "מחובר כעת",
+    "conflictEditedBy": "נערך על ידי {{name}}",
+    "conflictSomeone": "מישהו אחר",
+    "conflictReload": "רענן ונסה שוב"
   }
 }

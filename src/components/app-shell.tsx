@@ -64,6 +64,7 @@ import { htmlLangAttribute } from "@/lib/app-locale";
 import { useServerFn } from "@tanstack/react-start";
 import { syncPreferredLanguage } from "@/lib/translate-content.functions";
 import { OnlinePresencePublisher } from "@/components/online-presence-publisher";
+import { NetworkStatusBanner } from "@/components/network-status-banner";
 import { NotificationsBell } from "@/components/notifications-bell";
 import { PullToRefresh } from "@/components/pull-to-refresh";
 import { LanguageSwitcher } from "@/components/language-switcher";
@@ -885,6 +886,7 @@ export function AppShell({ children }: { children: ReactNode }) {
     <>
       <RealtimeBridge uid={profile.id} />
       <OnlinePresencePublisher profile={profile} />
+      <NetworkStatusBanner />
       <IdleLogoutGuard userId={profile.id} onIdle={handleSignOut} />
       <BranchModeGuard isPlatformOwner={isPlatformOwner} />
       <div className="flex flex-col min-h-screen bg-background">

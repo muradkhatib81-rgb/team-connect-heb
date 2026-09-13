@@ -3623,5 +3623,12 @@
   "pwa": {
     "install": "تثبيت التطبيق",
     "installed": "التطبيق مثبت"
+  },
+  "network": {
+    "offline": "لا يوجد اتصال",
+    "online": "حاليا متصل",
+    "conflictEditedBy": "تم التعديل من قبل {{name}}",
+    "conflictSomeone": "شخص آخر",
+    "conflictReload": "أعد التحميل وحاول مرة أخرى"
   }
 }

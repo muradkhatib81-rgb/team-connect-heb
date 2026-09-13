@@ -438,7 +438,7 @@ function SentTab({
     queryFn: async () => {
       const { data, error } = await supabase
         .from("messages")
-        .select("id, title, body, priority, requires_acknowledgment, created_at, deleted_at, edited_at, edited_by")
+        .select("id, title, body, priority, requires_acknowledgment, created_at, updated_at, deleted_at, edited_at, edited_by")
         .eq("sender_id", userId)
         .is("deleted_at", null)
         .order("created_at", { ascending: false });
@@ -623,7 +623,7 @@ function MessageDetailDialog({
       const { data: m, error } = await supabase
         .from("messages")
         .select(
-          "id, title, body, priority, requires_acknowledgment, sender_id, created_at, edited_at, edited_by, edit_count, deleted_at",
+          "id, title, body, priority, requires_acknowledgment, sender_id, created_at, updated_at, edited_at, edited_by, edit_count, deleted_at",
         )
         .eq("id", messageId)
         .maybeSingle();
@@ -857,13 +857,11 @@ function MessageDetailDialog({
 
             {editOpen && (
               <EditMessageDialog
-                messageId={messageId}
-                initial={{
-                  title: d.msg.title,
+            messageId={messageId}
+            initial={{title: d.msg.title,
                   body: d.msg.body,
                   priority: d.msg.priority,
-                  requires_acknowledgment: d.msg.requires_acknowledgment,
-                }}
+                  requires_acknowledgment: d.msg.requires_acknowledgment, updated_at: (d?.msg as any)?.updated_at ?? null }}
                 onClose={() => setEditOpen(false)}
               />
             )}
@@ -908,7 +906,7 @@ function EditMessageDialog({
   onClose,
 }: {
   messageId: string;
-  initial: { title: string; body: string; priority: CommPriority; requires_acknowledgment: boolean };
+  initial: { title: string; body: string; priority: CommPriority; requires_acknowledgment: boolean; updated_at?: string | null };
   onClose: () => void;
 }) {
   const qc = useQueryClient();
@@ -926,6 +924,7 @@ function EditMessageDialog({
         priority,
         requires_acknowledgment: ack,
         file,
+        expectedUpdatedAt: initial.updated_at ?? null,
       }),
     onSuccess: () => {
       toast.success(i18n.t("comm.msgUpdated"));

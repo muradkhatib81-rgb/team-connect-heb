@@ -4,6 +4,7 @@ import { canExecuteTask, canEditTaskContent, canViewTask } from "@/lib/task-exec
 import i18n from "@/i18n";
 import { z } from "zod";
 import { notifyUsersWithPush } from "@/lib/push-dispatch.server";
+import { assertFreshEdit, stampEditMeta } from "@/lib/edit-conflict";
 
 const PRIORITY = ["low", "medium", "high"] as const;
 const STATUS = ["new", "in_progress", "pending_approval", "pending_closure", "completed", "closed"] as const;
@@ -510,6 +511,7 @@ const updateSchema = z.object({
   priority: z.enum(PRIORITY).optional(),
   status: z.enum(STATUS).optional(),
   notes: z.string().trim().max(2000).nullable().optional(),
+  expected_updated_at: z.string().nullable().optional(),
 });
 
 export const updateTask = createServerFn({ method: "POST" })
@@ -517,12 +519,22 @@ export const updateTask = createServerFn({ method: "POST" })
   .inputValidator((d: unknown) => updateSchema.parse(d))
   .handler(async ({ data, context }) => {
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    const { id, department_ids, assignee_ids, ...patch } = data;
+    const { id, department_ids, assignee_ids, expected_updated_at, ...patch } = data;
     const cleaned: Record<string, any> = {};
     for (const [k, v] of Object.entries(patch)) if (v !== undefined) cleaned[k] = v;
 
     if (Object.keys(cleaned).length) {
       const isExecutionOnly = Object.keys(cleaned).every((k) => EXECUTION_PATCH_KEYS.has(k));
+      if (!isExecutionOnly) {
+        await assertFreshEdit({
+          supabase: context.supabase,
+          table: "tasks",
+          id,
+          expectedUpdatedAt: expected_updated_at,
+          actorUserId: context.userId,
+        });
+        Object.assign(cleaned, stampEditMeta(context.userId));
+      }
       if (isExecutionOnly) {
         await assertCanExecuteTask(supabaseAdmin, context.userId, id);
         if (
