@@ -68,6 +68,7 @@ import { NotificationsBell } from "@/components/notifications-bell";
 import { PullToRefresh } from "@/components/pull-to-refresh";
 import { LanguageSwitcher } from "@/components/language-switcher";
 import { PwaInstallButton } from "@/components/pwa-install-button";
+import { HeaderRefreshButton } from "@/components/header-refresh-button";
 import { ThemeSwitcher, applyTheme } from "@/components/theme-switcher";
 import type { AppTheme } from "@/lib/translate-content.functions";
 import { useActiveBranch } from "@/lib/use-active-branch";
@@ -920,6 +921,7 @@ export function AppShell({ children }: { children: ReactNode }) {
             </div>
           </div>
           <div className="flex items-center gap-1 shrink-0">
+            <HeaderRefreshButton />
             <PwaInstallButton />
             <LanguageSwitcher userId={profile?.id} />
             <ThemeSwitcher userId={profile?.id} currentTheme={(profile?.preferred_theme as AppTheme | undefined) ?? "system"} />
@@ -937,6 +939,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         {/* Floating header — desktop only */}
         <div className="hidden lg:flex fixed top-4 end-4 z-40 items-center gap-2">
           <div className="bg-background/95 backdrop-blur border rounded-full shadow-soft">
+            <HeaderRefreshButton />
             <PwaInstallButton />
             <LanguageSwitcher userId={profile?.id} />
           </div>

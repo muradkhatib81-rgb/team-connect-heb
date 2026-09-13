@@ -1252,7 +1252,8 @@
     "hour": "שעה",
     "minute": "דקה",
     "contactPlatform": "פנה/י לבעל המערכת",
-    "contactManagement": "פנה/י להנהלה"
+    "contactManagement": "פנה/י להנהלה",
+    "refresh": "רענון"
   },
   "platformMonitoring": {
     "title": "ניטור פלטפורמה",

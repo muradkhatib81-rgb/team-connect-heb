@@ -1252,7 +1252,8 @@
     "hour": "ساعة",
     "minute": "دقيقة",
     "contactPlatform": "تواصل/ي مع مالك النظام",
-    "contactManagement": "تواصل/ي مع الإدارة"
+    "contactManagement": "تواصل/ي مع الإدارة",
+    "refresh": "تحديث"
   },
   "platformMonitoring": {
     "title": "مراقبة المنصة",

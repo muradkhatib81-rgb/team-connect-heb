@@ -1252,7 +1252,8 @@
     "hour": "Hour",
     "minute": "Minute",
     "contactPlatform": "Contact the platform owner",
-    "contactManagement": "Contact management"
+    "contactManagement": "Contact management",
+    "refresh": "Refresh"
   },
   "platformMonitoring": {
     "title": "Platform monitoring",

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState, type ReactNode } from "react"
 import { useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "@tanstack/react-router";
 import { Loader2 } from "lucide-react";
+import { refreshPageData } from "@/lib/refresh-page-data";
 
 const THRESHOLD = 56;
 const MAX_PULL = 88;
@@ -37,10 +38,7 @@ export function PullToRefresh({ children }: { children: ReactNode }) {
     setRefreshing(true);
     setPull(THRESHOLD);
     try {
-      await Promise.all([
-        qc.invalidateQueries({ refetchType: "active" }),
-        router.invalidate(),
-      ]);
+      await refreshPageData(qc, router);
     } finally {
       pullRef.current = 0;
       setRefreshing(false);
