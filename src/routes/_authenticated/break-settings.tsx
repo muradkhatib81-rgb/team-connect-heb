@@ -207,7 +207,7 @@ export function BreakSettingsPage() {
           {rows.map((r, idx) => (
             <Card
               key={r.id}
-              className="card-elevated p-4 flex items-center gap-3"
+              className="card-elevated p-4 flex flex-wrap items-center gap-3 min-w-0"
             >
               <div className="size-9 rounded-full bg-accent text-accent-foreground flex items-center justify-center font-semibold shrink-0">
                 {idx + 1}

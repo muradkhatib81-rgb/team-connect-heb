@@ -346,7 +346,7 @@ function BreaksPage() {
                 const setting = settingsQ.data?.find((s) => s.id === r.break_setting_id);
                 const showTime = r.approved_at_time ?? r.requested_at;
                 return (
-                  <Card key={r.id} className="card-elevated p-4 flex items-center gap-3">
+                  <Card key={r.id} className="card-elevated p-4 flex flex-wrap items-center gap-3 min-w-0">
                     <div className="flex-1 min-w-0">
                       <p className="font-medium truncate">
                       {setting?.name ?? i18n.t("breaks.defaultBreak")} · {r.duration_minutes}{" "}

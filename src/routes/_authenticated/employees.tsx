@@ -500,7 +500,7 @@ function EmployeesPage() {
   });
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 min-w-0 max-w-full">
       <header className="page-title-row flex flex-wrap items-end justify-between gap-3 min-w-0">
         <div className="min-w-0">
           <h1 className="text-2xl sm:text-3xl font-bold break-words">{t("employeesPage.title")}</h1>
@@ -540,8 +540,8 @@ function EmployeesPage() {
       )}
 
       {isDeptManagerOnly && me && managerDeptStats && (
-        <Card className="card-elevated p-4">
-          <div className="flex items-center gap-4">
+        <Card className="card-elevated p-4 min-w-0">
+          <div className="flex flex-col gap-3 min-w-0 sm:flex-row sm:items-center sm:gap-4">
             <div className="size-16 rounded-full bg-accent overflow-hidden flex items-center justify-center shrink-0 border border-border">
               {(() => {
                 const path = (employeesQuery.data ?? []).find((e) => e.id === me.id)?.avatar_url;
@@ -622,8 +622,8 @@ function EmployeesPage() {
 
 
 
-      <Card className="card-elevated p-4">
-        <div className="flex flex-col sm:flex-row gap-3">
+      <Card className="card-elevated p-4 min-w-0">
+        <div className="flex flex-col sm:flex-row gap-3 min-w-0">
           <div className="relative flex-1">
             <Search className="absolute right-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
             <Input
@@ -633,10 +633,10 @@ function EmployeesPage() {
               className="pr-10"
             />
           </div>
-          <div className="flex items-center gap-2">
-            <Filter className="size-4 text-muted-foreground" />
+          <div className="flex flex-col min-[420px]:flex-row items-stretch min-[420px]:items-center gap-2 min-w-0 w-full sm:w-auto">
+            <Filter className="size-4 text-muted-foreground hidden min-[420px]:block shrink-0" />
             <Select value={filterMode} onValueChange={(v) => setFilter(v as FilterMode)}>
-              <SelectTrigger className="w-48"><SelectValue /></SelectTrigger>
+              <SelectTrigger className="w-full min-w-0 sm:w-48"><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="active">{t("employeesPage.filters.active")}</SelectItem>
                 <SelectItem value="inactive">{t("employeesPage.filters.inactive")}</SelectItem>
@@ -651,7 +651,7 @@ function EmployeesPage() {
             </Select>
             {!isDeptManagerOnly && (
               <Select value={deptFilter} onValueChange={setDept}>
-                <SelectTrigger className="w-44"><SelectValue /></SelectTrigger>
+                <SelectTrigger className="w-full min-w-0 sm:w-44"><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">{t("employeesPage.allDepartments")}</SelectItem>
                   {(deptsQuery.data ?? []).map((d) => (
@@ -1317,45 +1317,47 @@ function EmployeeRow({
   const canFinalDelete = canDelete;
 
   return (
-    <Card className="card-elevated p-4">
-      <div className="flex items-center gap-4">
-        <div className="size-12 rounded-full bg-accent text-accent-foreground flex items-center justify-center text-base font-semibold shrink-0 overflow-hidden">
-          {avatarUrl ? (
-            <img src={avatarUrl} alt="" className="w-full h-full object-cover" />
-          ) : (
-            <span>{employeeNameInitial(emp)}</span>
-          )}
-        </div>
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 flex-wrap min-w-0">
-            <p className="font-semibold truncate">
-              {formatEmployeeName(emp)}
-              <span className="text-muted-foreground font-normal mx-1.5">·</span>
-              <span className="font-medium">{deptName ?? t("employeesPage.noDepartment")}</span>
-            </p>
-            {!emp.is_active && <Badge variant="destructive" className="rounded-full text-xs">{t("employeesPage.badges.inactive")}</Badge>}
-            {isEmployeeCurrentlyOnLeave(emp) && <Badge variant="secondary" className="rounded-full text-xs">{t("employeesPage.badges.onLeave")}</Badge>}
+    <Card className="card-elevated p-4 min-w-0 max-w-full">
+      <div className="flex flex-col gap-3 min-w-0 sm:flex-row sm:items-center sm:gap-4">
+        <div className="flex items-start gap-3 min-w-0 flex-1">
+          <div className="size-12 rounded-full bg-accent text-accent-foreground flex items-center justify-center text-base font-semibold shrink-0 overflow-hidden">
+            {avatarUrl ? (
+              <img src={avatarUrl} alt="" className="w-full h-full object-cover" />
+            ) : (
+              <span>{employeeNameInitial(emp)}</span>
+            )}
           </div>
-          {isEmployeeCurrentlyOnLeave(emp) && formatLeaveDateRange(emp.leave_start_date, emp.leave_end_date) && (
-            <p className="text-xs text-muted-foreground mt-0.5">
-              {formatLeaveDateRange(emp.leave_start_date, emp.leave_end_date)}
-            </p>
-          )}
-          {emp.phone && (
-            <div className="flex items-center gap-2 mt-0.5 min-w-0">
-              <p className="text-xs text-muted-foreground truncate" dir="ltr">{emp.phone}</p>
-              <ContactActions phone={emp.phone} size="icon" />
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2 flex-wrap min-w-0">
+              <p className="font-semibold min-w-0 max-w-full break-words [overflow-wrap:anywhere]">
+                {formatEmployeeName(emp)}
+                <span className="text-muted-foreground font-normal mx-1.5">·</span>
+                <span className="font-medium">{deptName ?? t("employeesPage.noDepartment")}</span>
+              </p>
+              {!emp.is_active && <Badge variant="destructive" className="rounded-full text-xs">{t("employeesPage.badges.inactive")}</Badge>}
+              {isEmployeeCurrentlyOnLeave(emp) && <Badge variant="secondary" className="rounded-full text-xs">{t("employeesPage.badges.onLeave")}</Badge>}
             </div>
-          )}
-          {roles.length > 0 && (
-            <div className="flex flex-wrap gap-1 mt-2">
-              {roles.map((r) => (
-                <Badge key={r} variant="secondary" className="rounded-full text-xs">{getRoleLabel(r)}</Badge>
-              ))}
-            </div>
-          )}
+            {isEmployeeCurrentlyOnLeave(emp) && formatLeaveDateRange(emp.leave_start_date, emp.leave_end_date) && (
+              <p className="text-xs text-muted-foreground mt-0.5">
+                {formatLeaveDateRange(emp.leave_start_date, emp.leave_end_date)}
+              </p>
+            )}
+            {emp.phone && (
+              <div className="flex items-center gap-2 mt-0.5 min-w-0">
+                <p className="text-xs text-muted-foreground truncate" dir="ltr">{emp.phone}</p>
+                <ContactActions phone={emp.phone} size="icon" />
+              </div>
+            )}
+            {roles.length > 0 && (
+              <div className="flex flex-wrap gap-1 mt-2">
+                {roles.map((r) => (
+                  <Badge key={r} variant="secondary" className="rounded-full text-xs">{getRoleLabel(r)}</Badge>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
-        <div className="flex items-center gap-1 shrink-0">
+        <div className="flex flex-wrap items-center gap-1 justify-end max-w-full sm:shrink-0">
           {canReactivate && !emp.is_active && (
             <Button
               variant="default"
@@ -1382,9 +1384,9 @@ function EmployeeRow({
             </Button>
           )}
           {canFinalDelete && (
-            <Button variant="ghost" size="sm" className="gap-1.5 text-destructive hover:text-destructive hover:bg-destructive/10" onClick={onDelete} aria-label={t("employeesPage.row.deleteAria")}>
+            <Button variant="ghost" size="sm" className="gap-1.5 text-destructive hover:text-destructive hover:bg-destructive/10 max-sm:size-9 max-sm:p-0" onClick={onDelete} aria-label={t("employeesPage.row.deleteAria")}>
               <Trash2 className="size-4" />
-              <span>{t("employeesPage.row.fullDelete")}</span>
+              <span className="hidden sm:inline">{t("employeesPage.row.fullDelete")}</span>
             </Button>
           )}
         </div>

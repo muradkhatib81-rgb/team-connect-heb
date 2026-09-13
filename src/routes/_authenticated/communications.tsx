@@ -192,7 +192,7 @@ function CommunicationsPage() {
   if (!me) return null;
 
   return (
-    <div className="space-y-6" dir="rtl">
+    <div className="space-y-6 min-w-0 max-w-full" dir="rtl">
       <header className="page-title-row flex flex-wrap items-start justify-between gap-3 min-w-0">
         <div className="min-w-0">
           <h1 className="text-2xl font-bold flex items-start gap-2 min-w-0 break-words">
@@ -342,7 +342,7 @@ function InboxTab({
   return (
     <div className="space-y-3">
       <div className="flex flex-wrap items-center gap-2">
-        <div className="relative flex-1 min-w-[220px]">
+        <div className="relative flex-1 min-w-0">
           <Search className="absolute right-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
           <Input
             placeholder={i18n.t("comm.searchPlaceholder")}
@@ -352,7 +352,7 @@ function InboxTab({
           />
         </div>
         <Select value={filter} onValueChange={(v: any) => setFilter(v)}>
-          <SelectTrigger className="w-44">
+          <SelectTrigger className="w-full min-w-0 sm:w-44">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>

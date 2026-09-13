@@ -220,7 +220,7 @@ function EomManagePage() {
           <div className="space-y-1">
             <Label>{t("employeeOfMonthPage.monthLabel")}</Label>
             <Select value={String(month)} onValueChange={(v) => setMonth(Number(v))}>
-              <SelectTrigger className="w-40"><SelectValue /></SelectTrigger>
+              <SelectTrigger className="w-full min-w-0 sm:w-40"><SelectValue /></SelectTrigger>
               <SelectContent>
                 {getEomMonthNames().map((m, i) => (
                   <SelectItem key={i} value={String(i + 1)}>{m}</SelectItem>
@@ -231,7 +231,7 @@ function EomManagePage() {
           <div className="space-y-1">
             <Label>{t("employeeOfMonthPage.yearLabel")}</Label>
             <Select value={String(year)} onValueChange={(v) => setYear(Number(v))}>
-              <SelectTrigger className="w-32"><SelectValue /></SelectTrigger>
+              <SelectTrigger className="w-full min-w-0 sm:w-32"><SelectValue /></SelectTrigger>
               <SelectContent>
                 {yearOptions.map((y) => (
                   <SelectItem key={y} value={String(y)}>{y}</SelectItem>

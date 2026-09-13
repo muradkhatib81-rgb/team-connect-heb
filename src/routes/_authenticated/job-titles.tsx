@@ -89,24 +89,26 @@ function JobTitlesPage() {
         ) : (
           <ul className="divide-y divide-border">
             {(titlesQ.data ?? []).map((titleRow) => (
-              <li key={titleRow.id} className="flex items-center gap-3 p-4">
-                <Briefcase className="size-5 text-muted-foreground" />
+              <li key={titleRow.id} className="flex flex-wrap items-center gap-3 p-4 min-w-0">
+                <Briefcase className="size-5 text-muted-foreground shrink-0" />
                 <div className="flex-1 min-w-0">
-                  <div className="font-medium truncate">{titleRow.name}</div>
+                  <div className="font-medium break-words [overflow-wrap:anywhere]">{titleRow.name}</div>
                   <div className="text-xs text-muted-foreground">
                     {titleRow.excluded_from_headcount
                       ? t("jobTitlesPage.excludedFromHeadcount")
                       : t("jobTitlesPage.includedInHeadcount")}
                   </div>
                 </div>
-                <Button variant="outline" size="sm" onClick={() => setEditing(titleRow)} className="gap-1.5">
-                  <Pencil className="size-3.5" />
-                  {t("common.edit")}
-                </Button>
-                <Button variant="ghost" size="sm" onClick={() => setDeleting(titleRow)} className="gap-1.5 text-destructive">
-                  <Trash2 className="size-3.5" />
-                  {t("common.delete")}
-                </Button>
+                <div className="flex flex-wrap items-center gap-2 justify-end">
+                  <Button variant="outline" size="sm" onClick={() => setEditing(titleRow)} className="gap-1.5">
+                    <Pencil className="size-3.5" />
+                    {t("common.edit")}
+                  </Button>
+                  <Button variant="ghost" size="sm" onClick={() => setDeleting(titleRow)} className="gap-1.5 text-destructive">
+                    <Trash2 className="size-3.5" />
+                    {t("common.delete")}
+                  </Button>
+                </div>
               </li>
             ))}
           </ul>

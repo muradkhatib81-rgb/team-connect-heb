@@ -300,7 +300,7 @@ function TasksPage() {
     (depsQuery.data?.departments.some((d) => false) ?? false);
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 min-w-0 max-w-full">
       <header className="page-title-row flex flex-wrap items-start justify-between gap-3 min-w-0">
         <div className="min-w-0">
           <h1 className="text-2xl sm:text-3xl font-bold break-words">{i18n.t("tasks.title")}</h1>
@@ -328,15 +328,15 @@ function TasksPage() {
         </TabsList>
 
         <TabsContent value="tasks" className="space-y-4 mt-4">
-          <div className="flex flex-wrap items-center gap-3">
+          <div className="flex flex-col sm:flex-row flex-wrap items-stretch sm:items-center gap-3 min-w-0">
             <Input
               placeholder={i18n.t("tasks.searchPlaceholder")}
               value={search2}
               onChange={(e) => setSearch2(e.target.value)}
-              className="max-w-xs"
+              className="w-full min-w-0 sm:max-w-xs"
             />
             <Select value={statusFilter} onValueChange={setStatusFilter}>
-              <SelectTrigger className="max-w-[180px]">
+              <SelectTrigger className="w-full min-w-0 sm:w-[180px] sm:max-w-[180px]">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>

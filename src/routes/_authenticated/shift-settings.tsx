@@ -568,7 +568,7 @@ function ShiftSettingsPage() {
       ) : (
         <div className="grid gap-3">
           {rows.map((r, idx) => (
-            <Card key={r.id} className="card-elevated p-4 flex items-center gap-3">
+            <Card key={r.id} className="card-elevated p-4 flex flex-wrap items-center gap-3 min-w-0">
               <div
                 className="size-9 rounded-full flex items-center justify-center font-semibold shrink-0 text-white"
                 style={{ backgroundColor: r.color }}

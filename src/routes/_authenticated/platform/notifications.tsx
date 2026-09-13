@@ -157,7 +157,7 @@ function PlatformNotificationsPage() {
             </Select>
           </div>
           {scopeMode === "company" ? (
-            <div className="space-y-2 min-w-[220px] flex-1">
+            <div className="space-y-2 min-w-0 flex-1">
               <Label>{t("platformNotifications.company")}</Label>
               <Select value={selectedCompanyId} onValueChange={setSelectedCompanyId}>
                 <SelectTrigger>
@@ -173,7 +173,7 @@ function PlatformNotificationsPage() {
               </Select>
             </div>
           ) : (
-            <div className="space-y-2 min-w-[220px] flex-1">
+            <div className="space-y-2 min-w-0 flex-1">
               <Label>{t("platformNotifications.branch")}</Label>
               <Select value={selectedBranchId} onValueChange={setSelectedBranchId}>
                 <SelectTrigger>

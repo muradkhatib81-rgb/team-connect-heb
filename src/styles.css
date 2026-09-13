@@ -133,9 +133,26 @@
 
   html {
     direction: rtl;
+    overscroll-behavior-x: none;
     overscroll-behavior-y: contain;
     font-variant-numeric: lining-nums tabular-nums;
     font-feature-settings: "lnum" 1, "tnum" 1;
+    /*
+      Document-width lock. html IS the window scroller, so overflow-y:auto
+      keeps window.scrollY truthful (pull-to-refresh / tap safety).
+
+      Do NOT put overflow-x on body or a min-h-dvh wrapper (.app-viewport,
+      main, #root). Those nodes then become the vertical scroller,
+      window.scrollY stays 0, and touch preventDefault() eats Android taps.
+
+      Portaled Radix menus/selects/sheets render under document.body — siblings
+      of .app-viewport — so clipping only .app-viewport lets them grow
+      document.scrollWidth (page stretches, empty white space, layout crush).
+    */
+    overflow-x: clip;
+    overflow-y: auto;
+    width: 100%;
+    max-width: 100%;
   }
 
   body {
@@ -146,6 +163,10 @@
     text-rendering: optimizeLegibility;
     font-variant-numeric: lining-nums tabular-nums;
     font-feature-settings: "lnum" 1, "tnum" 1;
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    overscroll-behavior-x: none;
   }
 
   body,
@@ -190,17 +211,17 @@
 
 
 /*
-  Do NOT set overflow-x: clip/hidden on html, body, or a full-page wrapper.
-  If one overflow axis is not `visible`, the other computes to `auto` — the
-  element becomes the vertical scroller, window.scrollY stays 0, and
-  document-level touch handlers (pull-to-refresh) think we are always at the
-  top and call preventDefault(), which kills clicks in Android WebView
-  (header, Ask AI, language, «متصلون الآن», etc.).
-  Horizontal overflow is clamped on dialogs/sheets only.
+  Page shell: constrain inline size so flex/grid min-content cannot widen
+  the document. No overflow-x here — that would steal window scrolling.
+  contain:inline-size is Chromium/WebView + Safari 17+; width/max-width
+  still apply where contain is ignored.
 */
 .app-viewport {
+  width: 100%;
   max-width: 100%;
+  min-width: 0;
   min-height: 100dvh;
+  contain: inline-size;
 }
 
 /* Sticky/fixed top chrome: sit below the status bar, do not shrink h-14 into it. */
@@ -259,15 +280,46 @@
     translate: none !important;
   }
 
-  /* Popovers/menus may be wide (e.g. w-96) — clamp width, keep them tappable. */
-  [data-radix-popper-content-wrapper],
+  /*
+    Radix Popper sets min-width:max-content on the wrapper. That beats a
+    plain max-width and is what grows document.scrollWidth when a select
+    with long department names opens. Force min-width:0 so max-width wins.
+    Menus stay position:fixed + collisionPadding, so clip on html does not
+    eat their tap targets.
+  */
+  [data-radix-popper-content-wrapper] {
+    min-width: 0 !important;
+    max-width: min(
+      calc(100dvw - 1rem - var(--app-safe-left) - var(--app-safe-right)),
+      24rem
+    ) !important;
+  }
+
   [data-slot="popover-content"],
   [role="menu"],
   [role="listbox"],
   [data-radix-dropdown-menu-content],
   [data-radix-popover-content],
   [data-radix-select-content] {
-    max-width: min(100vw - 1rem - var(--app-safe-left) - var(--app-safe-right), 24rem);
+    max-width: min(
+      calc(100dvw - 1rem - var(--app-safe-left) - var(--app-safe-right)),
+      24rem
+    );
+    box-sizing: border-box;
+  }
+
+  .card-elevated,
+  [data-slot="card"] {
+    min-width: 0;
+    max-width: 100%;
+  }
+
+  /* Dense admin rows: wrap the action cluster instead of widening the page. */
+  .card-elevated.flex,
+  .card-elevated > .flex:not(.flex-col) {
+    flex-wrap: wrap;
+    min-width: 0;
+    max-width: 100%;
   }
 
   h1, h2, h3, h4 {
