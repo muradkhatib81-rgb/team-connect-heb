@@ -179,11 +179,16 @@
 }
 
 
-/* Clip page content, not html/body — overflow-x:clip on the document
-   clips position:fixed Radix portals (dropdowns/popovers) in Android WebView
-   and can hide overflowing header controls. Portals mount on body and escape this. */
+/*
+  Do NOT set overflow-x: clip/hidden on html, body, or a full-page wrapper.
+  If one overflow axis is not `visible`, the other computes to `auto` — the
+  element becomes the vertical scroller, window.scrollY stays 0, and
+  document-level touch handlers (pull-to-refresh) think we are always at the
+  top and call preventDefault(), which kills clicks in Android WebView
+  (header, Ask AI, language, «متصلون الآن», etc.).
+  Horizontal overflow is clamped on dialogs/sheets only.
+*/
 .app-viewport {
-  overflow-x: clip;
   max-width: 100%;
   min-height: 100dvh;
 }

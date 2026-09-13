@@ -96,8 +96,8 @@ export function NativeBootSplash() {
     <div
       aria-hidden
       className={cn(
-        "fixed inset-0 z-[9999] flex items-center justify-center bg-[#0f172a] transition-opacity duration-300",
-        leaving ? "opacity-0 pointer-events-none" : "opacity-100",
+        "pointer-events-none fixed inset-0 z-[9999] flex items-center justify-center bg-[#0f172a] transition-opacity duration-300",
+        leaving ? "opacity-0" : "opacity-100",
       )}
     >
       <style>{`

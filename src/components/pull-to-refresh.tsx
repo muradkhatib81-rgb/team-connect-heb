@@ -6,18 +6,40 @@ import { refreshPageData } from "@/lib/refresh-page-data";
 
 const THRESHOLD = 56;
 const MAX_PULL = 88;
+/** Ignore jitter so a tap is not treated as a pull (preventDefault cancels click). */
+const PULL_ARM_DELTA = 16;
 
 function pageScrollTop(): number {
-  return window.scrollY || document.documentElement.scrollTop || 0;
+  return Math.max(
+    window.scrollY || 0,
+    document.documentElement.scrollTop || 0,
+    document.body?.scrollTop || 0,
+    window.visualViewport?.pageTop || 0,
+  );
 }
 
 function nestedScrollerNotAtTop(target: EventTarget | null): boolean {
   let node = target instanceof HTMLElement ? target : null;
   while (node && node !== document.body) {
     const { overflowY } = window.getComputedStyle(node);
-    if ((overflowY === "auto" || overflowY === "scroll") && node.scrollTop > 1) {
+    if ((overflowY === "auto" || overflowY === "scroll" || overflowY === "overlay") && node.scrollTop > 1) {
       return true;
     }
+    node = node.parentElement;
+  }
+  return false;
+}
+
+function isInteractiveTarget(target: EventTarget | null): boolean {
+  let node = target instanceof Element ? target : null;
+  while (node && node !== document.documentElement) {
+    const tag = node.tagName;
+    if (/^(A|BUTTON|INPUT|SELECT|TEXTAREA|SUMMARY|LABEL)$/.test(tag)) return true;
+    const role = node.getAttribute("role");
+    if (role && /^(button|link|menuitem|menuitemradio|combobox|tab|switch|checkbox|slider)$/i.test(role)) {
+      return true;
+    }
+    if (node.getAttribute("aria-haspopup")) return true;
     node = node.parentElement;
   }
   return false;
@@ -52,6 +74,10 @@ export function PullToRefresh({ children }: { children: ReactNode }) {
 
     const onStart = (e: TouchEvent) => {
       if (refreshing) return;
+      if (isInteractiveTarget(e.target)) {
+        armed.current = false;
+        return;
+      }
       if (pageScrollTop() > 0 || nestedScrollerNotAtTop(e.target)) {
         armed.current = false;
         return;
@@ -65,7 +91,7 @@ export function PullToRefresh({ children }: { children: ReactNode }) {
       if (!armed.current || refreshing) return;
       const y = e.touches[0]?.clientY ?? 0;
       const delta = y - startY.current;
-      if (delta < 8) return;
+      if (delta < PULL_ARM_DELTA) return;
       if (pageScrollTop() > 0) {
         armed.current = false;
         pulling.current = false;
@@ -73,6 +99,7 @@ export function PullToRefresh({ children }: { children: ReactNode }) {
         return;
       }
       pulling.current = true;
+      // Only cancel the click once this is clearly a pull, not a tap.
       if (e.cancelable) e.preventDefault();
       const damped = Math.min(MAX_PULL, delta * 0.45);
       pullRef.current = damped;
