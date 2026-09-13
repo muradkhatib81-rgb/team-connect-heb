@@ -23,6 +23,7 @@ import { NATIVE_FCM_TOKEN_EVENT } from "@/lib/fcm-endpoints";
 import { isNativeApp } from "@/lib/native-app";
 import { NativeBootSplash } from "@/components/native-boot-splash";
 import { installNativeSafeArea } from "@/lib/native-safe-area";
+import { installDocumentWidthLock } from "@/lib/document-width-lock";
 import { installNativeBackButton } from "@/lib/native-back-button";
 import { saveFcmToken } from "@/lib/push.functions";
 import { applyPwaBranding, fetchPlatformPwaIconUrl } from "@/lib/pwa-branding";
@@ -264,6 +265,7 @@ function RootComponent() {
 
   useEffect(() => installNativeBackButton(), []);
   useEffect(() => installNativeSafeArea(), []);
+  useEffect(() => installDocumentWidthLock(), []);
 
   useEffect(() => {
     if (!isNativeApp()) return;

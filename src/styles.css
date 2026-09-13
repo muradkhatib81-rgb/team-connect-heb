@@ -141,13 +141,10 @@
       Document-width lock. html IS the window scroller, so overflow-y:auto
       keeps window.scrollY truthful (pull-to-refresh / tap safety).
 
-      Do NOT put overflow-x on body or a min-h-dvh wrapper (.app-viewport,
-      main, #root). Those nodes then become the vertical scroller,
-      window.scrollY stays 0, and touch preventDefault() eats Android taps.
-
-      Portaled Radix menus/selects/sheets render under document.body — siblings
-      of .app-viewport — so clipping only .app-viewport lets them grow
-      document.scrollWidth (page stretches, empty white space, layout crush).
+      Do NOT put overflow-x:hidden on body or a min-h-dvh wrapper
+      (.app-viewport, main). Those nodes become the vertical scroller,
+      window.scrollY stays 0, and pull-to-refresh eats Android taps.
+      Body may use overflow-x:clip only inside @supports (overflow: clip).
     */
     /* hidden first: iOS 15 / older WKWebView ignore clip; html stays the
        window scroller because overflow-y is explicit auto (Android + iPhone). */
@@ -170,6 +167,20 @@
     max-width: 100%;
     min-width: 0;
     overscroll-behavior-x: none;
+  }
+
+  /*
+    Portaled dropdowns are body children. overflow-x:clip on body (only when
+    the engine supports clip) stops them from growing body.scrollWidth.
+    overflow-y stays visible → computes to clip; clip is not a scroll
+    container, so window.scrollY / pull-to-refresh stay on html.
+    @supports excludes iOS 15, where clip is ignored and hidden-on-body
+    would turn body into the vertical scroller (tap-eater).
+  */
+  @supports (overflow: clip) {
+    body {
+      overflow-x: clip;
+    }
   }
 
   body,
@@ -199,6 +210,7 @@
   --app-safe-right: env(safe-area-inset-right, 0px);
   --app-safe-bottom: env(safe-area-inset-bottom, 0px);
   --app-safe-left: env(safe-area-inset-left, 0px);
+  --app-visual-width: 100dvw;
 }
 
 @utility card-elevated {
@@ -284,16 +296,17 @@
   }
 
   /*
-    Radix Popper sets min-width:max-content on the wrapper. That beats a
-    plain max-width and is what grows document.scrollWidth when a select
-    with long department names opens. Force min-width:0 so max-width wins.
-    Menus stay position:fixed + collisionPadding, so clip on html does not
-    eat their tap targets.
+    Opening a select/dropdown must not increase document.scrollWidth
+    (white gutter + whole-page warp). Radix sets min-width:max-content
+    and sometimes position:absolute on the wrapper — both grow body.
+    Force fixed (out of document flow) + min-width:0 so max-width wins.
+    Menus stay inside the visual viewport and keep receiving taps.
   */
   [data-radix-popper-content-wrapper] {
+    position: fixed !important;
     min-width: 0 !important;
     max-width: min(
-      calc(100dvw - 1rem - var(--app-safe-left) - var(--app-safe-right)),
+      calc(var(--app-visual-width) - 1rem - var(--app-safe-left) - var(--app-safe-right)),
       24rem
     ) !important;
   }
@@ -305,7 +318,7 @@
   [data-radix-popover-content],
   [data-radix-select-content] {
     max-width: min(
-      calc(100dvw - 1rem - var(--app-safe-left) - var(--app-safe-right)),
+      calc(var(--app-visual-width) - 1rem - var(--app-safe-left) - var(--app-safe-right)),
       24rem
     );
     box-sizing: border-box;
