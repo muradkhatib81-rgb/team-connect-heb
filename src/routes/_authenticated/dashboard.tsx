@@ -342,7 +342,7 @@ function DashboardPage() {
 
       <header>
         <p className="text-sm text-muted-foreground">{t("dashboard.greeting")}</p>
-        <h1 className="text-2xl sm:text-3xl font-bold mt-1">{profile.full_name}</h1>
+        <h1 className="text-2xl sm:text-3xl font-bold mt-1 min-w-0 break-words">{profile.full_name}</h1>
         <div className="flex flex-wrap items-center gap-2 mt-3">
           {top && <Badge variant="secondary" className="rounded-full">{getRoleLabel(top)}</Badge>}
           <Badge variant="outline" className="rounded-full">

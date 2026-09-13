@@ -301,9 +301,9 @@ function TasksPage() {
 
   return (
     <div className="space-y-6">
-      <header className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h1 className="text-2xl sm:text-3xl font-bold">{i18n.t("tasks.title")}</h1>
+      <header className="page-title-row flex flex-wrap items-start justify-between gap-3 min-w-0">
+        <div className="min-w-0">
+          <h1 className="text-2xl sm:text-3xl font-bold break-words">{i18n.t("tasks.title")}</h1>
           <p className="text-sm text-muted-foreground mt-1">
             {i18n.t("tasks.subtitle")}
           </p>

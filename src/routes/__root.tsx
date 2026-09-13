@@ -22,6 +22,7 @@ import { initNativePush, isNativePushOptedIn, type NativePushToken } from "@/lib
 import { NATIVE_FCM_TOKEN_EVENT } from "@/lib/fcm-endpoints";
 import { isNativeApp } from "@/lib/native-app";
 import { NativeBootSplash } from "@/components/native-boot-splash";
+import { installNativeSafeArea } from "@/lib/native-safe-area";
 import { installNativeBackButton } from "@/lib/native-back-button";
 import { saveFcmToken } from "@/lib/push.functions";
 import { applyPwaBranding, fetchPlatformPwaIconUrl } from "@/lib/pwa-branding";
@@ -94,7 +95,7 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       { name: "theme-color", content: "#0d8c8c" },
       { name: "mobile-web-app-capable", content: "yes" },
       { name: "apple-mobile-web-app-capable", content: "yes" },
-      { name: "apple-mobile-web-app-status-bar-style", content: "default" },
+      { name: "apple-mobile-web-app-status-bar-style", content: "black-translucent" },
       { name: "apple-mobile-web-app-title", content: i18n.t("common.appName") },
       { title: i18n.t("common.appName") },
       { name: "description", content: i18n.t("common.appDescription") },
@@ -262,6 +263,7 @@ function RootComponent() {
   }, []);
 
   useEffect(() => installNativeBackButton(), []);
+  useEffect(() => installNativeSafeArea(), []);
 
   useEffect(() => {
     if (!isNativeApp()) return;

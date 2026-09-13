@@ -40,7 +40,7 @@ const DialogContent = React.forwardRef<
       className={cn(
         "fixed left-[50%] top-[50%] z-50 grid w-[calc(100vw-1rem)] max-w-lg translate-x-[-50%] translate-y-[-50%] gap-4 border bg-background p-4 sm:p-6 shadow-lg duration-200 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 rounded-lg sm:rounded-lg",
         className,
-        "max-md:top-[max(0.75rem,env(safe-area-inset-top,0px))] max-md:translate-y-0 max-md:!max-w-[calc(100vw-1rem-env(safe-area-inset-left,0px)-env(safe-area-inset-right,0px))] max-md:!max-h-[calc(100dvh-env(safe-area-inset-top,0px)-env(safe-area-inset-bottom,0px)-1.5rem)] max-md:overflow-x-hidden max-md:overflow-y-auto max-md:overscroll-contain sm:max-h-[calc(100dvh-2rem)] sm:overflow-y-auto",
+        "max-md:inset-x-[max(0.5rem,var(--app-safe-left))] max-md:top-[max(0.75rem,var(--app-safe-top))] max-md:bottom-auto max-md:w-auto max-md:max-w-none max-md:translate-x-0 max-md:translate-y-0 max-md:transform-none max-md:!max-h-[calc(100dvh-var(--app-safe-top)-var(--app-safe-bottom)-1.5rem)] max-md:overflow-x-hidden max-md:overflow-y-auto max-md:overscroll-contain sm:max-h-[calc(100dvh-2rem)] sm:overflow-y-auto",
       )}
       {...props}
     >
@@ -73,7 +73,7 @@ const DialogTitle = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <DialogPrimitive.Title
     ref={ref}
-    className={cn("text-lg font-semibold leading-none tracking-tight", className)}
+    className={cn("text-lg font-semibold leading-snug tracking-tight break-words", className)}
     {...props}
   />
 ));

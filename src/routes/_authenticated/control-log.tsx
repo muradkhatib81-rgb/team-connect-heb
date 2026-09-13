@@ -241,12 +241,12 @@ function OpsErrorsPage() {
 
   return (
     <div className="space-y-4">
-      <header className="flex items-center gap-3">
-        <div className="flex size-10 items-center justify-center rounded-xl bg-orange-100 text-orange-700">
+      <header className="page-title-row flex items-start gap-3 min-w-0">
+        <div className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-orange-100 text-orange-700">
           <AlertTriangle className="size-5" />
         </div>
-        <div>
-          <h1 className="text-xl font-bold">{t("opsErrors.title")}</h1>
+        <div className="min-w-0">
+          <h1 className="text-xl font-bold break-words">{t("opsErrors.title")}</h1>
           <p className="text-sm text-muted-foreground">
             {t("opsErrors.monthLabel")}: {caps.year_month}
           </p>

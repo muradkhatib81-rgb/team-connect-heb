@@ -199,7 +199,7 @@ export function NotificationsBell() {
           )}
         </Button>
       </PopoverTrigger>
-      <PopoverContent align="end" className="w-96 p-0">
+      <PopoverContent align="end" className="w-96 max-w-[min(24rem,calc(100vw-1.5rem))] p-0">
         <div className="flex items-center justify-between border-b px-3 py-2">
           <p className="text-sm font-semibold">{i18n.t("dashboard.notifCenter")}</p>
           {unreadCount > 0 && (

@@ -151,7 +151,7 @@ function PlatformAiPage() {
           <Sparkles className="size-6" />
         </div>
         <div className="min-w-0">
-          <h1 className="truncate text-2xl sm:text-3xl font-bold">{t("ai.platformAdmin.pageTitle")}</h1>
+          <h1 className="break-words text-2xl sm:text-3xl font-bold">{t("ai.platformAdmin.pageTitle")}</h1>
           <p className="text-sm text-muted-foreground mt-1">{t("ai.platformAdmin.pageSubtitle")}</p>
         </div>
         <Button className="ms-auto gap-2" onClick={() => setGrantOpen(true)}>

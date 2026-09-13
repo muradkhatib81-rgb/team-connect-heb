@@ -164,7 +164,17 @@
   h1, h2, h3, h4 {
     font-weight: 600;
     letter-spacing: -0.01em;
+    overflow-wrap: break-word;
+    word-break: normal;
+    min-width: 0;
   }
+}
+
+:root {
+  --app-safe-top: env(safe-area-inset-top, 0px);
+  --app-safe-right: env(safe-area-inset-right, 0px);
+  --app-safe-bottom: env(safe-area-inset-bottom, 0px);
+  --app-safe-left: env(safe-area-inset-left, 0px);
 }
 
 @utility card-elevated {
@@ -193,44 +203,104 @@
   min-height: 100dvh;
 }
 
+/* Sticky/fixed top chrome: sit below the status bar, do not shrink h-14 into it. */
+.mobile-app-header {
+  box-sizing: border-box;
+  height: auto;
+  min-height: calc(3.5rem + var(--app-safe-top));
+  padding-top: var(--app-safe-top);
+  padding-left: max(0.75rem, var(--app-safe-left));
+  padding-right: max(0.75rem, var(--app-safe-right));
+}
+
 /* Portaled modals/sheets must never paint outside the phone viewport.
-   Exclude Radix popovers/menus: they also use role=dialog but set data-side. */
+   Exclude Radix popovers/menus: they also use role=dialog but set data-side.
+   Do not use left:50% + translate — zoom animations overwrite transform and
+   the dialog then starts at mid-screen and overflows the right edge. */
 @media (max-width: 767px) {
   [role="alertdialog"],
-  [role="dialog"]:not([data-side]),
-  [data-vaul-drawer] {
-    max-width: calc(100vw - 1rem - env(safe-area-inset-left, 0px) - env(safe-area-inset-right, 0px)) !important;
-    max-height: calc(100dvh - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px) - 1rem) !important;
+  [role="dialog"]:not([data-side]):not([data-mobile-sheet]) {
+    left: max(0.5rem, var(--app-safe-left)) !important;
+    right: max(0.5rem, var(--app-safe-right)) !important;
+    top: max(0.75rem, var(--app-safe-top)) !important;
+    bottom: auto !important;
+    width: auto !important;
+    max-width: none !important;
+    max-height: calc(100dvh - var(--app-safe-top) - var(--app-safe-bottom) - 1.5rem) !important;
+    transform: none !important;
+    translate: none !important;
     overflow-x: hidden !important;
     overflow-y: auto !important;
     overscroll-behavior: contain;
     box-sizing: border-box;
   }
 
-  /* Side sheets: keep full height but respect safe areas + horizontal clamp */
+  [data-vaul-drawer] {
+    left: var(--app-safe-left) !important;
+    right: var(--app-safe-right) !important;
+    width: auto !important;
+    max-width: none !important;
+    max-height: calc(100dvh - var(--app-safe-top) - 1rem) !important;
+    overflow-x: hidden !important;
+    overflow-y: auto !important;
+    overscroll-behavior: contain;
+    box-sizing: border-box;
+  }
+
+  /* Side sheets: full height, safe areas, no centering transform. */
   [role="dialog"][data-mobile-sheet="side"] {
-    max-height: calc(100dvh - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px)) !important;
-    height: calc(100dvh - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px)) !important;
-    top: env(safe-area-inset-top, 0px) !important;
-    bottom: env(safe-area-inset-bottom, 0px) !important;
-    padding-bottom: env(safe-area-inset-bottom, 0px);
+    top: var(--app-safe-top) !important;
+    bottom: var(--app-safe-bottom) !important;
+    height: calc(100dvh - var(--app-safe-top) - var(--app-safe-bottom)) !important;
+    max-height: calc(100dvh - var(--app-safe-top) - var(--app-safe-bottom)) !important;
+    max-width: min(18rem, calc(100vw - 2rem - var(--app-safe-left) - var(--app-safe-right))) !important;
+    padding-bottom: var(--app-safe-bottom);
+    transform: none !important;
+    translate: none !important;
   }
-}
 
-/* Native boot splash: logo grows from small → full (also inlined in the overlay). */
-@keyframes native-boot-grow {
-  from {
-    transform: scale(0.34);
-    opacity: 0.85;
+  /* Popovers/menus may be wide (e.g. w-96) — clamp width, keep them tappable. */
+  [data-radix-popper-content-wrapper],
+  [data-slot="popover-content"],
+  [role="menu"],
+  [role="listbox"],
+  [data-radix-dropdown-menu-content],
+  [data-radix-popover-content],
+  [data-radix-select-content] {
+    max-width: min(100vw - 1rem - var(--app-safe-left) - var(--app-safe-right), 24rem);
   }
-  to {
-    transform: scale(1);
-    opacity: 1;
-  }
-}
 
-.native-boot-logo {
-  transform: scale(0.34);
-  transform-origin: center center;
-  animation: native-boot-grow 1.4s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+  h1, h2, h3, h4 {
+    overflow-wrap: break-word;
+    word-break: normal;
+    hyphens: none;
+    min-width: 0;
+    max-width: 100%;
+    text-wrap: pretty;
+  }
+
+  main h1.truncate,
+  main header h1 {
+    overflow: visible;
+    text-overflow: unset;
+    white-space: normal;
+  }
+
+  main header,
+  main .page-title-row {
+    flex-wrap: wrap;
+    align-items: flex-start;
+    min-width: 0;
+    max-width: 100%;
+  }
+
+  main header > *,
+  main .page-title-row > * {
+    min-width: 0;
+    max-width: 100%;
+  }
+
+  [data-sonner-toaster][data-y-position="top"] {
+    top: calc(var(--app-safe-top) + 0.5rem) !important;
+  }
 }

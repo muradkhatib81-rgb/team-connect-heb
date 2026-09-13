@@ -60,7 +60,7 @@ export function ImageLightbox({ images, initialIndex, onClose }: Props) {
         setScale((s) => Math.max(1, Math.min(5, s + (e.deltaY < 0 ? 0.2 : -0.2))));
       }}
     >
-      <div className="absolute top-3 left-3 right-3 flex items-center justify-between z-10 pointer-events-none">
+      <div className="absolute top-[calc(0.75rem+var(--app-safe-top))] left-3 right-3 flex items-center justify-between z-10 pointer-events-none">
         <div className="flex gap-2 pointer-events-auto" onClick={(e) => e.stopPropagation()}>
           <button
             className="bg-white/10 hover:bg-white/20 text-white p-2 rounded-full"

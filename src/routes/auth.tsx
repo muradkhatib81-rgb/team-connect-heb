@@ -195,7 +195,7 @@ function AuthPage() {
 
   return (
     <div className="min-h-screen flex flex-col bg-background">
-      <div className="flex justify-end p-3">
+      <div className="flex justify-end px-3 pb-3 pt-[max(0.75rem,var(--app-safe-top))]">
         <LanguageSwitcher />
       </div>
       <div className="flex-1 flex items-center justify-center px-4 py-10">

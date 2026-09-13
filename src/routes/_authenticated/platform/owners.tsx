@@ -123,7 +123,7 @@ function PlatformOwnersPage() {
             <Crown className="size-6" />
           </div>
           <div className="min-w-0">
-            <h1 className="truncate text-2xl sm:text-3xl font-bold">{t("platformOwners.title")}</h1>
+            <h1 className="break-words text-2xl sm:text-3xl font-bold">{t("platformOwners.title")}</h1>
             <p className="text-sm text-muted-foreground mt-1">{t("platformOwners.subtitle")}</p>
           </div>
         </div>

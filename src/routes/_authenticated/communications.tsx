@@ -193,10 +193,10 @@ function CommunicationsPage() {
 
   return (
     <div className="space-y-6" dir="rtl">
-      <header className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-bold flex items-center gap-2">
-            <Megaphone className="size-6 text-primary" /> {i18n.t("comm.title")}
+      <header className="page-title-row flex flex-wrap items-start justify-between gap-3 min-w-0">
+        <div className="min-w-0">
+          <h1 className="text-2xl font-bold flex items-start gap-2 min-w-0 break-words">
+            <Megaphone className="size-6 text-primary shrink-0 mt-0.5" /> {i18n.t("comm.title")}
           </h1>
           <p className="text-sm text-muted-foreground">{i18n.t("comm.subtitle")}</p>
         </div>

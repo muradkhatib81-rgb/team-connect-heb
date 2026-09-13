@@ -120,12 +120,12 @@ function PlatformSettingsPage() {
 
   return (
     <div className="space-y-6">
-      <header className="flex items-center gap-3">
+      <header className="page-title-row flex items-start gap-3 min-w-0">
         <div className="size-11 shrink-0 rounded-xl bg-primary/10 text-primary flex items-center justify-center">
           <Settings className="size-6" />
         </div>
         <div className="min-w-0">
-          <h1 className="truncate text-2xl sm:text-3xl font-bold">{t("platformSettings.title")}</h1>
+          <h1 className="text-2xl sm:text-3xl font-bold break-words">{t("platformSettings.title")}</h1>
           <p className="text-sm text-muted-foreground mt-1">
             {t("platformSettings.subtitle")}
           </p>

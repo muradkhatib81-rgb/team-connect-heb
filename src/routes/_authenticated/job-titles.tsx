@@ -63,10 +63,10 @@ function JobTitlesPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-semibold flex items-center gap-2">
-            <Briefcase className="size-6" />
+      <div className="page-title-row flex flex-col items-stretch gap-3 min-w-0 sm:flex-row sm:items-center sm:justify-between">
+        <div className="min-w-0">
+          <h1 className="text-2xl font-semibold flex items-start gap-2 min-w-0 break-words">
+            <Briefcase className="size-6 shrink-0 mt-0.5" />
             {t("jobTitlesPage.title")}
           </h1>
           <p className="text-sm text-muted-foreground mt-1">

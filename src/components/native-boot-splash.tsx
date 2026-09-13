@@ -4,10 +4,12 @@ import { SplashScreen } from "@capacitor/splash-screen";
 import { isNativeApp } from "@/lib/native-app";
 import { cn } from "@/lib/utils";
 
-const MIN_VISIBLE_MS = 1400;
+const MIN_VISIBLE_MS = 1500;
 const GROW_MS = 1400;
 const FADE_MS = 380;
-const HARD_TIMEOUT_MS = 4500;
+const HARD_TIMEOUT_MS = 5000;
+/** Start clearly small so the grow is unmistakable (not a 0.34→1 flicker). */
+const START_SCALE = 0.22;
 
 /** Survives React remounts in the same WebView session; resets on cold start. */
 let nativeBootSplashPlayed = false;
@@ -16,29 +18,56 @@ function hideNativeSplash() {
   void SplashScreen.hide({ fadeOutDuration: 0 }).catch(() => {});
 }
 
+function shouldForcePreview(): boolean {
+  if (typeof window === "undefined") return false;
+  try {
+    return new URLSearchParams(window.location.search).has("bootSplash");
+  } catch {
+    return false;
+  }
+}
+
 /**
  * Native cold-start: solid #0f172a native splash hands off into this overlay,
  * which grows the app icon once (small → full) then fades out and unmounts.
+ *
+ * Grow uses a CSS transition from an explicit small scale (not a keyframe
+ * that can finish before first paint). Native splash stays solid — no logo.
  */
 export function NativeBootSplash() {
-  const [active, setActive] = useState(() => {
-    if (typeof window === "undefined") return false;
-    return isNativeApp() && !nativeBootSplashPlayed;
-  });
+  const [active, setActive] = useState(false);
+  const [growing, setGrowing] = useState(false);
   const [leaving, setLeaving] = useState(false);
 
   useLayoutEffect(() => {
-    if (!isNativeApp()) return;
-    if (!active) {
+    if (shouldForcePreview() && !nativeBootSplashPlayed) {
+      setActive(true);
+      return;
+    }
+    if (!isNativeApp()) {
       hideNativeSplash();
       return;
     }
+    if (nativeBootSplashPlayed) {
+      hideNativeSplash();
+      return;
+    }
+    setActive(true);
+  }, []);
+
+  useLayoutEffect(() => {
+    if (!active) {
+      if (isNativeApp()) hideNativeSplash();
+      return;
+    }
     let cancelled = false;
-    const hide = () => {
-      if (!cancelled) hideNativeSplash();
-    };
+    // Paint the icon at START_SCALE first, then hide the solid native splash.
     const outer = requestAnimationFrame(() => {
-      requestAnimationFrame(hide);
+      requestAnimationFrame(() => {
+        if (cancelled) return;
+        hideNativeSplash();
+        setGrowing(true);
+      });
     });
     return () => {
       cancelled = true;
@@ -47,10 +76,6 @@ export function NativeBootSplash() {
   }, [active]);
 
   useEffect(() => {
-    if (!isNativeApp()) {
-      setActive(false);
-      return;
-    }
     if (!active) return;
 
     const started = Date.now();
@@ -100,23 +125,20 @@ export function NativeBootSplash() {
         leaving ? "opacity-0" : "opacity-100",
       )}
     >
-      <style>{`
-        @keyframes native-boot-grow {
-          from { transform: scale(0.34); opacity: 0.85; }
-          to { transform: scale(1); opacity: 1; }
-        }
-      `}</style>
       <img
         src="/icons/icon-512.png"
         alt=""
         width={168}
         height={168}
         draggable={false}
-        className="native-boot-logo h-[7.5rem] w-[7.5rem] rounded-[1.75rem] object-contain shadow-lg select-none pointer-events-none"
+        className="h-[7.5rem] w-[7.5rem] rounded-[1.75rem] object-contain shadow-lg select-none pointer-events-none"
         style={{
-          transform: "scale(0.34)",
+          transform: growing ? "scale(1)" : `scale(${START_SCALE})`,
           transformOrigin: "center center",
-          animation: `native-boot-grow ${GROW_MS}ms cubic-bezier(0.22, 1, 0.36, 1) forwards`,
+          opacity: growing ? 1 : 0.9,
+          transition: growing
+            ? `transform ${GROW_MS}ms cubic-bezier(0.33, 0.1, 0.2, 1), opacity ${GROW_MS}ms ease-out`
+            : "none",
         }}
       />
     </div>,

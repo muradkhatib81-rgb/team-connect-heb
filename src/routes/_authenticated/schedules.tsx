@@ -2015,12 +2015,12 @@ function SchedulesPage() {
 
   return (
     <div className="space-y-6">
-      <header className="flex items-center gap-3">
-        <div className="size-10 rounded-xl bg-primary/10 text-primary flex items-center justify-center">
+      <header className="page-title-row flex items-start gap-3 min-w-0">
+        <div className="size-10 shrink-0 rounded-xl bg-primary/10 text-primary flex items-center justify-center">
           <CalendarDays className="size-5" />
         </div>
         <div className="flex-1 min-w-0">
-          <h1 className="text-2xl sm:text-3xl font-bold">{i18n.t("schedules.pageTitle")}</h1>
+          <h1 className="text-2xl sm:text-3xl font-bold break-words">{i18n.t("schedules.pageTitle")}</h1>
           <p className="text-sm text-muted-foreground mt-1">
             {view === "pending" && canSeeScheduleQueues
               ? i18n.t("schedules.subtitlePending")

@@ -38,9 +38,9 @@ const sheetVariants = cva(
         top: "inset-x-0 top-0 border-b max-h-[calc(100dvh-env(safe-area-inset-top,0px)-env(safe-area-inset-bottom,0px))] pt-[max(1.5rem,env(safe-area-inset-top,0px))] data-[state=closed]:slide-out-to-top data-[state=open]:slide-in-from-top",
         bottom:
           "inset-x-0 bottom-0 border-t max-h-[calc(100dvh-env(safe-area-inset-top,0px)-env(safe-area-inset-bottom,0px))] pb-[max(1.5rem,env(safe-area-inset-bottom,0px))] data-[state=closed]:slide-out-to-bottom data-[state=open]:slide-in-from-bottom",
-        left: "inset-y-0 left-0 h-full max-h-dvh w-[min(18rem,calc(100vw-2rem))] border-r pl-[env(safe-area-inset-left,0px)] data-[state=closed]:slide-out-to-left data-[state=open]:slide-in-from-left sm:max-w-sm",
+        left: "inset-y-0 left-0 h-full max-h-dvh w-[min(18rem,calc(100vw-2rem-var(--app-safe-left)-var(--app-safe-right)))] border-r pl-[max(1.5rem,var(--app-safe-left))] data-[state=closed]:slide-out-to-left data-[state=open]:slide-in-from-left sm:max-w-sm",
         right:
-          "inset-y-0 right-0 h-full max-h-dvh w-[min(18rem,calc(100vw-2rem))] border-l pr-[env(safe-area-inset-right,0px)] data-[state=closed]:slide-out-to-right data-[state=open]:slide-in-from-right sm:max-w-sm",
+          "inset-y-0 right-0 h-full max-h-dvh w-[min(18rem,calc(100vw-2rem-var(--app-safe-left)-var(--app-safe-right)))] border-l pr-[max(1.5rem,var(--app-safe-right))] data-[state=closed]:slide-out-to-right data-[state=open]:slide-in-from-right sm:max-w-sm",
       },
     },
     defaultVariants: {

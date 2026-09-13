@@ -501,9 +501,9 @@ function EmployeesPage() {
 
   return (
     <div className="space-y-6">
-      <header className="flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <h1 className="text-2xl sm:text-3xl font-bold">{t("employeesPage.title")}</h1>
+      <header className="page-title-row flex flex-wrap items-end justify-between gap-3 min-w-0">
+        <div className="min-w-0">
+          <h1 className="text-2xl sm:text-3xl font-bold break-words">{t("employeesPage.title")}</h1>
           {isDeptManagerOnly && me?.department_id && deptMap[me.department_id] && (
             <p className="text-sm font-medium text-primary mt-1">
               {t("employeesPage.departmentLabel", { name: deptMap[me.department_id] })}

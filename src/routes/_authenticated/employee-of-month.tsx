@@ -197,14 +197,14 @@ function EomManagePage() {
 
   return (
     <div className="space-y-6">
-      <header className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 sm:flex sm:justify-between">
-        <div className="flex min-w-0 items-center gap-3">
+      <header className="page-title-row flex flex-col items-stretch gap-3 min-w-0 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex min-w-0 items-start gap-3">
           <div className="size-10 shrink-0 rounded-xl bg-amber-100 text-amber-600 flex items-center justify-center">
             <Trophy className="size-5" />
           </div>
           <div className="min-w-0">
-            <h1 className="truncate text-2xl sm:text-3xl font-bold">{t("employeeOfMonthPage.title")}</h1>
-            <p className="text-sm text-muted-foreground mt-1">{t("employeeOfMonthPage.subtitle")}</p>
+            <h1 className="text-2xl sm:text-3xl font-bold break-words">{t("employeeOfMonthPage.title")}</h1>
+            <p className="text-sm text-muted-foreground mt-1 break-words">{t("employeeOfMonthPage.subtitle")}</p>
           </div>
         </div>
         {canManage && (

@@ -32,7 +32,7 @@ export function NetworkStatusBanner() {
       role="status"
       aria-live="polite"
       className={cn(
-        "fixed top-0 inset-x-0 z-[60] flex items-center justify-center gap-2 px-3 py-1.5 text-xs font-medium shadow-sm",
+        "fixed top-0 inset-x-0 z-[60] flex items-center justify-center gap-2 px-3 pb-1.5 pt-[calc(0.375rem+var(--app-safe-top))] text-xs font-medium shadow-sm",
         online
           ? "bg-emerald-600 text-white"
           : "bg-destructive text-destructive-foreground",

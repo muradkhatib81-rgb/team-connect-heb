@@ -23,10 +23,13 @@ const config: CapacitorConfig = {
   android: {
     allowMixedContent: false,
     backgroundColor: "#0f172a",
+    // CSS --app-safe-* / env(safe-area-inset-*) handle the status bar.
+    adjustMarginsForEdgeToEdge: "disable",
   },
   ios: {
     backgroundColor: "#0f172a",
-    contentInset: "automatic",
+    // Edge-to-edge; header/modals pad with env(safe-area-inset-top).
+    contentInset: "never",
   },
   plugins: {
     SplashScreen: {
@@ -36,8 +39,8 @@ const config: CapacitorConfig = {
       backgroundColor: "#0f172a",
       androidScaleType: "CENTER",
       showSpinner: false,
-      splashFullScreen: true,
-      splashImmersive: true,
+      splashFullScreen: false,
+      splashImmersive: false,
     },
     PushNotifications: {
       presentationOptions: ["badge", "sound", "alert"],

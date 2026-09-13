@@ -323,7 +323,7 @@ function PlatformBillingPage() {
           <CreditCard className="size-6" />
         </div>
         <div className="min-w-0">
-          <h1 className="truncate text-2xl sm:text-3xl font-bold">{t("platformBilling.title")}</h1>
+          <h1 className="break-words text-2xl sm:text-3xl font-bold">{t("platformBilling.title")}</h1>
           <p className="text-sm text-muted-foreground mt-1">{t("platformBilling.subtitle")}</p>
         </div>
       </header>
