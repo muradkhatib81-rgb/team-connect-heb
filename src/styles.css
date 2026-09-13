@@ -210,3 +210,20 @@
     padding-bottom: env(safe-area-inset-bottom, 0px);
   }
 }
+
+/* Native boot splash: logo grows from small → full */
+@keyframes native-boot-grow {
+  from {
+    transform: scale(0.34);
+    opacity: 0.85;
+  }
+  to {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+.native-boot-logo {
+  transform: scale(0.34);
+  animation: native-boot-grow 1.15s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}

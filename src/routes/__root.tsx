@@ -21,6 +21,7 @@ import { registerPwaServiceWorker } from "@/lib/register-pwa";
 import { initNativePush, isNativePushOptedIn, type NativePushToken } from "@/lib/native-push";
 import { NATIVE_FCM_TOKEN_EVENT } from "@/lib/fcm-endpoints";
 import { isNativeApp } from "@/lib/native-app";
+import { NativeBootSplash } from "@/components/native-boot-splash";
 import { installNativeBackButton } from "@/lib/native-back-button";
 import { saveFcmToken } from "@/lib/push.functions";
 import { applyPwaBranding, fetchPlatformPwaIconUrl } from "@/lib/pwa-branding";
@@ -315,6 +316,7 @@ function RootComponent() {
     <QueryClientProvider client={queryClient}>
       <I18nextProvider i18n={i18n}>
         <PlatformProvider>
+          <NativeBootSplash />
           <Outlet />
           <Toaster position="top-center" richColors closeButton />
         </PlatformProvider>

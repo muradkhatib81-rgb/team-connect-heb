@@ -5,23 +5,29 @@
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <title>Team Connect</title>
     <style>
-      html,
-      body {
+      html, body {
         margin: 0;
         height: 100%;
         background: #0f172a;
-        color: #e2e8f0;
-        font-family: system-ui, sans-serif;
         display: grid;
         place-items: center;
+        overflow: hidden;
       }
-      p {
-        opacity: 0.8;
-        font-size: 14px;
+      .logo {
+        width: 120px;
+        height: 120px;
+        border-radius: 28px;
+        object-fit: contain;
+        transform: scale(0.34);
+        animation: grow 1.15s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+      }
+      @keyframes grow {
+        from { transform: scale(0.34); opacity: 0.85; }
+        to { transform: scale(1); opacity: 1; }
       }
     </style>
   </head>
   <body>
-    <p>טוען…</p>
+    <img class="logo" src="./icons/icon-512.png" width="120" height="120" alt="Team Connect" />
   </body>
 </html>
