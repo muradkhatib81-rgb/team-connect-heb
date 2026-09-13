@@ -157,8 +157,10 @@ export function installLastAppPathTracking(
     }
   };
   window.addEventListener("pagehide", onPageHide);
+  window.addEventListener("beforeunload", onPageHide);
   return () => {
     unsub();
     window.removeEventListener("pagehide", onPageHide);
+    window.removeEventListener("beforeunload", onPageHide);
   };
 }

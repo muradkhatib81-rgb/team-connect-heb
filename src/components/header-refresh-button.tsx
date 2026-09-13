@@ -9,8 +9,9 @@ import { cn } from "@/lib/utils";
 
 /**
  * Header refresh — remount the current page and reload its data (F5-like
- * for content). Must NOT call window.location.reload() or router.invalidate()
- * (those re-run layout beforeLoad and can bounce to /auth or /dashboard).
+ * for content). Must NEVER call window.location.reload() or router.invalidate():
+ * native persistSession:false drops the session and paints /auth (the flash
+ * users reported); layout beforeLoad can also bounce to /dashboard.
  */
 export function HeaderRefreshButton() {
   const { t } = useTranslation();

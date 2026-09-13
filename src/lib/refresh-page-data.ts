@@ -49,7 +49,7 @@ function scrollPageToTop(): void {
  * the page outlet so local UI state resets and data loads again.
  *
  * Does NOT:
- * - call window.location.reload() (native in-memory/sessionStorage policy)
+ * - call window.location.reload() (native persistSession:false → /auth flash)
  * - call router.invalidate() (re-runs layout beforeLoad → /dashboard|/auth)
  */
 export async function refreshPageData(
