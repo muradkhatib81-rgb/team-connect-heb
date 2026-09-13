@@ -1,7 +1,7 @@
 import { StatusBar, Style } from "@capacitor/status-bar";
 import { isNativeApp, isNativeIOS } from "@/lib/native-app";
 
-/** Used only when the WebView reports 0 for env(safe-area-inset-top). */
+/** Used only when the WebView and StatusBar plugin both report 0. */
 const ANDROID_FALLBACK_TOP_PX = 32;
 const IOS_FALLBACK_TOP_PX = 50;
 
@@ -19,16 +19,24 @@ function readEnvInset(side: "top" | "right" | "bottom" | "left"): number {
   return value;
 }
 
-function applySafeAreaVars() {
+async function applySafeAreaVars() {
   const root = document.documentElement;
   const envTop = readEnvInset("top");
   const envRight = readEnvInset("right");
   const envBottom = readEnvInset("bottom");
   const envLeft = readEnvInset("left");
 
-  let top = envTop;
+  let pluginHeight = 0;
+  try {
+    const info = await StatusBar.getInfo();
+    pluginHeight = info.height || 0;
+  } catch {
+    /* plugin unavailable */
+  }
+
+  let top = Math.max(envTop, pluginHeight);
   // Android WebView often reports 0 even when the status bar overlays content.
-  if (isNativeApp() && top < 20) {
+  if (top < 20) {
     top = isNativeIOS() ? IOS_FALLBACK_TOP_PX : ANDROID_FALLBACK_TOP_PX;
   }
 
@@ -50,14 +58,16 @@ export function installNativeSafeArea() {
   const root = document.documentElement;
   root.dataset.nativeApp = "true";
 
-  applySafeAreaVars();
+  void applySafeAreaVars();
 
   void StatusBar.setOverlaysWebView({ overlay: true })
     .then(() => applySafeAreaVars())
-    .catch(() => {});
+    .catch(() => applySafeAreaVars());
   void StatusBar.setStyle({ style: Style.Light }).catch(() => {});
 
-  const onResize = () => applySafeAreaVars();
+  const onResize = () => {
+    void applySafeAreaVars();
+  };
   window.addEventListener("resize", onResize);
   window.visualViewport?.addEventListener("resize", onResize);
 

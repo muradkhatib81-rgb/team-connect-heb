@@ -23,8 +23,6 @@ const config: CapacitorConfig = {
   android: {
     allowMixedContent: false,
     backgroundColor: "#0f172a",
-    // CSS --app-safe-* / env(safe-area-inset-*) handle the status bar.
-    adjustMarginsForEdgeToEdge: "disable",
   },
   ios: {
     backgroundColor: "#0f172a",
@@ -41,6 +39,10 @@ const config: CapacitorConfig = {
       showSpinner: false,
       splashFullScreen: false,
       splashImmersive: false,
+    },
+    StatusBar: {
+      overlaysWebView: true,
+      style: "LIGHT",
     },
     PushNotifications: {
       presentationOptions: ["badge", "sound", "alert"],
