@@ -1,4 +1,4 @@
-import i18n, { detectSystemLanguage } from "@/i18n";
+import { detectSystemLanguage } from "@/i18n";
 import { supabase } from "@/integrations/supabase/client";
 import {
   DEFAULT_PWA_ICON_192,
@@ -6,7 +6,6 @@ import {
   PWA_COPY,
   PWA_ICON_PATH,
   PWA_ICON_QUERY_KEY,
-  buildPwaManifest,
 } from "@/lib/pwa-manifest";
 
 export {
@@ -16,7 +15,6 @@ export {
   PWA_ICON_QUERY_KEY,
 };
 
-let lastManifestObjectUrl: string | null = null;
 
 function setOrCreateMeta(name: string, content: string) {
   let el = document.querySelector(`meta[name="${name}"]`) as HTMLMetaElement | null;
@@ -69,10 +67,11 @@ export function applyPwaBranding(iconUrl?: string | null) {
 
   const lang = detectSystemLanguage();
   const copy = PWA_COPY[lang];
-  const manifest = buildPwaManifest({ lang, iconUrl });
 
-  const blob = new Blob([JSON.stringify(manifest)], { type: "application/manifest+json" });
-  const objectUrl = URL.createObjectURL(blob);
+  // Keep same-origin HTTPS manifest (never blob:) so Chromium can offer Install.
+  const params = new URLSearchParams({ lang });
+  if (iconUrl) params.set("icon", iconUrl);
+  const manifestHref = `/api/pwa-manifest?${params.toString()}`;
 
   let link = document.querySelector('link[rel="manifest"]') as HTMLLinkElement | null;
   if (!link) {
@@ -80,11 +79,7 @@ export function applyPwaBranding(iconUrl?: string | null) {
     link.rel = "manifest";
     document.head.appendChild(link);
   }
-  if (lastManifestObjectUrl) {
-    URL.revokeObjectURL(lastManifestObjectUrl);
-  }
-  lastManifestObjectUrl = objectUrl;
-  link.href = objectUrl;
+  link.href = manifestHref;
 
   setOrCreateMeta("apple-mobile-web-app-title", copy.name);
 

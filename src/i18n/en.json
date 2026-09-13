@@ -3617,5 +3617,9 @@
     "light": "Light",
     "dark": "Dark",
     "system": "System"
+  },
+  "pwa": {
+    "install": "Install app",
+    "installed": "App installed"
   }
 }
