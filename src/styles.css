@@ -200,7 +200,18 @@
 */
 .app-viewport {
   max-width: 100%;
+  min-width: 0;
   min-height: 100dvh;
+}
+
+/* Flex/grid children default to min-width:auto and can expand the page
+   (RTL then shows a blank gutter + clipped cards). Never set overflow-x
+   on html/body/main — that steals window.scrollY and breaks PTR. */
+.app-viewport,
+.app-viewport > *,
+main {
+  min-width: 0;
+  max-width: 100%;
 }
 
 /* Sticky/fixed top chrome: sit below the status bar, do not shrink h-14 into it. */
@@ -302,5 +313,11 @@
 
   [data-sonner-toaster][data-y-position="top"] {
     top: calc(var(--app-safe-top) + 0.5rem) !important;
+  }
+
+  main .card-elevated,
+  main [class~="card-elevated"] {
+    max-width: 100%;
+    min-width: 0;
   }
 }
