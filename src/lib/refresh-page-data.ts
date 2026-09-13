@@ -6,13 +6,14 @@ import { bumpPageRemount } from "@/lib/page-remount";
  * Keys that drive auth, route guards, Branch Mode, and chrome. Refreshing
  * them remounts the shell or re-runs beforeLoad (→ /auth, /dashboard,
  * /platform). Page refresh must not touch these.
+ *
+ * `my-ai-access` stays here so Ask AI does not flicker for a Platform Owner
+ * without a branch (PR #10).
  */
 const SESSION_OR_SHELL_HEADS = new Set<unknown>([
   "auth",
   "route-guard",
   "active-branch",
-  "platform-companies",
-  "platform-branches",
   "shell-can-manage-breaks",
   "shell-comm-unread",
   "attendance-caps",
@@ -24,8 +25,22 @@ const SESSION_OR_SHELL_HEADS = new Set<unknown>([
   "my-break-manage-perm",
 ]);
 
-function isSessionOrGuardQuery(queryKey: QueryKey): boolean {
-  return SESSION_OR_SHELL_HEADS.has(queryKey[0]);
+/**
+ * Company/branch lists live on shell providers (outside the remount
+ * boundary) and are the data source for many /platform pages. Emptying
+ * them makes `activeCompany`/`activeBranch` resolve to null and can
+ * flicker Branch Mode. Refetch in place instead.
+ */
+const SHELL_LIST_HEADS = new Set<unknown>(["platform-companies", "platform-branches"]);
+
+export type RefreshKeyPolicy = "keep" | "soft-refetch" | "drop";
+
+/** How in-app refresh treats a query. Exported so the policy can be tested. */
+export function refreshKeyPolicy(queryKey: QueryKey): RefreshKeyPolicy {
+  const head = queryKey[0];
+  if (SESSION_OR_SHELL_HEADS.has(head)) return "keep";
+  if (SHELL_LIST_HEADS.has(head)) return "soft-refetch";
+  return "drop";
 }
 
 function currentAppPath(): string {
@@ -60,10 +75,15 @@ export async function refreshPageData(
   persistCurrentAppPath(stayOn);
 
   await qc.cancelQueries({
-    predicate: (query) => !isSessionOrGuardQuery(query.queryKey),
+    predicate: (query) => refreshKeyPolicy(query.queryKey) !== "keep",
   });
   qc.removeQueries({
-    predicate: (query) => !isSessionOrGuardQuery(query.queryKey),
+    predicate: (query) => refreshKeyPolicy(query.queryKey) === "drop",
+  });
+  // In-place refetch so Companies / Branches / other context-backed
+  // platform pages update without dropping the active selection.
+  await qc.invalidateQueries({
+    predicate: (query) => refreshKeyPolicy(query.queryKey) === "soft-refetch",
   });
 
   bumpPageRemount();
