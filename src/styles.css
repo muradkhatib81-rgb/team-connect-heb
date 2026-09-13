@@ -149,6 +149,9 @@
       of .app-viewport — so clipping only .app-viewport lets them grow
       document.scrollWidth (page stretches, empty white space, layout crush).
     */
+    /* hidden first: iOS 15 / older WKWebView ignore clip; html stays the
+       window scroller because overflow-y is explicit auto (Android + iPhone). */
+    overflow-x: hidden;
     overflow-x: clip;
     overflow-y: auto;
     width: 100%;
