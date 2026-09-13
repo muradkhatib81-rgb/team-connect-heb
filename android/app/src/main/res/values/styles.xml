@@ -16,7 +16,11 @@
     </style>
 
 
+    <!-- Solid #0f172a only — logo grow happens in the web overlay, not here. -->
     <style name="AppTheme.NoActionBarLaunch" parent="Theme.SplashScreen">
         <item name="android:background">@drawable/splash</item>
+        <item name="windowSplashScreenBackground">#FF0F172A</item>
+        <item name="windowSplashScreenAnimatedIcon">@drawable/splash_empty_icon</item>
+        <item name="postSplashScreenTheme">@style/AppTheme.NoActionBar</item>
     </style>
 </resources>

@@ -317,7 +317,9 @@ function RootComponent() {
       <I18nextProvider i18n={i18n}>
         <PlatformProvider>
           <NativeBootSplash />
-          <Outlet />
+          <div className="app-viewport">
+            <Outlet />
+          </div>
           <Toaster position="top-center" richColors closeButton />
         </PlatformProvider>
       </I18nextProvider>

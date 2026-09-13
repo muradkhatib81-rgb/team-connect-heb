@@ -23,6 +23,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Check, Languages, Monitor } from "lucide-react";
+import { cn } from "@/lib/utils";
 
 const PICKABLE: { code: AppLanguage; labelKey: string }[] = [
   { code: "he", labelKey: "contentTranslation.lang.he" },
@@ -69,7 +70,7 @@ export function LanguageSwitcher({ userId }: LanguageSwitcherProps = {}) {
           <Languages className="size-3.5" />
         </Button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="min-w-[180px]">
+      <DropdownMenuContent align="end" className="min-w-[180px]" collisionPadding={12}>
         <DropdownMenuItem
           onClick={() => handleChange("system")}
           className={followsSystem ? "font-semibold bg-muted" : ""}
@@ -79,14 +80,27 @@ export function LanguageSwitcher({ userId }: LanguageSwitcherProps = {}) {
           {followsSystem ? <Check className="size-3.5 ms-2 shrink-0" /> : null}
         </DropdownMenuItem>
         <DropdownMenuSeparator />
+        {PICKABLE.map((lang) => {
+          const selected = preference === lang.code;
+          return (
+            <DropdownMenuItem
+              key={lang.code}
+              onClick={() => handleChange(lang.code)}
+              className={cn("md:hidden", selected ? "font-semibold bg-muted" : "")}
+            >
+              <span className="flex-1">{t(lang.labelKey)}</span>
+              {selected ? <Check className="size-3.5 ms-2 shrink-0" /> : null}
+            </DropdownMenuItem>
+          );
+        })}
         <DropdownMenuSub>
           <DropdownMenuSubTrigger
-            className={!followsSystem ? "font-semibold bg-muted" : ""}
+            className={cn("max-md:hidden", !followsSystem ? "font-semibold bg-muted" : "")}
           >
             <Languages className="size-3.5 me-2 shrink-0" />
             {t("contentTranslation.lang.choose")}
           </DropdownMenuSubTrigger>
-          <DropdownMenuSubContent className="min-w-[140px]">
+          <DropdownMenuSubContent className="min-w-[140px]" collisionPadding={12}>
             {PICKABLE.map((lang) => {
               const selected = preference === lang.code;
               return (

@@ -3,7 +3,7 @@ import type { CapacitorConfig } from "@capacitor/cli";
 /**
  * Native Android/iOS shell loads the live production app.
  * Canonical host is www (apex team-connect-app.com 308-redirects here).
- * Local `www/` is only a brief offline/fallback splash until the remote URL loads.
+ * Local `www/` is a solid-color fallback (no logo) until the remote URL loads.
  */
 const config: CapacitorConfig = {
   appId: "com.teamconnect.heb",
@@ -30,6 +30,7 @@ const config: CapacitorConfig = {
   },
   plugins: {
     SplashScreen: {
+      // Solid #0f172a only. Logo grow is a single web overlay (NativeBootSplash).
       launchShowDuration: 0,
       launchAutoHide: false,
       backgroundColor: "#0f172a",

@@ -51,5 +51,7 @@ Edit in `android/app/build.gradle`:
 - `versionName` (user-visible, e.g. `1.0.1`)
 
 ## Notes
-- Installed debug APKs keep their old remote URL until you rebuild after `cap sync`.
+- Installed debug APKs keep their old remote URL until you rebuild after `cap sync`.
+- Native splash is a solid `#0f172a` (`drawable/splash.xml`). Do not regenerate `splash.png` logos with `@capacitor/assets` — the app icon grow animation is the web overlay.
+- After changing splash drawables or `capacitor.config.ts`, run `npx cap sync android` before rebuilding the APK/AAB.
 - Do not commit `*.jks`, `keystore.properties`, or `google-services.json`.

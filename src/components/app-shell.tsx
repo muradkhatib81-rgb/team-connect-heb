@@ -922,16 +922,16 @@ export function AppShell({ children }: { children: ReactNode }) {
               <BranchSubtitle />
             </div>
           </div>
-          <div className="flex items-center gap-1 shrink-0">
+          <div className="flex items-center gap-1 min-w-0 overflow-x-auto overflow-y-hidden overscroll-x-contain [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
             <HeaderRefreshButton />
             <PwaInstallButton />
             <LanguageSwitcher userId={profile?.id} />
             <ThemeSwitcher userId={profile?.id} currentTheme={(profile?.preferred_theme as AppTheme | undefined) ?? "system"} />
             {!!aiAccessQ.data?.allowed && (
-              <Button variant="ghost" size="sm" className="h-8 gap-1.5 px-2 text-xs font-medium" asChild>
+              <Button variant="ghost" size="sm" className="h-8 gap-1.5 px-2 text-xs font-medium shrink-0" asChild>
                 <Link to="/ai-assistant" onClick={() => setMobileOpen(false)}>
                   <Sparkles className="size-3.5 shrink-0" />
-                  <span className="max-w-[9.5rem] truncate">{t("ai.askAssistant")}</span>
+                  <span className="max-w-[9.5rem] truncate max-[380px]:sr-only">{t("ai.askAssistant")}</span>
                 </Link>
               </Button>
             )}

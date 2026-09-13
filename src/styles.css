@@ -179,19 +179,20 @@
 }
 
 
-/* mobile-viewport-clamp */
-@layer base {
-  html,
-  body {
-    overflow-x: clip;
-    max-width: 100%;
-  }
-
+/* Clip page content, not html/body — overflow-x:clip on the document
+   clips position:fixed Radix portals (dropdowns/popovers) in Android WebView
+   and can hide overflowing header controls. Portals mount on body and escape this. */
+.app-viewport {
+  overflow-x: clip;
+  max-width: 100%;
+  min-height: 100dvh;
 }
 
-/* Portaled modals/sheets must never paint outside the phone viewport */
+/* Portaled modals/sheets must never paint outside the phone viewport.
+   Exclude Radix popovers/menus: they also use role=dialog but set data-side. */
 @media (max-width: 767px) {
-  [role="dialog"],
+  [role="alertdialog"],
+  [role="dialog"]:not([data-side]),
   [data-vaul-drawer] {
     max-width: calc(100vw - 1rem - env(safe-area-inset-left, 0px) - env(safe-area-inset-right, 0px)) !important;
     max-height: calc(100dvh - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px) - 1rem) !important;
@@ -211,7 +212,7 @@
   }
 }
 
-/* Native boot splash: logo grows from small → full */
+/* Native boot splash: logo grows from small → full (also inlined in the overlay). */
 @keyframes native-boot-grow {
   from {
     transform: scale(0.34);
@@ -225,5 +226,6 @@
 
 .native-boot-logo {
   transform: scale(0.34);
-  animation: native-boot-grow 1.15s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+  transform-origin: center center;
+  animation: native-boot-grow 1.4s cubic-bezier(0.22, 1, 0.36, 1) forwards;
 }

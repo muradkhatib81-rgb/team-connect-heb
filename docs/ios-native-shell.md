@@ -7,6 +7,7 @@ Prepared on Windows so the next step is Mac/Xcode only.
 - `ios/` Capacitor native project (`App`)
 - Scripts: `ios:sync`, `cap:sync:ios`, `cap:open:ios`
 - Remote shell URL: `https://www.team-connect-app.com` (see `capacitor.config.ts`)
+- Native launch/splash is solid `#0f172a` (no logo). The growing Team Connect icon is the web overlay. After splash/config changes: `npx cap sync ios`.
 
 ## On a Mac (when ready)
 1. Install Xcode + CocoaPods
