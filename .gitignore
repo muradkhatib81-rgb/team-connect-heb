@@ -52,3 +52,11 @@ supabase/.temp/
 .env
 .env.local
 .env.*.local
+
+# Android release signing (never commit)
+android/keystore.properties
+android/app/release/
+android/*.keystore
+android/*.jks
+android/app/*.keystore
+android/app/*.jks

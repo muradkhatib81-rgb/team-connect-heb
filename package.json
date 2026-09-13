@@ -14,6 +14,7 @@
     "cap:open:android": "npx cap open android",
     "cap:open:ios": "npx cap open ios",
     "android:sync": "npx cap sync android",
+    "android:aab": "powershell -ExecutionPolicy Bypass -File ./scripts/build-android-aab.ps1",
     "ios:sync": "npx cap sync ios",
     "cap:sync:ios": "npx cap sync ios"
   },
