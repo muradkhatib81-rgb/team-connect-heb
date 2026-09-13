@@ -10,6 +10,7 @@ import { Card } from "@/components/ui/card";
 import { toast } from "sonner";
 import { APP_NAME } from "@/lib/constants";
 import { bootstrapPlatformOwner } from "@/lib/auth-bootstrap.functions";
+import { consumeRestoredAppPath } from "@/lib/last-app-path";
 import { resolveLandingPath } from "@/lib/use-auth";
 import { seedIdleSessionOnLogin } from "@/lib/use-idle-logout";
 import { toWhatsAppUrl } from "@/lib/whatsapp";
@@ -67,7 +68,8 @@ function AuthPage() {
         if (data.session) {
           setHasUsers(true);
           try {
-            const target = await resolveLandingPath(data.session.user.id);
+            const restored = consumeRestoredAppPath("/auth");
+            const target = restored ?? (await resolveLandingPath(data.session.user.id));
             if (!cancelled) {
               stayOnLoader = true;
               router.history.replace(target);

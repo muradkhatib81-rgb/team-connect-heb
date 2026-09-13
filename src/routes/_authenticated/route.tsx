@@ -3,6 +3,8 @@ import { supabase } from "@/integrations/supabase/client";
 import { AppShell } from "@/components/app-shell";
 import { ActiveBranchProvider } from "@/lib/use-active-branch";
 import { canAccessRoute } from "@/lib/route-access";
+import { consumeRestoredAppPath } from "@/lib/last-app-path";
+import { PageRemountBoundary, PageRemountProvider } from "@/lib/page-remount";
 import {
   fetchRouteGuardPermissions,
   fetchRouteGuardProfileActive,
@@ -12,6 +14,9 @@ import {
 import { BranchProvider, CompanyProvider } from "@/platform";
 
 export const Route = createFileRoute("/_authenticated")({
+  // Client-only: session lives in browser storage. SSR beforeLoad sees no
+  // user and used to 302 → /auth → role home, so F5 on /tasks opened dashboard.
+  ssr: false,
   beforeLoad: async ({ location, context }) => {
     // Prefer local session first so a refresh does not flash /auth while
     // getUser() (network) is still restoring. Only bounce when there is
@@ -20,6 +25,15 @@ export const Route = createFileRoute("/_authenticated")({
     const sessionUser = sessionData.session?.user ?? null;
     if (!sessionUser) {
       throw redirect({ to: "/auth", replace: true });
+    }
+
+    const restored = consumeRestoredAppPath(
+      typeof window !== "undefined"
+        ? `${window.location.pathname}${window.location.search}${window.location.hash}`
+        : location.pathname,
+    );
+    if (restored) {
+      throw redirect({ href: restored, replace: true });
     }
 
     // Soft-validate with getUser; if it fails but session exists, keep going
@@ -104,9 +118,13 @@ function AuthenticatedLayout() {
     <ActiveBranchProvider>
       <CompanyProvider>
         <BranchProvider>
-          <AppShell>
-            <Outlet />
-          </AppShell>
+          <PageRemountProvider>
+            <AppShell>
+              <PageRemountBoundary>
+                <Outlet />
+              </PageRemountBoundary>
+            </AppShell>
+          </PageRemountProvider>
         </BranchProvider>
       </CompanyProvider>
     </ActiveBranchProvider>

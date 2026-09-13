@@ -26,6 +26,7 @@ import { installNativeSafeArea } from "@/lib/native-safe-area";
 import { installNativeBackButton } from "@/lib/native-back-button";
 import { saveFcmToken } from "@/lib/push.functions";
 import { applyPwaBranding, fetchPlatformPwaIconUrl } from "@/lib/pwa-branding";
+import { installLastAppPathTracking } from "@/lib/last-app-path";
 
 function NotFoundComponent() {
   const { t } = useTranslation();
@@ -316,6 +317,10 @@ function RootComponent() {
       auth.subscription.unsubscribe();
     };
   }, []);
+
+  useEffect(() => {
+    return installLastAppPathTracking((onResolved) => router.subscribe("onResolved", onResolved));
+  }, [router]);
 
   useEffect(() => {
     const { data: sub } = supabase.auth.onAuthStateChange((event) => {

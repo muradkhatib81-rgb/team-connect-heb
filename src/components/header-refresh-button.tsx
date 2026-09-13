@@ -8,10 +8,9 @@ import { refreshPageData } from "@/lib/refresh-page-data";
 import { cn } from "@/lib/utils";
 
 /**
- * Header refresh — refetch the current page's active queries.
- * Must NOT call window.location.reload() (native persistSession:false
- * drops the session → /auth) or router.invalidate() (layout beforeLoad
- * can redirect to /dashboard). Stay on the current route.
+ * Header refresh — remount the current page and reload its data (F5-like
+ * for content). Must NOT call window.location.reload() or router.invalidate()
+ * (those re-run layout beforeLoad and can bounce to /auth or /dashboard).
  */
 export function HeaderRefreshButton() {
   const { t } = useTranslation();
