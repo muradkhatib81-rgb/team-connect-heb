@@ -37,6 +37,7 @@ import {
   listTasks,
 } from "@/lib/tasks.functions";
 import { useActiveBranch } from "@/lib/use-active-branch";
+import { LIST_PAGE_SIZE, SEARCH_DEBOUNCE_MS } from "@/lib/list-page";
 import { formatHeDateTime, splitForInputs, combineToIso } from "@/lib/date-format";
 import { canExecuteTask, canEditTaskContent, EXECUTABLE_TASK_STATUSES } from "@/lib/task-execution";
 import { HebrewDateInput, HebrewTimeInput } from "@/components/hebrew-datetime";
@@ -241,29 +242,55 @@ function TasksPage() {
   const fetchTasks = useServerFn(listTasks);
   const { activeBranchId } = useActiveBranch();
 
-  const depsQuery = useQuery({
-    queryKey: ["task-deps"],
+  const [openCreate, setOpenCreate] = useState(false);
+  const [editTask, setEditTask] = useState<TaskRow | null>(null);
+  const [taskTab, setTaskTab] = useState("tasks");
+  const [statusFilter, setStatusFilter] = useState<string>(search.status ?? "all");
+  const [search2, setSearch2] = useState("");
+  const [debouncedSearch2, setDebouncedSearch2] = useState("");
+  const [visibleCount, setVisibleCount] = useState(LIST_PAGE_SIZE);
+  const needTaskEmployeePicker = openCreate || !!editTask || taskTab === "recurring";
+
+  const deptsQuery = useQuery({
+    queryKey: ["task-deps", "depts", activeBranchId ?? "none"],
     queryFn: async () => {
-      const [{ data: depts }, { data: emps }] = await Promise.all([
-        supabase.from("departments").select("id, name").order("name"),
-        supabase.from("profiles").select("id, full_name, department_id, branch_id").order("full_name"),
-      ]);
-      return {
-        departments: (depts ?? []) as DeptOption[],
-        employees: ((emps ?? []) as EmpOption[]).filter((e) => !isNonEmployeeIdentity(e)),
-      };
+      const { data: depts, error } = await supabase
+        .from("departments")
+        .select("id, name")
+        .order("name");
+      if (error) throw error;
+      return (depts ?? []) as DeptOption[];
     },
   });
+
+  const empsQuery = useQuery({
+    enabled: needTaskEmployeePicker,
+    queryKey: ["task-deps", "emps", activeBranchId ?? "none"],
+    queryFn: async () => {
+      const { data: emps, error } = await supabase
+        .from("profiles")
+        .select("id, full_name, department_id, branch_id")
+        .order("full_name");
+      if (error) throw error;
+      return ((emps ?? []) as EmpOption[]).filter((e) => !isNonEmployeeIdentity(e));
+    },
+  });
+
+  const depsQuery = {
+    data:
+      deptsQuery.data || empsQuery.data
+        ? {
+            departments: deptsQuery.data ?? [],
+            employees: empsQuery.data ?? [],
+          }
+        : undefined,
+    isLoading: deptsQuery.isLoading || (needTaskEmployeePicker && empsQuery.isLoading),
+  };
 
   const tasksQuery = useQuery({
     queryKey: ["tasks", activeBranchId ?? "none"],
     queryFn: () => fetchTasks(),
   });
-
-  const [openCreate, setOpenCreate] = useState(false);
-  const [editTask, setEditTask] = useState<TaskRow | null>(null);
-  const [statusFilter, setStatusFilter] = useState<string>(search.status ?? "all");
-  const [search2, setSearch2] = useState("");
 
   useEffect(() => {
     if (search.status) setStatusFilter(search.status);
@@ -283,8 +310,8 @@ function TasksPage() {
           new Date(t.due_at).getTime() < now,
       );
     }
-    if (search2.trim()) {
-      const q = search2.trim().toLowerCase();
+    if (debouncedSearch2.trim()) {
+      const q = debouncedSearch2.trim().toLowerCase();
       list = list.filter(
         (t) =>
           t.title.toLowerCase().includes(q) ||
@@ -292,7 +319,21 @@ function TasksPage() {
       );
     }
     return list;
-  }, [tasksQuery.data, statusFilter, search2]);
+  }, [tasksQuery.data, statusFilter, debouncedSearch2]);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => setDebouncedSearch2(search2), SEARCH_DEBOUNCE_MS);
+    return () => window.clearTimeout(timer);
+  }, [search2]);
+
+  useEffect(() => {
+    setVisibleCount(LIST_PAGE_SIZE);
+  }, [statusFilter, debouncedSearch2, activeBranchId]);
+
+  const visibleTasks = useMemo(
+    () => filtered.slice(0, visibleCount),
+    [filtered, visibleCount],
+  );
 
   const canCreateAny =
     caps.canManageTasks ||
@@ -315,7 +356,7 @@ function TasksPage() {
         )}
       </header>
 
-      <Tabs defaultValue="tasks" className="w-full">
+      <Tabs value={taskTab} onValueChange={setTaskTab} className="w-full">
         <TabsList>
           <TabsTrigger value="tasks" className="gap-2">
             <ListTodo className="size-4" />
@@ -362,7 +403,7 @@ function TasksPage() {
             </Card>
           ) : (
             <div className="space-y-3">
-              {filtered.map((t) => (
+              {visibleTasks.map((t) => (
                 <TaskCard
                   key={t.id}
                   task={t}
@@ -371,6 +412,20 @@ function TasksPage() {
                   onEdit={() => setEditTask(t)}
                 />
               ))}
+              {filtered.length > visibleTasks.length && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="w-full"
+                  onClick={() => setVisibleCount((n) => n + LIST_PAGE_SIZE)}
+                >
+                  {i18n.t("common.loadMore")} ·{" "}
+                  {i18n.t("common.showingOf", {
+                    shown: visibleTasks.length,
+                    total: filtered.length,
+                  })}
+                </Button>
+              )}
             </div>
           )}
         </TabsContent>
@@ -380,7 +435,7 @@ function TasksPage() {
         </TabsContent>
       </Tabs>
 
-      {openCreate && depsQuery.data && (
+      {openCreate && !depsQuery.isLoading && depsQuery.data && (
         <TaskFormDialog
           mode="create"
           deps={depsQuery.data}
@@ -388,7 +443,7 @@ function TasksPage() {
           onClose={() => setOpenCreate(false)}
         />
       )}
-      {editTask && depsQuery.data && (
+      {editTask && !depsQuery.isLoading && depsQuery.data && (
         <TaskFormDialog
           mode="edit"
           deps={depsQuery.data}

@@ -38,11 +38,11 @@ export function resolveAppLanguageFromTags(tags: string[]): PwaLanguage {
     if (tag.startsWith("en")) return "en";
     if (tag.startsWith("he") || tag.startsWith("iw")) return "he";
   }
-  return "he";
+  return "en";
 }
 
 export function resolveAppLanguageFromAcceptLanguage(header: string | null | undefined): PwaLanguage {
-  if (!header) return "he";
+  if (!header) return "en";
   return resolveAppLanguageFromTags(header.split(","));
 }
 

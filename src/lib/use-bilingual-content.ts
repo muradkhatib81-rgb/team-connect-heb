@@ -27,7 +27,9 @@ export function useBilingualContentMap(
   isLoading: boolean;
 } {
   const { i18n } = useTranslation();
-  const targetLang = (i18n.language === "ar" || i18n.language === "en" ? i18n.language : "he") as AppLanguage;
+  const targetLang = (
+    i18n.language === "he" || i18n.language === "ar" || i18n.language === "en" ? i18n.language : "en"
+  ) as AppLanguage;
   const translateFn = useServerFn(translateUserContentBatch);
 
   const stableItems = useMemo(

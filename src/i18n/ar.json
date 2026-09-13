@@ -1231,6 +1231,8 @@
     "close": "إغلاق",
     "back": "رجوع",
     "next": "التالي",
+    "loadMore": "تحميل المزيد",
+    "showingOf": "{{shown}} من {{total}}",
     "days": "أيام",
     "appName": "نظام إدارة الموظفين",
     "appShortName": "إدارة الموظفين",

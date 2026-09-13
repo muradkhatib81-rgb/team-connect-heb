@@ -1231,6 +1231,8 @@
     "close": "Close",
     "back": "Back",
     "next": "Next",
+    "loadMore": "Load more",
+    "showingOf": "{{shown}} of {{total}}",
     "days": "days",
     "appName": "Employee management system",
     "appShortName": "Team Connect",

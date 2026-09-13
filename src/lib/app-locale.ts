@@ -22,7 +22,7 @@ export function htmlLangAttribute(lang: AppLanguage | string): string {
 
 /** Intl locale for dates/numbers — Latin digits even when UI language is Arabic. */
 export function intlLocaleForApp(lang?: string): string {
-  const code = (lang ?? "he").split("-")[0];
+  const code = (lang ?? "en").split("-")[0];
   if (code === "ar") return "ar-u-nu-latn";
   if (code === "en") return "en-US";
   return "he-u-nu-latn";

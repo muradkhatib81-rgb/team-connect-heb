@@ -48,6 +48,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { formatHeDateTime } from "@/lib/date-format";
+import { MESSAGE_PAGE_SIZE } from "@/lib/list-page";
 import { BilingualContent } from "@/components/bilingual-content";
 import { SearchableMultiSelect, type SearchablePickerOption } from "@/components/searchable-picker";
 import { pickBilingualResult, useBilingualContentMap } from "@/lib/use-bilingual-content";
@@ -266,7 +267,7 @@ interface InboxRow {
   message: {
     id: string;
     title: string;
-    body: string;
+    body?: string;
     priority: CommPriority;
     requires_acknowledgment: boolean;
     sender_id: string;
@@ -291,22 +292,24 @@ function InboxTab({
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState<"all" | "unread" | "important">("all");
   const [selected, setSelected] = useState<string | null>(initialMessageId ?? null);
+  const [limit, setLimit] = useState(MESSAGE_PAGE_SIZE);
 
   useEffect(() => {
     if (initialMessageId) setSelected(initialMessageId);
   }, [initialMessageId]);
 
   const q = useQuery({
-    queryKey: ["comm", "inbox", userId],
+    queryKey: ["comm", "inbox", userId, limit],
     queryFn: async () => {
       const { data, error } = await supabase
         .from("message_recipients")
         .select(
-          "message_id, read_at, acknowledged_at, archived_at, delivered_at, message:messages!inner(id,title,body,priority,requires_acknowledgment,sender_id,created_at,deleted_at,edited_at)",
+          "message_id, read_at, acknowledged_at, archived_at, delivered_at, message:messages!inner(id,title,priority,requires_acknowledgment,sender_id,created_at,deleted_at,edited_at)",
         )
         .eq("user_id", userId)
         .is("archived_at", null)
-        .order("delivered_at", { ascending: false });
+        .order("delivered_at", { ascending: false })
+        .limit(limit);
       if (error) throw error;
       const rows = ((data ?? []) as any[]).filter(
         (r) => !r.message?.deleted_at && r.message?.sender_id !== userId,
@@ -320,19 +323,22 @@ function InboxTab({
           .in("id", senderIds);
         (sp ?? []).forEach((u: any) => (senderMap[u.id] = u.full_name));
       }
-      return rows.map((r) => ({ ...r, sender: { full_name: senderMap[r.message.sender_id] ?? "—" } })) as InboxRow[];
+      return {
+        rows: rows.map((r) => ({ ...r, sender: { full_name: senderMap[r.message.sender_id] ?? "—" } })) as InboxRow[],
+        hasMore: (data ?? []).length >= limit,
+      };
     },
   });
 
   const filtered = useMemo(() => {
-    const list = q.data ?? [];
+    const list = q.data?.rows ?? [];
     return list.filter((r) => {
       if (filter === "unread" && r.read_at) return false;
       if (filter === "important" && r.message.priority !== "high" && r.message.priority !== "urgent")
         return false;
       if (search) {
         const t = search.trim().toLowerCase();
-        if (!r.message.title.toLowerCase().includes(t) && !r.message.body.toLowerCase().includes(t))
+        if (!r.message.title.toLowerCase().includes(t))
           return false;
       }
       return true;
@@ -401,6 +407,16 @@ function InboxTab({
               </div>
             </Card>
           ))}
+          {q.data?.hasMore && (
+            <Button
+              type="button"
+              variant="outline"
+              className="w-full"
+              onClick={() => setLimit((n) => n + MESSAGE_PAGE_SIZE)}
+            >
+              {i18n.t("common.loadMore")}
+            </Button>
+          )}
         </div>
       )}
 
@@ -432,16 +448,18 @@ function SentTab({
   canViewReceipts: boolean;
 }) {
   const [selected, setSelected] = useState<string | null>(null);
+  const [limit, setLimit] = useState(MESSAGE_PAGE_SIZE);
 
   const q = useQuery({
-    queryKey: ["comm", "sent", userId],
+    queryKey: ["comm", "sent", userId, limit],
     queryFn: async () => {
       const { data, error } = await supabase
         .from("messages")
-        .select("id, title, body, priority, requires_acknowledgment, created_at, updated_at, deleted_at, edited_at, edited_by")
+        .select("id, title, priority, requires_acknowledgment, created_at, updated_at, deleted_at, edited_at, edited_by")
         .eq("sender_id", userId)
         .is("deleted_at", null)
-        .order("created_at", { ascending: false });
+        .order("created_at", { ascending: false })
+        .limit(limit);
       if (error) throw error;
       const ids = (data ?? []).map((m: any) => m.id);
       let statsMap: Record<string, { total: number; read: number; ack: number }> = {};
@@ -457,7 +475,10 @@ function SentTab({
           if (r.acknowledged_at) s.ack++;
         });
       }
-      return (data ?? []).map((m: any) => ({ ...m, stats: statsMap[m.id] ?? { total: 0, read: 0, ack: 0 } }));
+      return {
+        rows: (data ?? []).map((m: any) => ({ ...m, stats: statsMap[m.id] ?? { total: 0, read: 0, ack: 0 } })),
+        hasMore: (data ?? []).length >= limit,
+      };
     },
   });
 
@@ -469,10 +490,10 @@ function SentTab({
         </h3>
         {q.isLoading ? (
           <Loader2 className="mx-auto size-5 animate-spin text-muted-foreground" />
-        ) : (q.data ?? []).length === 0 ? (
+        ) : (q.data?.rows ?? []).length === 0 ? (
           <Card className="p-6 text-center text-sm text-muted-foreground">{i18n.t("comm.noSent")}</Card>
         ) : (
-          (q.data ?? []).map((m: any) => {
+          (q.data?.rows ?? []).map((m: any) => {
             const pct = m.stats.total ? Math.round((m.stats.read / m.stats.total) * 100) : 0;
             return (
               <Card
@@ -505,6 +526,16 @@ function SentTab({
             );
           })
         )}
+        {q.data?.hasMore && (
+          <Button
+            type="button"
+            variant="outline"
+            className="w-full"
+            onClick={() => setLimit((n) => n + MESSAGE_PAGE_SIZE)}
+          >
+            {i18n.t("common.loadMore")}
+          </Button>
+        )}
       </section>
 
       {selected && (
@@ -525,20 +556,25 @@ function SentTab({
 // ---------------- Archive ----------------
 function ArchiveTab({ userId, canDelete }: { userId: string; canDelete: boolean }) {
   const qc = useQueryClient();
+  const [limit, setLimit] = useState(MESSAGE_PAGE_SIZE);
 
   const msgsQ = useQuery({
-    queryKey: ["comm", "archive-msgs", userId],
+    queryKey: ["comm", "archive-msgs", userId, limit],
     queryFn: async () => {
       const { data, error } = await supabase
         .from("message_recipients")
         .select(
-          "message_id, archived_at, message:messages!inner(id,title,body,priority,created_at,deleted_at)",
+          "message_id, archived_at, message:messages!inner(id,title,priority,created_at,deleted_at)",
         )
         .eq("user_id", userId)
         .not("archived_at", "is", null)
-        .order("archived_at", { ascending: false });
+        .order("archived_at", { ascending: false })
+        .limit(limit);
       if (error) throw error;
-      return (data ?? []) as any[];
+      return {
+        rows: (data ?? []) as any[],
+        hasMore: (data ?? []).length >= limit,
+      };
     },
   });
 
@@ -555,11 +591,11 @@ function ArchiveTab({ userId, canDelete }: { userId: string; canDelete: boolean 
     <div className="space-y-6">
       <section>
         <h3 className="text-sm font-semibold mb-2 text-muted-foreground">{i18n.t("comm.archiveTitle")}</h3>
-        {(msgsQ.data ?? []).length === 0 ? (
+        {(msgsQ.data?.rows ?? []).length === 0 ? (
           <Card className="p-6 text-center text-sm text-muted-foreground">{i18n.t("comm.archiveEmpty")}</Card>
         ) : (
           <div className="space-y-2">
-            {(msgsQ.data ?? []).map((r: any) => (
+            {(msgsQ.data?.rows ?? []).map((r: any) => (
               <Card key={r.message_id} className="p-3 flex items-center justify-between gap-2">
                 <div className="min-w-0">
                   <p className="text-sm font-medium truncate">{r.message.title}</p>
@@ -591,6 +627,16 @@ function ArchiveTab({ userId, canDelete }: { userId: string; canDelete: boolean 
                 </div>
               </Card>
             ))}
+            {msgsQ.data?.hasMore && (
+              <Button
+                type="button"
+                variant="outline"
+                className="w-full"
+                onClick={() => setLimit((n) => n + MESSAGE_PAGE_SIZE)}
+              >
+                {i18n.t("common.loadMore")}
+              </Button>
+            )}
           </div>
         )}
       </section>

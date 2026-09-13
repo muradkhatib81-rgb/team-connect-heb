@@ -2,6 +2,7 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import {
+  ensureLanguageLoaded,
   getSavedLanguagePreference,
   resolveLanguage,
   saveLanguagePreference,
@@ -26,9 +27,9 @@ import { Check, Languages, Monitor } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const PICKABLE: { code: AppLanguage; labelKey: string }[] = [
+  { code: "en", labelKey: "contentTranslation.lang.en" },
   { code: "he", labelKey: "contentTranslation.lang.he" },
   { code: "ar", labelKey: "contentTranslation.lang.ar" },
-  { code: "en", labelKey: "contentTranslation.lang.en" },
 ];
 
 interface LanguageSwitcherProps {
@@ -44,7 +45,9 @@ export function LanguageSwitcher({ userId }: LanguageSwitcherProps = {}) {
 
   function handleChange(code: LanguagePreference) {
     const resolved = resolveLanguage(code);
-    void i18n.changeLanguage(resolved);
+    void ensureLanguageLoaded(resolved).then(() => {
+      void i18n.changeLanguage(resolved);
+    });
     saveLanguagePreference(code, userId);
     saveLanguagePreference(code);
     document.documentElement.dir = resolved === "en" ? "ltr" : "rtl";

@@ -24,7 +24,7 @@ export function AiChatPanel({
   remainingMinutes: number | null;
 }) {
   const { t, i18n } = useTranslation();
-  const locale = (i18n.language?.slice(0, 2) ?? "he") as "he" | "ar" | "en";
+  const locale = (i18n.language?.slice(0, 2) ?? "en") as "he" | "ar" | "en";
   const title = t(`ai.assistantTitle.${assistantKind}`);
   const warmContext = useServerFn(warmAiContext);
 

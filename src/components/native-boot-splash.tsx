@@ -126,7 +126,7 @@ export function NativeBootSplash() {
       )}
     >
       <img
-        src="/icons/icon-512.png"
+        src="/icons/icon-192.png"
         alt=""
         width={168}
         height={168}

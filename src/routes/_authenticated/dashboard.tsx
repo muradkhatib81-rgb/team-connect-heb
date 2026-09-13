@@ -186,7 +186,7 @@ function DashboardPage() {
 
   const statsQuery = useQuery({
     enabled: admin,
-    queryKey: ["dashboard", "stats"],
+    queryKey: ["dashboard", "stats", activeBranchId ?? profile?.branch_id ?? "none"],
     staleTime: 30_000,
     queryFn: async () => {
       const [

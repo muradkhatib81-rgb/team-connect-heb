@@ -9,7 +9,7 @@ import {
 } from "@tanstack/react-router";
 import { useEffect, useState, type ReactNode } from "react";
 import { I18nextProvider, useTranslation } from "react-i18next";
-import i18n from "@/i18n";
+import i18n, { ensureLanguageLoaded, getSavedLanguage } from "@/i18n";
 import { htmlLangAttribute, installWesternDigitsEnforcer } from "@/lib/app-locale";
 
 import appCss from "../styles.css?url";
@@ -194,7 +194,7 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
 function RootShell({ children }: { children: ReactNode }) {
   const [lang, setLang] = useState(() => {
     const current = i18n.language;
-    return current === "en" || current === "ar" ? current : "he";
+    return current === "he" || current === "ar" ? current : "en";
   });
   const [pwaIconUrl, setPwaIconUrl] = useState<string | null>(null);
 
@@ -215,7 +215,7 @@ function RootShell({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     const onChange = (lng: string) => {
-      const next = lng === "en" || lng === "ar" ? lng : "he";
+      const next = lng === "he" || lng === "ar" ? lng : "en";
       setLang(next);
       document.documentElement.dir = next === "en" ? "ltr" : "rtl";
       document.documentElement.lang = htmlLangAttribute(next);
@@ -251,6 +251,18 @@ function RootShell({ children }: { children: ReactNode }) {
 function RootComponent() {
   const { queryClient } = Route.useRouteContext();
   const router = useRouter();
+  const [localeReady, setLocaleReady] = useState(() => {
+    const lng = getSavedLanguage();
+    return lng === "en" || i18n.hasResourceBundle(lng, "translation");
+  });
+
+  useEffect(() => {
+    const lng = getSavedLanguage();
+    void ensureLanguageLoaded(lng).then(() => {
+      if (i18n.language !== lng) void i18n.changeLanguage(lng);
+      setLocaleReady(true);
+    });
+  }, []);
 
   useEffect(() => {
     const run = () => void registerPwaServiceWorker();
@@ -319,9 +331,13 @@ function RootComponent() {
       <I18nextProvider i18n={i18n}>
         <PlatformProvider>
           <NativeBootSplash />
-          <div className="app-viewport">
-            <Outlet />
-          </div>
+          {localeReady ? (
+            <div className="app-viewport">
+              <Outlet />
+            </div>
+          ) : (
+            <div className="app-viewport" />
+          )}
           <Toaster position="top-center" richColors closeButton />
         </PlatformProvider>
       </I18nextProvider>

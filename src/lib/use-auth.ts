@@ -72,7 +72,7 @@ async function fetchSessionAndProfile(): Promise<AuthProfile | null> {
     must_change_password: contact.must_change_password ?? false,
     roles: (roles ?? []).map((r) => r.role as AppRole),
     branch_id: p.branch_id ?? null,
-    preferred_language: parseLanguagePreference(p.preferred_language) ?? "system",
+    preferred_language: parseLanguagePreference(p.preferred_language) ?? "en",
     preferred_theme:
       p.preferred_theme === "light" || p.preferred_theme === "dark" || p.preferred_theme === "system"
         ? p.preferred_theme

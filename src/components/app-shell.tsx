@@ -52,11 +52,10 @@ import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { useTranslation } from "react-i18next";
 import {
-  getGuestLanguage,
+  ensureLanguageLoaded,
   getGuestLanguagePreference,
-  getSavedLanguagePreference,
-  parseLanguagePreference,
   resolveLanguage,
+  resolveSignedInLanguagePreference,
   saveLanguagePreference,
   type LanguagePreference,
 } from "@/i18n";
@@ -91,10 +90,12 @@ import {
   bridgePostgresOn,
   bridgeSupabaseChannelName,
   createBridgeChannel,
+  createDebouncedRunner,
   notifyBridgeOperationalActivity,
   syncBridgeMonitorClose,
   syncBridgeMonitorOpen,
   syncBridgeSupabaseStatus,
+  withRealtimeFilter,
 } from "@/lib/realtime-bridge-sync";
 import { useAiAccess } from "@/lib/use-ai-access";
 import { bindPushToneListener } from "@/lib/alert-tone";
@@ -207,21 +208,21 @@ export function AppShell({ children }: { children: ReactNode }) {
     if (appliedLangForUser.current === profile.id) return;
 
     const guestPref = getGuestLanguagePreference();
-    const guestLang = getGuestLanguage();
-    const preference: LanguagePreference =
-      guestLang ??
-      (guestPref === "system" ? "system" : null) ??
-      parseLanguagePreference(profile.preferred_language) ??
-      getSavedLanguagePreference(profile.id);
+    const preference: LanguagePreference = resolveSignedInLanguagePreference({
+      userId: profile.id,
+      profilePreference: profile.preferred_language,
+    });
     const lang = resolveLanguage(preference);
     appliedLangForUser.current = profile.id;
     saveLanguagePreference(preference, profile.id);
     saveLanguagePreference(preference);
     if (i18n.language !== lang) {
-      void i18n.changeLanguage(lang);
-      document.documentElement.dir = lang === "en" ? "ltr" : "rtl";
-      document.documentElement.lang = htmlLangAttribute(lang);
-      document.body.lang = htmlLangAttribute(lang);
+      void ensureLanguageLoaded(lang).then(() => {
+        void i18n.changeLanguage(lang);
+        document.documentElement.dir = lang === "en" ? "ltr" : "rtl";
+        document.documentElement.lang = htmlLangAttribute(lang);
+        document.body.lang = htmlLangAttribute(lang);
+      });
     }
     // Sync guest explicit he/ar/en, or guest "system", when it differs from profile.
     if (guestPref && guestPref !== profile.preferred_language) {
@@ -1017,12 +1018,17 @@ function RealtimeBridge({ uid }: { uid: string }) {
   }, [uid]);
 
   useEffect(() => {
-    let scheduleBumpTimer: ReturnType<typeof setTimeout> | null = null;
-    let notifBumpTimer: ReturnType<typeof setTimeout> | null = null;
+    const scheduleBump = createDebouncedRunner(50);
+    const notifBump = createDebouncedRunner(400);
+    const breakBump = createDebouncedRunner(400);
+    const leaveBump = createDebouncedRunner(400);
+    const commBump = createDebouncedRunner(400);
+    const profileBump = createDebouncedRunner(400);
+    const taskBump = createDebouncedRunner(400);
+    const branchFilter = activeBranchId ? `branch_id=eq.${activeBranchId}` : null;
     const bumpScheduleQueries = () => {
-      if (scheduleBumpTimer) clearTimeout(scheduleBumpTimer);
       // Tiny coalesce only — keep edits feeling realtime (was 500ms and felt laggy).
-      scheduleBumpTimer = setTimeout(() => {
+      scheduleBump.run(() => {
         qc.invalidateQueries({ queryKey: ["schedule"] });
         qc.invalidateQueries({ queryKey: ["schedules-pending"] });
         qc.invalidateQueries({ queryKey: ["schedules-approved"] });
@@ -1039,7 +1045,7 @@ function RealtimeBridge({ uid }: { uid: string }) {
         qc.invalidateQueries({ queryKey: ["schedules-week-saved"] });
         qc.invalidateQueries({ queryKey: ["dashboard-dept-states"] });
         qc.invalidateQueries({ queryKey: ["schedule-shifts"] });
-      }, 50);
+      });
     };
 
     const monitorName = bridgeMonitorName(uid);
@@ -1094,7 +1100,7 @@ function RealtimeBridge({ uid }: { uid: string }) {
         },
       );
     onPg(
-        { event: "*", schema: "public", table: "profiles" },
+        withRealtimeFilter({ event: "*", schema: "public", table: "profiles" }, branchFilter),
         (payload: any) => {
           const affected = payload?.new?.id ?? payload?.old?.id;
           if (!affected || affected === uid) {
@@ -1102,16 +1108,20 @@ function RealtimeBridge({ uid }: { uid: string }) {
             qc.invalidateQueries({ queryKey: ["route-guard", "is-active", uid] });
             invalidateShiftVisibleQueries(qc, uid, activeBranchId);
           }
-          qc.invalidateQueries({ queryKey: ["employees"] });
-          qc.invalidateQueries({ queryKey: ["departments"] });
-          qc.invalidateQueries({ queryKey: ["dashboard", "stats"] });
-          qc.invalidateQueries({ queryKey: ["dashboard-shift-cards"] });
-          qc.invalidateQueries({ queryKey: ["dept-employees"] });
-          qc.invalidateQueries({ queryKey: ["dept-employees-for-manager"] });
-          qc.invalidateQueries({ queryKey: ["eom", "current"] });
+          profileBump.run(() => {
+            qc.invalidateQueries({ queryKey: ["employees"] });
+            qc.invalidateQueries({ queryKey: ["departments"] });
+            qc.invalidateQueries({ queryKey: ["dashboard", "stats"] });
+            qc.invalidateQueries({ queryKey: ["dashboard-shift-cards"] });
+            qc.invalidateQueries({ queryKey: ["dept-employees"] });
+            qc.invalidateQueries({ queryKey: ["dept-employees-for-manager"] });
+            qc.invalidateQueries({ queryKey: ["eom", "current"] });
+          });
         },
       );
-    onPg({ event: "*", schema: "public", table: "departments" }, () => {
+    onPg(
+        withRealtimeFilter({ event: "*", schema: "public", table: "departments" }, branchFilter),
+        () => {
         // Do not invalidate auth/me here — that re-spins the whole shell for every dept tweak.
         qc.invalidateQueries({ queryKey: ["departments"] });
         qc.invalidateQueries({ queryKey: ["dashboard", "stats"] });
@@ -1127,21 +1137,26 @@ function RealtimeBridge({ uid }: { uid: string }) {
         qc.invalidateQueries({ queryKey: ["can-request-break"] });
       });
     onPg({ event: "*", schema: "public", table: "task_assignees" }, () =>
-        qc.invalidateQueries({ queryKey: ["tasks"] }),
+        taskBump.run(() => qc.invalidateQueries({ queryKey: ["tasks"] })),
       );
     onPg({ event: "*", schema: "public", table: "task_departments" }, () =>
-        qc.invalidateQueries({ queryKey: ["tasks"] }),
+        taskBump.run(() => qc.invalidateQueries({ queryKey: ["tasks"] })),
       );
     onPg({ event: "*", schema: "public", table: "task_comments" }, () => {
-        qc.invalidateQueries({ queryKey: ["task-activity"] });
-        qc.invalidateQueries({ queryKey: ["task-comments"] });
+        taskBump.run(() => {
+          qc.invalidateQueries({ queryKey: ["task-activity"] });
+          qc.invalidateQueries({ queryKey: ["task-comments"] });
+        });
       });
     onPg({ event: "*", schema: "public", table: "task_activity_log" }, () =>
-        qc.invalidateQueries({ queryKey: ["task-activity"] }),
+        taskBump.run(() => qc.invalidateQueries({ queryKey: ["task-activity"] })),
       );
     onPg({ event: "*", schema: "public", table: "tasks" }, () => {
-        qc.invalidateQueries({ queryKey: ["tasks"] });
-        qc.invalidateQueries({ queryKey: ["dashboard", "tasks-stats"] });
+        // Unfiltered: listTasks also merges legacy rows with branch_id IS NULL.
+        taskBump.run(() => {
+          qc.invalidateQueries({ queryKey: ["tasks"] });
+          qc.invalidateQueries({ queryKey: ["dashboard", "tasks-stats"] });
+        });
       });
     onPg({ event: "*", schema: "public", table: "task_recurrences" }, () =>
         qc.invalidateQueries({ queryKey: ["recurrences"] }),
@@ -1149,11 +1164,15 @@ function RealtimeBridge({ uid }: { uid: string }) {
     onPg({ event: "*", schema: "public", table: "task_images" }, () =>
         qc.invalidateQueries({ queryKey: ["task-images"] }),
       );
-    onPg({ event: "*", schema: "public", table: "schedules" }, () => {
+    onPg(
+        withRealtimeFilter({ event: "*", schema: "public", table: "schedules" }, branchFilter),
+        () => {
         bumpScheduleQueries();
         invalidateShiftVisibleQueries(qc, uid, activeBranchId);
       });
-    onPg({ event: "*", schema: "public", table: "schedule_shifts" }, () => {
+    onPg(
+        withRealtimeFilter({ event: "*", schema: "public", table: "schedule_shifts" }, branchFilter),
+        () => {
         bumpScheduleQueries();
         if (activeBranchId) {
           invalidateShiftVisibleQueries(qc, uid, activeBranchId);
@@ -1171,26 +1190,8 @@ function RealtimeBridge({ uid }: { uid: string }) {
         },
       );
     onPg(
-        { event: "*", schema: "public", table: "break_requests" },
+        withRealtimeFilter({ event: "*", schema: "public", table: "break_requests" }, branchFilter),
         (payload: any) => {
-          qc.invalidateQueries({ queryKey: ["breaks"] });
-          qc.invalidateQueries({ queryKey: ["breaks-admin"] });
-          qc.invalidateQueries({ queryKey: ["all-break-requests"] });
-          qc.invalidateQueries({ queryKey: ["dashboard-breaks"] });
-          qc.invalidateQueries({ queryKey: ["break-stats"] });
-          qc.invalidateQueries({ queryKey: ["employees-page-active-breaks"] });
-          // Prefer specific keys — avoid prefix ["dashboard"] which also refetches admin headcount.
-          qc.invalidateQueries({ queryKey: ["dashboard", "stats"] });
-          qc.invalidateQueries({ queryKey: ["my-active-break"] });
-          qc.invalidateQueries({ queryKey: ["my-break-shortcut"] });
-          qc.invalidateQueries({ queryKey: ["my-breaks-today"] });
-          qc.invalidateQueries({ queryKey: ["my-break-requests"] });
-          qc.invalidateQueries({ queryKey: ["dashboard-on-break"] });
-          qc.invalidateQueries({ queryKey: ["dashboard-dept-on-break"] });
-          qc.invalidateQueries({ queryKey: ["dashboard-pending-breaks"] });
-          qc.invalidateQueries({ queryKey: ["dashboard-daily-breaks"] });
-          qc.invalidateQueries({ queryKey: ["dashboard-dept-daily-breaks"] });
-          qc.invalidateQueries({ queryKey: ["dashboard-daily-breaks-count"] });
           const affected = payload?.new?.user_id ?? payload?.old?.user_id;
           if (affected === uid) {
             qc.invalidateQueries({ queryKey: ["my-open-break-nav", uid] });
@@ -1198,27 +1199,53 @@ function RealtimeBridge({ uid }: { uid: string }) {
               notifyOwnBreakStatusTransition(payload);
             }
           }
+          breakBump.run(() => {
+            qc.invalidateQueries({ queryKey: ["breaks"] });
+            qc.invalidateQueries({ queryKey: ["breaks-admin"] });
+            qc.invalidateQueries({ queryKey: ["all-break-requests"] });
+            qc.invalidateQueries({ queryKey: ["dashboard-breaks"] });
+            qc.invalidateQueries({ queryKey: ["break-stats"] });
+            qc.invalidateQueries({ queryKey: ["employees-page-active-breaks"] });
+            // Prefer specific keys — avoid prefix ["dashboard"] which also refetches admin headcount.
+            qc.invalidateQueries({ queryKey: ["dashboard", "stats"] });
+            qc.invalidateQueries({ queryKey: ["my-active-break"] });
+            qc.invalidateQueries({ queryKey: ["my-break-shortcut"] });
+            qc.invalidateQueries({ queryKey: ["my-breaks-today"] });
+            qc.invalidateQueries({ queryKey: ["my-break-requests"] });
+            qc.invalidateQueries({ queryKey: ["dashboard-on-break"] });
+            qc.invalidateQueries({ queryKey: ["dashboard-dept-on-break"] });
+            qc.invalidateQueries({ queryKey: ["dashboard-pending-breaks"] });
+            qc.invalidateQueries({ queryKey: ["dashboard-daily-breaks"] });
+            qc.invalidateQueries({ queryKey: ["dashboard-dept-daily-breaks"] });
+            qc.invalidateQueries({ queryKey: ["dashboard-daily-breaks-count"] });
+          });
         },
       );
-    onPg({ event: "*", schema: "public", table: "break_settings" }, () => {
+    onPg(
+        withRealtimeFilter({ event: "*", schema: "public", table: "break_settings" }, branchFilter),
+        () => {
         qc.invalidateQueries({ queryKey: ["break-settings"] });
         qc.invalidateQueries({ queryKey: ["break-settings-active"] });
       });
-    onPg({ event: "*", schema: "public", table: "break_policy" }, () => {
+    onPg(
+        withRealtimeFilter({ event: "*", schema: "public", table: "break_policy" }, branchFilter),
+        () => {
         qc.invalidateQueries({ queryKey: ["break-policy"] });
         qc.invalidateQueries({ queryKey: ["break-policy-effective"] });
         qc.invalidateQueries({ queryKey: ["can-request-break"] });
       });
     onPg({ event: "*", schema: "public", table: "leave_requests" }, () => {
-        qc.invalidateQueries({ queryKey: ["my-leave-requests"] });
-        qc.invalidateQueries({ queryKey: ["leave-admin-requests"] });
-        qc.invalidateQueries({ queryKey: ["leave-admin-on-leave"] });
-        qc.invalidateQueries({ queryKey: ["dashboard-my-leave"] });
-        qc.invalidateQueries({ queryKey: ["dashboard-leave-queue"] });
-        qc.invalidateQueries({ queryKey: ["dashboard-shift-cards"] });
-        qc.invalidateQueries({ queryKey: ["my-leave-balances"] });
-        qc.invalidateQueries({ queryKey: ["leave-admin-balances"] });
-        qc.invalidateQueries({ queryKey: ["auth", "me"] });
+        // Do not invalidate auth/me — profile listener covers the viewer's own row.
+        leaveBump.run(() => {
+          qc.invalidateQueries({ queryKey: ["my-leave-requests"] });
+          qc.invalidateQueries({ queryKey: ["leave-admin-requests"] });
+          qc.invalidateQueries({ queryKey: ["leave-admin-on-leave"] });
+          qc.invalidateQueries({ queryKey: ["dashboard-my-leave"] });
+          qc.invalidateQueries({ queryKey: ["dashboard-leave-queue"] });
+          qc.invalidateQueries({ queryKey: ["dashboard-shift-cards"] });
+          qc.invalidateQueries({ queryKey: ["my-leave-balances"] });
+          qc.invalidateQueries({ queryKey: ["leave-admin-balances"] });
+        });
       });
     onPg({ event: "*", schema: "public", table: "ops_error_entries" }, () => {
         qc.invalidateQueries({ queryKey: ["ops-error-entries"] });
@@ -1234,24 +1261,33 @@ function RealtimeBridge({ uid }: { uid: string }) {
           qc.invalidateQueries({ queryKey: ["leave-emp-accrual-rates"] });
         },
       );
-    onPg({ event: "*", schema: "public", table: "messages" }, () => {
-        qc.invalidateQueries({ queryKey: ["communications"] });
-        qc.invalidateQueries({ queryKey: ["comm"] });
-        qc.invalidateQueries({ queryKey: ["shell-comm-unread", uid] });
-        qc.invalidateQueries({ queryKey: ["notif", "messages"] });
-        qc.invalidateQueries({ queryKey: ["emp-dash-msgs"] });
+    onPg(
+        withRealtimeFilter({ event: "*", schema: "public", table: "messages" }, branchFilter),
+        () => {
+        commBump.run(() => {
+          qc.invalidateQueries({ queryKey: ["communications"] });
+          qc.invalidateQueries({ queryKey: ["comm"] });
+          qc.invalidateQueries({ queryKey: ["shell-comm-unread", uid] });
+          qc.invalidateQueries({ queryKey: ["notif", "messages"] });
+          qc.invalidateQueries({ queryKey: ["emp-dash-msgs"] });
+        });
       });
     onPg({ event: "*", schema: "public", table: "message_recipients" }, () => {
-        qc.invalidateQueries({ queryKey: ["communications"] });
-        qc.invalidateQueries({ queryKey: ["comm"] });
-        qc.invalidateQueries({ queryKey: ["shell-comm-unread", uid] });
-        qc.invalidateQueries({ queryKey: ["notif", "messages"] });
-        qc.invalidateQueries({ queryKey: ["emp-dash-msgs"] });
+        // Unfiltered: senders need recipient-row updates (read/ack) for people who are not themselves.
+        commBump.run(() => {
+          qc.invalidateQueries({ queryKey: ["communications"] });
+          qc.invalidateQueries({ queryKey: ["comm"] });
+          qc.invalidateQueries({ queryKey: ["shell-comm-unread", uid] });
+          qc.invalidateQueries({ queryKey: ["notif", "messages"] });
+          qc.invalidateQueries({ queryKey: ["emp-dash-msgs"] });
+        });
       });
     onPg({ event: "*", schema: "public", table: "message_targets" }, () => {
-        qc.invalidateQueries({ queryKey: ["communications"] });
-        qc.invalidateQueries({ queryKey: ["comm"] });
-        qc.invalidateQueries({ queryKey: ["emp-dash-msgs"] });
+        commBump.run(() => {
+          qc.invalidateQueries({ queryKey: ["communications"] });
+          qc.invalidateQueries({ queryKey: ["comm"] });
+          qc.invalidateQueries({ queryKey: ["emp-dash-msgs"] });
+        });
       });
     onPg(
         {
@@ -1262,17 +1298,18 @@ function RealtimeBridge({ uid }: { uid: string }) {
         },
         () => {
           // Debounce — one schedule publish can insert dozens of rows; don't refetch per row.
-          if (notifBumpTimer) clearTimeout(notifBumpTimer);
-          notifBumpTimer = setTimeout(() => {
+          notifBump.run(() => {
             qc.invalidateQueries({ queryKey: ["notif", "schedule"] });
             qc.invalidateQueries({ queryKey: ["emp-dash-notif"] });
-          }, 400);
+          });
         },
       );
     onPg({ event: "*", schema: "public", table: "company_settings" }, () =>
         qc.invalidateQueries({ queryKey: ["company-settings"] }),
       );
-    onPg({ event: "*", schema: "public", table: "employee_of_month" }, () => {
+    onPg(
+        withRealtimeFilter({ event: "*", schema: "public", table: "employee_of_month" }, branchFilter),
+        () => {
         qc.invalidateQueries({ queryKey: ["employee-of-month"] });
         qc.invalidateQueries({ queryKey: ["eom", "current"] });
       });
@@ -1377,8 +1414,13 @@ function RealtimeBridge({ uid }: { uid: string }) {
       syncBridgeSupabaseStatus(monitorName, errLabel);
     });
     return () => {
-      if (scheduleBumpTimer) clearTimeout(scheduleBumpTimer);
-      if (notifBumpTimer) clearTimeout(notifBumpTimer);
+      scheduleBump.cancel();
+      notifBump.cancel();
+      breakBump.cancel();
+      leaveBump.cancel();
+      commBump.cancel();
+      profileBump.cancel();
+      taskBump.cancel();
       syncBridgeSupabaseStatus(monitorName, "reconnecting");
       void supabase.removeChannel(rawBridgeChannel);
     };

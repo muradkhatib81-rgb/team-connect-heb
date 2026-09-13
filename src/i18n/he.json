@@ -1231,6 +1231,8 @@
     "close": "סגירה",
     "back": "חזרה",
     "next": "הבא",
+    "loadMore": "טען עוד",
+    "showingOf": "{{shown}} מתוך {{total}}",
     "days": "ימים",
     "appName": "מערכת ניהול עובדים",
     "appShortName": "ניהול עובדים",

@@ -170,7 +170,11 @@ async function loadBranchDepartmentsDirectory(
   branchId: string,
   staff: ProfileStaffRow[],
   today: string,
-  opts: { includeLeaveBalances: boolean; includeContactDetails: boolean },
+  opts: {
+    includeLeaveBalances: boolean;
+    includeContactDetails: boolean;
+    contacts?: Map<string, { phone: string | null; idNumber: string | null }>;
+  },
 ) {
   const { data: depts, error } = await supabase
     .from("departments")
@@ -214,16 +218,21 @@ async function loadBranchDepartmentsDirectory(
 
   const [leaveByUser, contactByUser] = await Promise.all([
     opts.includeLeaveBalances ? loadLeaveBalancesByUser(supabase, leaveUserIds) : Promise.resolve(new Map()),
-    opts.includeContactDetails ? loadContactsByUser(supabase) : Promise.resolve(new Map()),
+    opts.includeContactDetails
+      ? opts.contacts
+        ? Promise.resolve(opts.contacts)
+        : loadContactsByUser(supabase)
+      : Promise.resolve(new Map()),
   ]);
 
   return (depts ?? []).map((dept) => {
     const headContact = dept.manager_id ? contactByUser.get(dept.manager_id) : undefined;
     const headLeave = dept.manager_id ? leaveByUser.get(dept.manager_id) : undefined;
 
-    const members = (staffByDept.get(dept.id) ?? [])
+    const allMembers = (staffByDept.get(dept.id) ?? [])
       .filter((p) => p.id !== dept.manager_id)
-      .sort((a, b) => formatEmployeeName(a).localeCompare(formatEmployeeName(b), "he"))
+      .sort((a, b) => formatEmployeeName(a).localeCompare(formatEmployeeName(b), "he"));
+    const members = allMembers
       .slice(0, 30)
       .map((p) => {
         const leave = leaveByUser.get(p.id);
@@ -259,7 +268,7 @@ async function loadBranchDepartmentsDirectory(
             },
           }
         : {}),
-      employeeCount: members.length,
+      employeeCount: allMembers.length,
       employees: members,
     };
   });
@@ -936,8 +945,6 @@ export async function buildBranchOperatorSnapshot(
       canViewEmployeeDetails,
       canManageEmployeeOfMonth,
     },
-    operationalErrorsThisMonth: (personal as { operationalErrorsThisMonth?: unknown })
-      ?.operationalErrorsThisMonth ?? null,
     personal,
   };
 
@@ -983,6 +990,8 @@ export async function buildBranchOperatorSnapshot(
 
   snapshot.leaveTomorrow = summarizeLeaveOnDate(counted, tomorrow);
 
+  const contacts = canViewEmployeeDetails ? await loadContactsByUser(supabase) : new Map();
+
   const [
     departmentsDirectory,
     employeeOfMonth,
@@ -999,6 +1008,7 @@ export async function buildBranchOperatorSnapshot(
     loadBranchDepartmentsDirectory(supabase, branchId, staff, today, {
       includeLeaveBalances: leaveAccess.canView,
       includeContactDetails: canViewEmployeeDetails,
+      contacts,
     }),
     loadEmployeeOfMonthHistory(supabase, branchId, today, canManageEmployeeOfMonth),
     canViewSchedule
@@ -1030,9 +1040,7 @@ export async function buildBranchOperatorSnapshot(
       : Promise.resolve({ data: null }),
     // Management directory is branch identity (roles + dept heads), not filtered by excluded_from_headcount.
     canViewEmployeeDetails
-      ? loadContactsByUser(supabase).then((contacts) =>
-          loadBranchManagementDirectory(supabase, branchId, staff, contacts),
-        )
+      ? loadBranchManagementDirectory(supabase, branchId, staff, contacts)
       : loadBranchManagementDirectory(supabase, branchId, staff),
     // Recent hires require employee-details grant (owner-granted).
     canViewEmployeeDetails
@@ -1053,12 +1061,6 @@ export async function buildBranchOperatorSnapshot(
   if (recentHires) snapshot.recentHires = recentHires;
   if (activeBreaksNow) {
     snapshot.activeBreaksNow = activeBreaksNow;
-    const hc = snapshot.headcount as
-      | { today?: Record<string, unknown> }
-      | undefined;
-    if (hc?.today) {
-      hc.today.onBreakNames = activeBreaksNow.map((b) => b.employeeName);
-    }
   }
   if (recentPublishedSchedules) snapshot.recentPublishedSchedules = recentPublishedSchedules;
 

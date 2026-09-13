@@ -15,6 +15,31 @@ export function isBridgeChannelName(name: string): boolean {
   return name.startsWith(BRIDGE_PREFIX);
 }
 
+/** Coalesce rapid postgres_changes → React Query invalidations. */
+export function createDebouncedRunner(delayMs: number) {
+  let timer: ReturnType<typeof setTimeout> | null = null;
+  const run = (fn: () => void) => {
+    if (timer) clearTimeout(timer);
+    timer = setTimeout(fn, delayMs);
+  };
+  const cancel = () => {
+    if (timer) {
+      clearTimeout(timer);
+      timer = null;
+    }
+  };
+  return { run, cancel };
+}
+
+/** Add a realtime filter only when we have a value; never widens an existing filter. */
+export function withRealtimeFilter<T extends { filter?: string }>(
+  config: T,
+  filter: string | null | undefined,
+): T {
+  if (!filter || config.filter) return config;
+  return { ...config, filter };
+}
+
 /** Stable RealtimeManager key — one row per user for the platform monitor page. */
 export function bridgeMonitorName(uid: string): string {
   return `${BRIDGE_PREFIX}${uid}`;

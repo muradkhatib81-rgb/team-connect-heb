@@ -57,6 +57,8 @@ import { toast } from "sonner";
 import { formatEmployeeName, employeeMatchesSearch, employeeNameInitial, splitFullName } from "@/lib/employee-name";
 import { isNonEmployeeIdentity } from "@/lib/employee-identity";
 import { ContactActions } from "@/components/contact-actions";
+import { useActiveBranch } from "@/lib/use-active-branch";
+import { LIST_PAGE_SIZE, SEARCH_DEBOUNCE_MS } from "@/lib/list-page";
 
 type FilterMode = "all" | "active" | "inactive" | "on_leave" | "on_break" | "managers" | "workers";
 
@@ -185,8 +187,11 @@ function EmployeesPage() {
   const navigate = useNavigate();
   const search = useSearch({ from: "/_authenticated/employees" });
   const { data: me, isLoading: meLoading } = useAuth();
+  const { activeBranchId } = useActiveBranch();
   const qcPage = useQueryClient();
   const [searchTerm, setSearchTerm] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
+  const [visibleCount, setVisibleCount] = useState(LIST_PAGE_SIZE);
   const [editing, setEditing] = useState<ProfileRow | null>(null);
   const [creating, setCreating] = useState(false);
   const [resetting, setResetting] = useState<ProfileRow | null>(null);
@@ -306,9 +311,14 @@ function EmployeesPage() {
   // Single source of truth: same profiles query the Dashboard uses.
   // Contact details (id_number, phone) come from a separate RPC and are
   // merged in as optional — a failure there must NOT empty the employees list.
+  useEffect(() => {
+    const timer = window.setTimeout(() => setDebouncedSearch(searchTerm), SEARCH_DEBOUNCE_MS);
+    return () => window.clearTimeout(timer);
+  }, [searchTerm]);
+
   const employeesQuery = useQuery({
     enabled: allowed,
-    queryKey: ["employees"],
+    queryKey: ["employees", activeBranchId ?? "none"],
     queryFn: async () => {
       const { data, error } = await supabase
         .from("profiles")
@@ -393,7 +403,7 @@ function EmployeesPage() {
   );
 
   const filtered = useMemo(() => {
-    const term = searchTerm.trim().toLowerCase();
+    const term = debouncedSearch.trim().toLowerCase();
     return employees.filter((e) => {
       // Hide department manager from their own list — except when viewing who is on leave.
       if (isDeptManagerOnly && e.id === me?.id && filterMode !== "on_leave") return false;
@@ -411,7 +421,16 @@ function EmployeesPage() {
         (e.phone ?? "").includes(term)
       );
     });
-  }, [employees, searchTerm, deptFilter, filterMode, isDeptManagerOnly, me?.id, onBreakSet, rolesMap]);
+  }, [employees, debouncedSearch, deptFilter, filterMode, isDeptManagerOnly, me?.id, onBreakSet, rolesMap]);
+
+  useEffect(() => {
+    setVisibleCount(LIST_PAGE_SIZE);
+  }, [debouncedSearch, deptFilter, filterMode]);
+
+  const visibleEmployees = useMemo(
+    () => filtered.slice(0, visibleCount),
+    [filtered, visibleCount],
+  );
 
 
 
@@ -445,8 +464,8 @@ function EmployeesPage() {
   );
   const managerAvatarMap = managerAvatarQ.data ?? {};
 
-  // Populate signed URL cache for avatars in current list
-  const avatarsQ = useSignedAvatarUrls((employeesQuery.data ?? []).map((e) => e.avatar_url));
+  // Sign avatars for the visible page only (cache still fills as the user loads more).
+  const avatarsQ = useSignedAvatarUrls(visibleEmployees.map((e) => e.avatar_url));
   const avatarMap = avatarsQ.data ?? {};
 
   // Top-level summary stats — derived from the SAME merged employees list
@@ -679,7 +698,7 @@ function EmployeesPage() {
       ) : (
 
         <div className="grid gap-3">
-          {filtered.map((emp) => (
+          {visibleEmployees.map((emp) => (
             <EmployeeRow
               key={emp.id}
               emp={emp}
@@ -697,6 +716,15 @@ function EmployeesPage() {
               canReactivate={canEditEmployee}
             />
           ))}
+          {filtered.length > visibleEmployees.length && (
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setVisibleCount((n) => n + LIST_PAGE_SIZE)}
+            >
+              {t("common.loadMore")} · {t("common.showingOf", { shown: visibleEmployees.length, total: filtered.length })}
+            </Button>
+          )}
 
         </div>
       )}
