@@ -1,7 +1,7 @@
 import type { CapacitorConfig } from "@capacitor/cli";
 
 /**
- * Native Android shell loads the live Vercel app.
+ * Native Android/iOS shell loads the live production app.
  * Local `www/` is only a brief offline/fallback splash until the remote URL loads.
  */
 const config: CapacitorConfig = {
@@ -9,9 +9,11 @@ const config: CapacitorConfig = {
   appName: "Team Connect",
   webDir: "www",
   server: {
-    url: "https://team-connect-heb.vercel.app",
+    url: "https://team-connect-app.com",
     cleartext: false,
     allowNavigation: [
+      "team-connect-app.com",
+      "www.team-connect-app.com",
       "team-connect-heb.vercel.app",
       "*.supabase.co",
       "*.googleapis.com",
