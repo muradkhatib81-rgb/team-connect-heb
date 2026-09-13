@@ -6,6 +6,7 @@ import { getScheduleWeek } from "@/lib/schedule-week";
 import { todayJerusalemDate } from "@/lib/break-workflow";
 import { isEmployeeCurrentlyOnLeave } from "@/lib/employee-leave";
 import { formatEmployeeName } from "@/lib/employee-name";
+import { isNonEmployeeIdentity } from "@/lib/employee-identity";
 
 type Db = SupabaseClient<Database>;
 
@@ -497,16 +498,67 @@ async function buildDeptHeadSnapshot(supabase: Db, userId: string) {
     durationMinutes: row.duration_minutes ?? null,
   }));
 
-  const [scheduleThisWeek, recentDepartmentTasks] = departmentId
+  const [scheduleThisWeek, recentDepartmentTasks, recentHires] = departmentId
     ? await Promise.all([
         buildDepartmentScheduleSummary(supabase, departmentId, weekStart, weekDays),
         loadDepartmentTasks(supabase, userId, departmentId, 3),
+        (async () => {
+          const { data } = await supabase
+            .from("profiles")
+            .select(
+              "id, full_name, first_name, last_name, job_title, created_at, is_active, department_id, branch_id",
+            )
+            .eq("department_id", departmentId)
+            .order("created_at", { ascending: false })
+            .limit(10);
+          return ((data ?? []) as Array<{
+            id: string;
+            full_name: string | null;
+            first_name?: string | null;
+            last_name?: string | null;
+            job_title: string | null;
+            created_at: string;
+            is_active: boolean;
+            department_id: string | null;
+            branch_id: string | null;
+          }>)
+            .filter((p) => p.id !== userId && !isNonEmployeeIdentity(p))
+            .slice(0, 5)
+            .map((p) => ({
+              name: formatEmployeeName(p),
+              jobTitle: p.job_title,
+              departmentName,
+              createdAt: p.created_at,
+              isActive: p.is_active ?? true,
+            }));
+        })(),
       ])
-    : [{ weekStart, days: [] as Array<{ date: string; morning: number; evening: number; off: number; onLeave: number }>, note: "Department not set on profile." }, []];
+    : [
+        {
+          weekStart,
+          days: [] as Array<{
+            date: string;
+            morning: number;
+            evening: number;
+            off: number;
+            onLeave: number;
+          }>,
+          note: "Department not set on profile.",
+        },
+        [],
+        [] as Array<{
+          name: string;
+          jobTitle: string | null;
+          departmentName: string | null;
+          createdAt: string;
+          isActive: boolean;
+        }>,
+      ];
 
   return {
     role: "department_head",
     asOfDate: today,
+    scope: "department_only",
     managerProfile: {
       name: formatEmployeeName({
         full_name: managerProfile?.full_name,
@@ -522,6 +574,8 @@ async function buildDeptHeadSnapshot(supabase: Db, userId: string) {
       activeNow: activeBreaks,
       dailyLog: dailyBreaks,
     },
+    // Department-scoped only — never branch-wide managers/breaks/schedules.
+    recentHires,
     scheduleThisWeek,
     recentDepartmentTasks,
     operationalErrorsThisMonth: (personal as { operationalErrorsThisMonth?: unknown })

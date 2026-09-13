@@ -937,6 +937,171 @@ function buildOperationalIssues(input: {
   };
 }
 
+
+async function loadManagementDirectory(supabase: Db) {
+  const { data: roles, error } = await supabase
+    .from("user_roles")
+    .select("user_id, role")
+    .in("role", ["branch_manager", "assistant_manager", "department_manager"]);
+  if (error) throw error;
+
+  const byUser = new Map<string, Set<string>>();
+  for (const row of roles ?? []) {
+    const set = byUser.get(row.user_id) ?? new Set<string>();
+    set.add(row.role);
+    byUser.set(row.user_id, set);
+  }
+
+  const ids = [...byUser.keys()];
+  if (!ids.length) return [] as Array<{
+    name: string;
+    roles: string[];
+    jobTitle: string | null;
+    branchName: string | null;
+    departmentName: string | null;
+    isActive: boolean;
+    excludedFromHeadcount: boolean;
+  }>;
+
+  const [{ data: profiles }, { data: branches }, { data: depts }] = await Promise.all([
+    supabase
+      .from("profiles")
+      .select(
+        "id, full_name, first_name, last_name, job_title, branch_id, department_id, is_active, excluded_from_headcount",
+      )
+      .in("id", ids),
+    supabase.from("branches").select("id, name"),
+    supabase.from("departments").select("id, name"),
+  ]);
+
+  const branchNameById = new Map((branches ?? []).map((b) => [b.id, b.name]));
+  const deptNameById = new Map((depts ?? []).map((d) => [d.id, d.name]));
+
+  return (profiles ?? [])
+    .map((p) => ({
+      name: formatEmployeeName(p),
+      roles: [...(byUser.get(p.id) ?? new Set<string>())].sort(),
+      jobTitle: p.job_title,
+      branchName: p.branch_id ? (branchNameById.get(p.branch_id) ?? null) : null,
+      departmentName: p.department_id ? (deptNameById.get(p.department_id) ?? null) : null,
+      isActive: p.is_active ?? true,
+      excludedFromHeadcount: !!p.excluded_from_headcount,
+    }))
+    .sort((a, b) => a.name.localeCompare(b.name, "he"))
+    .slice(0, 80);
+}
+
+async function loadRecentHires(supabase: Db, limit = 10) {
+  const { data: profiles, error } = await supabase
+    .from("profiles")
+    .select(
+      "id, full_name, first_name, last_name, job_title, branch_id, department_id, created_at, is_active",
+    )
+    .order("created_at", { ascending: false })
+    .limit(Math.max(limit * 3, 30));
+  if (error) throw error;
+
+  const staff = (profiles ?? []).filter((p) => !isNonEmployeeIdentity(p)).slice(0, limit);
+  if (!staff.length) return [];
+
+  const branchIds = [...new Set(staff.map((p) => p.branch_id).filter(Boolean))] as string[];
+  const deptIds = [...new Set(staff.map((p) => p.department_id).filter(Boolean))] as string[];
+
+  const [{ data: branches }, { data: depts }] = await Promise.all([
+    branchIds.length
+      ? supabase.from("branches").select("id, name").in("id", branchIds)
+      : Promise.resolve({ data: [] as Array<{ id: string; name: string }> }),
+    deptIds.length
+      ? supabase.from("departments").select("id, name").in("id", deptIds)
+      : Promise.resolve({ data: [] as Array<{ id: string; name: string }> }),
+  ]);
+
+  const branchNameById = new Map((branches ?? []).map((b) => [b.id, b.name]));
+  const deptNameById = new Map((depts ?? []).map((d) => [d.id, d.name]));
+
+  return staff.map((p) => ({
+    name: formatEmployeeName(p),
+    jobTitle: p.job_title,
+    branchName: p.branch_id ? (branchNameById.get(p.branch_id) ?? null) : null,
+    departmentName: p.department_id ? (deptNameById.get(p.department_id) ?? null) : null,
+    createdAt: p.created_at,
+    isActive: p.is_active ?? true,
+  }));
+}
+
+async function loadActiveBreaksNow(supabase: Db, limit = 50) {
+  const { data: active, error } = await supabase
+    .from("break_requests")
+    .select(
+      "id, user_id, department_id, branch_id, break_setting_id, started_at, ends_at, duration_minutes, status",
+    )
+    .eq("status", "active")
+    .order("started_at", { ascending: false })
+    .limit(limit);
+  if (error) throw error;
+  if (!active?.length) return [];
+
+  const userIds = [...new Set(active.map((r) => r.user_id))];
+  const deptIds = [...new Set(active.map((r) => r.department_id).filter(Boolean))] as string[];
+  const branchIds = [...new Set(active.map((r) => r.branch_id).filter(Boolean))] as string[];
+  const settingIds = [...new Set(active.map((r) => r.break_setting_id))];
+
+  const [{ data: profs }, { data: depts }, { data: branches }, { data: settings }] =
+    await Promise.all([
+      supabase.from("profiles").select("id, full_name, first_name, last_name").in("id", userIds),
+      deptIds.length
+        ? supabase.from("departments").select("id, name").in("id", deptIds)
+        : Promise.resolve({ data: [] as Array<{ id: string; name: string }> }),
+      branchIds.length
+        ? supabase.from("branches").select("id, name").in("id", branchIds)
+        : Promise.resolve({ data: [] as Array<{ id: string; name: string }> }),
+      settingIds.length
+        ? supabase.from("break_settings").select("id, name").in("id", settingIds)
+        : Promise.resolve({ data: [] as Array<{ id: string; name: string }> }),
+    ]);
+
+  const profMap = new Map(
+    (profs ?? []).map((p) => [p.id, formatEmployeeName(p)]),
+  );
+  const deptMap = new Map((depts ?? []).map((d) => [d.id, d.name]));
+  const branchMap = new Map((branches ?? []).map((b) => [b.id, b.name]));
+  const settingMap = new Map((settings ?? []).map((s) => [s.id, s.name]));
+
+  return active.map((r) => ({
+    employeeName: profMap.get(r.user_id) ?? "—",
+    departmentName: r.department_id ? (deptMap.get(r.department_id) ?? null) : null,
+    branchName: r.branch_id ? (branchMap.get(r.branch_id) ?? null) : null,
+    breakType: settingMap.get(r.break_setting_id) ?? null,
+    startedAt: r.started_at,
+    endsAt: r.ends_at,
+    durationMinutes: r.duration_minutes,
+    status: r.status,
+  }));
+}
+
+async function loadRecentPublishedSchedules(supabase: Db, limit = 10) {
+  const { data: scheds, error } = await supabase
+    .from("schedules")
+    .select(
+      "id, department_id, branch_id, week_start, status, published_at, updated_at, departments(name), branches(name)",
+    )
+    .eq("status", "approved")
+    .not("published_at", "is", null)
+    .order("published_at", { ascending: false })
+    .limit(limit);
+  if (error) throw error;
+
+  return (scheds ?? []).map((s) => ({
+    departmentName:
+      (s as { departments?: { name?: string | null } | null }).departments?.name ?? null,
+    branchName: (s as { branches?: { name?: string | null } | null }).branches?.name ?? null,
+    weekStart: s.week_start,
+    status: s.status,
+    publishedAt: s.published_at,
+    updatedAt: s.updated_at,
+  }));
+}
+
 /** Read-only platform owner snapshot — uses caller session (RLS) only. */
 export async function buildPlatformOwnerSnapshot(supabase: Db, userId: string) {
   await assertPlatformOwner(supabase, userId);
@@ -950,7 +1115,7 @@ export async function buildPlatformOwnerSnapshot(supabase: Db, userId: string) {
     .maybeSingle();
 
   const tenantsPromise = loadTenantsSummary(supabase);
-  const [owners, tenantsRaw, ai, audit, settings, health, branchDirectories] = await Promise.all([
+  const [owners, tenantsRaw, ai, audit, settings, health, branchDirectories, managementDirectory, recentHires, activeBreaksNow, recentPublishedSchedules] = await Promise.all([
     loadPlatformOwnersSummary(supabase),
     tenantsPromise,
     loadAiSummary(supabase),
@@ -958,6 +1123,10 @@ export async function buildPlatformOwnerSnapshot(supabase: Db, userId: string) {
     loadPlatformSettings(supabase),
     loadHealthSummary(supabase),
     tenantsPromise.then((t) => loadBranchOperationalDirectories(supabase, t.branchMeta, today)),
+    loadManagementDirectory(supabase),
+    loadRecentHires(supabase, 10),
+    loadActiveBreaksNow(supabase, 50),
+    loadRecentPublishedSchedules(supabase, 10),
   ]);
   const { branchMeta: _branchMeta, ...tenants } = tenantsRaw;
 
@@ -979,6 +1148,10 @@ export async function buildPlatformOwnerSnapshot(supabase: Db, userId: string) {
     owners,
     tenants,
     branchDirectories,
+    managementDirectory,
+    recentHires,
+    activeBreaksNow,
+    recentPublishedSchedules,
     ai,
     billing: {
       note: "UI billing plans (free/standard/enterprise) are session-scoped stubs. Company AI grants in ai.grants with billing_plan are the durable billing link for assistant quotas.",

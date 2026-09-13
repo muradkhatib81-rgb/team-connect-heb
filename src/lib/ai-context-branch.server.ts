@@ -676,6 +676,206 @@ async function loadEmployeeOfMonthHistory(
   };
 }
 
+
+async function loadBranchManagementDirectory(
+  supabase: Db,
+  branchId: string,
+  staff: ProfileStaffRow[],
+) {
+  const { data: roleRows } = await supabase
+    .from("user_roles")
+    .select("user_id, role")
+    .in("role", ["branch_manager", "assistant_manager", "department_manager"]);
+
+  const roleByUser = new Map<string, Set<string>>();
+  for (const row of roleRows ?? []) {
+    const set = roleByUser.get(row.user_id) ?? new Set<string>();
+    set.add(row.role);
+    roleByUser.set(row.user_id, set);
+  }
+
+  const { data: depts } = await supabase
+    .from("departments")
+    .select("id, name, manager_id")
+    .eq("branch_id", branchId)
+    .eq("is_active", true);
+
+  const deptNameById = new Map((depts ?? []).map((d) => [d.id, d.name]));
+  const headIds = new Set(
+    (depts ?? []).map((d) => d.manager_id).filter((id): id is string => !!id),
+  );
+
+  const candidateIds = new Set<string>();
+  for (const p of staff) {
+    if (roleByUser.has(p.id) || headIds.has(p.id)) candidateIds.add(p.id);
+  }
+  for (const id of headIds) candidateIds.add(id);
+
+  const missingIds = [...candidateIds].filter((id) => !staff.some((p) => p.id === id));
+  let extraProfiles: Array<{
+    id: string;
+    full_name: string | null;
+    first_name?: string | null;
+    last_name?: string | null;
+    job_title: string | null;
+    department_id: string | null;
+    branch_id: string | null;
+    is_active: boolean;
+    excluded_from_headcount: boolean | null;
+  }> = [];
+  if (missingIds.length) {
+    const { data } = await supabase
+      .from("profiles")
+      .select(
+        "id, full_name, first_name, last_name, job_title, department_id, branch_id, is_active, excluded_from_headcount",
+      )
+      .in("id", missingIds);
+    extraProfiles = (data ?? []) as typeof extraProfiles;
+  }
+
+  const byId = new Map<string, (typeof extraProfiles)[number]>();
+  for (const p of staff) {
+    byId.set(p.id, {
+      id: p.id,
+      full_name: p.full_name,
+      first_name: p.first_name,
+      last_name: p.last_name,
+      job_title: p.job_title,
+      department_id: p.department_id,
+      branch_id: p.branch_id,
+      is_active: p.is_active,
+      excluded_from_headcount: p.excluded_from_headcount,
+    });
+  }
+  for (const p of extraProfiles) {
+    if (p.branch_id && p.branch_id !== branchId) continue;
+    byId.set(p.id, p);
+  }
+
+  return [...byId.values()]
+    .filter((p) => roleByUser.has(p.id) || headIds.has(p.id))
+    .map((p) => {
+      const roles = [...(roleByUser.get(p.id) ?? new Set<string>())];
+      if (headIds.has(p.id) && !roles.includes("department_manager")) {
+        roles.push("department_head");
+      }
+      return {
+        name: formatEmployeeName(p),
+        roles: roles.sort(),
+        jobTitle: p.job_title,
+        departmentName: p.department_id ? (deptNameById.get(p.department_id) ?? null) : null,
+        isActive: p.is_active ?? true,
+        excludedFromHeadcount: !!p.excluded_from_headcount,
+      };
+    })
+    .sort((a, b) => a.name.localeCompare(b.name, "he"))
+    .slice(0, 40);
+}
+
+async function loadBranchRecentHires(supabase: Db, branchId: string, limit = 5) {
+  const { data, error } = await supabase
+    .from("profiles")
+    .select(
+      "id, full_name, first_name, last_name, job_title, department_id, created_at, is_active, departments(name)",
+    )
+    .eq("branch_id", branchId)
+    .order("created_at", { ascending: false })
+    .limit(limit * 2);
+  if (error) throw error;
+
+  return ((data ?? []) as Array<{
+    id: string;
+    full_name: string | null;
+    first_name?: string | null;
+    last_name?: string | null;
+    job_title: string | null;
+    department_id: string | null;
+    created_at: string;
+    is_active: boolean;
+    departments?: { name?: string | null } | null;
+  }>)
+    .filter((p) => !isNonEmployeeIdentity({ department_id: p.department_id, branch_id: branchId }))
+    .slice(0, limit)
+    .map((p) => ({
+      name: formatEmployeeName(p),
+      jobTitle: p.job_title,
+      departmentName: p.departments?.name ?? null,
+      createdAt: p.created_at,
+      isActive: p.is_active ?? true,
+    }));
+}
+
+async function loadBranchActiveBreaksNow(supabase: Db, branchId: string, limit = 50) {
+  const { data: active, error } = await supabase
+    .from("break_requests")
+    .select(
+      "id, user_id, department_id, break_setting_id, started_at, ends_at, duration_minutes, status",
+    )
+    .eq("branch_id", branchId)
+    .eq("status", "active")
+    .order("started_at", { ascending: false })
+    .limit(limit);
+  if (error) {
+    return [];
+  }
+  if (!active?.length) return [];
+
+  const userIds = [...new Set(active.map((r) => r.user_id))];
+  const deptIds = [...new Set(active.map((r) => r.department_id).filter(Boolean))] as string[];
+  const settingIds = [...new Set(active.map((r) => r.break_setting_id))];
+
+  const [{ data: profs }, { data: depts }, { data: settings }] = await Promise.all([
+    supabase.from("profiles").select("id, full_name, first_name, last_name").in("id", userIds),
+    deptIds.length
+      ? supabase.from("departments").select("id, name").in("id", deptIds)
+      : Promise.resolve({ data: [] as Array<{ id: string; name: string }> }),
+    settingIds.length
+      ? supabase.from("break_settings").select("id, name").in("id", settingIds)
+      : Promise.resolve({ data: [] as Array<{ id: string; name: string }> }),
+  ]);
+
+  const profMap = new Map((profs ?? []).map((p) => [p.id, formatEmployeeName(p)]));
+  const deptMap = new Map((depts ?? []).map((d) => [d.id, d.name]));
+  const settingMap = new Map((settings ?? []).map((s) => [s.id, s.name]));
+
+  return active.map((r) => ({
+    employeeName: profMap.get(r.user_id) ?? "—",
+    departmentName: r.department_id ? (deptMap.get(r.department_id) ?? null) : null,
+    breakType: settingMap.get(r.break_setting_id) ?? null,
+    startedAt: r.started_at,
+    endsAt: r.ends_at,
+    durationMinutes: r.duration_minutes,
+    status: r.status,
+  }));
+}
+
+async function loadBranchRecentPublishedSchedules(
+  supabase: Db,
+  branchId: string,
+  limit = 10,
+) {
+  const { data: scheds, error } = await supabase
+    .from("schedules")
+    .select(
+      "id, department_id, week_start, status, published_at, updated_at, departments(name)",
+    )
+    .eq("branch_id", branchId)
+    .eq("status", "approved")
+    .not("published_at", "is", null)
+    .order("published_at", { ascending: false })
+    .limit(limit);
+  if (error) throw error;
+
+  return (scheds ?? []).map((s) => ({
+    departmentName:
+      (s as { departments?: { name?: string | null } | null }).departments?.name ?? null,
+    weekStart: s.week_start,
+    status: s.status,
+    publishedAt: s.published_at,
+    updatedAt: s.updated_at,
+  }));
+}
+
 /** Read-only branch operator snapshot (BM / assistant manager), gated by grants. */
 export async function buildBranchOperatorSnapshot(
   supabase: Db,
@@ -788,6 +988,10 @@ export async function buildBranchOperatorSnapshot(
     custodyJournal,
     pendingAdminRes,
     tasksRes,
+    managementDirectory,
+    recentHires,
+    activeBreaksNow,
+    recentPublishedSchedules,
   ] = await Promise.all([
     loadBranchDepartmentsDirectory(supabase, branchId, staff, today, {
       includeLeaveBalances: leaveAccess.canView,
@@ -821,10 +1025,35 @@ export async function buildBranchOperatorSnapshot(
           .order("created_at", { ascending: false })
           .limit(5)
       : Promise.resolve({ data: null }),
+    // Management directory is branch identity (roles + dept heads), not filtered by excluded_from_headcount.
+    loadBranchManagementDirectory(supabase, branchId, staff),
+    // Recent hires require employee-details grant (owner-granted).
+    canViewEmployeeDetails
+      ? loadBranchRecentHires(supabase, branchId, 5)
+      : Promise.resolve(null),
+    // Named active breaks require breaks grant (same as breakJournal).
+    canManageBreaks
+      ? loadBranchActiveBreaksNow(supabase, branchId, 50)
+      : Promise.resolve(null),
+    canViewSchedule
+      ? loadBranchRecentPublishedSchedules(supabase, branchId, 10)
+      : Promise.resolve(null),
   ]);
 
   snapshot.departmentsDirectory = departmentsDirectory;
   snapshot.employeeOfMonth = employeeOfMonth;
+  snapshot.managementDirectory = managementDirectory;
+  if (recentHires) snapshot.recentHires = recentHires;
+  if (activeBreaksNow) {
+    snapshot.activeBreaksNow = activeBreaksNow;
+    const hc = snapshot.headcount as
+      | { today?: Record<string, unknown> }
+      | undefined;
+    if (hc?.today) {
+      hc.today.onBreakNames = activeBreaksNow.map((b) => b.employeeName);
+    }
+  }
+  if (recentPublishedSchedules) snapshot.recentPublishedSchedules = recentPublishedSchedules;
 
   if (scheduleParts) {
     snapshot.tomorrowSchedule = scheduleParts[0];
