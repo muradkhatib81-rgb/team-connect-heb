@@ -6,6 +6,7 @@ import en from "./en.json";
 import { resolveAppLanguageFromTags } from "@/lib/pwa-manifest";
 
 export type AppLanguage = "he" | "ar" | "en";
+export type LanguagePreference = AppLanguage | "system";
 
 const STORAGE_KEY = "app_language";
 
@@ -25,34 +26,75 @@ function parseLang(value: string | null): AppLanguage | null {
   return null;
 }
 
-export function getSavedLanguage(userId?: string): AppLanguage {
+export function parseLanguagePreference(value: string | null | undefined): LanguagePreference | null {
+  if (value === "he" || value === "ar" || value === "en" || value === "system") return value;
+  return null;
+}
+
+/** Resolve a preference (including "system") to a concrete UI language. */
+export function resolveLanguage(pref: LanguagePreference): AppLanguage {
+  if (pref === "system") return detectSystemLanguage();
+  return pref;
+}
+
+/**
+ * Preference mode from localStorage (he|ar|en|system).
+ * Missing key → "system". Legacy keys that only store he/ar/en stay explicit prefs.
+ */
+export function getSavedLanguagePreference(userId?: string): LanguagePreference {
   try {
-    // Prefer user-specific key, fall back to legacy global key
     const saved =
-      parseLang(localStorage.getItem(userKey(userId))) ??
-      parseLang(localStorage.getItem(STORAGE_KEY));
+      parseLanguagePreference(localStorage.getItem(userKey(userId))) ??
+      parseLanguagePreference(localStorage.getItem(STORAGE_KEY));
     if (saved) return saved;
   } catch {
     // SSR or localStorage not available
   }
-  return detectSystemLanguage();
+  return "system";
 }
 
-/** Language chosen on the login screen (no account yet). Null if they never picked one. */
-export function getGuestLanguage(): AppLanguage | null {
+/** Concrete language for i18n init / display. */
+export function getSavedLanguage(userId?: string): AppLanguage {
+  return resolveLanguage(getSavedLanguagePreference(userId));
+}
+
+/** Guest preference including "system"; null if never set. */
+export function getGuestLanguagePreference(): LanguagePreference | null {
   try {
-    return parseLang(localStorage.getItem(STORAGE_KEY));
+    return parseLanguagePreference(localStorage.getItem(STORAGE_KEY));
   } catch {
     return null;
   }
 }
 
-export function saveLanguage(lang: AppLanguage, userId?: string) {
+/**
+ * Language chosen on the login screen (no account yet).
+ * Only returns he/ar/en when guest explicitly picked one; null for system or never picked
+ * so login can fall back to the profile preference.
+ */
+export function getGuestLanguage(): AppLanguage | null {
+  return parseLang(
+    (() => {
+      try {
+        return localStorage.getItem(STORAGE_KEY);
+      } catch {
+        return null;
+      }
+    })(),
+  );
+}
+
+export function saveLanguagePreference(pref: LanguagePreference, userId?: string) {
   try {
-    localStorage.setItem(userKey(userId), lang);
+    localStorage.setItem(userKey(userId), pref);
   } catch {
     // SSR or localStorage not available
   }
+}
+
+/** Save an explicit language preference (he|ar|en). */
+export function saveLanguage(lang: AppLanguage, userId?: string) {
+  saveLanguagePreference(lang, userId);
 }
 
 i18n.use(initReactI18next).init({

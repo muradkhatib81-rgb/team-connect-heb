@@ -1201,7 +1201,8 @@
     "lang": {
       "he": "עברית",
       "ar": "العربية",
-      "en": "English"
+      "en": "English",
+      "system": "לפי המערכת"
     }
   },
   "common": {

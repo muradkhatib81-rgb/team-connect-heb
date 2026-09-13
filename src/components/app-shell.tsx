@@ -51,7 +51,15 @@ import {
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { useTranslation } from "react-i18next";
-import { getGuestLanguage, getSavedLanguage, saveLanguage } from "@/i18n";
+import {
+  getGuestLanguage,
+  getGuestLanguagePreference,
+  getSavedLanguagePreference,
+  parseLanguagePreference,
+  resolveLanguage,
+  saveLanguagePreference,
+  type LanguagePreference,
+} from "@/i18n";
 import { htmlLangAttribute } from "@/lib/app-locale";
 import { useServerFn } from "@tanstack/react-start";
 import { syncPreferredLanguage } from "@/lib/translate-content.functions";
@@ -195,22 +203,29 @@ export function AppShell({ children }: { children: ReactNode }) {
     }
     if (appliedLangForUser.current === profile.id) return;
 
+    const guestPref = getGuestLanguagePreference();
     const guestLang = getGuestLanguage();
-    const lang = guestLang ?? profile.preferred_language ?? getSavedLanguage(profile.id);
+    const preference: LanguagePreference =
+      guestLang ??
+      (guestPref === "system" ? "system" : null) ??
+      parseLanguagePreference(profile.preferred_language) ??
+      getSavedLanguagePreference(profile.id);
+    const lang = resolveLanguage(preference);
     appliedLangForUser.current = profile.id;
-    saveLanguage(lang, profile.id);
-    saveLanguage(lang);
+    saveLanguagePreference(preference, profile.id);
+    saveLanguagePreference(preference);
     if (i18n.language !== lang) {
       void i18n.changeLanguage(lang);
       document.documentElement.dir = lang === "en" ? "ltr" : "rtl";
       document.documentElement.lang = htmlLangAttribute(lang);
       document.body.lang = htmlLangAttribute(lang);
     }
-    if (guestLang && guestLang !== profile.preferred_language) {
+    // Sync guest explicit he/ar/en, or guest "system", when it differs from profile.
+    if (guestPref && guestPref !== profile.preferred_language) {
       qc.setQueryData<AuthProfile | null>(["auth", "me"], (prev) =>
-        prev ? { ...prev, preferred_language: guestLang } : prev,
+        prev ? { ...prev, preferred_language: guestPref } : prev,
       );
-      void syncLangFn({ data: { lang: guestLang } }).catch(() => {});
+      void syncLangFn({ data: { lang: guestPref } }).catch(() => {});
     }
   }, [profile?.id, profile?.preferred_language, i18n, syncLangFn, qc]);
 

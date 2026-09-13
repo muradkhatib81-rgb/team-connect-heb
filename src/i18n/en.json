@@ -1201,7 +1201,8 @@
     "lang": {
       "he": "Hebrew",
       "ar": "Arabic",
-      "en": "English"
+      "en": "English",
+      "system": "System"
     }
   },
   "common": {

@@ -2,7 +2,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { syncFoundationSession } from "@/core/bootstrap";
-import { getSavedLanguage, saveLanguage, type AppLanguage } from "@/i18n";
+import { parseLanguagePreference, type LanguagePreference } from "@/i18n";
 import { isPlatformOwner, type AppRole } from "./constants";
 import { formatEmployeeName } from "./employee-name";
 
@@ -24,7 +24,7 @@ export interface AuthProfile {
   must_change_password: boolean;
   roles: AppRole[];
   branch_id: string | null;
-  preferred_language: AppLanguage;
+  preferred_language: LanguagePreference;
   preferred_theme: "light" | "dark" | "system";
 }
 
@@ -72,10 +72,7 @@ async function fetchSessionAndProfile(): Promise<AuthProfile | null> {
     must_change_password: contact.must_change_password ?? false,
     roles: (roles ?? []).map((r) => r.role as AppRole),
     branch_id: p.branch_id ?? null,
-    preferred_language:
-      p.preferred_language === "he" || p.preferred_language === "ar" || p.preferred_language === "en"
-        ? p.preferred_language
-        : "he",
+    preferred_language: parseLanguagePreference(p.preferred_language) ?? "system",
     preferred_theme:
       p.preferred_theme === "light" || p.preferred_theme === "dark" || p.preferred_theme === "system"
         ? p.preferred_theme

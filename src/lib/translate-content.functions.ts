@@ -10,6 +10,7 @@ import {
 } from "@/lib/translate-content.server";
 
 const langSchema = z.enum(["he", "ar", "en"]);
+const preferenceLangSchema = z.enum(["he", "ar", "en", "system"]);
 const entityTypeSchema = z.enum(["message", "morning_board_item", "task", "task_comment"]);
 const fieldSchema = z.enum(["title", "body", "description"]);
 
@@ -38,7 +39,7 @@ export const translateUserContentBatch = createServerFn({ method: "POST" })
 
 export const syncPreferredLanguage = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((raw: unknown) => z.object({ lang: langSchema }).parse(raw))
+  .inputValidator((raw: unknown) => z.object({ lang: preferenceLangSchema }).parse(raw))
   .handler(async ({ context, data }) => {
     const { error } = await context.supabase
       .from("profiles")
