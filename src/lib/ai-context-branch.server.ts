@@ -681,6 +681,7 @@ async function loadBranchManagementDirectory(
   supabase: Db,
   branchId: string,
   staff: ProfileStaffRow[],
+  contactByUser?: Map<string, { phone: string | null }>,
 ) {
   const { data: roleRows } = await supabase
     .from("user_roles")
@@ -759,6 +760,7 @@ async function loadBranchManagementDirectory(
       if (headIds.has(p.id) && !roles.includes("department_manager")) {
         roles.push("department_head");
       }
+      const phone = contactByUser?.get(p.id)?.phone ?? null;
       return {
         name: formatEmployeeName(p),
         roles: roles.sort(),
@@ -766,6 +768,7 @@ async function loadBranchManagementDirectory(
         departmentName: p.department_id ? (deptNameById.get(p.department_id) ?? null) : null,
         isActive: p.is_active ?? true,
         excludedFromHeadcount: !!p.excluded_from_headcount,
+        ...(phone ? { phone } : {}),
       };
     })
     .sort((a, b) => a.name.localeCompare(b.name, "he"))
@@ -1026,7 +1029,11 @@ export async function buildBranchOperatorSnapshot(
           .limit(5)
       : Promise.resolve({ data: null }),
     // Management directory is branch identity (roles + dept heads), not filtered by excluded_from_headcount.
-    loadBranchManagementDirectory(supabase, branchId, staff),
+    canViewEmployeeDetails
+      ? loadContactsByUser(supabase).then((contacts) =>
+          loadBranchManagementDirectory(supabase, branchId, staff, contacts),
+        )
+      : loadBranchManagementDirectory(supabase, branchId, staff),
     // Recent hires require employee-details grant (owner-granted).
     canViewEmployeeDetails
       ? loadBranchRecentHires(supabase, branchId, 5)

@@ -961,9 +961,11 @@ async function loadManagementDirectory(supabase: Db) {
     departmentName: string | null;
     isActive: boolean;
     excludedFromHeadcount: boolean;
+    phone?: string | null;
   }>;
 
-  const [{ data: profiles }, { data: branches }, { data: depts }] = await Promise.all([
+  const [{ data: profiles }, { data: branches }, { data: depts }, contactByUser] =
+    await Promise.all([
     supabase
       .from("profiles")
       .select(
@@ -972,21 +974,26 @@ async function loadManagementDirectory(supabase: Db) {
       .in("id", ids),
     supabase.from("branches").select("id, name"),
     supabase.from("departments").select("id, name"),
+    loadContactsByUser(supabase),
   ]);
 
   const branchNameById = new Map((branches ?? []).map((b) => [b.id, b.name]));
   const deptNameById = new Map((depts ?? []).map((d) => [d.id, d.name]));
 
   return (profiles ?? [])
-    .map((p) => ({
-      name: formatEmployeeName(p),
-      roles: [...(byUser.get(p.id) ?? new Set<string>())].sort(),
-      jobTitle: p.job_title,
-      branchName: p.branch_id ? (branchNameById.get(p.branch_id) ?? null) : null,
-      departmentName: p.department_id ? (deptNameById.get(p.department_id) ?? null) : null,
-      isActive: p.is_active ?? true,
-      excludedFromHeadcount: !!p.excluded_from_headcount,
-    }))
+    .map((p) => {
+      const phone = contactByUser.get(p.id)?.phone ?? null;
+      return {
+        name: formatEmployeeName(p),
+        roles: [...(byUser.get(p.id) ?? new Set<string>())].sort(),
+        jobTitle: p.job_title,
+        branchName: p.branch_id ? (branchNameById.get(p.branch_id) ?? null) : null,
+        departmentName: p.department_id ? (deptNameById.get(p.department_id) ?? null) : null,
+        isActive: p.is_active ?? true,
+        excludedFromHeadcount: !!p.excluded_from_headcount,
+        ...(phone ? { phone } : {}),
+      };
+    })
     .sort((a, b) => a.name.localeCompare(b.name, "he"))
     .slice(0, 80);
 }
