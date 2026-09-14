@@ -141,7 +141,7 @@ function PlatformNotificationsPage() {
           </p>
         </div>
         <div className="flex flex-wrap items-end gap-3">
-          <div className="space-y-2 min-w-[140px]">
+          <div className="space-y-2 min-w-0 w-full sm:w-auto sm:min-w-[140px]">
             <Label>{t("platformNotifications.scopeType")}</Label>
             <Select
               value={scopeMode}

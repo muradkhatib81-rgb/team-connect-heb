@@ -368,7 +368,7 @@ export function PermissionsPage() {
                   <p className="font-medium truncate">{row.full_name || t("permissions.noName")}</p>
                   <p className="text-xs text-muted-foreground">{row.department_name}</p>
                 </div>
-                <div className="w-40 shrink-0">
+                <div className="w-full min-w-0 sm:w-40 sm:shrink-0">
                   <Select
                     value={row.role}
                     disabled={!canEditRowRole(row)}

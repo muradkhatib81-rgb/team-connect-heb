@@ -222,7 +222,7 @@ function PlatformAiPage() {
         <TabsContent value="providers" className="mt-4">
           <Card className="card-elevated divide-y">
             {(providersQ.data ?? []).map((p: any) => (
-              <div key={p.code} className="flex items-center gap-3 p-4">
+              <div key={p.code} className="flex flex-wrap items-center gap-3 p-4 min-w-0">
                 <Bot className="size-4 text-primary" />
                 <div className="flex-1 min-w-0">
                   <p className="font-medium">{p.display_name}</p>
