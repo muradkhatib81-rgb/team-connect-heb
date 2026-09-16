@@ -1,7 +1,10 @@
 import { createFileRoute, Outlet, redirect, useRouterState } from "@tanstack/react-router";
+import { useEffect, useState } from "react";
 import { Loader2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { AppShell } from "@/components/app-shell";
+import { MaintenanceScreen } from "@/components/maintenance-screen";
+import { ForceUpdateScreen } from "@/components/force-update-screen";
 import { ActiveBranchProvider } from "@/lib/use-active-branch";
 import { canAccessRoute } from "@/lib/route-access";
 import { consumeRestoredAppPath } from "@/lib/last-app-path";
@@ -14,6 +17,15 @@ import {
   routeGuardStaleTime,
 } from "@/lib/route-guard-data";
 import { BranchProvider, CompanyProvider } from "@/platform";
+import { useAuth } from "@/lib/use-auth";
+import { isPlatformOwner } from "@/lib/constants";
+import { usePlatformFeatureFlagState } from "@/lib/use-platform-feature-flags";
+import { shouldForceClientUpdate } from "@/core/config/platform-feature-flags";
+import {
+  getRunningClientInfo,
+  isClientOlderThanMin,
+  type RunningClientInfo,
+} from "@/lib/client-version";
 
 export const Route = createFileRoute("/_authenticated")({
   // Client-only: session lives in browser storage. SSR beforeLoad sees no
@@ -123,9 +135,55 @@ export const Route = createFileRoute("/_authenticated")({
 function AuthenticatedLayout() {
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const onInactivePage = pathname === "/inactive";
+  const { data: profile } = useAuth();
+  const flags = usePlatformFeatureFlagState();
+  const owner = isPlatformOwner(profile?.roles ?? []);
+  const [client, setClient] = useState<RunningClientInfo | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    void getRunningClientInfo().then((info) => {
+      if (!cancelled) setClient(info);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   if (onInactivePage) {
     return <Outlet />;
+  }
+
+  if (profile && !owner && flags.isLoading) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-background">
+        <Loader2 className="size-6 animate-spin text-primary" />
+      </div>
+    );
+  }
+
+  if (profile && !owner && flags.maintenanceMode) {
+    return <MaintenanceScreen />;
+  }
+
+  if (profile && !owner && flags.forceClientUpdate && !client) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-background">
+        <Loader2 className="size-6 animate-spin text-primary" />
+      </div>
+    );
+  }
+
+  if (
+    profile &&
+    client &&
+    shouldForceClientUpdate({
+      forceClientUpdate: flags.forceClientUpdate,
+      isPlatformOwner: owner,
+      currentIsOlderThanMin: isClientOlderThanMin(client.version, flags.minClientVersion),
+    })
+  ) {
+    return <ForceUpdateScreen client={client} minClientVersion={flags.minClientVersion} />;
   }
 
   // The shell is inside every hierarchy context so its navigation is driven

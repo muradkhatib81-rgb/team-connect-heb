@@ -10,6 +10,7 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as AuthRouteImport } from './routes/auth'
+import { Route as CompanySignupRouteImport } from './routes/company-signup'
 import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/route'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as ApiPwaManifestRouteImport } from './routes/api/pwa-manifest'
@@ -52,6 +53,7 @@ import { Route as AuthenticatedPlatformSettingsRouteImport } from './routes/_aut
 import { Route as AuthenticatedPlatformRealtimeRouteImport } from './routes/_authenticated/platform/realtime'
 import { Route as AuthenticatedPlatformOwnersRouteImport } from './routes/_authenticated/platform/owners'
 import { Route as AuthenticatedPlatformNotificationsRouteImport } from './routes/_authenticated/platform/notifications'
+import { Route as AuthenticatedPlatformAnnouncementsRouteImport } from './routes/_authenticated/platform/announcements'
 import { Route as AuthenticatedPlatformMonitoringRouteImport } from './routes/_authenticated/platform/monitoring'
 import { Route as AuthenticatedPlatformFeatureFlagsRouteImport } from './routes/_authenticated/platform/feature-flags'
 import { Route as AuthenticatedPlatformControlLogRouteImport } from './routes/_authenticated/platform/control-log'
@@ -74,6 +76,11 @@ import { Route as AuthenticatedPlatformBranchesBranchIdRouteImport } from './rou
 const AuthRoute = AuthRouteImport.update({
   id: '/auth',
   path: '/auth',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const CompanySignupRoute = CompanySignupRouteImport.update({
+  id: '/company-signup',
+  path: '/company-signup',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AuthenticatedRouteRoute = AuthenticatedRouteRouteImport.update({
@@ -309,6 +316,12 @@ const AuthenticatedPlatformNotificationsRoute =
     path: '/notifications',
     getParentRoute: () => AuthenticatedPlatformRouteRoute,
   } as any)
+const AuthenticatedPlatformAnnouncementsRoute =
+  AuthenticatedPlatformAnnouncementsRouteImport.update({
+    id: '/announcements',
+    path: '/announcements',
+    getParentRoute: () => AuthenticatedPlatformRouteRoute,
+  } as any)
 const AuthenticatedPlatformMonitoringRoute =
   AuthenticatedPlatformMonitoringRouteImport.update({
     id: '/monitoring',
@@ -420,6 +433,7 @@ const AuthenticatedPlatformBranchesBranchIdRoute =
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
+  '/company-signup': typeof CompanySignupRoute
   '/platform': typeof AuthenticatedPlatformRouteRouteWithChildren
   '/ai-assistant': typeof AuthenticatedAiAssistantRoute
   '/attendance': typeof AuthenticatedAttendanceRoute
@@ -460,6 +474,7 @@ export interface FileRoutesByFullPath {
   '/platform/feature-flags': typeof AuthenticatedPlatformFeatureFlagsRoute
   '/platform/monitoring': typeof AuthenticatedPlatformMonitoringRoute
   '/platform/notifications': typeof AuthenticatedPlatformNotificationsRoute
+  '/platform/announcements': typeof AuthenticatedPlatformAnnouncementsRoute
   '/platform/owners': typeof AuthenticatedPlatformOwnersRouteWithChildren
   '/platform/realtime': typeof AuthenticatedPlatformRealtimeRoute
   '/platform/settings': typeof AuthenticatedPlatformSettingsRoute
@@ -482,6 +497,7 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
+  '/company-signup': typeof CompanySignupRoute
   '/ai-assistant': typeof AuthenticatedAiAssistantRoute
   '/attendance': typeof AuthenticatedAttendanceRoute
   '/break-planning': typeof AuthenticatedBreakPlanningRoute
@@ -520,6 +536,7 @@ export interface FileRoutesByTo {
   '/platform/feature-flags': typeof AuthenticatedPlatformFeatureFlagsRoute
   '/platform/monitoring': typeof AuthenticatedPlatformMonitoringRoute
   '/platform/notifications': typeof AuthenticatedPlatformNotificationsRoute
+  '/platform/announcements': typeof AuthenticatedPlatformAnnouncementsRoute
   '/platform/owners': typeof AuthenticatedPlatformOwnersRouteWithChildren
   '/platform/realtime': typeof AuthenticatedPlatformRealtimeRoute
   '/platform/settings': typeof AuthenticatedPlatformSettingsRoute
@@ -544,6 +561,7 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/_authenticated': typeof AuthenticatedRouteRouteWithChildren
   '/auth': typeof AuthRoute
+  '/company-signup': typeof CompanySignupRoute
   '/_authenticated/platform': typeof AuthenticatedPlatformRouteRouteWithChildren
   '/_authenticated/ai-assistant': typeof AuthenticatedAiAssistantRoute
   '/_authenticated/attendance': typeof AuthenticatedAttendanceRoute
@@ -584,6 +602,7 @@ export interface FileRoutesById {
   '/_authenticated/platform/feature-flags': typeof AuthenticatedPlatformFeatureFlagsRoute
   '/_authenticated/platform/monitoring': typeof AuthenticatedPlatformMonitoringRoute
   '/_authenticated/platform/notifications': typeof AuthenticatedPlatformNotificationsRoute
+  '/_authenticated/platform/announcements': typeof AuthenticatedPlatformAnnouncementsRoute
   '/_authenticated/platform/owners': typeof AuthenticatedPlatformOwnersRouteWithChildren
   '/_authenticated/platform/realtime': typeof AuthenticatedPlatformRealtimeRoute
   '/_authenticated/platform/settings': typeof AuthenticatedPlatformSettingsRoute
@@ -608,6 +627,7 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/auth'
+    | '/company-signup'
     | '/platform'
     | '/ai-assistant'
     | '/attendance'
@@ -648,6 +668,7 @@ export interface FileRouteTypes {
     | '/platform/feature-flags'
     | '/platform/monitoring'
     | '/platform/notifications'
+    | '/platform/announcements'
     | '/platform/owners'
     | '/platform/realtime'
     | '/platform/settings'
@@ -670,6 +691,7 @@ export interface FileRouteTypes {
   to:
     | '/'
     | '/auth'
+    | '/company-signup'
     | '/ai-assistant'
     | '/attendance'
     | '/break-planning'
@@ -708,6 +730,7 @@ export interface FileRouteTypes {
     | '/platform/feature-flags'
     | '/platform/monitoring'
     | '/platform/notifications'
+    | '/platform/announcements'
     | '/platform/owners'
     | '/platform/realtime'
     | '/platform/settings'
@@ -731,6 +754,7 @@ export interface FileRouteTypes {
     | '/'
     | '/_authenticated'
     | '/auth'
+    | '/company-signup'
     | '/_authenticated/platform'
     | '/_authenticated/ai-assistant'
     | '/_authenticated/attendance'
@@ -771,6 +795,7 @@ export interface FileRouteTypes {
     | '/_authenticated/platform/feature-flags'
     | '/_authenticated/platform/monitoring'
     | '/_authenticated/platform/notifications'
+    | '/_authenticated/platform/announcements'
     | '/_authenticated/platform/owners'
     | '/_authenticated/platform/realtime'
     | '/_authenticated/platform/settings'
@@ -795,6 +820,7 @@ export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AuthenticatedRouteRoute: typeof AuthenticatedRouteRouteWithChildren
   AuthRoute: typeof AuthRoute
+  CompanySignupRoute: typeof CompanySignupRoute
   ApiPwaManifestRoute: typeof ApiPwaManifestRoute
   ApiAiChatStreamRoute: typeof ApiAiChatStreamRoute
   ApiPushVapidPublicKeyRoute: typeof ApiPushVapidPublicKeyRoute
@@ -811,6 +837,13 @@ declare module '@tanstack/react-router' {
       path: '/auth'
       fullPath: '/auth'
       preLoaderRoute: typeof AuthRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/company-signup': {
+      id: '/company-signup'
+      path: '/company-signup'
+      fullPath: '/company-signup'
+      preLoaderRoute: typeof CompanySignupRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/_authenticated': {
@@ -1107,6 +1140,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedPlatformNotificationsRouteImport
       parentRoute: typeof AuthenticatedPlatformRouteRoute
     }
+    '/_authenticated/platform/announcements': {
+      id: '/_authenticated/platform/announcements'
+      path: '/announcements'
+      fullPath: '/platform/announcements'
+      preLoaderRoute: typeof AuthenticatedPlatformAnnouncementsRouteImport
+      parentRoute: typeof AuthenticatedPlatformRouteRoute
+    }
     '/_authenticated/platform/monitoring': {
       id: '/_authenticated/platform/monitoring'
       path: '/monitoring'
@@ -1296,6 +1336,7 @@ interface AuthenticatedPlatformRouteRouteChildren {
   AuthenticatedPlatformFeatureFlagsRoute: typeof AuthenticatedPlatformFeatureFlagsRoute
   AuthenticatedPlatformMonitoringRoute: typeof AuthenticatedPlatformMonitoringRoute
   AuthenticatedPlatformNotificationsRoute: typeof AuthenticatedPlatformNotificationsRoute
+  AuthenticatedPlatformAnnouncementsRoute: typeof AuthenticatedPlatformAnnouncementsRoute
   AuthenticatedPlatformOwnersRoute: typeof AuthenticatedPlatformOwnersRouteWithChildren
   AuthenticatedPlatformRealtimeRoute: typeof AuthenticatedPlatformRealtimeRoute
   AuthenticatedPlatformSettingsRoute: typeof AuthenticatedPlatformSettingsRoute
@@ -1319,6 +1360,8 @@ const AuthenticatedPlatformRouteRouteChildren: AuthenticatedPlatformRouteRouteCh
     AuthenticatedPlatformMonitoringRoute: AuthenticatedPlatformMonitoringRoute,
     AuthenticatedPlatformNotificationsRoute:
       AuthenticatedPlatformNotificationsRoute,
+    AuthenticatedPlatformAnnouncementsRoute:
+      AuthenticatedPlatformAnnouncementsRoute,
     AuthenticatedPlatformOwnersRoute:
       AuthenticatedPlatformOwnersRouteWithChildren,
     AuthenticatedPlatformRealtimeRoute: AuthenticatedPlatformRealtimeRoute,
@@ -1418,6 +1461,7 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AuthenticatedRouteRoute: AuthenticatedRouteRouteWithChildren,
   AuthRoute: AuthRoute,
+  CompanySignupRoute: CompanySignupRoute,
   ApiPwaManifestRoute: ApiPwaManifestRoute,
   ApiAiChatStreamRoute: ApiAiChatStreamRoute,
   ApiPushVapidPublicKeyRoute: ApiPushVapidPublicKeyRoute,

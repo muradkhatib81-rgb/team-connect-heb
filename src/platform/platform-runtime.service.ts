@@ -21,6 +21,10 @@ import { branchService } from "../modules/branches";
 import type { HealthStatus } from "../core/monitoring/types";
 import type { Permission, Role } from "../core/authorization/types";
 import type { FeatureFlag } from "../core/config/types";
+import {
+  catalogEnabledStates,
+  type PlatformFeatureFlagState,
+} from "../core/config/platform-feature-flags";
 import type { BillingPlan } from "../core/managers/billing-manager";
 import type {
   ChannelSnapshot,
@@ -176,6 +180,10 @@ export class PlatformRuntimeService {
 
   isFeatureEnabled(key: string): boolean {
     return getFeatureFlagManager().isEnabled(key);
+  }
+
+  applyPersistedFeatureFlagState(state: PlatformFeatureFlagState): void {
+    getFeatureFlagManager().applyEnabledStates(catalogEnabledStates(state));
   }
 
   /** Toggle an existing Platform-scoped Feature Flag. No-op if the key is unknown. */

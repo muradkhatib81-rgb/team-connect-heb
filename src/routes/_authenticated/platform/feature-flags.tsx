@@ -1,6 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useServerFn } from "@tanstack/react-start";
 import { useTranslation } from "react-i18next";
 import { Archive, ArchiveRestore, Eye, Flag, Pencil, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
@@ -18,6 +19,17 @@ import { useAuth } from "@/lib/use-auth";
 import { usePlatformContext } from "@/platform";
 import type { UUID } from "@/core";
 import type { FeatureFlag } from "@/core/config/types";
+import {
+  PLATFORM_FEATURE_FLAG_STATE_QUERY_KEY,
+  asMinClientVersion,
+  isPersistedPlatformFeatureFlagKey,
+} from "@/core/config/platform-feature-flags";
+import {
+  getPlatformFeatureFlagState,
+  setMinClientVersion,
+  setPlatformFeatureFlagEnabled,
+} from "@/lib/platform-feature-flags.functions";
+import { usePlatformFeatureFlagState } from "@/lib/use-platform-feature-flags";
 
 export const Route = createFileRoute("/_authenticated/platform/feature-flags")({
   component: PlatformFeatureFlagsPage,
@@ -40,6 +52,11 @@ function PlatformFeatureFlagsPage() {
   const { runtime } = usePlatformContext();
   const { data: profile } = useAuth();
   const qc = useQueryClient();
+  const getStateFn = useServerFn(getPlatformFeatureFlagState);
+  const setFlagFn = useServerFn(setPlatformFeatureFlagEnabled);
+  const setMinFn = useServerFn(setMinClientVersion);
+  const persisted = usePlatformFeatureFlagState();
+  const [minVersion, setMinVersion] = useState("");
   const [search, setSearch] = useState("");
   const [scope, setScope] = useState("all");
   const [status, setStatus] = useState("all");
@@ -50,13 +67,28 @@ function PlatformFeatureFlagsPage() {
 
   const flagsQuery = useQuery({
     queryKey: FLAGS_QUERY_KEY,
-    queryFn: () => runtime.listFeatureFlags(),
+    queryFn: async () => {
+      try {
+        const state = await getStateFn();
+        runtime.applyPersistedFeatureFlagState(state);
+      } catch {
+        /* keep in-memory defaults if persistence is unavailable */
+      }
+      return runtime.listFeatureFlags();
+    },
   });
 
   const actionMut = useMutation({
     mutationFn: async ({ action, flag, enabled }: { action: string; flag: FeatureFlag; enabled?: boolean }) => {
       const previous = { ...flag };
-      if (action === "toggle") runtime.setFeatureFlagEnabled(flag.key, !!enabled);
+      if (action === "toggle") {
+        if (isPersistedPlatformFeatureFlagKey(flag.key)) {
+          const state = await setFlagFn({ data: { key: flag.key, enabled: !!enabled } });
+          runtime.applyPersistedFeatureFlagState(state);
+        } else {
+          runtime.setFeatureFlagEnabled(flag.key, !!enabled);
+        }
+      }
       if (action === "archive") runtime.archiveFeatureFlag(flag.key);
       if (action === "restore") runtime.restoreFeatureFlag(flag.key);
       if (action === "delete") runtime.deleteFeatureFlag(flag.key);
@@ -64,6 +96,11 @@ function PlatformFeatureFlagsPage() {
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: FLAGS_QUERY_KEY });
+      qc.invalidateQueries({ queryKey: PLATFORM_FEATURE_FLAG_STATE_QUERY_KEY });
+      qc.invalidateQueries({ queryKey: ["my-ai-access"] });
+      qc.invalidateQueries({ queryKey: ["platform-announcements-visible"] });
+      qc.invalidateQueries({ queryKey: ["platform-announcements-admin"] });
+      qc.invalidateQueries({ queryKey: ["storage-quota-warning"] });
       toast.success(t("platformFeatureFlags.actionSuccess"));
     },
     onError: (error: Error) => toast.error(error.message),
@@ -78,6 +115,24 @@ function PlatformFeatureFlagsPage() {
       .sort((a, b) => sort === "updated" ? b.updatedAt.getTime() - a.updatedAt.getTime() : sort === "scope" ? a.scope.localeCompare(b.scope) : sort === "status" ? Number(b.enabled) - Number(a.enabled) : a.displayName.localeCompare(b.displayName));
   }, [flagsQuery.data, scope, search, sort, status]);
 
+  const minMut = useMutation({
+    mutationFn: async () => {
+      const version = asMinClientVersion(minVersion || persisted.minClientVersion, "");
+      if (!version) throw new Error(t("platformFeatureFlags.invalidMinVersion"));
+      const state = await setMinFn({ data: { version } });
+      runtime.applyPersistedFeatureFlagState(state);
+      return state;
+    },
+    onSuccess: (state) => {
+      setMinVersion(state.minClientVersion);
+      qc.invalidateQueries({ queryKey: PLATFORM_FEATURE_FLAG_STATE_QUERY_KEY });
+      toast.success(t("platformFeatureFlags.minVersionSaved"));
+    },
+    onError: (error: Error) => toast.error(error.message),
+  });
+
+  const shownMinVersion = minVersion || persisted.minClientVersion;
+
   return (
     <div className="min-w-0 max-w-full space-y-6 overflow-x-hidden">
       <header className="flex flex-wrap items-center justify-between gap-3">
@@ -88,6 +143,7 @@ function PlatformFeatureFlagsPage() {
           <div className="min-w-0">
             <h1 className="break-words text-2xl sm:text-3xl font-bold">{t("platformFeatureFlags.title")}</h1>
             <p className="text-sm text-muted-foreground mt-1">{t("platformFeatureFlags.subtitle")}</p>
+            <p className="text-xs text-muted-foreground mt-1">{t("platformFeatureFlags.persistedHint")}</p>
           </div>
         </div>
         <Button onClick={() => setEditing({} as FeatureFlag)} className="w-full shrink-0 gap-2 sm:w-auto">
@@ -95,6 +151,29 @@ function PlatformFeatureFlagsPage() {
           {t("platformFeatureFlags.newFlag")}
         </Button>
       </header>
+      <Card className="card-elevated p-4 space-y-3">
+        <div>
+          <p className="text-sm font-medium">{t("platformFeatureFlags.minVersionTitle")}</p>
+          <p className="text-xs text-muted-foreground mt-1">{t("platformFeatureFlags.minVersionHint")}</p>
+        </div>
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+          <Input
+            value={shownMinVersion}
+            onChange={(event) => setMinVersion(event.target.value)}
+            placeholder="1.0.0"
+            dir="ltr"
+            className="sm:max-w-[10rem] font-mono"
+          />
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => minMut.mutate()}
+            disabled={minMut.isPending}
+          >
+            {t("platformFeatureFlags.saveMinVersion")}
+          </Button>
+        </div>
+      </Card>
       <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-4">
         <Input
           value={search}
@@ -165,8 +244,10 @@ function PlatformFeatureFlagsPage() {
                 />
                 <Button variant="ghost" size="icon" onClick={() => setDetails(flag)}><Eye className="size-4" /></Button>
                 <Button variant="ghost" size="icon" onClick={() => setEditing(flag)}><Pencil className="size-4" /></Button>
-                {flag.archivedAt ? <Button variant="ghost" size="icon" onClick={() => actionMut.mutate({ action: "restore", flag })}><ArchiveRestore className="size-4" /></Button> : <Button variant="ghost" size="icon" onClick={() => actionMut.mutate({ action: "archive", flag })}><Archive className="size-4" /></Button>}
+                {flag.archivedAt ? <Button variant="ghost" size="icon" onClick={() => actionMut.mutate({ action: "restore", flag })}><ArchiveRestore className="size-4" /></Button> : !isPersistedPlatformFeatureFlagKey(flag.key) ? <Button variant="ghost" size="icon" onClick={() => actionMut.mutate({ action: "archive", flag })}><Archive className="size-4" /></Button> : null}
+                {!isPersistedPlatformFeatureFlagKey(flag.key) && (
                 <Button variant="ghost" size="icon" className="text-destructive" onClick={() => setDeleting(flag)}><Trash2 className="size-4" /></Button>
+                )}
                 </div>
               </li>
             ))}

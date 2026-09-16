@@ -20,6 +20,10 @@ import {
   fetchPlatformPwaIconUrl,
   uploadPlatformPwaIcon,
 } from "@/lib/pwa-branding";
+import { PLATFORM_FEATURE_FLAG_STATE_QUERY_KEY } from "@/core/config/platform-feature-flags";
+import { setPlatformFeatureFlagEnabled } from "@/lib/platform-feature-flags.functions";
+import { usePlatformFeatureFlagState } from "@/lib/use-platform-feature-flags";
+import { useServerFn } from "@tanstack/react-start";
 
 export const Route = createFileRoute("/_authenticated/platform/settings")({
   component: PlatformSettingsPage,
@@ -38,6 +42,8 @@ function PlatformSettingsPage() {
   const [whatsappNumber, setWhatsappNumber] = useState("");
   const [saving, setSaving] = useState(false);
   const [uploadingIcon, setUploadingIcon] = useState(false);
+  const flags = usePlatformFeatureFlagState();
+  const setFlagFn = useServerFn(setPlatformFeatureFlagEnabled);
 
   const settingsQ = useQuery({
     queryKey: PLATFORM_SETTINGS_QUERY_KEY,
@@ -61,8 +67,8 @@ function PlatformSettingsPage() {
   });
 
   useEffect(() => {
-    setMaintenanceMode(runtime.getPlatformSetting<boolean>(MAINTENANCE_MODE_KEY) ?? false);
-  }, [runtime]);
+    setMaintenanceMode(flags.maintenanceMode);
+  }, [flags.maintenanceMode]);
 
   useEffect(() => {
     if (settingsQ.data !== undefined) {
@@ -83,6 +89,11 @@ function PlatformSettingsPage() {
     setSaving(true);
     try {
       runtime.setPlatformSetting(MAINTENANCE_MODE_KEY, maintenanceMode);
+      await setFlagFn({
+        data: { key: "platform.maintenance_mode", enabled: maintenanceMode },
+      });
+      await qc.invalidateQueries({ queryKey: PLATFORM_FEATURE_FLAG_STATE_QUERY_KEY });
+      await qc.invalidateQueries({ queryKey: ["platform-feature-flags"] });
 
       const { error } = await supabase
         .from("platform_settings")

@@ -32,6 +32,7 @@ import { useCompanyContext } from "@/platform";
 import { branchService } from "@/modules/branches";
 import { useTranslation } from "react-i18next";
 import { OnlinePresencePlatformSection } from "@/components/online-presence-platform-section";
+import { usePlatformFeatureFlagState } from "@/lib/use-platform-feature-flags";
 
 export const Route = createFileRoute("/_authenticated/platform/")({
   component: PlatformDashboardPage,
@@ -61,6 +62,7 @@ function PlatformDashboardPage() {
   const audit = usePlatformAuditQuery();
   const { companies } = useCompanyContext();
   const navigate = useNavigate();
+  const flags = usePlatformFeatureFlagState();
 
   const allBranchesQuery = useQuery({
     queryKey: ["platform-all-branches"],
@@ -269,12 +271,14 @@ function PlatformDashboardPage() {
             hint={t("attendance.platformSubtitle")}
             onClick={() => navigate({ to: "/platform/attendance" })}
           />
+          {flags.realtime && (
           <ModuleTile
             icon={Radio}
             label={t("platformHub.modules.realtime")}
             hint="Realtime Manager"
             onClick={() => navigate({ to: "/platform/realtime" })}
           />
+          )}
           <ModuleTile
             icon={CreditCard}
             label={t("platformHub.modules.billing")}
@@ -287,12 +291,14 @@ function PlatformDashboardPage() {
             hint="Feature Flags"
             onClick={() => navigate({ to: "/platform/feature-flags" })}
           />
+          {flags.globalAnalytics && (
           <ModuleTile
             icon={BarChart3}
             label={t("platformHub.modules.analytics")}
             hint="Global Analytics"
             onClick={() => navigate({ to: "/platform/analytics" })}
           />
+          )}
           <ModuleTile
             icon={Crown}
             label={t("platformHub.modules.owners")}
@@ -305,6 +311,14 @@ function PlatformDashboardPage() {
             hint="Audit Log"
             onClick={() => navigate({ to: "/platform/audit-log" })}
           />
+          {flags.announcements && (
+          <ModuleTile
+            icon={Bell}
+            label={t("platformHub.modules.announcements")}
+            hint={t("platformHub.hints.announcements")}
+            onClick={() => navigate({ to: "/platform/announcements" })}
+          />
+          )}
           <ModuleTile
             icon={Bell}
             label={t("platformHub.modules.notifications")}

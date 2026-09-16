@@ -63,6 +63,8 @@ import { htmlLangAttribute } from "@/lib/app-locale";
 import { useServerFn } from "@tanstack/react-start";
 import { syncPreferredLanguage } from "@/lib/translate-content.functions";
 import { OnlinePresencePublisher } from "@/components/online-presence-publisher";
+import { PlatformAnnouncementsBanner } from "@/components/platform-announcements-banner";
+import { StorageQuotaWarningBanner } from "@/components/storage-quota-warning-banner";
 import { NetworkStatusBanner } from "@/components/network-status-banner";
 import { NotificationsBell } from "@/components/notifications-bell";
 import { PullToRefresh } from "@/components/pull-to-refresh";
@@ -83,6 +85,7 @@ import {
   useCurrentPermissions,
 } from "@/lib/use-current-permissions";
 import { useCustomerPaymentNavVisible } from "@/lib/use-customer-billing-gate";
+import { usePlatformFeatureFlagState } from "@/lib/use-platform-feature-flags";
 import { fetchCustodyUserCaps, invalidateCustodyQueries } from "@/lib/custody-workflow";
 import { invalidateShiftVisibleQueries } from "@/lib/shift-visible-rpc";
 import { notifyOwnBreakStatusTransition } from "@/lib/break-self-realtime";
@@ -245,6 +248,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   const aiAccessQ = useAiAccess();
   const permissionsQ = useCurrentPermissions(profile?.id);
   const showCustomerBillingNav = useCustomerPaymentNavVisible();
+  const featureFlags = usePlatformFeatureFlagState();
   const custodyCapsQ = useQuery({
     enabled: !!profile?.id,
     queryKey: ["custody-caps", profile?.id],
@@ -516,7 +520,7 @@ export function AppShell({ children }: { children: ReactNode }) {
       to: "/platform/realtime",
       label: t("nav.realtime"),
       icon: Radio,
-      visible: isPlatformOwner,
+      visible: isPlatformOwner && featureFlags.realtime,
       section: t("nav.platformSection"),
     },
     {
@@ -548,10 +552,17 @@ export function AppShell({ children }: { children: ReactNode }) {
       section: t("nav.platformSection"),
     },
     {
+      to: "/platform/announcements",
+      label: t("nav.announcements"),
+      icon: Megaphone,
+      visible: isPlatformOwner && featureFlags.announcements,
+      section: t("nav.platformSection"),
+    },
+    {
       to: "/platform/analytics",
       label: t("nav.analytics"),
       icon: BarChart3,
-      visible: isPlatformOwner,
+      visible: isPlatformOwner && featureFlags.globalAnalytics,
       section: t("nav.platformSection"),
     },
     {
@@ -894,8 +905,12 @@ export function AppShell({ children }: { children: ReactNode }) {
 
   return (
     <>
-      <RealtimeBridge uid={profile.id} />
-      <OnlinePresencePublisher profile={profile} />
+      {featureFlags.realtime && (
+        <>
+          <RealtimeBridge uid={profile.id} />
+          <OnlinePresencePublisher profile={profile} />
+        </>
+      )}
       <NetworkStatusBanner />
       <IdleLogoutGuard userId={profile.id} onIdle={handleSignOut} />
       <BranchModeGuard isPlatformOwner={isPlatformOwner} />
@@ -976,7 +991,19 @@ export function AppShell({ children }: { children: ReactNode }) {
 
         <main className="lg:ms-64 flex-1 min-w-0 max-w-full">
           <PullToRefresh>
-            <div className="mx-auto max-w-6xl min-w-0 px-4 sm:px-6 py-6 lg:py-10">{children}</div>
+            <div className="mx-auto max-w-6xl min-w-0 px-4 sm:px-6 py-6 lg:py-10">
+              {isPlatformOwner && featureFlags.forceClientUpdate && (
+                <div className="mb-4 flex flex-wrap items-center justify-between gap-2 rounded-xl border border-sky-300 bg-sky-50 px-4 py-3 text-sm text-sky-950 dark:border-sky-800 dark:bg-sky-950/40 dark:text-sky-100">
+                  <p className="min-w-0">{t("forceUpdatePage.ownerBanner", { version: featureFlags.minClientVersion })}</p>
+                  <Button asChild size="sm" variant="outline" className="shrink-0">
+                    <Link to="/platform/feature-flags">{t("maintenancePage.ownerBannerCta")}</Link>
+                  </Button>
+                </div>
+              )}
+              <PlatformAnnouncementsBanner />
+              <StorageQuotaWarningBanner />
+              {children}
+            </div>
             <AppFooter />
           </PullToRefresh>
         </main>

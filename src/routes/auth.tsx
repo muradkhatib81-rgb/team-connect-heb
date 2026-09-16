@@ -1,4 +1,4 @@
-import { createFileRoute, redirect, useNavigate, useRouter } from "@tanstack/react-router";
+import { createFileRoute, redirect, useNavigate, useRouter, Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { z } from "zod";
@@ -335,6 +335,12 @@ function AuthPage() {
                   <p className="text-xs text-muted-foreground text-center">
                     {t("auth.noAccount")}
                   </p>
+                  <Link
+                    to="/company-signup"
+                    className="block text-xs text-center text-muted-foreground hover:text-foreground transition-colors"
+                  >
+                    {t("auth.companySignupLink")}
+                  </Link>
                   {whatsappUrl && (
                     <a
                       href={whatsappUrl}

@@ -1198,6 +1198,42 @@ export type Database = {
           },
         ]
       }
+      platform_announcements: {
+        Row: {
+          body: string
+          branch_id: string | null
+          company_id: string | null
+          created_at: string
+          created_by: string | null
+          id: string
+          is_active: boolean
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          body: string
+          branch_id?: string | null
+          company_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          is_active?: boolean
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          body?: string
+          branch_id?: string | null
+          company_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          is_active?: boolean
+          title?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       platform_owner_audit_log: {
         Row: {
           actor_id: string | null
@@ -1234,6 +1270,15 @@ export type Database = {
           updated_at: string
           whatsapp_number: string | null
           customer_billing_visible: boolean
+          ff_maintenance_mode: boolean
+          ff_global_analytics: boolean
+          ff_beta_ai: boolean
+          ff_announcements: boolean
+          ff_self_serve_company_signup: boolean
+          ff_force_client_update: boolean
+          ff_realtime: boolean
+          ff_storage_quota_warnings: boolean
+          min_client_version: string
         }
         Insert: {
           created_at?: string
@@ -1243,6 +1288,15 @@ export type Database = {
           updated_at?: string
           whatsapp_number?: string | null
           customer_billing_visible?: boolean
+          ff_maintenance_mode?: boolean
+          ff_global_analytics?: boolean
+          ff_beta_ai?: boolean
+          ff_announcements?: boolean
+          ff_self_serve_company_signup?: boolean
+          ff_force_client_update?: boolean
+          ff_realtime?: boolean
+          ff_storage_quota_warnings?: boolean
+          min_client_version?: string
         }
         Update: {
           created_at?: string
@@ -1252,6 +1306,15 @@ export type Database = {
           updated_at?: string
           whatsapp_number?: string | null
           customer_billing_visible?: boolean
+          ff_maintenance_mode?: boolean
+          ff_global_analytics?: boolean
+          ff_beta_ai?: boolean
+          ff_announcements?: boolean
+          ff_self_serve_company_signup?: boolean
+          ff_force_client_update?: boolean
+          ff_realtime?: boolean
+          ff_storage_quota_warnings?: boolean
+          min_client_version?: string
         }
         Relationships: []
       }
@@ -2531,6 +2594,9 @@ export type Database = {
         }[]
       }
       get_customer_billing_visible: { Args: never; Returns: boolean }
+      get_platform_feature_flags: { Args: never; Returns: Json }
+      get_platform_client_gates: { Args: never; Returns: Json }
+      get_my_storage_quota_warning: { Args: never; Returns: Json }
       get_my_department_id: { Args: never; Returns: string }
       get_profile_contact: {
         Args: { _id: string }

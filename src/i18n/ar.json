@@ -24,7 +24,8 @@
     "loginSuccess": "تم تسجيل الدخول بنجاح",
     "loginPageTitle": "تسجيل الدخول",
     "showPassword": "إظهار كلمة المرور",
-    "hidePassword": "إخفاء كلمة المرور"
+    "hidePassword": "إخفاء كلمة المرور",
+    "companySignupLink": "تسجيل شركة"
   },
   "profile": {
     "title": "ملفي الشخصي",
@@ -937,6 +938,7 @@
     "platformAi": "إدارة AI",
     "aiAssistant": "مساعد AI",
     "featureFlags": "علامات الميزات",
+    "announcements": "الإعلانات",
     "analytics": "التحليلات العامة",
     "platformOwners": "أصحاب النظام",
     "activityLog": "سجل نشاط المنصة",
@@ -1188,6 +1190,7 @@
     "errors": {
       "noManagePermission": "لا توجد صلاحية لإدارة AI",
       "noAccess": "لا يوجد وصول لمساعد AI أو انتهت الحصة.",
+      "betaAiDisabled": "مساعد AI متوقف للموظفين والمديرين.",
       "planNotFound": "لم تُعثر على إعدادات AI لهذه الخطة",
       "selectScope": "يرجى اختيار النطاق",
       "billingPlanCompanyOnly": "منح الاشتراك متاحة على مستوى الشركة فقط",
@@ -1899,7 +1902,7 @@
     "whatsappPlaceholder": "0501234567 أو 972501234567",
     "whatsappHint": "يُعرض كرابط واتساب في أسفل شاشة تسجيل الدخول. اتركه فارغاً للإخفاء.",
     "maintenanceMode": "وضع الصيانة (Maintenance Mode)",
-    "maintenanceHint": "علامة عامة فقط — لا يمنع الدخول فعلياً في هذه المرحلة",
+    "maintenanceHint": "عند التشغيل، لا يستطيع الموظفون والمديرون استخدام التطبيق. تبقون بصلاحية كاملة (أعلام الميزات والفوترة) لإيقافه.",
     "saveSettings": "حفظ الإعدادات",
     "pwaIconTitle": "أيقونة تثبيت التطبيق (PWA)",
     "pwaIconDesc": "فقط مالك المنصة يمكنه التغيير. اسم التثبيت يُحدَّد حسب لغة جهاز المستخدم (عبرية / عربية / إنجليزية) قبل التثبيت، ولا يمكن للمستخدمين تغييره.",
@@ -1958,6 +1961,7 @@
       "realtime": "إدارة Real-Time",
       "billing": "الفوترة والاشتراكات",
       "featureFlags": "علامات الميزات",
+      "announcements": "الإعلانات",
       "analytics": "تحليلات عامة",
       "owners": "مالكو النظام",
       "auditLog": "سجل نشاط المنصة",
@@ -1967,7 +1971,8 @@
     "hints": {
       "companies": "{{count}} شركات",
       "branches": "{{count}} فروع",
-      "owners": "{{count}} مالكي نظام"
+      "owners": "{{count}} مالكي نظام",
+      "announcements": "شركة / فرع / الكل"
     }
   },
   "platformOwners": {
@@ -2127,6 +2132,8 @@
   "platformRealtime": {
     "title": "إدارة Real-Time",
     "subtitle": "جسر Supabase RealtimeBridge التشغيلي يُسجَّل هنا تلقائياً أثناء استخدام التطبيق. قنوات الاختبار اليدوية ما زالت متاحة للجلسة الحالية.",
+    "disabledTitle": "الحضور اللحظي متوقف",
+    "disabledDesc": "الحضور الحي وشاشة الوقت الفعلي مخفيان عندما يكون platform.realtime متوقفاً. عمليات CRUD لا تتأثر.",
     "openChannel": "فتح قناة",
     "channelsHeader": "قنوات ({{count}}) · مفتوحة: {{open}}",
     "noChannels": "لا توجد قنوات في هذه الجلسة بعد. يظهر RealtimeBridge تلقائياً عند تفعيل shell التطبيق، أو افتح قناة اختبار يدوية من الزر أعلاه.",
@@ -2390,6 +2397,7 @@
   "platformFeatureFlags": {
     "title": "أعلام الميزات (Feature Flags)",
     "subtitle": "تفعيل/إيقاف الأعلام على مستوى المنصة — عبر مدير Feature Flag الحالي",
+    "persistedHint": "المفاتيح الثمانية في الكتالوج تُحفظ في قاعدة البيانات وتبقى بعد التحديث والنشر. الأعلام المخصّصة تبقى في هذه الجلسة فقط. اللوحة الرئيسية دائماً مفعّلة.",
     "newFlag": "علم جديد",
     "searchPlaceholder": "بحث بالاسم أو المفتاح",
     "filters": {
@@ -2408,6 +2416,11 @@
     "loading": "جاري التحميل…",
     "empty": "لا توجد أعلام ميزات مسجّلة",
     "actionSuccess": "اكتملت العملية",
+    "minVersionTitle": "الحد الأدنى لإصدار العميل",
+    "minVersionHint": "ينطبق على Android وiPhone وWindows عندما يكون platform.force_client_update مفعّلاً. استخدم major.minor.patch.",
+    "saveMinVersion": "حفظ الإصدار",
+    "minVersionSaved": "تم حفظ الحد الأدنى لإصدار العميل",
+    "invalidMinVersion": "استخدم major.minor.patch (مثلاً 1.0.1).",
     "system": "النظام",
     "scopes": {
       "platform": "المنصة",
@@ -2450,7 +2463,56 @@
     "noCompanies": "لا توجد شركات على المنصة بعد",
     "branchCount": "{{count}} فروع",
     "oldestCompany": "أقدم شركة على المنصة",
-    "newestCompany": "أحدث شركة على المنصة"
+    "newestCompany": "أحدث شركة على المنصة",
+    "disabledTitle": "التحليلات العامة متوقفة",
+    "disabledDesc": "هذه الصفحة مخفية بينما platform.global_analytics متوقف. يمكن إعادة تشغيله من أعلام الميزات."
+  },
+  "maintenancePage": {
+    "title": "سنعود قريباً",
+    "message": "النظام في وضع الصيانة. حاولوا لاحقاً.",
+    "ownerBanner": "وضع الصيانة قيد التشغيل. المستخدمون الآخرون لا يستطيعون استخدام التطبيق.",
+    "ownerBannerCta": "إدارة الأعلام",
+    "openFeatureFlags": "فتح أعلام الميزات"
+  },
+  "forceUpdatePage": {
+    "title": "يلزم التحديث",
+    "message": "عميل {{platform}} هذا أقل من الإصدار الأدنى. ثبّتوا أحدث تطبيق Team Connect للمتابعة.",
+    "versions": "هذا الجهاز: {{current}} · المطلوب: {{min}}",
+    "android": "Android",
+    "iphone": "iPhone",
+    "windows": "Windows",
+    "ownerBanner": "فرض تحديث العميل مفعّل. العملاء الأقدم من {{version}} محظورون. يمكنكم الاستمرار في استخدام التطبيق."
+  },
+  "companySignupPage": {
+    "title": "تسجيل شركة",
+    "locked": "التسجيل الذاتي للشركات مقفل. ما زال مالك المنصة يستطيع إنشاء شركات من المنصة → الشركات.",
+    "unlocked": "لا يوجد نموذج عام لتسجيل شركة. تواصلوا مع مالك المنصة لإنشاء شركة لكم.",
+    "backToSignIn": "العودة لتسجيل الدخول"
+  },
+  "platformAnnouncements": {
+    "title": "الإعلانات",
+    "subtitle": "انشر لشركة أو فرع أو للجميع. المشاهدون يرون فقط صفوف شركتهم أو فرعهم.",
+    "new": "إعلان جديد",
+    "loading": "جاري التحميل…",
+    "empty": "لا إعلانات بعد",
+    "created": "تم نشر الإعلان",
+    "deleted": "تم حذف الإعلان",
+    "formTitle": "العنوان",
+    "formBody": "الرسالة",
+    "scope": "الجمهور",
+    "scopeAll": "كل الشركات",
+    "scopeCompany": "شركة واحدة",
+    "scopeBranch": "فرع واحد",
+    "scopeCompanyValue": "الشركة: {{company}}",
+    "scopeBranchValue": "{{company}} · {{branch}}",
+    "selectCompany": "اختر شركة",
+    "selectBranch": "اختر فرعاً",
+    "disabledTitle": "الإعلانات متوقفة",
+    "disabledDesc": "هذه الصفحة ولافتات المشاهدين مخفية بينما platform.announcements متوقف.",
+    "moreCount": "{{count}} إضافية"
+  },
+  "storageQuotaWarning": {
+    "message": "التخزين عند {{percent}}% ({{used}} من {{quota}}). حرّروا مساحة أو اطلبوا من مالك المنصة رفع الحصة."
   },
   "platformAiRedirect": {
     "title": "انتقلت التخصيصات حسب الشركة والفرع إلى الفوترة",

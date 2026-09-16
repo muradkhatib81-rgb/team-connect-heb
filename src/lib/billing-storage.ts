@@ -36,3 +36,15 @@ export function formatUsedBytes(bytes: number): string {
   if (bytes < MB * 1024) return `${(bytes / MB).toFixed(1)} MB`;
   return `${(bytes / (MB * 1024)).toFixed(2)} GB`;
 }
+
+/** Manager warning threshold — not an upload hard-block. */
+export const STORAGE_QUOTA_WARNING_RATIO = 0.8;
+
+export function isStorageNearQuota(
+  usedBytes: number,
+  quotaMb: number | null | undefined,
+  ratio = STORAGE_QUOTA_WARNING_RATIO,
+): boolean {
+  if (quotaMb == null || quotaMb <= 0) return false;
+  return usedBytes >= quotaMb * MB * ratio;
+}

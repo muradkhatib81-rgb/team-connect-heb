@@ -1,10 +1,12 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { BarChart3, Building2, GitBranch, Users2, Calendar } from "lucide-react";
 import { Card } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
 import { usePlatformContext, useCompanyContext } from "@/platform";
 import { branchService } from "@/modules/branches";
+import { usePlatformFeatureFlagState } from "@/lib/use-platform-feature-flags";
 
 export const Route = createFileRoute("/_authenticated/platform/analytics")({
   component: PlatformAnalyticsPage,
@@ -14,15 +16,18 @@ function PlatformAnalyticsPage() {
   const { t } = useTranslation();
   const { runtime } = usePlatformContext();
   const { companies, isLoading: companiesLoading } = useCompanyContext();
+  const flags = usePlatformFeatureFlagState();
 
   const dashboardQuery = useQuery({
     queryKey: ["platform-analytics", "dashboard"],
     queryFn: () => runtime.getGlobalDashboard(),
+    enabled: flags.globalAnalytics,
   });
 
   const allBranchesQuery = useQuery({
     queryKey: ["platform-analytics", "all-branches"],
     queryFn: () => branchService.listAllBranches(),
+    enabled: flags.globalAnalytics,
   });
 
   const branches = allBranchesQuery.data ?? [];
@@ -40,6 +45,23 @@ function PlatformAnalyticsPage() {
   const newestCompany = [...companies].sort(
     (a, b) => b.createdAt.getTime() - a.createdAt.getTime(),
   )[0];
+
+  if (!flags.isLoading && !flags.globalAnalytics) {
+    return (
+      <div className="flex flex-col items-center justify-center py-20 text-center space-y-3">
+        <div className="size-12 rounded-xl bg-muted flex items-center justify-center">
+          <BarChart3 className="size-6 text-muted-foreground" />
+        </div>
+        <h1 className="text-xl font-bold">{t("platformAnalytics.disabledTitle")}</h1>
+        <p className="text-sm text-muted-foreground max-w-md">
+          {t("platformAnalytics.disabledDesc")}
+        </p>
+        <Button asChild variant="outline" size="sm">
+          <Link to="/platform/feature-flags">{t("maintenancePage.openFeatureFlags")}</Link>
+        </Button>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">

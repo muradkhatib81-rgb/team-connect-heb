@@ -24,7 +24,8 @@
     "loginSuccess": "Logged in successfully",
     "loginPageTitle": "Sign in",
     "showPassword": "Show password",
-    "hidePassword": "Hide password"
+    "hidePassword": "Hide password",
+    "companySignupLink": "Company signup"
   },
   "profile": {
     "title": "My Profile",
@@ -937,6 +938,7 @@
     "platformAi": "AI Management",
     "aiAssistant": "AI Assistant",
     "featureFlags": "Feature Flags",
+    "announcements": "Announcements",
     "analytics": "Global Analytics",
     "platformOwners": "System Owners",
     "activityLog": "Platform Activity Log",
@@ -1188,6 +1190,7 @@
     "errors": {
       "noManagePermission": "No permission to manage AI",
       "noAccess": "No AI assistant access or quota exhausted.",
+      "betaAiDisabled": "Ask AI is turned off for employees and managers.",
       "planNotFound": "No AI settings found for this plan",
       "selectScope": "Please select a scope",
       "billingPlanCompanyOnly": "Billing plan grants apply to companies only",
@@ -1899,7 +1902,7 @@
     "whatsappPlaceholder": "0501234567 or 972501234567",
     "whatsappHint": "Shown as a WhatsApp link at the bottom of the login screen. Leave empty to hide.",
     "maintenanceMode": "Maintenance Mode",
-    "maintenanceHint": "Global flag only — does not block sign-in in practice at this stage",
+    "maintenanceHint": "When on, employees and managers cannot use the app. You keep full access (Feature Flags and billing) so you can turn it off.",
     "saveSettings": "Save settings",
     "pwaIconTitle": "App install icon (PWA)",
     "pwaIconDesc": "Only the platform owner can change this. Install name is set from the device system language (Hebrew / Arabic / English) before install and cannot be changed by users.",
@@ -1958,6 +1961,7 @@
       "realtime": "Real-Time management",
       "billing": "Billing & subscriptions",
       "featureFlags": "Feature flags",
+      "announcements": "Announcements",
       "analytics": "Global analytics",
       "owners": "System owners",
       "auditLog": "Platform activity log",
@@ -1967,7 +1971,8 @@
     "hints": {
       "companies": "{{count}} companies",
       "branches": "{{count}} branches",
-      "owners": "{{count}} system owners"
+      "owners": "{{count}} system owners",
+      "announcements": "Company / branch / all"
     }
   },
   "platformOwners": {
@@ -2127,6 +2132,8 @@
   "platformRealtime": {
     "title": "Real-Time Management",
     "subtitle": "The operational Supabase RealtimeBridge registers here automatically while you use the app. Manual test channels remain available for the current session.",
+    "disabledTitle": "Realtime presence is turned off",
+    "disabledDesc": "Live presence and the realtime monitor are hidden while platform.realtime is disabled. CRUD is unchanged.",
     "openChannel": "Open channel",
     "channelsHeader": "Channels ({{count}}) · open: {{open}}",
     "noChannels": "No channels in this session yet. The RealtimeBridge appears automatically once the app shell is active, or open a manual test channel above.",
@@ -2390,6 +2397,7 @@
   "platformFeatureFlags": {
     "title": "Feature Flags",
     "subtitle": "Enable/disable flags at platform scope — via the existing Feature Flag Manager",
+    "persistedHint": "The eight catalog keys are saved to the database and survive refresh and deploy. Custom flags stay in this session only. Main Board is always on.",
     "newFlag": "New flag",
     "searchPlaceholder": "Search by name or key",
     "filters": {
@@ -2408,6 +2416,11 @@
     "loading": "Loading…",
     "empty": "No feature flags registered",
     "actionSuccess": "Operation completed",
+    "minVersionTitle": "Minimum client version",
+    "minVersionHint": "Applies to Android, iPhone, and Windows when platform.force_client_update is on. Use major.minor.patch.",
+    "saveMinVersion": "Save version",
+    "minVersionSaved": "Minimum client version saved",
+    "invalidMinVersion": "Use major.minor.patch (for example 1.0.1).",
     "system": "System",
     "scopes": {
       "platform": "Platform",
@@ -2450,7 +2463,56 @@
     "noCompanies": "No companies on the platform yet",
     "branchCount": "{{count}} branches",
     "oldestCompany": "Oldest company on platform",
-    "newestCompany": "Newest company on platform"
+    "newestCompany": "Newest company on platform",
+    "disabledTitle": "Global analytics is turned off",
+    "disabledDesc": "This page is hidden while platform.global_analytics is disabled. Turn it back on in Feature Flags."
+  },
+  "maintenancePage": {
+    "title": "We'll be back soon",
+    "message": "The system is in maintenance mode. Please try again later.",
+    "ownerBanner": "Maintenance mode is on. Other users cannot use the app.",
+    "ownerBannerCta": "Manage flags",
+    "openFeatureFlags": "Open Feature Flags"
+  },
+  "forceUpdatePage": {
+    "title": "Update required",
+    "message": "This {{platform}} client is below the minimum version. Install the latest Team Connect app to continue.",
+    "versions": "This device: {{current}} · required: {{min}}",
+    "android": "Android",
+    "iphone": "iPhone",
+    "windows": "Windows",
+    "ownerBanner": "Force client update is on. Clients older than {{version}} are blocked. You can still use the app."
+  },
+  "companySignupPage": {
+    "title": "Company signup",
+    "locked": "Self-serve company signup is locked. A Platform Owner can still create companies from Platform → Companies.",
+    "unlocked": "Self-serve company signup is not a public form. Contact the platform owner to have a company created for you.",
+    "backToSignIn": "Back to sign in"
+  },
+  "platformAnnouncements": {
+    "title": "Announcements",
+    "subtitle": "Publish to a company, a branch, or everyone. Viewers only see rows in their company or branch.",
+    "new": "New announcement",
+    "loading": "Loading…",
+    "empty": "No announcements yet",
+    "created": "Announcement published",
+    "deleted": "Announcement deleted",
+    "formTitle": "Title",
+    "formBody": "Message",
+    "scope": "Audience",
+    "scopeAll": "All companies",
+    "scopeCompany": "One company",
+    "scopeBranch": "One branch",
+    "scopeCompanyValue": "Company: {{company}}",
+    "scopeBranchValue": "{{company}} · {{branch}}",
+    "selectCompany": "Select company",
+    "selectBranch": "Select branch",
+    "disabledTitle": "Announcements are turned off",
+    "disabledDesc": "This page and viewer banners are hidden while platform.announcements is disabled.",
+    "moreCount": "{{count}} more"
+  },
+  "storageQuotaWarning": {
+    "message": "Storage is at {{percent}}% ({{used}} of {{quota}}). Free space or ask the platform owner to raise the quota."
   },
   "platformAiRedirect": {
     "title": "Company and branch allocations moved to billing",
