@@ -46,3 +46,11 @@ export function scopeFromAnnouncementRow(row: {
   }
   return { scope: "all", companyId: "", branchId: "" };
 }
+
+/** Viewer banner is redundant on the Platform Owner management page. */
+export const PLATFORM_ANNOUNCEMENTS_ADMIN_PATH = "/platform/announcements";
+
+export function isPlatformAnnouncementsAdminPath(pathname: string): boolean {
+  const normalized = (pathname.split("?")[0] ?? "/").replace(/\/+$/, "") || "/";
+  return normalized === PLATFORM_ANNOUNCEMENTS_ADMIN_PATH;
+}

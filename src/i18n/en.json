@@ -2563,8 +2563,7 @@
     "selectCompany": "Select company",
     "selectBranch": "Select branch",
     "disabledTitle": "Announcements are turned off",
-    "disabledDesc": "This page and viewer banners are hidden while platform.announcements is disabled.",
-    "moreCount": "{{count}} more"
+    "disabledDesc": "This page and viewer banners are hidden while platform.announcements is disabled."
   },
   "storageQuotaWarning": {
     "message": "Storage is at {{percent}}% ({{used}} of {{quota}}). Free space or ask the platform owner to raise the quota."
