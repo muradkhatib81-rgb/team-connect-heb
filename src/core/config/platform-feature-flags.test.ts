@@ -13,6 +13,7 @@ import {
   defaultPlatformFeatureFlagState,
   isPersistedPlatformFeatureFlagKey,
   isRetiredPlatformFeatureFlagKey,
+  authLoginAccountFooter,
   isSelfServeCompanySignupOpen,
   mergePlatformFeatureFlagSnapshot,
   mergePlatformFeatureFlagState,
@@ -163,6 +164,25 @@ test("announcements and realtime are simple kill-switches", () => {
 test("self-serve company signup defaults locked", () => {
   assert.equal(isSelfServeCompanySignupOpen(false), false);
   assert.equal(isSelfServeCompanySignupOpen(true), true);
+});
+
+test("login footer hides no-account copy when self-serve is open", () => {
+  assert.deepEqual(
+    authLoginAccountFooter({ selfServeCompanySignup: true, gatesReady: true }),
+    { showNoAccountMessage: false, showCompanySignupLink: true },
+  );
+  assert.deepEqual(
+    authLoginAccountFooter({ selfServeCompanySignup: false, gatesReady: true }),
+    { showNoAccountMessage: true, showCompanySignupLink: false },
+  );
+  assert.deepEqual(
+    authLoginAccountFooter({ selfServeCompanySignup: undefined, gatesReady: true }),
+    { showNoAccountMessage: true, showCompanySignupLink: false },
+  );
+  assert.deepEqual(
+    authLoginAccountFooter({ selfServeCompanySignup: true, gatesReady: false }),
+    { showNoAccountMessage: false, showCompanySignupLink: false },
+  );
 });
 
 test("force client update never blocks Platform Owner", () => {

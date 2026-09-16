@@ -22,6 +22,8 @@ import { PasswordInput, PasswordVisibilityToggle } from "@/components/ui/passwor
 import { useTranslation } from "react-i18next";
 import i18n from "@/i18n";
 import { toWesternDigits } from "@/lib/app-locale";
+import { authLoginAccountFooter } from "@/core/config/platform-feature-flags";
+import { usePlatformClientGates } from "@/lib/use-platform-feature-flags";
 
 /** Kept so old /auth?redirect=… bookmarks still validate; login ignores it. */
 const searchSchema = z.object({ redirect: z.string().optional() });
@@ -74,6 +76,11 @@ function AuthPage() {
     staleTime: 60_000,
   });
   const whatsappUrl = toWhatsAppUrl(whatsappQ.data);
+  const gates = usePlatformClientGates();
+  const { showNoAccountMessage, showCompanySignupLink } = authLoginAccountFooter({
+    selfServeCompanySignup: gates.data?.selfServeCompanySignup,
+    gatesReady: gates.status !== "pending",
+  });
 
   useEffect(() => {
     let cancelled = false;
@@ -332,15 +339,19 @@ function AuthPage() {
                   {loading ? <Loader2 className="size-4 animate-spin" /> : t("auth.signIn")}
                 </Button>
                 <div className="pt-2 space-y-2">
-                  <p className="text-xs text-muted-foreground text-center">
-                    {t("auth.noAccount")}
-                  </p>
-                  <Link
-                    to="/company-signup"
-                    className="block text-xs text-center text-muted-foreground hover:text-foreground transition-colors"
-                  >
-                    {t("auth.companySignupLink")}
-                  </Link>
+                  {showNoAccountMessage && (
+                    <p className="text-xs text-muted-foreground text-center">
+                      {t("auth.noAccount")}
+                    </p>
+                  )}
+                  {showCompanySignupLink && (
+                    <Link
+                      to="/company-signup"
+                      className="block text-xs text-center text-muted-foreground hover:text-foreground transition-colors"
+                    >
+                      {t("auth.companySignupLink")}
+                    </Link>
+                  )}
                   {whatsappUrl && (
                     <a
                       href={whatsappUrl}

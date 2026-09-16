@@ -181,6 +181,25 @@ export function isSelfServeCompanySignupOpen(enabled: boolean): boolean {
   return enabled === true;
 }
 
+/**
+ * Public login footer (non-bootstrap). WhatsApp stays independent of this flag.
+ * While gates are still loading, hide both gated items so the "no account"
+ * sentence does not flash when self-serve is already on.
+ */
+export function authLoginAccountFooter(input: {
+  selfServeCompanySignup: boolean | undefined;
+  gatesReady: boolean;
+}): { showNoAccountMessage: boolean; showCompanySignupLink: boolean } {
+  if (!input.gatesReady) {
+    return { showNoAccountMessage: false, showCompanySignupLink: false };
+  }
+  const open = isSelfServeCompanySignupOpen(input.selfServeCompanySignup === true);
+  return {
+    showNoAccountMessage: !open,
+    showCompanySignupLink: open,
+  };
+}
+
 export function canUseRealtimePresence(enabled: boolean): boolean {
   return enabled === true;
 }

@@ -35,7 +35,7 @@ export const getPlatformFeatureFlagState = createServerFn({ method: "GET" })
     return loadPlatformFeatureFlagState();
   });
 
-/** Public subset for /company-signup (no auth). */
+/** Public subset for /auth and /company-signup (no auth). */
 export const getPlatformClientGates = createServerFn({ method: "GET" }).handler(
   async (): Promise<PlatformClientGates> => {
     return loadPlatformClientGates();

@@ -20,6 +20,7 @@ import { usePlatformContext } from "@/platform";
 import type { UUID } from "@/core";
 import type { FeatureFlag } from "@/core/config/types";
 import {
+  PLATFORM_CLIENT_GATES_QUERY_KEY,
   PLATFORM_FEATURE_FLAG_STATE_QUERY_KEY,
   asMinClientVersion,
   isPersistedPlatformFeatureFlagKey,
@@ -97,6 +98,7 @@ function PlatformFeatureFlagsPage() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: FLAGS_QUERY_KEY });
       qc.invalidateQueries({ queryKey: PLATFORM_FEATURE_FLAG_STATE_QUERY_KEY });
+      qc.invalidateQueries({ queryKey: PLATFORM_CLIENT_GATES_QUERY_KEY });
       qc.invalidateQueries({ queryKey: ["my-ai-access"] });
       qc.invalidateQueries({ queryKey: ["platform-announcements-visible"] });
       qc.invalidateQueries({ queryKey: ["platform-announcements-admin"] });
