@@ -2427,6 +2427,42 @@
       "company": "Company",
       "branch": "Branch"
     },
+    "catalog": {
+      "platform": {
+        "maintenance_mode": {
+          "name": "Maintenance mode",
+          "description": "Blocks everyone except Platform Owners while the app is under maintenance."
+        },
+        "global_analytics": {
+          "name": "Global analytics",
+          "description": "Shows aggregated analytics across companies, branches, and active users."
+        },
+        "beta_ai": {
+          "name": "Beta AI",
+          "description": "Kill-switch for Ask AI. Platform Owners keep access when this is off."
+        },
+        "announcements": {
+          "name": "Announcements",
+          "description": "Platform announcements for a company, a branch, or everyone."
+        },
+        "self_serve_company_signup": {
+          "name": "Self-serve company signup",
+          "description": "Lets companies register without a Platform Owner creating them first."
+        },
+        "force_client_update": {
+          "name": "Force client update",
+          "description": "Blocks non-owners on Android, iPhone, and Windows clients below the minimum version."
+        },
+        "realtime": {
+          "name": "Realtime",
+          "description": "Live presence and realtime platform features."
+        },
+        "storage_quota_warnings": {
+          "name": "Storage quota warnings",
+          "description": "Warns managers when storage is nearing the plan quota."
+        }
+      }
+    },
     "details": {
       "noDescription": "No description",
       "created": "Created",
@@ -2446,7 +2482,8 @@
       "scope": "Scope",
       "notes": "Notes",
       "saved": "Flag saved",
-      "nameKeyRequired": "Name and key are required fields."
+      "nameKeyRequired": "Name and key are required fields.",
+      "catalogLockedHint": "Catalog flag names and descriptions follow the UI language."
     }
   },
   "platformAnalytics": {

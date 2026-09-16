@@ -161,6 +161,7 @@ const featureFlagManager = container.resolve<FeatureFlagManager>(TOKENS.featureF
 for (const flag of DEFAULT_PLATFORM_FEATURE_FLAGS) {
   featureFlagManager.register({
     id: generateUUID(),
+    // Catalog titles/descriptions are resolved via i18n at render time.
     displayName: flag.key,
     key: flag.key,
     description: "",

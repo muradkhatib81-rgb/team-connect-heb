@@ -1,5 +1,8 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
 import { test } from "node:test";
+import { fileURLToPath } from "node:url";
 import {
   DEFAULT_PLATFORM_FEATURE_FLAGS,
   RETIRED_PLATFORM_FEATURE_FLAG_KEYS,
@@ -9,6 +12,7 @@ import {
   canSeeStorageQuotaWarnings,
   canUseAskAi,
   canUseRealtimePresence,
+  catalogFeatureFlagI18nKey,
   defaultPlatformFeatureFlagSnapshot,
   defaultPlatformFeatureFlagState,
   isPersistedPlatformFeatureFlagKey,
@@ -16,6 +20,8 @@ import {
   isSelfServeCompanySignupOpen,
   mergePlatformFeatureFlagSnapshot,
   mergePlatformFeatureFlagState,
+  resolveFeatureFlagDescription,
+  resolveFeatureFlagDisplayName,
   shouldForceClientUpdate,
 } from "./platform-feature-flags.ts";
 
@@ -237,4 +243,68 @@ test("storage quota warnings are manager-facing only", () => {
     }),
     false,
   );
+});
+
+test("catalog flag labels resolve via i18n paths; custom flags keep stored names", () => {
+  const t = (key: string) => `T:${key}`;
+  assert.equal(
+    catalogFeatureFlagI18nKey("platform.announcements", "name"),
+    "platformFeatureFlags.catalog.platform.announcements.name",
+  );
+  assert.equal(catalogFeatureFlagI18nKey("custom.ad-hoc", "name"), null);
+  assert.equal(
+    resolveFeatureFlagDisplayName(
+      { key: "platform.announcements", displayName: "platform.announcements" },
+      t,
+    ),
+    "T:platformFeatureFlags.catalog.platform.announcements.name",
+  );
+  assert.equal(
+    resolveFeatureFlagDisplayName({ key: "custom.ad-hoc", displayName: "My flag" }, t),
+    "My flag",
+  );
+  assert.equal(
+    resolveFeatureFlagDescription(
+      { key: "platform.maintenance_mode", description: "" },
+      t,
+    ),
+    "T:platformFeatureFlags.catalog.platform.maintenance_mode.description",
+  );
+  assert.equal(
+    resolveFeatureFlagDescription({ key: "custom.ad-hoc", description: "Stored desc" }, t),
+    "Stored desc",
+  );
+});
+
+function nestedLookup(obj: unknown, path: string): unknown {
+  return path.split(".").reduce<unknown>((acc, part) => {
+    if (!acc || typeof acc !== "object") return undefined;
+    return (acc as Record<string, unknown>)[part];
+  }, obj);
+}
+
+test("en/he/ar catalogs have human titles for every catalog key", () => {
+  const dir = join(dirname(fileURLToPath(import.meta.url)), "../../i18n");
+  const locales = {
+    en: JSON.parse(readFileSync(join(dir, "en.json"), "utf8")) as Record<string, unknown>,
+    he: JSON.parse(readFileSync(join(dir, "he.json"), "utf8")) as Record<string, unknown>,
+    ar: JSON.parse(readFileSync(join(dir, "ar.json"), "utf8")) as Record<string, unknown>,
+  };
+  for (const [locale, bundle] of Object.entries(locales)) {
+    for (const flag of DEFAULT_PLATFORM_FEATURE_FLAGS) {
+      const name = nestedLookup(bundle, catalogFeatureFlagI18nKey(flag.key, "name")!);
+      const description = nestedLookup(bundle, catalogFeatureFlagI18nKey(flag.key, "description")!);
+      assert.equal(typeof name, "string", `${locale} name for ${flag.key}`);
+      assert.equal(typeof description, "string", `${locale} description for ${flag.key}`);
+      assert.notEqual((name as string).trim(), "", `${locale} name empty for ${flag.key}`);
+      assert.notEqual((description as string).trim(), "", `${locale} description empty for ${flag.key}`);
+      assert.notEqual(name, flag.key, `${locale} name must not be the technical key for ${flag.key}`);
+    }
+  }
+  const enName = nestedLookup(locales.en, "platformFeatureFlags.catalog.platform.announcements.name");
+  const heName = nestedLookup(locales.he, "platformFeatureFlags.catalog.platform.announcements.name");
+  const arName = nestedLookup(locales.ar, "platformFeatureFlags.catalog.platform.announcements.name");
+  assert.equal(enName, "Announcements");
+  assert.equal(heName, "הודעות מערכת");
+  assert.equal(arName, "الإعلانات");
 });

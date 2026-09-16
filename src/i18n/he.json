@@ -2427,6 +2427,42 @@
       "company": "חברה",
       "branch": "סניף"
     },
+    "catalog": {
+      "platform": {
+        "maintenance_mode": {
+          "name": "מצב תחזוקה",
+          "description": "חוסם את כולם מלבד בעלי הפלטפורמה בזמן תחזוקת המערכת."
+        },
+        "global_analytics": {
+          "name": "אנליטיקס גלובלי",
+          "description": "מציג נתונים מצטברים על פני חברות, סניפים ומשתמשים פעילים."
+        },
+        "beta_ai": {
+          "name": "בינה מלאכותית ניסיונית",
+          "description": "מתג כיבוי ל־Ask AI. בעלי הפלטפורמה נשארים עם גישה כשזה כבוי."
+        },
+        "announcements": {
+          "name": "הודעות מערכת",
+          "description": "הודעות פלטפורמה לחברה, לסניף או לכולם."
+        },
+        "self_serve_company_signup": {
+          "name": "הרשמת חברה עצמאית",
+          "description": "מאפשרת לחברות להירשם בלי שבעל הפלטפורמה ייצור אותן מראש."
+        },
+        "force_client_update": {
+          "name": "כפיית עדכון לקוח",
+          "description": "חוסם משתמשים שאינם בעלי פלטפורמה בלקוחות Android, iPhone ו-Windows מתחת לגרסה המינימלית."
+        },
+        "realtime": {
+          "name": "נוכחות בזמן אמת",
+          "description": "נוכחות חיה ותכונות זמן-אמת בפלטפורמה."
+        },
+        "storage_quota_warnings": {
+          "name": "התראות מכסת אחסון",
+          "description": "מתריע למנהלים כשהאחסון מתקרב למכסת התוכנית."
+        }
+      }
+    },
     "details": {
       "noDescription": "ללא תיאור",
       "created": "נוצר",
@@ -2446,7 +2482,8 @@
       "scope": "היקף",
       "notes": "הערות",
       "saved": "הדגל נשמר",
-      "nameKeyRequired": "שם ומפתח הם שדות חובה."
+      "nameKeyRequired": "שם ומפתח הם שדות חובה.",
+      "catalogLockedHint": "שמות ותיאורי דגלי הקטלוג מתעדכנים לפי שפת הממשק."
     }
   },
   "platformAnalytics": {
