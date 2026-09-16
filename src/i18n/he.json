@@ -2560,8 +2560,7 @@
     "selectCompany": "בחרו חברה",
     "selectBranch": "בחרו סניף",
     "disabledTitle": "הודעות המערכת כבויות",
-    "disabledDesc": "המסך הזה ובאנרים למשתמשים מוסתרים כש-platform.announcements כבוי.",
-    "moreCount": "עוד {{count}}"
+    "disabledDesc": "המסך הזה ובאנרים למשתמשים מוסתרים כש-platform.announcements כבוי."
   },
   "storageQuotaWarning": {
     "message": "האחסון ב-{{percent}}% ({{used}} מתוך {{quota}}). פנו מקום או בקשו מבעל הפלטפורמה להעלות את המכסה."

@@ -46,3 +46,21 @@ export function scopeFromAnnouncementRow(row: {
   }
   return { scope: "all", companyId: "", branchId: "" };
 }
+
+/** Viewer banner is redundant on the Platform Owner management page. */
+export const PLATFORM_ANNOUNCEMENTS_ADMIN_PATH = "/platform/announcements";
+
+export function isPlatformAnnouncementsAdminPath(pathname: string): boolean {
+  const normalized = (pathname.split("?")[0] ?? "/").replace(/\/+$/, "") || "/";
+  return normalized === PLATFORM_ANNOUNCEMENTS_ADMIN_PATH;
+}
+
+/** Stack every undismissed row; order is preserved from the server list. */
+export function undismissedAnnouncements<T extends { id: string }>(
+  rows: readonly T[] | null | undefined,
+  dismissedIds: readonly string[],
+): T[] {
+  if (!rows?.length) return [];
+  const dismissed = new Set(dismissedIds);
+  return rows.filter((row) => !dismissed.has(row.id));
+}

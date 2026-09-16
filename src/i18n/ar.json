@@ -2560,8 +2560,7 @@
     "selectCompany": "اختر شركة",
     "selectBranch": "اختر فرعاً",
     "disabledTitle": "الإعلانات متوقفة",
-    "disabledDesc": "هذه الصفحة ولافتات المشاهدين مخفية بينما platform.announcements متوقف.",
-    "moreCount": "{{count}} إضافية"
+    "disabledDesc": "هذه الصفحة ولافتات المشاهدين مخفية بينما platform.announcements متوقف."
   },
   "storageQuotaWarning": {
     "message": "التخزين عند {{percent}}% ({{used}} من {{quota}}). حرّروا مساحة أو اطلبوا من مالك المنصة رفع الحصة."
