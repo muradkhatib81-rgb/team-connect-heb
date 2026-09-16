@@ -82,6 +82,7 @@ import {
   hasBranchActionPermission,
   useCurrentPermissions,
 } from "@/lib/use-current-permissions";
+import { useCustomerPaymentNavVisible } from "@/lib/use-customer-billing-gate";
 import { fetchCustodyUserCaps, invalidateCustodyQueries } from "@/lib/custody-workflow";
 import { invalidateShiftVisibleQueries } from "@/lib/shift-visible-rpc";
 import { notifyOwnBreakStatusTransition } from "@/lib/break-self-realtime";
@@ -243,6 +244,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   const leaveAccess = useLeaveAccess();
   const aiAccessQ = useAiAccess();
   const permissionsQ = useCurrentPermissions(profile?.id);
+  const showCustomerBillingNav = useCustomerPaymentNavVisible();
   const custodyCapsQ = useQuery({
     enabled: !!profile?.id,
     queryKey: ["custody-caps", profile?.id],
@@ -460,6 +462,13 @@ export function AppShell({ children }: { children: ReactNode }) {
       label: t("nav.companySettings"),
       icon: Building,
       visible: canManageCompanySettings,
+      section: branchSection,
+    },
+    {
+      to: "/company-billing",
+      label: t("nav.companyBilling"),
+      icon: CreditCard,
+      visible: showCustomerBillingNav,
       section: branchSection,
     },
     // Personal profile stays reachable regardless of Branch Mode.

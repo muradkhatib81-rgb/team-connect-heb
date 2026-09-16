@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
@@ -14,8 +14,9 @@ import { Card } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { toast } from "sonner";
-import { Loader2, Upload, Trash2, Building2, CalendarRange } from "lucide-react";
+import { Loader2, Upload, Trash2, Building2, CalendarRange, CreditCard } from "lucide-react";
 import { useCurrentPermissions } from "@/lib/use-current-permissions";
+import { useCustomerPaymentNavVisible } from "@/lib/use-customer-billing-gate";
 import i18n from "@/i18n";
 
 export const Route = createFileRoute("/_authenticated/company-settings")({
@@ -75,6 +76,7 @@ export function CompanySettingsPage() {
     },
   });
   const canManageSchedule = isMainAdmin || !!manageSchedQ.data;
+  const showCustomerBilling = useCustomerPaymentNavVisible();
 
   useEffect(() => {
     if (company) {
@@ -370,6 +372,21 @@ export function CompanySettingsPage() {
           </Button>
         </div>
       </Card>
+      )}
+
+      {showCustomerBilling && canManageSettings && (
+        <Card className="card-elevated p-6 space-y-3">
+          <div className="flex items-center gap-2">
+            <CreditCard className="size-5 text-primary" />
+            <h2 className="text-lg font-semibold">{t("companySettingsPage.billingTitle")}</h2>
+          </div>
+          <p className="text-sm text-muted-foreground">{t("companySettingsPage.billingHint")}</p>
+          <div>
+            <Button asChild size="sm" variant="outline" className="gap-2">
+              <Link to="/company-billing">{t("companySettingsPage.openBilling")}</Link>
+            </Button>
+          </div>
+        </Card>
       )}
     </div>
   );

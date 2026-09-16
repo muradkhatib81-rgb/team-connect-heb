@@ -31,6 +31,7 @@ import { Route as AuthenticatedCustodySettingsRouteImport } from './routes/_auth
 import { Route as AuthenticatedCustodyLogRouteImport } from './routes/_authenticated/custody-log'
 import { Route as AuthenticatedControlLogRouteImport } from './routes/_authenticated/control-log'
 import { Route as AuthenticatedCompanySettingsRouteImport } from './routes/_authenticated/company-settings'
+import { Route as AuthenticatedCompanyBillingRouteImport } from './routes/_authenticated/company-billing'
 import { Route as AuthenticatedCommunicationsRouteImport } from './routes/_authenticated/communications'
 import { Route as AuthenticatedChangePasswordRouteImport } from './routes/_authenticated/change-password'
 import { Route as AuthenticatedBreaksAdminRouteImport } from './routes/_authenticated/breaks-admin'
@@ -184,6 +185,12 @@ const AuthenticatedCompanySettingsRoute =
   AuthenticatedCompanySettingsRouteImport.update({
     id: '/company-settings',
     path: '/company-settings',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
+const AuthenticatedCompanyBillingRoute =
+  AuthenticatedCompanyBillingRouteImport.update({
+    id: '/company-billing',
+    path: '/company-billing',
     getParentRoute: () => AuthenticatedRouteRoute,
   } as any)
 const AuthenticatedCommunicationsRoute =
@@ -423,6 +430,7 @@ export interface FileRoutesByFullPath {
   '/change-password': typeof AuthenticatedChangePasswordRoute
   '/communications': typeof AuthenticatedCommunicationsRoute
   '/company-settings': typeof AuthenticatedCompanySettingsRoute
+  '/company-billing': typeof AuthenticatedCompanyBillingRoute
   '/control-log': typeof AuthenticatedControlLogRoute
   '/custody-log': typeof AuthenticatedCustodyLogRoute
   '/custody-settings': typeof AuthenticatedCustodySettingsRoute
@@ -483,6 +491,7 @@ export interface FileRoutesByTo {
   '/change-password': typeof AuthenticatedChangePasswordRoute
   '/communications': typeof AuthenticatedCommunicationsRoute
   '/company-settings': typeof AuthenticatedCompanySettingsRoute
+  '/company-billing': typeof AuthenticatedCompanyBillingRoute
   '/control-log': typeof AuthenticatedControlLogRoute
   '/custody-log': typeof AuthenticatedCustodyLogRoute
   '/custody-settings': typeof AuthenticatedCustodySettingsRoute
@@ -545,6 +554,7 @@ export interface FileRoutesById {
   '/_authenticated/change-password': typeof AuthenticatedChangePasswordRoute
   '/_authenticated/communications': typeof AuthenticatedCommunicationsRoute
   '/_authenticated/company-settings': typeof AuthenticatedCompanySettingsRoute
+  '/_authenticated/company-billing': typeof AuthenticatedCompanyBillingRoute
   '/_authenticated/control-log': typeof AuthenticatedControlLogRoute
   '/_authenticated/custody-log': typeof AuthenticatedCustodyLogRoute
   '/_authenticated/custody-settings': typeof AuthenticatedCustodySettingsRoute
@@ -608,6 +618,7 @@ export interface FileRouteTypes {
     | '/change-password'
     | '/communications'
     | '/company-settings'
+    | '/company-billing'
     | '/control-log'
     | '/custody-log'
     | '/custody-settings'
@@ -668,6 +679,7 @@ export interface FileRouteTypes {
     | '/change-password'
     | '/communications'
     | '/company-settings'
+    | '/company-billing'
     | '/control-log'
     | '/custody-log'
     | '/custody-settings'
@@ -729,6 +741,7 @@ export interface FileRouteTypes {
     | '/_authenticated/change-password'
     | '/_authenticated/communications'
     | '/_authenticated/company-settings'
+    | '/_authenticated/company-billing'
     | '/_authenticated/control-log'
     | '/_authenticated/custody-log'
     | '/_authenticated/custody-settings'
@@ -945,6 +958,13 @@ declare module '@tanstack/react-router' {
       path: '/company-settings'
       fullPath: '/company-settings'
       preLoaderRoute: typeof AuthenticatedCompanySettingsRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/company-billing': {
+      id: '/_authenticated/company-billing'
+      path: '/company-billing'
+      fullPath: '/company-billing'
+      preLoaderRoute: typeof AuthenticatedCompanyBillingRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
     '/_authenticated/communications': {
@@ -1340,6 +1360,7 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedChangePasswordRoute: typeof AuthenticatedChangePasswordRoute
   AuthenticatedCommunicationsRoute: typeof AuthenticatedCommunicationsRoute
   AuthenticatedCompanySettingsRoute: typeof AuthenticatedCompanySettingsRoute
+  AuthenticatedCompanyBillingRoute: typeof AuthenticatedCompanyBillingRoute
   AuthenticatedControlLogRoute: typeof AuthenticatedControlLogRoute
   AuthenticatedCustodyLogRoute: typeof AuthenticatedCustodyLogRoute
   AuthenticatedCustodySettingsRoute: typeof AuthenticatedCustodySettingsRoute
@@ -1370,6 +1391,7 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedChangePasswordRoute: AuthenticatedChangePasswordRoute,
   AuthenticatedCommunicationsRoute: AuthenticatedCommunicationsRoute,
   AuthenticatedCompanySettingsRoute: AuthenticatedCompanySettingsRoute,
+  AuthenticatedCompanyBillingRoute: AuthenticatedCompanyBillingRoute,
   AuthenticatedControlLogRoute: AuthenticatedControlLogRoute,
   AuthenticatedCustodyLogRoute: AuthenticatedCustodyLogRoute,
   AuthenticatedCustodySettingsRoute: AuthenticatedCustodySettingsRoute,

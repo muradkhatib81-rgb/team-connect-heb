@@ -51,6 +51,10 @@ import {
   BranchEditDialog,
   BranchDeleteDialog,
 } from "@/components/platform/branch-dialogs";
+import { useServerFn } from "@tanstack/react-start";
+import { setCompanyBillingEnabled } from "@/lib/billing.functions";
+import { useCustomerBillingGate } from "@/lib/use-customer-billing-gate";
+import { CUSTOMER_BILLING_GATE_QUERY_KEY } from "@/lib/billing-visibility";
 
 const VALID_TABS = [
   "dashboard",
@@ -692,23 +696,34 @@ function CompanyReportsTab({
 
 function CompanySettingsTab({ companyId }: { companyId: UUID }) {
   const { t } = useTranslation();
+  const qc = useQueryClient();
+  const setCompanyBillingFn = useServerFn(setCompanyBillingEnabled);
+  const { gate, isLoading: gateLoading } = useCustomerBillingGate({ companyId });
   const [contactEmail, setContactEmail] = useState("");
   const [billingEnabled, setBillingEnabled] = useState(false);
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     setContactEmail(companyService.getCompanySetting<string>(companyId, CONTACT_EMAIL_KEY) ?? "");
-    setBillingEnabled(
-      companyService.getCompanySetting<boolean>(companyId, BILLING_ENABLED_KEY) ?? false,
-    );
   }, [companyId]);
 
-  const handleSave = () => {
+  useEffect(() => {
+    if (gateLoading) return;
+    const fromMemory = companyService.getCompanySetting<boolean>(companyId, BILLING_ENABLED_KEY);
+    setBillingEnabled(gate.companyEnabled || fromMemory === true);
+  }, [companyId, gate.companyEnabled, gateLoading]);
+
+  const handleSave = async () => {
     setSaving(true);
     try {
       companyService.setCompanySetting(companyId, CONTACT_EMAIL_KEY, contactEmail.trim());
       companyService.setCompanySetting(companyId, BILLING_ENABLED_KEY, billingEnabled);
+      await setCompanyBillingFn({ data: { companyId, enabled: billingEnabled } });
+      await qc.invalidateQueries({ queryKey: CUSTOMER_BILLING_GATE_QUERY_KEY });
+      await qc.invalidateQueries({ queryKey: ["platform-billing-overview"] });
       toast.success(t("platformCompanyDetail.settings.settingsSaved"));
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : t("platformCompanyDetail.settings.saveFailed"));
     } finally {
       setSaving(false);
     }
@@ -728,15 +743,22 @@ function CompanySettingsTab({ companyId }: { companyId: UUID }) {
           placeholder="contact@company.com"
         />
       </div>
-      <div className="flex items-center justify-between rounded-lg border p-3">
-        <div>
+      <div className="flex items-center justify-between rounded-lg border p-3 gap-4">
+        <div className="min-w-0">
           <p className="text-sm font-medium">{t("platformCompanyDetail.settings.billingEnabled")}</p>
-          <p className="text-xs text-muted-foreground">{t("platformCompanyDetail.settings.billingEnabledDesc")}</p>
+          <p className="text-xs text-muted-foreground">
+            {t("platformCompanyDetail.settings.billingEnabledDesc")}
+          </p>
+          {!gate.platformVisible && (
+            <p className="text-xs text-amber-800 dark:text-amber-400 mt-1">
+              {t("platformCompanyDetail.settings.billingEnabledNeedsMaster")}
+            </p>
+          )}
         </div>
         <Switch checked={billingEnabled} onCheckedChange={setBillingEnabled} />
       </div>
       <div className="flex justify-end">
-        <Button onClick={handleSave} disabled={saving} size="sm" className="gap-2">
+        <Button onClick={() => void handleSave()} disabled={saving} size="sm" className="gap-2">
           {saving && <Loader2 className="size-4 animate-spin" />}
           {t("platformCompanyDetail.settings.saveSettings")}
         </Button>

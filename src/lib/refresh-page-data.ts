@@ -23,6 +23,7 @@ const SESSION_OR_SHELL_HEADS = new Set<unknown>([
   "my-ai-access",
   "current-user-permissions",
   "my-break-manage-perm",
+  "customer-billing-gate",
 ]);
 
 /**

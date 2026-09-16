@@ -43,11 +43,19 @@ alwaysApply: true
 
 ## Still later (product)
 
-- Enforce storage quota on uploads (track `used_bytes`, block when over)
 - Tax/VAT invoices / PDF receipts as a product requirement
-- Company self-serve page (non-owner)
-- Enforce `billingEnabled` as a hard feature gate across the app
+- Company self-serve checkout (non-owner Pay/Portal — page `/company-billing` is gated and stubbed)
+- Enforce storage quota on uploads (track `used_bytes`, block when over)
 - Dunning emails beyond 3-day grace on `past_due`
 - Live Stripe (needs supported-country business entity + bank) or local PSP alternative
 
-Key files: `src/lib/billing.functions.ts`, `src/lib/billing-store.server.ts`, `src/lib/billing-stripe.server.ts`, `src/lib/billing-storage.server.ts`, `src/routes/api/public/hooks/stripe-webhook.ts`, `src/routes/_authenticated/platform/billing.tsx`, `supabase/migrations/20260825120000_billing_stripe_foundation.sql`, `supabase/migrations/20260825130000_billing_storage_quotas.sql`
+### Customer payment visibility (2026-09-16)
+
+**Master toggle:** Platform Owner → **Platform → Billing & Subscriptions** (`/platform/billing`) header switch **Customer payment UI**.
+- Stored in `platform_settings.customer_billing_visible` (default **false**).
+- OFF: no non-owner sees checkout/portal/subscription self-serve (nav `/company-billing` hidden).
+- ON: companies with **Billing enabled** on **Platform → Companies → [company] → Settings** can see customer payment UI.
+- Platform Owner always keeps `/platform/billing` for manual activation.
+- Per-company flag: `companies.billing_enabled` (default false). Does not block manual plans, entitlements, AI minutes, or storage.
+
+Key files: `src/lib/billing.functions.ts`, `src/lib/billing-store.server.ts`, `src/lib/billing-stripe.server.ts`, `src/lib/billing-storage.server.ts`, `src/lib/billing-visibility.ts`, `src/routes/api/public/hooks/stripe-webhook.ts`, `src/routes/_authenticated/platform/billing.tsx`, `src/routes/_authenticated/company-billing.tsx`, `supabase/migrations/20260825120000_billing_stripe_foundation.sql`, `supabase/migrations/20260825130000_billing_storage_quotas.sql`, `supabase/migrations/20260916120000_customer_billing_visibility.sql`
