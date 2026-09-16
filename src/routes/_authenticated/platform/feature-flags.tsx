@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
@@ -23,6 +23,7 @@ import {
   PLATFORM_FEATURE_FLAG_STATE_QUERY_KEY,
   asMinClientVersion,
   isPersistedPlatformFeatureFlagKey,
+  platformOnlyFlagScope,
   resolveFeatureFlagDescription,
   resolveFeatureFlagDisplayName,
 } from "@/core/config/platform-feature-flags";
@@ -254,6 +255,13 @@ function PlatformFeatureFlagsPage() {
                   </p>
                 </div>
                 <div className="flex shrink-0 flex-wrap items-center justify-end gap-1 self-end sm:gap-2 sm:self-center">
+                {flag.key === "platform.announcements" ? (
+                  <Button asChild variant="outline" size="sm" className="gap-1.5">
+                    <Link to="/platform/announcements">
+                      {t("platformFeatureFlags.openAnnouncements")}
+                    </Link>
+                  </Button>
+                ) : null}
                 <Switch
                   checked={flag.enabled}
                   disabled={actionMut.isPending || !!flag.archivedAt}
@@ -330,16 +338,16 @@ function FlagDialog({ flag, onClose }: { flag: FeatureFlag | null; onClose: () =
   const [key, setKey] = useState(flag?.key ?? "");
   const [description, setDescription] = useState(isCatalog ? catalogDescription : (flag?.description ?? ""));
   const [notes, setNotes] = useState(flag?.notes ?? "");
-  const [scope, setScope] = useState<"platform" | "company" | "branch">((flag?.scope as "platform" | "company" | "branch") ?? "platform");
   const mut = useMutation({
     mutationFn: async () => {
       const nextName = isCatalog ? (flag?.displayName ?? catalogName) : name.trim();
       const nextDescription = isCatalog ? (flag?.description ?? "") : description.trim();
       const nextKey = key.trim();
       if (!nextName || !nextKey) throw new Error(t("platformFeatureFlags.dialog.nameKeyRequired"));
-      if (isNew) runtime.registerFeatureFlag({ displayName: nextName, key: nextKey, description: nextDescription, notes: notes.trim() || null, enabled: false, scope, scopeTargetId: null });
-      else runtime.updateFeatureFlag(flag.key, { displayName: nextName, description: nextDescription, notes: notes.trim() || null, scope, scopeTargetId: null });
-      runtime.recordFeatureFlagAudit(isNew ? "feature-flag.create" : "feature-flag.update", (profile?.id ?? "unknown") as UUID, nextKey, flag, { name: nextName, description: nextDescription, notes, scope });
+      const locked = platformOnlyFlagScope();
+      if (isNew) runtime.registerFeatureFlag({ displayName: nextName, key: nextKey, description: nextDescription, notes: notes.trim() || null, enabled: false, ...locked });
+      else runtime.updateFeatureFlag(flag.key, { displayName: nextName, description: nextDescription, notes: notes.trim() || null, ...locked });
+      runtime.recordFeatureFlagAudit(isNew ? "feature-flag.create" : "feature-flag.update", (profile?.id ?? "unknown") as UUID, nextKey, flag, { name: nextName, description: nextDescription, notes, ...locked });
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: FLAGS_QUERY_KEY });
@@ -380,17 +388,25 @@ function FlagDialog({ flag, onClose }: { flag: FeatureFlag | null; onClose: () =
           </Label>
           <Label>
             {t("platformFeatureFlags.dialog.scope")}
-            <Select value={scope} onValueChange={(value) => setScope(value as typeof scope)}>
-              <SelectTrigger><SelectValue /></SelectTrigger>
-              <SelectContent>
-                {FLAG_SCOPES.map((value) => (
-                  <SelectItem key={value} value={value}>
-                    {scopeLabel(value, t)}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <Input value={scopeLabel("platform", t)} disabled />
           </Label>
+          <p className="text-xs text-muted-foreground">
+            {isCatalog
+              ? t("platformFeatureFlags.dialog.platformWideHint")
+              : t("platformFeatureFlags.dialog.customPlatformOnlyHint")}
+          </p>
+          {isCatalog && flag?.key === "platform.announcements" ? (
+            <div className="space-y-2">
+              <p className="text-xs text-muted-foreground">
+                {t("platformFeatureFlags.dialog.announcementsTargetHint")}
+              </p>
+              <Button asChild variant="outline" size="sm">
+                <Link to="/platform/announcements" onClick={onClose}>
+                  {t("platformFeatureFlags.openAnnouncements")}
+                </Link>
+              </Button>
+            </div>
+          ) : null}
           <Label>
             {t("platformFeatureFlags.dialog.notes")}
             <Textarea value={notes} onChange={(event) => setNotes(event.target.value)} />

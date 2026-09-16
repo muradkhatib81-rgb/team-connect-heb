@@ -20,6 +20,7 @@ import {
   isSelfServeCompanySignupOpen,
   mergePlatformFeatureFlagSnapshot,
   mergePlatformFeatureFlagState,
+  platformOnlyFlagScope,
   resolveFeatureFlagDescription,
   resolveFeatureFlagDisplayName,
   shouldForceClientUpdate,
@@ -307,4 +308,8 @@ test("en/he/ar catalogs have human titles for every catalog key", () => {
   assert.equal(enName, "Announcements");
   assert.equal(heName, "הודעות מערכת");
   assert.equal(arName, "الإعلانات");
+});
+
+test("feature-flag writes are locked to platform scope with no target", () => {
+  assert.deepEqual(platformOnlyFlagScope(), { scope: "platform", scopeTargetId: null });
 });

@@ -2483,8 +2483,12 @@
       "notes": "Notes",
       "saved": "Flag saved",
       "nameKeyRequired": "Name and key are required fields.",
-      "catalogLockedHint": "Catalog flag names and descriptions follow the UI language."
-    }
+      "catalogLockedHint": "Catalog flag names and descriptions follow the UI language.",
+      "platformWideHint": "These eight catalog flags are platform-wide only. They cannot be limited to a company or branch.",
+      "announcementsTargetHint": "To publish an announcement to a company, a branch, or everyone, use Announcements — not this scope field.",
+      "customPlatformOnlyHint": "Custom flags are platform-wide in this session. Company or branch targeting is not available here."
+    },
+    "openAnnouncements": "Open Announcements"
   },
   "platformAnalytics": {
     "title": "Global analytics",

@@ -98,6 +98,14 @@ export function resolveFeatureFlagDescription(
   return path ? translate(path) : flag.description;
 }
 
+/**
+ * Writes stay platform-wide. Company/branch targeting for announcements
+ * lives on `/platform/announcements`, not on Feature Flags (no pickers here).
+ */
+export function platformOnlyFlagScope(): { scope: "platform"; scopeTargetId: null } {
+  return { scope: "platform", scopeTargetId: null };
+}
+
 export function defaultPlatformFeatureFlagState(): PlatformFeatureFlagState {
   return {
     "platform.maintenance_mode": false,
