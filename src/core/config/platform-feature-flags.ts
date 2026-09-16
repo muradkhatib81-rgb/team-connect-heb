@@ -59,8 +59,9 @@ export type PlatformFeatureFlagSnapshot = PlatformFeatureFlagState & {
 export const PLATFORM_FEATURE_FLAG_STATE_QUERY_KEY = ["platform-feature-flag-state"] as const;
 export const PLATFORM_CLIENT_GATES_QUERY_KEY = ["platform-client-gates"] as const;
 
-/** Public subset used by /company-signup and pre-auth force-update checks. */
+/** Public subset used by /auth, /company-signup, and pre-auth force-update checks. */
 export type PlatformClientGates = {
+  maintenanceMode: boolean;
   selfServeCompanySignup: boolean;
   forceClientUpdate: boolean;
   minClientVersion: string;
@@ -68,6 +69,7 @@ export type PlatformClientGates = {
 
 export function clientGatesFromSnapshot(snapshot: PlatformFeatureFlagSnapshot): PlatformClientGates {
   return {
+    maintenanceMode: snapshot["platform.maintenance_mode"],
     selfServeCompanySignup: snapshot["platform.self_serve_company_signup"],
     forceClientUpdate: snapshot["platform.force_client_update"],
     minClientVersion: snapshot.minClientVersion,
@@ -316,6 +318,33 @@ export function canSeeAnnouncements(enabled: boolean): boolean {
 
 export function isSelfServeCompanySignupOpen(enabled: boolean): boolean {
   return enabled === true;
+}
+
+/**
+ * Public login footer (non-bootstrap). WhatsApp stays independent of this flag.
+ * While gates are still loading, hide both gated items so the "no account"
+ * sentence does not flash when self-serve is already on.
+ */
+export function authLoginAccountFooter(input: {
+  selfServeCompanySignup: boolean | undefined;
+  gatesReady: boolean;
+}): { showNoAccountMessage: boolean; showCompanySignupLink: boolean } {
+  if (!input.gatesReady) {
+    return { showNoAccountMessage: false, showCompanySignupLink: false };
+  }
+  const open = isSelfServeCompanySignupOpen(input.selfServeCompanySignup === true);
+  return {
+    showNoAccountMessage: !open,
+    showCompanySignupLink: open,
+  };
+}
+
+/** Public /auth and /company-signup: only when the gate is known to be on. */
+export function shouldShowPublicMaintenance(input: {
+  maintenanceMode: boolean | undefined;
+  gatesReady: boolean;
+}): boolean {
+  return input.gatesReady && input.maintenanceMode === true;
 }
 
 export function canUseRealtimePresence(enabled: boolean): boolean {
