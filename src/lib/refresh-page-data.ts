@@ -24,6 +24,7 @@ const SESSION_OR_SHELL_HEADS = new Set<unknown>([
   "current-user-permissions",
   "my-break-manage-perm",
   "customer-billing-gate",
+  "platform-feature-flag-state",
 ]);
 
 /**

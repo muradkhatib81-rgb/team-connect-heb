@@ -3,12 +3,15 @@ import { OnlinePresenceCard } from "@/components/online-presence-card";
 import { useOnlinePresenceViewerAccess } from "@/lib/use-online-presence-access";
 import { isPlatformOwner } from "@/lib/constants";
 import { useTranslation } from "react-i18next";
+import { usePlatformFeatureFlagState } from "@/lib/use-platform-feature-flags";
 
 export function OnlinePresencePlatformSection() {
   const { t } = useTranslation();
   const { data: profile } = useAuth();
+  const flags = usePlatformFeatureFlagState();
   const accessQ = useOnlinePresenceViewerAccess(profile?.id, profile?.roles);
 
+  if (!flags.realtime) return null;
   if (!profile || !isPlatformOwner(profile.roles)) return null;
 
   return (

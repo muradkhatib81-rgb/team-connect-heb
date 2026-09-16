@@ -33,6 +33,24 @@ export function isHardAiDenial(reason?: string | null): boolean {
 }
 
 /**
+ * Extra platform kill-switch on top of grants. Does not change Platform Owner
+ * access. When the flag is on, `access` is returned unchanged.
+ */
+export function applyBetaAiKillSwitch(
+  access: ResolvedAiAccess,
+  input: { betaAiEnabled: boolean; isPlatformOwner: boolean },
+): ResolvedAiAccess {
+  if (input.betaAiEnabled || input.isPlatformOwner) return access;
+  return {
+    ...NO_AI_ACCESS,
+    reason: "beta_ai_disabled",
+    remainingMinutes: access.remainingMinutes,
+    quotaMinutes: access.quotaMinutes,
+    providerCode: access.providerCode,
+  };
+}
+
+/**
  * Expose the existing platform-owner allow path without requiring Branch Mode.
  * Employees/managers stay on the server grant result.
  */

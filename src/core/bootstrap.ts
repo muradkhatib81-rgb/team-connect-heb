@@ -153,10 +153,10 @@ container.register(TOKENS.errorLogger, new ErrorLogger());
 
 configurationManager.set("environment", getEnvironment());
 
-// Part 3 — Feature Flags: seed a small set of real, platform-scoped flags
-// so the Feature Flag Manager has something genuine to list/toggle from
-// the Platform UI. Nothing here gates behavior yet — flipping a flag only
-// changes what `featureFlagManager.isEnabled(key)` reports, honestly.
+// Part 3 — Feature Flags: seed the platform catalog. Enabled state for
+// these keys is persisted on platform_settings and gates product behavior.
+// Main Board is not in the catalog. In-memory defaults apply until the
+// durable overlay is loaded.
 const featureFlagManager = container.resolve<FeatureFlagManager>(TOKENS.featureFlag);
 for (const flag of DEFAULT_PLATFORM_FEATURE_FLAGS) {
   featureFlagManager.register({

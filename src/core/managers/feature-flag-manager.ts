@@ -40,6 +40,16 @@ export class FeatureFlagManager extends BaseManager {
     return flag?.enabled === true && !flag.archivedAt;
   }
 
+  /** Overlay persisted enabled values onto matching, non-archived flags. */
+  applyEnabledStates(states: Readonly<Record<string, boolean>>): void {
+    for (const [key, enabled] of Object.entries(states)) {
+      const existing = this.flags.get(key);
+      if (!existing || existing.archivedAt) continue;
+      if (existing.enabled === enabled) continue;
+      this.update(key, { enabled });
+    }
+  }
+
   list(): FeatureFlag[] {
     return [...this.flags.values()];
   }

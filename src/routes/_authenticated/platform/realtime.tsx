@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -39,6 +39,7 @@ import { usePlatformContext } from "@/platform";
 import type { ChannelSnapshot, ChannelVisibility } from "@/core";
 import { getRealtimeManager } from "@/core/bootstrap";
 import { isBridgeChannelName } from "@/lib/realtime-bridge-sync";
+import { usePlatformFeatureFlagState } from "@/lib/use-platform-feature-flags";
 
 export const Route = createFileRoute("/_authenticated/platform/realtime")({
   component: PlatformRealtimePage,
@@ -76,6 +77,7 @@ function PlatformRealtimePage() {
   const { t } = useTranslation();
   const { runtime } = usePlatformContext();
   const qc = useQueryClient();
+  const flags = usePlatformFeatureFlagState();
   const [openCreate, setOpenCreate] = useState(false);
   const [editChannel, setEditChannel] = useState<ChannelSnapshot | null>(null);
   const [deleteChannel, setDeleteChannel] = useState<ChannelSnapshot | null>(null);
@@ -132,6 +134,23 @@ function PlatformRealtimePage() {
     return b.updatedAt.getTime() - a.updatedAt.getTime();
   });
   const openCount = channels.filter((c) => !c.closedAt).length;
+
+  if (!flags.isLoading && !flags.realtime) {
+    return (
+      <div className="flex flex-col items-center justify-center py-20 text-center space-y-3">
+        <div className="size-12 rounded-xl bg-muted flex items-center justify-center">
+          <Radio className="size-6 text-muted-foreground" />
+        </div>
+        <h1 className="text-xl font-bold">{t("platformRealtime.disabledTitle")}</h1>
+        <p className="text-sm text-muted-foreground max-w-md">
+          {t("platformRealtime.disabledDesc")}
+        </p>
+        <Button asChild variant="outline" size="sm">
+          <Link to="/platform/feature-flags">{t("maintenancePage.openFeatureFlags")}</Link>
+        </Button>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">

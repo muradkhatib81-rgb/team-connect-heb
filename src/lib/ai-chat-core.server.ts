@@ -6,7 +6,8 @@ import {
   normalizeAiLocale,
   type AiReplyLanguage,
 } from "@/lib/ai-language";
-import { isHardAiDenial, resolveAiAccessForUi } from "@/lib/ai-access-resolve";
+import { applyBetaAiKillSwitch, isHardAiDenial, resolveAiAccessForUi } from "@/lib/ai-access-resolve";
+import { loadPlatformFeatureFlagState } from "@/lib/platform-feature-flags.server";
 
 export type RawAiAccess = {
   allowed?: boolean;
@@ -38,6 +39,20 @@ export function mapAiAccess(raw: RawAiAccess): ResolvedAiAccess {
  * non-hard reason (typically `auth.uid()` empty / no branch on platform home).
  */
 export async function loadResolvedAiAccess(supabase: any, userId: string): Promise<ResolvedAiAccess> {
+  const flags = await loadPlatformFeatureFlagState();
+  if (!flags["platform.beta_ai"]) {
+    const { data: isOwner, error: ownerErr } = await supabase.rpc("is_platform_owner", {
+      _user_id: userId,
+    });
+    if (ownerErr) throw new Error(ownerErr.message);
+    if (!isOwner) {
+      return applyBetaAiKillSwitch(mapAiAccess({}), {
+        betaAiEnabled: false,
+        isPlatformOwner: false,
+      });
+    }
+  }
+
   const { data, error } = await supabase.rpc("get_my_ai_access");
   if (error) throw new Error(error.message);
   const mapped = mapAiAccess((data ?? {}) as RawAiAccess);
