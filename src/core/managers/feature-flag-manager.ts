@@ -30,6 +30,11 @@ export class FeatureFlagManager extends BaseManager {
     if (!this.flags.delete(key)) throw new Error("Feature flag not found.");
   }
 
+  /** Drop keys if present. Safe for one-time retirements that may already be absent. */
+  purgeKeys(keys: readonly string[]): void {
+    for (const key of keys) this.flags.delete(key);
+  }
+
   isEnabled(key: string): boolean {
     const flag = this.flags.get(key);
     return flag?.enabled === true && !flag.archivedAt;

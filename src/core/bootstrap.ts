@@ -46,6 +46,10 @@ import { PerformanceLogger } from "./logging/performance-logger";
 import { ErrorLogger } from "./logging/error-logger";
 
 import { getEnvironment } from "./config/environment";
+import {
+  DEFAULT_PLATFORM_FEATURE_FLAGS,
+  RETIRED_PLATFORM_FEATURE_FLAG_KEYS,
+} from "./config/platform-feature-flags";
 import type { HealthCheckOutcome, IHealthCheck } from "./monitoring/health-check.interface";
 import type { HealthTarget } from "./monitoring/types";
 import {
@@ -154,12 +158,7 @@ configurationManager.set("environment", getEnvironment());
 // the Platform UI. Nothing here gates behavior yet — flipping a flag only
 // changes what `featureFlagManager.isEnabled(key)` reports, honestly.
 const featureFlagManager = container.resolve<FeatureFlagManager>(TOKENS.featureFlag);
-for (const flag of [
-  { key: "platform.maintenance_mode", enabled: false },
-  { key: "platform.global_analytics", enabled: true },
-  { key: "platform.beta_billing", enabled: false },
-  { key: "platform.beta_ai", enabled: true },
-] as const) {
+for (const flag of DEFAULT_PLATFORM_FEATURE_FLAGS) {
   featureFlagManager.register({
     id: generateUUID(),
     displayName: flag.key,
@@ -178,6 +177,7 @@ for (const flag of [
     deletedBy: null,
   });
 }
+featureFlagManager.purgeKeys(RETIRED_PLATFORM_FEATURE_FLAG_KEYS);
 
 // Part 4 — Monitoring Integration: real read-only probes where possible.
 // Queue stays "unknown" (no job queue wired). No writes / no permission changes.
@@ -221,6 +221,8 @@ export async function initializeFoundation(): Promise<void> {
   for (const manager of runtimeManagers) {
     await manager.init();
   }
+  // Drop retired keys after init in case a later hydrate reintroduced them.
+  featureFlagManager.purgeKeys(RETIRED_PLATFORM_FEATURE_FLAG_KEYS);
   inactivitySweepHandle = setInterval(
     () => {
       void sessionManager.cleanupInactiveSessions();
