@@ -67,6 +67,45 @@ export function isPersistedPlatformFeatureFlagKey(key: string): key is DefaultPl
   return DEFAULT_PLATFORM_FEATURE_FLAGS.some((flag) => flag.key === key);
 }
 
+/**
+ * i18n path for a catalog flag label. Custom (non-catalog) flags return null
+ * so the UI keeps the stored displayName/description.
+ *
+ * Nested as platformFeatureFlags.catalog.platform.<suffix>.{name,description}
+ * because catalog keys look like `platform.maintenance_mode`.
+ */
+export function catalogFeatureFlagI18nKey(
+  key: string,
+  field: "name" | "description",
+): string | null {
+  if (!isPersistedPlatformFeatureFlagKey(key)) return null;
+  return `platformFeatureFlags.catalog.${key}.${field}`;
+}
+
+export function resolveFeatureFlagDisplayName(
+  flag: { key: string; displayName: string },
+  translate: (key: string) => string,
+): string {
+  const path = catalogFeatureFlagI18nKey(flag.key, "name");
+  return path ? translate(path) : flag.displayName;
+}
+
+export function resolveFeatureFlagDescription(
+  flag: { key: string; description: string },
+  translate: (key: string) => string,
+): string {
+  const path = catalogFeatureFlagI18nKey(flag.key, "description");
+  return path ? translate(path) : flag.description;
+}
+
+/**
+ * Writes stay platform-wide. Company/branch targeting for announcements
+ * lives on `/platform/announcements`, not on Feature Flags (no pickers here).
+ */
+export function platformOnlyFlagScope(): { scope: "platform"; scopeTargetId: null } {
+  return { scope: "platform", scopeTargetId: null };
+}
+
 export function defaultPlatformFeatureFlagState(): PlatformFeatureFlagState {
   return {
     "platform.maintenance_mode": false,

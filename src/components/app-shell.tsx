@@ -555,7 +555,7 @@ export function AppShell({ children }: { children: ReactNode }) {
       to: "/platform/announcements",
       label: t("nav.announcements"),
       icon: Megaphone,
-      visible: isPlatformOwner && featureFlags.announcements,
+      visible: isPlatformOwner,
       section: t("nav.platformSection"),
     },
     {

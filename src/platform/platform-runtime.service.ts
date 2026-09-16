@@ -23,6 +23,7 @@ import type { Permission, Role } from "../core/authorization/types";
 import type { FeatureFlag } from "../core/config/types";
 import {
   catalogEnabledStates,
+  platformOnlyFlagScope,
   type PlatformFeatureFlagState,
 } from "../core/config/platform-feature-flags";
 import type { BillingPlan } from "../core/managers/billing-manager";
@@ -164,6 +165,7 @@ export class PlatformRuntimeService {
     const now = new Date();
     const flag: FeatureFlag = {
       ...input,
+      ...platformOnlyFlagScope(),
       key,
       id: generateUUID(),
       createdAt: now,
@@ -198,7 +200,7 @@ export class PlatformRuntimeService {
     key: string,
     patch: Pick<FeatureFlag, "displayName" | "description" | "scope" | "scopeTargetId" | "notes">,
   ): FeatureFlag {
-    return getFeatureFlagManager().update(key, patch);
+    return getFeatureFlagManager().update(key, { ...patch, ...platformOnlyFlagScope() });
   }
 
   archiveFeatureFlag(key: string): FeatureFlag {

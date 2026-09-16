@@ -20,7 +20,10 @@ import { BranchProvider, CompanyProvider } from "@/platform";
 import { useAuth } from "@/lib/use-auth";
 import { isPlatformOwner } from "@/lib/constants";
 import { usePlatformFeatureFlagState } from "@/lib/use-platform-feature-flags";
-import { shouldForceClientUpdate } from "@/core/config/platform-feature-flags";
+import {
+  canAccessAppDuringMaintenance,
+  shouldForceClientUpdate,
+} from "@/core/config/platform-feature-flags";
 import {
   getRunningClientInfo,
   isClientOlderThanMin,
@@ -162,7 +165,13 @@ function AuthenticatedLayout() {
     );
   }
 
-  if (profile && !owner && flags.maintenanceMode) {
+  if (
+    profile &&
+    !canAccessAppDuringMaintenance({
+      maintenanceMode: flags.maintenanceMode,
+      isPlatformOwner: owner,
+    })
+  ) {
     return <MaintenanceScreen />;
   }
 
