@@ -4,6 +4,7 @@ import { useServerFn } from "@tanstack/react-start";
 import { Megaphone, X } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
+import { ImageLightbox } from "@/components/image-lightbox";
 import { listVisiblePlatformAnnouncements } from "@/lib/platform-announcements.functions";
 import { usePlatformFeatureFlagState } from "@/lib/use-platform-feature-flags";
 import { useAuth } from "@/lib/use-auth";
@@ -32,6 +33,7 @@ export function PlatformAnnouncementsBanner() {
   const flags = usePlatformFeatureFlagState();
   const listFn = useServerFn(listVisiblePlatformAnnouncements);
   const [dismissed, setDismissed] = useState<string[]>(() => readDismissed());
+  const [lightbox, setLightbox] = useState(false);
 
   const query = useQuery({
     queryKey: ["platform-announcements-visible"],
@@ -53,6 +55,7 @@ export function PlatformAnnouncementsBanner() {
     const next = [...dismissed, id];
     setDismissed(next);
     writeDismissed(next);
+    setLightbox(false);
   }
 
   return (
@@ -62,6 +65,20 @@ export function PlatformAnnouncementsBanner() {
         <div className="min-w-0 flex-1 space-y-1">
           <p className="font-medium break-words">{current.title}</p>
           <p className="text-sm leading-relaxed break-words whitespace-pre-wrap">{current.body}</p>
+          {current.image_url && (
+            <button
+              type="button"
+              className="mt-2 block overflow-hidden rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              onClick={() => setLightbox(true)}
+              aria-label={t("platformAnnouncements.viewImage")}
+            >
+              <img
+                src={current.image_url}
+                alt={t("platformAnnouncements.imageAlt")}
+                className="max-h-48 w-full rounded-md object-contain bg-black/5 dark:bg-white/5"
+              />
+            </button>
+          )}
           {items.length > 1 && (
             <p className="text-xs opacity-80">
               {t("platformAnnouncements.moreCount", { count: items.length - 1 })}
@@ -78,6 +95,13 @@ export function PlatformAnnouncementsBanner() {
           <X className="size-4" />
         </Button>
       </div>
+      {lightbox && current.image_url && (
+        <ImageLightbox
+          images={[{ url: current.image_url, alt: t("platformAnnouncements.imageAlt") }]}
+          initialIndex={0}
+          onClose={() => setLightbox(false)}
+        />
+      )}
     </div>
   );
 }
