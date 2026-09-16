@@ -2447,7 +2447,7 @@
         },
         "self_serve_company_signup": {
           "name": "Self-serve company signup",
-          "description": "Lets companies register without a Platform Owner creating them first."
+          "description": "On the login page, hide the no-account sentence and show the company-signup link. Does not add a public create-company form; Platform Owners still create companies from Platform → Companies."
         },
         "force_client_update": {
           "name": "Force client update",

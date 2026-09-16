@@ -59,7 +59,7 @@ export type PlatformFeatureFlagSnapshot = PlatformFeatureFlagState & {
 export const PLATFORM_FEATURE_FLAG_STATE_QUERY_KEY = ["platform-feature-flag-state"] as const;
 export const PLATFORM_CLIENT_GATES_QUERY_KEY = ["platform-client-gates"] as const;
 
-/** Public subset used by /company-signup and pre-auth force-update checks. */
+/** Public subset used by /auth, /company-signup, and pre-auth force-update checks. */
 export type PlatformClientGates = {
   selfServeCompanySignup: boolean;
   forceClientUpdate: boolean;
