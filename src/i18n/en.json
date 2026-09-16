@@ -2431,7 +2431,7 @@
       "platform": {
         "maintenance_mode": {
           "name": "Maintenance mode",
-          "description": "Blocks everyone except Platform Owners while the app is under maintenance."
+          "description": "Blocks everyone except Platform Owners while the app is under maintenance, including the public login page."
         },
         "global_analytics": {
           "name": "Global analytics",
@@ -2447,7 +2447,7 @@
         },
         "self_serve_company_signup": {
           "name": "Self-serve company signup",
-          "description": "Lets companies register without a Platform Owner creating them first."
+          "description": "On the login page, hide the no-account sentence and show the company-signup link. Does not add a public create-company form; Platform Owners still create companies from Platform → Companies."
         },
         "force_client_update": {
           "name": "Force client update",
@@ -2513,7 +2513,10 @@
     "message": "The system is in maintenance mode. Please try again later.",
     "ownerBanner": "Maintenance mode is on. Other users cannot use the app.",
     "ownerBannerCta": "Manage flags",
-    "openFeatureFlags": "Open Feature Flags"
+    "openFeatureFlags": "Open Feature Flags",
+    "ownerSignIn": "Platform owner sign-in",
+    "ownerSignInHint": "Sign-in is limited to Platform Owners until maintenance ends.",
+    "hideOwnerSignIn": "Hide sign-in"
   },
   "forceUpdatePage": {
     "title": "Update required",

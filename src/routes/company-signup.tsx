@@ -1,9 +1,11 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
-import { Building2, Lock, Mail } from "lucide-react";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { Building2, Lock, Mail, Loader2 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { LanguageSwitcher } from "@/components/language-switcher";
+import { MaintenanceScreen } from "@/components/maintenance-screen";
+import { shouldShowPublicMaintenance } from "@/core/config/platform-feature-flags";
 import { usePlatformClientGates } from "@/lib/use-platform-feature-flags";
 import { APP_NAME } from "@/lib/constants";
 import i18n from "@/i18n";
@@ -16,8 +18,26 @@ export const Route = createFileRoute("/company-signup")({
 
 function CompanySignupPage() {
   const { t } = useTranslation();
+  const navigate = useNavigate();
   const gates = usePlatformClientGates();
+  const gatesReady = gates.status !== "pending";
+  const publicMaintenance = shouldShowPublicMaintenance({
+    maintenanceMode: gates.data?.maintenanceMode,
+    gatesReady,
+  });
   const locked = gates.data?.selfServeCompanySignup !== true;
+
+  if (!gatesReady) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-muted/30">
+        <Loader2 className="size-6 animate-spin text-primary" />
+      </div>
+    );
+  }
+
+  if (publicMaintenance) {
+    return <MaintenanceScreen onOwnerSignIn={() => navigate({ to: "/auth", search: { owner: "1" } })} />;
+  }
 
   return (
     <div className="min-h-screen flex flex-col items-center justify-center bg-muted/30 p-4">
