@@ -1,14 +1,16 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
-import type { PlatformFeatureFlagSnapshot } from "@/core/config/platform-feature-flags";
-import { asMinClientVersion } from "@/core/config/platform-feature-flags";
+import {
+  asMinClientVersion,
+  type PlatformClientGates,
+  type PlatformFeatureFlagSnapshot,
+} from "@/core/config/platform-feature-flags";
 import {
   loadPlatformClientGates,
   loadPlatformFeatureFlagState,
   saveMinClientVersion,
   savePlatformFeatureFlagEnabled,
-  type PlatformClientGates,
 } from "@/lib/platform-feature-flags.server";
 
 async function assertPlatformOwner(supabase: any, userId: string) {

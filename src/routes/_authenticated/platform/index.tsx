@@ -18,6 +18,7 @@ import {
   Flag,
   BarChart3,
   Bell,
+  Megaphone,
   AlertTriangle,
   Fingerprint,
 } from "lucide-react";
@@ -291,6 +292,12 @@ function PlatformDashboardPage() {
             hint="Feature Flags"
             onClick={() => navigate({ to: "/platform/feature-flags" })}
           />
+          <ModuleTile
+            icon={Megaphone}
+            label={t("platformHub.modules.announcements")}
+            hint={t("platformHub.hints.announcements")}
+            onClick={() => navigate({ to: "/platform/announcements" })}
+          />
           {flags.globalAnalytics && (
           <ModuleTile
             icon={BarChart3}
@@ -311,14 +318,6 @@ function PlatformDashboardPage() {
             hint="Audit Log"
             onClick={() => navigate({ to: "/platform/audit-log" })}
           />
-          {flags.announcements && (
-          <ModuleTile
-            icon={Bell}
-            label={t("platformHub.modules.announcements")}
-            hint={t("platformHub.hints.announcements")}
-            onClick={() => navigate({ to: "/platform/announcements" })}
-          />
-          )}
           <ModuleTile
             icon={Bell}
             label={t("platformHub.modules.notifications")}

@@ -284,7 +284,13 @@ function PlatformAnnouncementsPage() {
             </Button>
             <Button
               onClick={() => createMut.mutate()}
-              disabled={createMut.isPending || !title.trim() || !body.trim()}
+              disabled={
+                createMut.isPending ||
+                !title.trim() ||
+                !body.trim() ||
+                (scope === "company" && !companyId) ||
+                (scope === "branch" && (!companyId || !branchId))
+              }
             >
               {t("common.save")}
             </Button>

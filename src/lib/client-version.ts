@@ -1,5 +1,5 @@
-import { Capacitor } from "@capacitor/core";
 import { App } from "@capacitor/app";
+import { nativePlatform } from "./native-app";
 import { WEB_APP_VERSION } from "./client-version-compare";
 
 export {
@@ -16,16 +16,18 @@ export type RunningClientInfo = {
 };
 
 export async function getRunningClientInfo(): Promise<RunningClientInfo> {
-  if (typeof window !== "undefined" && Capacitor.isNativePlatform()) {
+  // Native Android/iOS use the store app version. Windows/PWA/web use WEB_APP_VERSION
+  // (force-update UI labels `web` as Windows).
+  const platform = nativePlatform();
+  if (platform === "android" || platform === "ios") {
     try {
       const info = await App.getInfo();
-      const native = Capacitor.getPlatform();
       return {
-        platform: native === "ios" ? "ios" : "android",
+        platform,
         version: (info.version || WEB_APP_VERSION).trim() || WEB_APP_VERSION,
       };
     } catch {
-      return { platform: "web", version: WEB_APP_VERSION };
+      return { platform, version: WEB_APP_VERSION };
     }
   }
   return { platform: "web", version: WEB_APP_VERSION };
