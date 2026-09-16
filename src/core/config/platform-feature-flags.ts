@@ -59,6 +59,21 @@ export type PlatformFeatureFlagSnapshot = PlatformFeatureFlagState & {
 export const PLATFORM_FEATURE_FLAG_STATE_QUERY_KEY = ["platform-feature-flag-state"] as const;
 export const PLATFORM_CLIENT_GATES_QUERY_KEY = ["platform-client-gates"] as const;
 
+/** Public subset used by /company-signup and pre-auth force-update checks. */
+export type PlatformClientGates = {
+  selfServeCompanySignup: boolean;
+  forceClientUpdate: boolean;
+  minClientVersion: string;
+};
+
+export function clientGatesFromSnapshot(snapshot: PlatformFeatureFlagSnapshot): PlatformClientGates {
+  return {
+    selfServeCompanySignup: snapshot["platform.self_serve_company_signup"],
+    forceClientUpdate: snapshot["platform.force_client_update"],
+    minClientVersion: snapshot.minClientVersion,
+  };
+}
+
 export function isRetiredPlatformFeatureFlagKey(key: string): boolean {
   return (RETIRED_PLATFORM_FEATURE_FLAG_KEYS as readonly string[]).includes(key);
 }
@@ -178,6 +193,89 @@ export function mergePlatformFeatureFlagSnapshot(
   return {
     ...mergePlatformFeatureFlagState(partial),
     minClientVersion: asMinClientVersion(partial?.minClientVersion ?? partial?.min_client_version),
+  };
+}
+
+function flagColumnValue(data: Record<string, unknown>, column: string, catalogKey: string): unknown {
+  return data[column] ?? data[catalogKey];
+}
+
+/** Map a `platform_settings` / sync-table row (ff_* columns) onto the catalog snapshot. */
+export function snapshotFromPlatformFlagColumns(
+  data: Record<string, unknown> | null | undefined,
+): PlatformFeatureFlagSnapshot {
+  if (!data) return defaultPlatformFeatureFlagSnapshot();
+  return mergePlatformFeatureFlagSnapshot({
+    "platform.maintenance_mode": flagColumnValue(data, "ff_maintenance_mode", "platform.maintenance_mode"),
+    "platform.global_analytics": flagColumnValue(data, "ff_global_analytics", "platform.global_analytics"),
+    "platform.beta_ai": flagColumnValue(data, "ff_beta_ai", "platform.beta_ai"),
+    "platform.announcements": flagColumnValue(data, "ff_announcements", "platform.announcements"),
+    "platform.self_serve_company_signup": flagColumnValue(
+      data,
+      "ff_self_serve_company_signup",
+      "platform.self_serve_company_signup",
+    ),
+    "platform.force_client_update": flagColumnValue(
+      data,
+      "ff_force_client_update",
+      "platform.force_client_update",
+    ),
+    "platform.realtime": flagColumnValue(data, "ff_realtime", "platform.realtime"),
+    "platform.storage_quota_warnings": flagColumnValue(
+      data,
+      "ff_storage_quota_warnings",
+      "platform.storage_quota_warnings",
+    ),
+    minClientVersion: data.min_client_version ?? data.minClientVersion,
+  });
+}
+
+/**
+ * Overlay a realtime payload onto the current snapshot.
+ * Missing columns keep the current value so a partial payload cannot reset flags.
+ */
+export function overlayPlatformFlagColumns(
+  current: PlatformFeatureFlagSnapshot,
+  data: Record<string, unknown> | null | undefined,
+): PlatformFeatureFlagSnapshot {
+  if (!data) return current;
+  return {
+    "platform.maintenance_mode": asBoolean(
+      flagColumnValue(data, "ff_maintenance_mode", "platform.maintenance_mode"),
+      current["platform.maintenance_mode"],
+    ),
+    "platform.global_analytics": asBoolean(
+      flagColumnValue(data, "ff_global_analytics", "platform.global_analytics"),
+      current["platform.global_analytics"],
+    ),
+    "platform.beta_ai": asBoolean(
+      flagColumnValue(data, "ff_beta_ai", "platform.beta_ai"),
+      current["platform.beta_ai"],
+    ),
+    "platform.announcements": asBoolean(
+      flagColumnValue(data, "ff_announcements", "platform.announcements"),
+      current["platform.announcements"],
+    ),
+    "platform.self_serve_company_signup": asBoolean(
+      flagColumnValue(data, "ff_self_serve_company_signup", "platform.self_serve_company_signup"),
+      current["platform.self_serve_company_signup"],
+    ),
+    "platform.force_client_update": asBoolean(
+      flagColumnValue(data, "ff_force_client_update", "platform.force_client_update"),
+      current["platform.force_client_update"],
+    ),
+    "platform.realtime": asBoolean(
+      flagColumnValue(data, "ff_realtime", "platform.realtime"),
+      current["platform.realtime"],
+    ),
+    "platform.storage_quota_warnings": asBoolean(
+      flagColumnValue(data, "ff_storage_quota_warnings", "platform.storage_quota_warnings"),
+      current["platform.storage_quota_warnings"],
+    ),
+    minClientVersion: asMinClientVersion(
+      data.min_client_version ?? data.minClientVersion,
+      current.minClientVersion,
+    ),
   };
 }
 

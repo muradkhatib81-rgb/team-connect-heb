@@ -6,11 +6,15 @@ import { supabaseAdmin } from "@/integrations/supabase/client.server";
 import {
   PLATFORM_FEATURE_FLAG_COLUMNS,
   asMinClientVersion,
+  clientGatesFromSnapshot,
   defaultPlatformFeatureFlagSnapshot,
-  mergePlatformFeatureFlagSnapshot,
+  snapshotFromPlatformFlagColumns,
   type DefaultPlatformFeatureFlagKey,
+  type PlatformClientGates,
   type PlatformFeatureFlagSnapshot,
 } from "@/core/config/platform-feature-flags";
+
+export type { PlatformClientGates };
 
 function isMissingRelationOrColumn(message: string): boolean {
   return /does not exist|column|relation/i.test(message);
@@ -20,17 +24,7 @@ const FLAG_SELECT =
   "ff_maintenance_mode, ff_global_analytics, ff_beta_ai, ff_announcements, ff_self_serve_company_signup, ff_force_client_update, ff_realtime, ff_storage_quota_warnings, min_client_version";
 
 function rowToSnapshot(data: Record<string, unknown> | null | undefined): PlatformFeatureFlagSnapshot {
-  return mergePlatformFeatureFlagSnapshot({
-    "platform.maintenance_mode": data?.ff_maintenance_mode,
-    "platform.global_analytics": data?.ff_global_analytics,
-    "platform.beta_ai": data?.ff_beta_ai,
-    "platform.announcements": data?.ff_announcements,
-    "platform.self_serve_company_signup": data?.ff_self_serve_company_signup,
-    "platform.force_client_update": data?.ff_force_client_update,
-    "platform.realtime": data?.ff_realtime,
-    "platform.storage_quota_warnings": data?.ff_storage_quota_warnings,
-    minClientVersion: data?.min_client_version,
-  });
+  return snapshotFromPlatformFlagColumns(data);
 }
 
 export async function loadPlatformFeatureFlagState(): Promise<PlatformFeatureFlagSnapshot> {
@@ -69,17 +63,6 @@ export async function saveMinClientVersion(version: string): Promise<PlatformFea
   return loadPlatformFeatureFlagState();
 }
 
-export type PlatformClientGates = {
-  selfServeCompanySignup: boolean;
-  forceClientUpdate: boolean;
-  minClientVersion: string;
-};
-
 export async function loadPlatformClientGates(): Promise<PlatformClientGates> {
-  const snapshot = await loadPlatformFeatureFlagState();
-  return {
-    selfServeCompanySignup: snapshot["platform.self_serve_company_signup"],
-    forceClientUpdate: snapshot["platform.force_client_update"],
-    minClientVersion: snapshot.minClientVersion,
-  };
+  return clientGatesFromSnapshot(await loadPlatformFeatureFlagState());
 }

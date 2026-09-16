@@ -1234,6 +1234,48 @@ export type Database = {
         }
         Relationships: []
       }
+      platform_feature_flag_sync: {
+        Row: {
+          ff_announcements: boolean
+          ff_beta_ai: boolean
+          ff_force_client_update: boolean
+          ff_global_analytics: boolean
+          ff_maintenance_mode: boolean
+          ff_realtime: boolean
+          ff_self_serve_company_signup: boolean
+          ff_storage_quota_warnings: boolean
+          id: number
+          min_client_version: string
+          updated_at: string
+        }
+        Insert: {
+          ff_announcements?: boolean
+          ff_beta_ai?: boolean
+          ff_force_client_update?: boolean
+          ff_global_analytics?: boolean
+          ff_maintenance_mode?: boolean
+          ff_realtime?: boolean
+          ff_self_serve_company_signup?: boolean
+          ff_storage_quota_warnings?: boolean
+          id?: number
+          min_client_version?: string
+          updated_at?: string
+        }
+        Update: {
+          ff_announcements?: boolean
+          ff_beta_ai?: boolean
+          ff_force_client_update?: boolean
+          ff_global_analytics?: boolean
+          ff_maintenance_mode?: boolean
+          ff_realtime?: boolean
+          ff_self_serve_company_signup?: boolean
+          ff_storage_quota_warnings?: boolean
+          id?: number
+          min_client_version?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       platform_owner_audit_log: {
         Row: {
           actor_id: string | null
