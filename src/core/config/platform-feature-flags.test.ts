@@ -27,6 +27,7 @@ import {
   resolveFeatureFlagDescription,
   resolveFeatureFlagDisplayName,
   shouldForceClientUpdate,
+  shouldShowPublicMaintenance,
   snapshotFromPlatformFlagColumns,
 } from "./platform-feature-flags.ts";
 
@@ -159,11 +160,13 @@ test("overlayPlatformFlagColumns keeps current values for missing columns", () =
 test("clientGatesFromSnapshot exposes the public subset", () => {
   const gates = clientGatesFromSnapshot(
     mergePlatformFeatureFlagSnapshot({
+      "platform.maintenance_mode": true,
       "platform.self_serve_company_signup": true,
       "platform.force_client_update": true,
       minClientVersion: "4.5.6",
     }),
   );
+  assert.equal(gates.maintenanceMode, true);
   assert.equal(gates.selfServeCompanySignup, true);
   assert.equal(gates.forceClientUpdate, true);
   assert.equal(gates.minClientVersion, "4.5.6");
@@ -240,6 +243,25 @@ test("login footer hides no-account copy when self-serve is open", () => {
   assert.deepEqual(
     authLoginAccountFooter({ selfServeCompanySignup: true, gatesReady: false }),
     { showNoAccountMessage: false, showCompanySignupLink: false },
+  );
+});
+
+test("public maintenance only shows after gates confirm it is on", () => {
+  assert.equal(
+    shouldShowPublicMaintenance({ maintenanceMode: true, gatesReady: true }),
+    true,
+  );
+  assert.equal(
+    shouldShowPublicMaintenance({ maintenanceMode: false, gatesReady: true }),
+    false,
+  );
+  assert.equal(
+    shouldShowPublicMaintenance({ maintenanceMode: true, gatesReady: false }),
+    false,
+  );
+  assert.equal(
+    shouldShowPublicMaintenance({ maintenanceMode: undefined, gatesReady: true }),
+    false,
   );
 });
 

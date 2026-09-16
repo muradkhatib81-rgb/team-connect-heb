@@ -51,9 +51,11 @@ test("applyPlatformFeatureFlagSyncRow writes flag state and client gates immedia
   assert.equal(state.minClientVersion, "1.2.3");
 
   const gates = qc.getQueryData(PLATFORM_CLIENT_GATES_QUERY_KEY) as {
+    maintenanceMode: boolean;
     forceClientUpdate: boolean;
     minClientVersion: string;
   };
+  assert.equal(gates.maintenanceMode, true);
   assert.equal(gates.forceClientUpdate, true);
   assert.equal(gates.minClientVersion, "1.2.3");
   assert.ok(qc.invalidated.includes(JSON.stringify(["my-ai-access"])));

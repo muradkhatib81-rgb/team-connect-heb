@@ -2431,7 +2431,7 @@
       "platform": {
         "maintenance_mode": {
           "name": "Maintenance mode",
-          "description": "Blocks everyone except Platform Owners while the app is under maintenance."
+          "description": "Blocks everyone except Platform Owners while the app is under maintenance, including the public login page."
         },
         "global_analytics": {
           "name": "Global analytics",
@@ -2513,7 +2513,10 @@
     "message": "The system is in maintenance mode. Please try again later.",
     "ownerBanner": "Maintenance mode is on. Other users cannot use the app.",
     "ownerBannerCta": "Manage flags",
-    "openFeatureFlags": "Open Feature Flags"
+    "openFeatureFlags": "Open Feature Flags",
+    "ownerSignIn": "Platform owner sign-in",
+    "ownerSignInHint": "Sign-in is limited to Platform Owners until maintenance ends.",
+    "hideOwnerSignIn": "Hide sign-in"
   },
   "forceUpdatePage": {
     "title": "Update required",

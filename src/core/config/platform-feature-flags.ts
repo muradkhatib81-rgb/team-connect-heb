@@ -61,6 +61,7 @@ export const PLATFORM_CLIENT_GATES_QUERY_KEY = ["platform-client-gates"] as cons
 
 /** Public subset used by /auth, /company-signup, and pre-auth force-update checks. */
 export type PlatformClientGates = {
+  maintenanceMode: boolean;
   selfServeCompanySignup: boolean;
   forceClientUpdate: boolean;
   minClientVersion: string;
@@ -68,6 +69,7 @@ export type PlatformClientGates = {
 
 export function clientGatesFromSnapshot(snapshot: PlatformFeatureFlagSnapshot): PlatformClientGates {
   return {
+    maintenanceMode: snapshot["platform.maintenance_mode"],
     selfServeCompanySignup: snapshot["platform.self_serve_company_signup"],
     forceClientUpdate: snapshot["platform.force_client_update"],
     minClientVersion: snapshot.minClientVersion,
@@ -335,6 +337,14 @@ export function authLoginAccountFooter(input: {
     showNoAccountMessage: !open,
     showCompanySignupLink: open,
   };
+}
+
+/** Public /auth and /company-signup: only when the gate is known to be on. */
+export function shouldShowPublicMaintenance(input: {
+  maintenanceMode: boolean | undefined;
+  gatesReady: boolean;
+}): boolean {
+  return input.gatesReady && input.maintenanceMode === true;
 }
 
 export function canUseRealtimePresence(enabled: boolean): boolean {

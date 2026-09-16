@@ -16,17 +16,21 @@ import { resolveLandingPath } from "@/lib/use-auth";
 import { seedIdleSessionOnLogin } from "@/lib/use-idle-logout";
 import { toWhatsAppUrl } from "@/lib/whatsapp";
 import { WhatsAppIcon } from "@/components/whatsapp-icon";
-import { Store, Loader2 } from "lucide-react";
+import { Store, Loader2, Wrench } from "lucide-react";
 import { LanguageSwitcher } from "@/components/language-switcher";
 import { PasswordInput, PasswordVisibilityToggle } from "@/components/ui/password-input";
 import { useTranslation } from "react-i18next";
 import i18n from "@/i18n";
 import { toWesternDigits } from "@/lib/app-locale";
-import { authLoginAccountFooter } from "@/core/config/platform-feature-flags";
+import { authLoginAccountFooter, shouldShowPublicMaintenance } from "@/core/config/platform-feature-flags";
 import { usePlatformClientGates } from "@/lib/use-platform-feature-flags";
+import { MaintenanceScreen } from "@/components/maintenance-screen";
 
 /** Kept so old /auth?redirect=… bookmarks still validate; login ignores it. */
-const searchSchema = z.object({ redirect: z.string().optional() });
+const searchSchema = z.object({
+  redirect: z.string().optional(),
+  owner: z.literal("1").optional(),
+});
 
 function AuthPending() {
   return (
@@ -64,6 +68,8 @@ function AuthPage() {
   const [checking, setChecking] = useState(true);
   const [hasUsers, setHasUsers] = useState<boolean | null>(null);
   const [showPassword, setShowPassword] = useState(false);
+  const search = Route.useSearch();
+  const [ownerSignIn, setOwnerSignIn] = useState(search.owner === "1");
 
   const whatsappQ = useQuery({
     queryKey: ["platform-settings-whatsapp-public"],
@@ -77,9 +83,14 @@ function AuthPage() {
   });
   const whatsappUrl = toWhatsAppUrl(whatsappQ.data);
   const gates = usePlatformClientGates();
+  const gatesReady = gates.status !== "pending";
+  const publicMaintenance = shouldShowPublicMaintenance({
+    maintenanceMode: gates.data?.maintenanceMode,
+    gatesReady,
+  });
   const { showNoAccountMessage, showCompanySignupLink } = authLoginAccountFooter({
     selfServeCompanySignup: gates.data?.selfServeCompanySignup,
-    gatesReady: gates.status !== "pending",
+    gatesReady,
   });
 
   useEffect(() => {
@@ -215,7 +226,7 @@ function AuthPage() {
     navigate({ to: "/platform", replace: true });
   }
 
-  if (checking) {
+  if (checking || !gatesReady) {
     return (
       <div className="flex min-h-screen items-center justify-center">
         <Loader2 className="size-6 animate-spin text-primary" />
@@ -224,6 +235,10 @@ function AuthPage() {
   }
 
   const showBootstrap = hasUsers === false;
+
+  if (publicMaintenance && !showBootstrap && !ownerSignIn) {
+    return <MaintenanceScreen onOwnerSignIn={() => setOwnerSignIn(true)} />;
+  }
 
   return (
     <div className="min-h-screen flex flex-col bg-background">
@@ -234,14 +249,25 @@ function AuthPage() {
         <div className="w-full max-w-md">
           <div className="flex flex-col items-center gap-3 mb-8">
             <div className="size-16 rounded-2xl gradient-brand flex items-center justify-center shadow-card overflow-hidden">
-              <Store className="size-7 text-primary-foreground" />
+              {publicMaintenance ? (
+                <Wrench className="size-7 text-primary-foreground" />
+              ) : (
+                <Store className="size-7 text-primary-foreground" />
+              )}
             </div>
             <div className="text-center">
-              <h1 className="text-2xl font-bold text-foreground">{t("auth.appName")}</h1>
+              <h1 className="text-2xl font-bold text-foreground">
+                {publicMaintenance ? t("maintenancePage.title") : t("auth.appName")}
+              </h1>
             </div>
           </div>
 
           <Card className="card-elevated p-6">
+            {publicMaintenance && !showBootstrap ? (
+              <p className="mb-4 text-xs text-amber-800 dark:text-amber-300 text-center">
+                {t("maintenancePage.ownerSignInHint")}
+              </p>
+            ) : null}
             {showBootstrap ? (
               <>
                 <div className="mb-5 text-center">
@@ -339,12 +365,24 @@ function AuthPage() {
                   {loading ? <Loader2 className="size-4 animate-spin" /> : t("auth.signIn")}
                 </Button>
                 <div className="pt-2 space-y-2">
-                  {showNoAccountMessage && (
+                  {publicMaintenance && (
+                      <button
+                        type="button"
+                        className="block w-full text-xs text-center text-muted-foreground hover:text-foreground transition-colors"
+                        onClick={() => {
+                          setOwnerSignIn(false);
+                          void navigate({ to: "/auth", search: {}, replace: true });
+                        }}
+                      >
+                      {t("maintenancePage.hideOwnerSignIn")}
+                    </button>
+                  )}
+                  {showNoAccountMessage && !publicMaintenance && (
                     <p className="text-xs text-muted-foreground text-center">
                       {t("auth.noAccount")}
                     </p>
                   )}
-                  {showCompanySignupLink && (
+                  {showCompanySignupLink && !publicMaintenance && (
                     <Link
                       to="/company-signup"
                       className="block text-xs text-center text-muted-foreground hover:text-foreground transition-colors"

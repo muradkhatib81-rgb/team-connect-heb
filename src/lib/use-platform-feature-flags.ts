@@ -75,5 +75,10 @@ export function usePlatformClientGates() {
     queryKey: PLATFORM_CLIENT_GATES_QUERY_KEY,
     queryFn: () => fn(),
     staleTime: FLAG_STATE_STALE_MS,
+    // Global QueryClient disables focus refetch. Public /auth must pick up
+    // maintenance + self-serve toggles without a full reload. Anon cannot
+    // subscribe to platform_feature_flag_sync (authenticated SELECT only).
+    refetchOnWindowFocus: true,
+    refetchInterval: FLAG_STATE_STALE_MS,
   });
 }
