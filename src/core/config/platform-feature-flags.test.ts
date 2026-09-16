@@ -13,6 +13,7 @@ import {
   canUseAskAi,
   canUseRealtimePresence,
   catalogFeatureFlagI18nKey,
+  clientGatesFromSnapshot,
   defaultPlatformFeatureFlagSnapshot,
   defaultPlatformFeatureFlagState,
   isPersistedPlatformFeatureFlagKey,
@@ -20,10 +21,12 @@ import {
   isSelfServeCompanySignupOpen,
   mergePlatformFeatureFlagSnapshot,
   mergePlatformFeatureFlagState,
+  overlayPlatformFlagColumns,
   platformOnlyFlagScope,
   resolveFeatureFlagDescription,
   resolveFeatureFlagDisplayName,
   shouldForceClientUpdate,
+  snapshotFromPlatformFlagColumns,
 } from "./platform-feature-flags.ts";
 
 test("default platform flags are the eight catalog keys only — no Main Board", () => {
@@ -115,6 +118,54 @@ test("mergePlatformFeatureFlagSnapshot keeps a valid min client version", () => 
   assert.equal(merged.minClientVersion, "2.3.4");
   assert.equal(mergePlatformFeatureFlagSnapshot({ min_client_version: "9.0.1" }).minClientVersion, "9.0.1");
   assert.equal(mergePlatformFeatureFlagSnapshot({ minClientVersion: "nope" }).minClientVersion, "1.0.0");
+});
+
+test("snapshotFromPlatformFlagColumns reads ff_* columns", () => {
+  const snap = snapshotFromPlatformFlagColumns({
+    ff_maintenance_mode: true,
+    ff_global_analytics: false,
+    ff_beta_ai: false,
+    ff_announcements: false,
+    ff_self_serve_company_signup: true,
+    ff_force_client_update: true,
+    ff_realtime: false,
+    ff_storage_quota_warnings: true,
+    min_client_version: "2.0.1",
+  });
+  assert.equal(snap["platform.maintenance_mode"], true);
+  assert.equal(snap["platform.global_analytics"], false);
+  assert.equal(snap["platform.beta_ai"], false);
+  assert.equal(snap["platform.announcements"], false);
+  assert.equal(snap["platform.self_serve_company_signup"], true);
+  assert.equal(snap["platform.force_client_update"], true);
+  assert.equal(snap["platform.realtime"], false);
+  assert.equal(snap["platform.storage_quota_warnings"], true);
+  assert.equal(snap.minClientVersion, "2.0.1");
+});
+
+test("overlayPlatformFlagColumns keeps current values for missing columns", () => {
+  const current = mergePlatformFeatureFlagSnapshot({
+    "platform.maintenance_mode": false,
+    "platform.beta_ai": false,
+    minClientVersion: "3.0.0",
+  });
+  const overlaid = overlayPlatformFlagColumns(current, { ff_maintenance_mode: true });
+  assert.equal(overlaid["platform.maintenance_mode"], true);
+  assert.equal(overlaid["platform.beta_ai"], false);
+  assert.equal(overlaid.minClientVersion, "3.0.0");
+});
+
+test("clientGatesFromSnapshot exposes the public subset", () => {
+  const gates = clientGatesFromSnapshot(
+    mergePlatformFeatureFlagSnapshot({
+      "platform.self_serve_company_signup": true,
+      "platform.force_client_update": true,
+      minClientVersion: "4.5.6",
+    }),
+  );
+  assert.equal(gates.selfServeCompanySignup, true);
+  assert.equal(gates.forceClientUpdate, true);
+  assert.equal(gates.minClientVersion, "4.5.6");
 });
 
 test("maintenance blocks non-owners only", () => {

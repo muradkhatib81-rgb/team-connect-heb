@@ -37,7 +37,7 @@ export function PlatformAnnouncementsBanner() {
     queryKey: ["platform-announcements-visible"],
     enabled: !!profile?.id && flags.announcements,
     queryFn: () => listFn(),
-    staleTime: 60_000,
+    staleTime: 5_000,
   });
 
   const items = useMemo(
