@@ -926,6 +926,7 @@
     "shiftSettings": "הגדרות משמרות",
     "jobTitles": "תפקידים",
     "companySettings": "הגדרות חברה",
+    "customerBilling": "תשלום",
     "profile": "הפרופיל שלי",
     "platformSection": "ניהול פלטפורמה",
     "companies": "חברות",
@@ -1316,6 +1317,12 @@
   "platformBilling": {
     "title": "חיוב ומנויים",
     "subtitle": "תשלום Stripe לפי חברה. דקות AI ונפח אחסון לפי חברה או סניף — נקבעים כאן, לא ב-Stripe.",
+    "customerPaymentVisible": "תשלום ללקוחות גלוי",
+    "customerPaymentVisibleDesc": "כשכבוי, דפי תשלום, Checkout ומנוי מוסתרים מכולם מלבד בעל הפלטפורמה. בחירת תוכנית ידנית, דקות AI ואחסון בעמוד זה נשארים זמינים.",
+    "customerPaymentVisibleOn": "לקוחות יכולים לראות תשלום",
+    "customerPaymentVisibleOff": "מוסתר מלקוחות",
+    "customerPaymentSaved": "נראות התשלום ללקוחות נשמרה",
+    "customerPaymentSaveFailed": "לא ניתן לשמור את נראות התשלום ללקוחות",
     "stripeNotConfigured": "Stripe עדיין לא מוגדר במלואו בשרת. בחירת תוכנית ידנית נשמרת. ל-Checkout אמיתי נדרשים המשתנים שברשימה למטה.",
     "storageTablesMissing": "טבלאות מכסת האחסון עדיין לא הותקנו. הריצו ב-Supabase SQL את הקובץ 20260825130000_billing_storage_quotas.sql ואז רעננו את העמוד.",
     "platformSubscription": "מנוי הפלטפורמה",
@@ -1408,7 +1415,10 @@
     },
     "errors": {
       "employeeLimitExceeded": "הגעתם למכסת {{limit}} עובדים בתוכנית {{planLabel}}. שדרגו את התוכנית או התחילו תקופת ניסיון.",
+      "employeeLimitExceededHidden": "הגעתם למכסת {{limit}} עובדים בתוכנית {{planLabel}}.",
       "branchLimitExceeded": "הגעתם למכסת {{limit}} סניפים בתוכנית {{planLabel}}. שדרגו את התוכנית או התחילו תקופת ניסיון.",
+      "branchLimitExceededHidden": "הגעתם למכסת {{limit}} סניפים בתוכנית {{planLabel}}.",
+      "customerPaymentHidden": "התשלום אינו זמין.",
       "stripeActiveNoTrial": "לחברה יש מנוי Stripe פעיל — לא ניתן להתחיל ניסיון ידני.",
       "trialAlreadyActive": "תקופת הניסיון כבר פעילה לחברה זו.",
       "trialOnlyOnFree": "ניסיון זמין רק לחברות בתוכנית חינמית.",
@@ -1440,6 +1450,14 @@
     "colAiMinutes": "דקות AI",
     "colStorage": "אחסון",
     "invoice": "חשבונית"
+  },
+  "customerBilling": {
+    "title": "תשלום",
+    "subtitle": "תוכנית החברה. לשינוי התוכנית פנו לבעל הפלטפורמה.",
+    "currentPlan": "תוכנית נוכחית",
+    "noCompany": "הסניף עדיין לא משויך לחברה, לכן אין תוכנית תשלום להצגה.",
+    "selfServeHint": "תשלום עצמי עדיין לא זמין. בעל הפלטפורמה יכול להפעיל תוכנית מחיוב ומנויים.",
+    "unavailable": "התשלום מוסתר."
   },
   "permissions": {
     "title": "ניהול הרשאות",
@@ -2314,7 +2332,7 @@
     "settings": {
       "contactEmail": "אימייל ליצירת קשר",
       "billingEnabled": "חיוב פעיל",
-      "billingEnabledDesc": "האם החברה כלולה במעגל החיוב של הפלטפורמה",
+      "billingEnabledDesc": "הערה ברמת החברה בלבד. הצגה או הסתרה של תשלום ללקוחות נשלטת מ״תשלום ללקוחות גלוי״ בחיוב ומנויים.",
       "saveSettings": "שמירת הגדרות",
       "settingsSaved": "הגדרות החברה נשמרו"
     }

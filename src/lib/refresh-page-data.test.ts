@@ -9,6 +9,7 @@ test("refresh policy keeps session, chrome, and Ask AI keys", () => {
   assert.equal(refreshKeyPolicy(["active-branch"]), "keep");
   assert.equal(refreshKeyPolicy(["my-ai-access", "u1"]), "keep");
   assert.equal(refreshKeyPolicy(["company-settings"]), "keep");
+  assert.equal(refreshKeyPolicy(["customer-payment-visible"]), "keep");
 });
 
 test("refresh policy soft-refetches company/branch lists used by platform pages", () => {

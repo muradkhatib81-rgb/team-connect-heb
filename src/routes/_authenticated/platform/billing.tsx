@@ -27,6 +27,7 @@ import {
   createBillingPortalSession,
   getBillingOverview,
   saveBillingAllocation,
+  setCustomerPaymentVisible,
   setManualBillingPlan,
   startBillingTrial,
 } from "@/lib/billing.functions";
@@ -37,6 +38,7 @@ import {
   trialDaysRemaining,
 } from "@/lib/billing-entitlements";
 import { translateBillingError } from "@/lib/billing-errors";
+import { CUSTOMER_PAYMENT_VISIBLE_QUERY_KEY } from "@/lib/billing-visibility";
 import {
   DEFAULT_STORAGE_QUOTA_MB,
   formatUsedBytes,
@@ -82,6 +84,7 @@ function PlatformBillingPage() {
   const checkoutFn = useServerFn(createBillingCheckoutSession);
   const portalFn = useServerFn(createBillingPortalSession);
   const startTrialFn = useServerFn(startBillingTrial);
+  const setVisibilityFn = useServerFn(setCustomerPaymentVisible);
 
   const [selectedCompanyId, setSelectedCompanyId] = useState("");
   const [selectedBranchId, setSelectedBranchId] = useState(COMPANY_SCOPE);
@@ -104,10 +107,10 @@ function PlatformBillingPage() {
     if (search.checkout === "success") {
       toast.success(t("platformBilling.checkoutSuccess"));
       void qc.invalidateQueries({ queryKey: OVERVIEW_KEY });
-      void navigate({ to: "/platform/billing", search: {}, replace: true });
+      void navigate({ to: "/platform/billing", search: { checkout: undefined }, replace: true });
     } else if (search.checkout === "cancel") {
       toast.message(t("platformBilling.checkoutCancel"));
-      void navigate({ to: "/platform/billing", search: {}, replace: true });
+      void navigate({ to: "/platform/billing", search: { checkout: undefined }, replace: true });
     }
   }, [search.checkout, navigate, qc, t]);
 
@@ -303,6 +306,20 @@ function PlatformBillingPage() {
     onError: (e: Error) => toastBillingError(e),
   });
 
+  const visibilityMut = useMutation({
+    mutationFn: (visible: boolean) => setVisibilityFn({ data: { visible } }),
+    onSuccess: (res) => {
+      toast.success(t("platformBilling.customerPaymentSaved"));
+      qc.setQueryData(OVERVIEW_KEY, (prev: typeof overviewQ.data) =>
+        prev ? { ...prev, customerPaymentVisible: res.customerPaymentVisible } : prev,
+      );
+      void qc.invalidateQueries({ queryKey: CUSTOMER_PAYMENT_VISIBLE_QUERY_KEY });
+    },
+    onError: (e: Error) => {
+      toast.error(translateBillingError(e.message, t) || t("platformBilling.customerPaymentSaveFailed"));
+    },
+  });
+
   const overview = overviewQ.data;
   const platformPlan = overview?.platform.plan ?? "free";
   const catalogForDraft = entitlements.find((e) => e.billing_plan === draftPlan);
@@ -327,6 +344,30 @@ function PlatformBillingPage() {
           <p className="text-sm text-muted-foreground mt-1">{t("platformBilling.subtitle")}</p>
         </div>
       </header>
+
+      <Card className="card-elevated p-4 sm:p-5">
+        <div className="flex items-start justify-between gap-4">
+          <div className="min-w-0 space-y-1">
+            <p className="text-sm font-medium">{t("platformBilling.customerPaymentVisible")}</p>
+            <p className="text-xs text-muted-foreground">
+              {t("platformBilling.customerPaymentVisibleDesc")}
+            </p>
+          </div>
+          <div className="flex shrink-0 flex-col items-end gap-2">
+            <Switch
+              checked={overview?.customerPaymentVisible === true}
+              disabled={!overview || visibilityMut.isPending}
+              onCheckedChange={(checked) => visibilityMut.mutate(checked)}
+              aria-label={t("platformBilling.customerPaymentVisible")}
+            />
+            <Badge variant={overview?.customerPaymentVisible ? "secondary" : "outline"}>
+              {overview?.customerPaymentVisible
+                ? t("platformBilling.customerPaymentVisibleOn")
+                : t("platformBilling.customerPaymentVisibleOff")}
+            </Badge>
+          </div>
+        </div>
+      </Card>
 
       {overviewQ.isError && (
         <Card className="p-4 text-sm text-destructive">

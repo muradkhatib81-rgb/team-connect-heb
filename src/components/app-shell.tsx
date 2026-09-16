@@ -86,6 +86,11 @@ import { fetchCustodyUserCaps, invalidateCustodyQueries } from "@/lib/custody-wo
 import { invalidateShiftVisibleQueries } from "@/lib/shift-visible-rpc";
 import { notifyOwnBreakStatusTransition } from "@/lib/break-self-realtime";
 import {
+  canShowCustomerPaymentUi,
+  isCompanyPaymentOperator,
+} from "@/lib/billing-visibility";
+import { useCustomerPaymentVisible } from "@/lib/use-customer-payment-visible";
+import {
   bridgeMonitorName,
   bridgePostgresOn,
   bridgeSupabaseChannelName,
@@ -243,6 +248,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   const leaveAccess = useLeaveAccess();
   const aiAccessQ = useAiAccess();
   const permissionsQ = useCurrentPermissions(profile?.id);
+  const customerPaymentVisibleQ = useCustomerPaymentVisible();
   const custodyCapsQ = useQuery({
     enabled: !!profile?.id,
     queryKey: ["custody-caps", profile?.id],
@@ -291,6 +297,11 @@ export function AppShell({ children }: { children: ReactNode }) {
     isPlatformOwner ||
     (profile.roles.includes("assistant_manager") &&
       permissionsQ.data?.can_manage_company_settings === true);
+  const showCustomerPaymentNav = canShowCustomerPaymentUi({
+    customerPaymentVisible: customerPaymentVisibleQ.data === true,
+    isPlatformOwner,
+    isCompanyOperator: isCompanyPaymentOperator(profile.roles),
+  });
   const canManageShiftSettings = hasBranchActionPermission(
     profile.roles,
     permissionsQ.data,
@@ -460,6 +471,13 @@ export function AppShell({ children }: { children: ReactNode }) {
       label: t("nav.companySettings"),
       icon: Building,
       visible: canManageCompanySettings,
+      section: branchSection,
+    },
+    {
+      to: "/billing",
+      label: t("nav.customerBilling"),
+      icon: CreditCard,
+      visible: showCustomerPaymentNav,
       section: branchSection,
     },
     // Personal profile stays reachable regardless of Branch Mode.
