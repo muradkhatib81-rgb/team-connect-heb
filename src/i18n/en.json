@@ -926,6 +926,7 @@
     "shiftSettings": "Shift Settings",
     "jobTitles": "Job Titles",
     "companySettings": "Company Settings",
+    "customerBilling": "Payment",
     "profile": "My Profile",
     "platformSection": "Platform Management",
     "companies": "Companies",
@@ -1316,6 +1317,12 @@
   "platformBilling": {
     "title": "Billing & Subscriptions",
     "subtitle": "Stripe payment is per company. AI minutes and storage are set here by company or branch — not in Stripe.",
+    "customerPaymentVisible": "Customer payment visible",
+    "customerPaymentVisibleDesc": "When off, payment, checkout, and subscription pages are hidden from everyone except Platform Owner. Manual plan, AI minutes, and storage on this page stay available.",
+    "customerPaymentVisibleOn": "Customers can see payment",
+    "customerPaymentVisibleOff": "Hidden from customers",
+    "customerPaymentSaved": "Customer payment visibility saved",
+    "customerPaymentSaveFailed": "Could not save customer payment visibility",
     "stripeNotConfigured": "Stripe is not fully configured on the server yet. Manual plan selection is saved. Real Checkout needs the env vars listed below.",
     "storageTablesMissing": "Storage quota tables are not installed yet. Run 20260825130000_billing_storage_quotas.sql in Supabase SQL, then refresh this page.",
     "platformSubscription": "Platform subscription",
@@ -1408,7 +1415,10 @@
     },
     "errors": {
       "employeeLimitExceeded": "You reached the limit of {{limit}} employees on the {{planLabel}} plan. Upgrade or start a trial.",
+      "employeeLimitExceededHidden": "You reached the limit of {{limit}} employees on the {{planLabel}} plan.",
       "branchLimitExceeded": "You reached the limit of {{limit}} branches on the {{planLabel}} plan. Upgrade or start a trial.",
+      "branchLimitExceededHidden": "You reached the limit of {{limit}} branches on the {{planLabel}} plan.",
+      "customerPaymentHidden": "Payment is not available.",
       "stripeActiveNoTrial": "This company has an active Stripe subscription — a manual trial cannot be started.",
       "trialAlreadyActive": "A trial is already active for this company.",
       "trialOnlyOnFree": "Trials are only available for companies on the Free plan.",
@@ -1440,6 +1450,14 @@
     "colAiMinutes": "AI minutes",
     "colStorage": "Storage",
     "invoice": "Invoice"
+  },
+  "customerBilling": {
+    "title": "Payment",
+    "subtitle": "Your company plan. To change it, contact the platform owner.",
+    "currentPlan": "Current plan",
+    "noCompany": "This branch is not assigned to a company yet, so there is no payment plan to show.",
+    "selfServeHint": "Self-serve checkout is not available yet. The platform owner can activate a plan from Billing & Subscriptions.",
+    "unavailable": "Payment is hidden."
   },
   "permissions": {
     "title": "Permission Management",
@@ -2314,7 +2332,7 @@
     "settings": {
       "contactEmail": "Contact email",
       "billingEnabled": "Billing enabled",
-      "billingEnabledDesc": "Whether the company is included in the platform billing cycle",
+      "billingEnabledDesc": "Per-company note only. Showing or hiding customer payment is controlled by Customer payment visible on Billing & Subscriptions.",
       "saveSettings": "Save settings",
       "settingsSaved": "Company settings saved"
     }

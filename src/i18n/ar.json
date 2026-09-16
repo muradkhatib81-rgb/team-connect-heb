@@ -926,6 +926,7 @@
     "shiftSettings": "إعدادات المناوبات",
     "jobTitles": "المسميات الوظيفية",
     "companySettings": "إعدادات الشركة",
+    "customerBilling": "الدفع",
     "profile": "ملفي الشخصي",
     "platformSection": "إدارة المنصة",
     "companies": "الشركات",
@@ -1316,6 +1317,12 @@
   "platformBilling": {
     "title": "الفوترة والاشتراكات",
     "subtitle": "دفع Stripe حسب الشركة. دقائق AI والتخزين تُحدَّد هنا حسب الشركة أو الفرع — وليس في Stripe.",
+    "customerPaymentVisible": "دفع العملاء ظاهر",
+    "customerPaymentVisibleDesc": "عند الإيقاف تُخفى صفحات الدفع وCheckout والاشتراك عن الجميع عدا مالك المنصة. اختيار الخطة يدوياً ودقائق AI والتخزين في هذه الصفحة تبقى متاحة.",
+    "customerPaymentVisibleOn": "يمكن للعملاء رؤية الدفع",
+    "customerPaymentVisibleOff": "مخفي عن العملاء",
+    "customerPaymentSaved": "تم حفظ ظهور الدفع للعملاء",
+    "customerPaymentSaveFailed": "تعذّر حفظ ظهور الدفع للعملاء",
     "stripeNotConfigured": "Stripe غير مضبوط بالكامل على الخادم بعد. اختيار الخطة يدوياً يُحفظ. لـ Checkout الحقيقي يلزم المتغيرات المدرجة أدناه.",
     "storageTablesMissing": "جداول حصة التخزين غير مثبتة بعد. شغّلوا 20260825130000_billing_storage_quotas.sql في Supabase SQL ثم حدّثوا الصفحة.",
     "platformSubscription": "اشتراك المنصة",
@@ -1408,7 +1415,10 @@
     },
     "errors": {
       "employeeLimitExceeded": "وصلت إلى حد {{limit}} موظفين في خطة {{planLabel}}. رقّوا الخطة أو ابدأوا فترة تجربة.",
+      "employeeLimitExceededHidden": "وصلت إلى حد {{limit}} موظفين في خطة {{planLabel}}.",
       "branchLimitExceeded": "وصلت إلى حد {{limit}} فروع في خطة {{planLabel}}. رقّوا الخطة أو ابدأوا فترة تجربة.",
+      "branchLimitExceededHidden": "وصلت إلى حد {{limit}} فروع في خطة {{planLabel}}.",
+      "customerPaymentHidden": "الدفع غير متاح.",
       "stripeActiveNoTrial": "للشركة اشتراك Stripe نشط — لا يمكن بدء تجربة يدوية.",
       "trialAlreadyActive": "فترة التجربة نشطة أصلاً لهذه الشركة.",
       "trialOnlyOnFree": "التجربة متاحة فقط للشركات على الخطة المجانية.",
@@ -1440,6 +1450,14 @@
     "colAiMinutes": "دقائق AI",
     "colStorage": "تخزين",
     "invoice": "فاتورة"
+  },
+  "customerBilling": {
+    "title": "الدفع",
+    "subtitle": "خطة شركتكم. لتغييرها تواصلوا مع مالك المنصة.",
+    "currentPlan": "الخطة الحالية",
+    "noCompany": "هذا الفرع غير مربوط بشركة بعد، لذلك لا توجد خطة دفع للعرض.",
+    "selfServeHint": "الدفع الذاتي غير متاح بعد. يمكن لمالك المنصة تفعيل خطة من الفوترة والاشتراكات.",
+    "unavailable": "الدفع مخفي."
   },
   "permissions": {
     "title": "إدارة الصلاحيات",
@@ -2314,7 +2332,7 @@
     "settings": {
       "contactEmail": "بريد للتواصل",
       "billingEnabled": "الفوترة مفعّلة",
-      "billingEnabledDesc": "هل الشركة ضمن دورة الفوترة للمنصة",
+      "billingEnabledDesc": "ملاحظة على مستوى الشركة فقط. إظهار أو إخفاء دفع العملاء يُتحكَّم به من «دفع العملاء ظاهر» في الفوترة والاشتراكات.",
       "saveSettings": "حفظ الإعدادات",
       "settingsSaved": "تم حفظ إعدادات الشركة"
     }

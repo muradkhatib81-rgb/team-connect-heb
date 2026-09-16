@@ -8,6 +8,7 @@ import type { BillingPlan } from "@/core/managers/billing-manager";
 import { applyCompanyAiGrantFromBillingPlan } from "@/lib/billing-ai-sync.server";
 import { applyCompanyStorageFromBillingPlan } from "@/lib/billing-storage.server";
 import { billingErrorCode } from "@/lib/billing-errors";
+import { readCustomerPaymentVisible } from "@/lib/billing-visibility.server";
 import type { BillingAccountRow } from "@/lib/billing-store.server";
 import {
   DEFAULT_PLAN_ENTITLEMENTS,
@@ -194,8 +195,14 @@ export async function getCompanyBillingState(companyId: string): Promise<Company
   };
 }
 
-function limitMessage(kind: "employees" | "branches", limit: number, plan: BillingPlan): string {
-  return billingErrorCode(kind === "employees" ? "employeeLimitExceeded" : "branchLimitExceeded", {
+function limitMessage(
+  kind: "employees" | "branches",
+  limit: number,
+  plan: BillingPlan,
+  customerPaymentVisible: boolean,
+): string {
+  const base = kind === "employees" ? "employeeLimitExceeded" : "branchLimitExceeded";
+  return billingErrorCode(customerPaymentVisible ? base : `${base}Hidden`, {
     limit,
     plan,
   });
@@ -206,7 +213,8 @@ export async function assertCanAddEmployee(companyId: string): Promise<void> {
   const max = state.entitlements.max_employees;
   if (max == null) return;
   if (state.usage.employees >= max) {
-    throw new Error(limitMessage("employees", max, state.effectivePlan));
+    const visible = await readCustomerPaymentVisible();
+    throw new Error(limitMessage("employees", max, state.effectivePlan, visible));
   }
 }
 
@@ -215,7 +223,8 @@ export async function assertCanAddBranch(companyId: string): Promise<void> {
   const max = state.entitlements.max_branches;
   if (max == null) return;
   if (state.usage.branches >= max) {
-    throw new Error(limitMessage("branches", max, state.effectivePlan));
+    const visible = await readCustomerPaymentVisible();
+    throw new Error(limitMessage("branches", max, state.effectivePlan, visible));
   }
 }
 

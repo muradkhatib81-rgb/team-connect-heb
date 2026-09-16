@@ -34,6 +34,7 @@ import {
   type BillingAccountRow,
 } from "@/lib/billing-store.server";
 import {
+  companyIdForPhysicalBranch,
   getCompanyBillingState,
   listPlanEntitlements,
   startCompanyTrial,
@@ -41,6 +42,7 @@ import {
 } from "@/lib/billing-entitlements.server";
 import type { PlanEntitlementRow } from "@/lib/billing-entitlements";
 import { billingErrorCode } from "@/lib/billing-errors";
+import { isCompanyPaymentOperator } from "@/lib/billing-visibility";
 import {
   appPublicUrl,
   getStripe,
@@ -52,6 +54,10 @@ import {
   priceIdForPlan,
   type StripeEnvPresence,
 } from "@/lib/billing-stripe.server";
+import {
+  readCustomerPaymentVisible,
+  writeCustomerPaymentVisible,
+} from "@/lib/billing-visibility.server";
 
 async function assertPlatformOwner(supabase: any, userId: string) {
   const { data, error } = await supabase.rpc("is_platform_owner", { _user_id: userId });
@@ -63,6 +69,8 @@ export type BillingOverview = {
   stripeConfigured: boolean;
   checkoutConfigured: boolean;
   webhookConfigured: boolean;
+  /** Platform-level gate for customer-facing payment UI. */
+  customerPaymentVisible: boolean;
   /** Presence flags only — no secret values. */
   stripeEnv: StripeEnvPresence;
   missingStripeEnv: string[];
@@ -123,8 +131,17 @@ export const getBillingOverview = createServerFn({ method: "GET" })
   .handler(async ({ context }): Promise<BillingOverview> => {
     const { supabase, userId } = context as { supabase: any; userId: string };
     await assertPlatformOwner(supabase, userId);
-    const [platform, accounts, payments, entitlements, grants, storageEntitlements, storageGrants, planEntitlements] =
-      await Promise.all([
+    const [
+      platform,
+      accounts,
+      payments,
+      entitlements,
+      grants,
+      storageEntitlements,
+      storageGrants,
+      planEntitlements,
+      customerPaymentVisible,
+    ] = await Promise.all([
         loadPlatformAccount(),
         listBillingAccounts(),
         listRecentPayments(15),
@@ -133,6 +150,7 @@ export const getBillingOverview = createServerFn({ method: "GET" })
         listBillingStorageEntitlements(),
         listBillingStorageGrants(),
         listPlanEntitlements(),
+        readCustomerPaymentVisible(),
       ]);
     const companyRows = accounts.filter((a) => a.company_id);
     const companies = await Promise.all(companyRows.map((row) => accountToCompanySlice(row)));
@@ -140,6 +158,7 @@ export const getBillingOverview = createServerFn({ method: "GET" })
       stripeConfigured: isStripeConfigured(),
       checkoutConfigured: isStripeCheckoutConfigured(),
       webhookConfigured: isStripeWebhookConfigured(),
+      customerPaymentVisible,
       stripeEnv: getStripeEnvPresence(),
       missingStripeEnv: missingStripeEnvKeys(),
       platform: platform
@@ -157,6 +176,80 @@ export const getBillingOverview = createServerFn({ method: "GET" })
       storageEntitlements,
       storageGrants,
       planEntitlements,
+    };
+  });
+
+const visibilityInput = z.object({ visible: z.boolean() });
+
+export const setCustomerPaymentVisible = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((raw: unknown) => visibilityInput.parse(raw))
+  .handler(async ({ data, context }) => {
+    const { supabase, userId } = context as { supabase: any; userId: string };
+    await assertPlatformOwner(supabase, userId);
+    const customerPaymentVisible = await writeCustomerPaymentVisible(data.visible);
+    return { ok: true as const, customerPaymentVisible };
+  });
+
+export type CustomerBillingSummary = {
+  customerPaymentVisible: boolean;
+  companyId: string | null;
+  plan: BillingPlan;
+  status: string;
+  trialEndsAt: string | null;
+  isTrialActive: boolean;
+};
+
+export const getCustomerBillingSummary = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }): Promise<CustomerBillingSummary> => {
+    const { supabase, userId } = context as { supabase: any; userId: string };
+    const [{ data: isOwner, error: ownerErr }, customerPaymentVisible] = await Promise.all([
+      supabase.rpc("is_platform_owner", { _user_id: userId }),
+      readCustomerPaymentVisible(),
+    ]);
+    if (ownerErr) throw new Error(ownerErr.message);
+    if (!customerPaymentVisible && !isOwner) {
+      throw new Error(billingErrorCode("customerPaymentHidden"));
+    }
+    if (!isOwner) {
+      const { data: roles, error: rolesErr } = await supabase
+        .from("user_roles")
+        .select("role")
+        .eq("user_id", userId);
+      if (rolesErr) throw new Error(rolesErr.message);
+      const roleList = (roles ?? []).map((r: { role: string }) => r.role);
+      if (!isCompanyPaymentOperator(roleList)) {
+        throw new Error("Unauthorized");
+      }
+    }
+
+    const { data: profile, error: profileErr } = await (supabaseAdmin as any)
+      .from("profiles")
+      .select("branch_id")
+      .eq("id", userId)
+      .maybeSingle();
+    if (profileErr) throw new Error(profileErr.message);
+    const branchId = (profile?.branch_id as string | null) ?? null;
+    const companyId = branchId ? await companyIdForPhysicalBranch(branchId) : null;
+    if (!companyId) {
+      return {
+        customerPaymentVisible,
+        companyId: null,
+        plan: "free",
+        status: "none",
+        trialEndsAt: null,
+        isTrialActive: false,
+      };
+    }
+    const state = await getCompanyBillingState(companyId);
+    return {
+      customerPaymentVisible,
+      companyId,
+      plan: state.effectivePlan,
+      status: state.status,
+      trialEndsAt: state.trialEndsAt,
+      isTrialActive: state.isTrialActive,
     };
   });
 

@@ -1228,6 +1228,7 @@ export type Database = {
       platform_settings: {
         Row: {
           created_at: string
+          customer_payment_visible: boolean
           id: number
           pwa_icon_url: string | null
           support_email: string | null
@@ -1236,6 +1237,7 @@ export type Database = {
         }
         Insert: {
           created_at?: string
+          customer_payment_visible?: boolean
           id?: number
           pwa_icon_url?: string | null
           support_email?: string | null
@@ -1244,6 +1246,7 @@ export type Database = {
         }
         Update: {
           created_at?: string
+          customer_payment_visible?: boolean
           id?: number
           pwa_icon_url?: string | null
           support_email?: string | null
@@ -2544,6 +2547,14 @@ export type Database = {
           job_title: string
           role: string
           role_label: string
+        }[]
+      }
+      get_public_platform_settings: {
+        Args: never
+        Returns: {
+          customer_payment_visible: boolean
+          pwa_icon_url: string | null
+          whatsapp_number: string | null
         }[]
       }
       get_task_assignees: {

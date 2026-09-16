@@ -45,8 +45,8 @@ alwaysApply: true
 
 - Enforce storage quota on uploads (track `used_bytes`, block when over)
 - Tax/VAT invoices / PDF receipts as a product requirement
-- Company self-serve page (non-owner)
-- Enforce `billingEnabled` as a hard feature gate across the app
+- Company self-serve page (non-owner) — gated `/billing` exists; Stripe checkout still owner-only
+- ~~Enforce `billingEnabled` as a hard feature gate across the app~~ (platform-level `customer_payment_visible` on `/platform/billing`, 2026-09-16)
 - Dunning emails beyond 3-day grace on `past_due`
 - Live Stripe (needs supported-country business entity + bank) or local PSP alternative
 
