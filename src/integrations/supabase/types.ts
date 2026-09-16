@@ -1233,6 +1233,7 @@ export type Database = {
           support_email: string | null
           updated_at: string
           whatsapp_number: string | null
+          customer_billing_visible: boolean
         }
         Insert: {
           created_at?: string
@@ -1241,6 +1242,7 @@ export type Database = {
           support_email?: string | null
           updated_at?: string
           whatsapp_number?: string | null
+          customer_billing_visible?: boolean
         }
         Update: {
           created_at?: string
@@ -1249,6 +1251,7 @@ export type Database = {
           support_email?: string | null
           updated_at?: string
           whatsapp_number?: string | null
+          customer_billing_visible?: boolean
         }
         Relationships: []
       }
@@ -2527,6 +2530,7 @@ export type Database = {
           user_id: string
         }[]
       }
+      get_customer_billing_visible: { Args: never; Returns: boolean }
       get_my_department_id: { Args: never; Returns: string }
       get_profile_contact: {
         Args: { _id: string }

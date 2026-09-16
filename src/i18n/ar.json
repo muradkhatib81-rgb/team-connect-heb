@@ -926,6 +926,7 @@
     "shiftSettings": "إعدادات المناوبات",
     "jobTitles": "المسميات الوظيفية",
     "companySettings": "إعدادات الشركة",
+    "companyBilling": "الاشتراك",
     "profile": "ملفي الشخصي",
     "platformSection": "إدارة المنصة",
     "companies": "الشركات",
@@ -1424,7 +1425,8 @@
       "companyNotFound": "الشركة غير موجودة",
       "stripeNoCheckoutUrl": "Stripe لم يُرجع رابط دفع",
       "stripeNotConfigured": "Stripe غير مضبوط.",
-      "noStripeCustomer": "لا يوجد عميل Stripe لهذه الشركة. ابدأوا بدفع أولاً."
+      "noStripeCustomer": "لا يوجد عميل Stripe لهذه الشركة. ابدأوا بدفع أولاً.",
+      "customerUiDisabled": "دفع العملاء مُوقف. تواصلوا مع مالك المنصة."
     },
     "stripeSetupTitle": "Stripe غير مضبوط بالكامل بعد",
     "envPresent": "موجود",
@@ -1439,7 +1441,13 @@
     "portalNeedsCustomer": "البوابة تُفتح بعد أن يكون للشركة عميل Stripe (عادة بعد أول Checkout).",
     "colAiMinutes": "دقائق AI",
     "colStorage": "تخزين",
-    "invoice": "فاتورة"
+    "invoice": "فاتورة",
+    "customerUiToggle": "واجهة دفع العملاء",
+    "customerUiToggleDesc": "إيقاف: أنتم فقط تستخدمون هذه الصفحة للخطط اليدوية. المستخدمون الآخرون لن يروا الدفع أو البوابة أو الاشتراك الذاتي. تشغيل: الشركات المسموح لها يمكنها رؤية واجهة الدفع.",
+    "customerUiOnToast": "واجهة دفع العملاء ظاهرة للشركات المسموح لها",
+    "customerUiOffToast": "واجهة دفع العملاء مخفية عن الجميع ما عداكم",
+    "customerUiCompanyOn": "دفع العميل مسموح",
+    "customerUiCompanyOff": "دفع العميل مخفي"
   },
   "permissions": {
     "title": "إدارة الصلاحيات",
@@ -2314,9 +2322,11 @@
     "settings": {
       "contactEmail": "بريد للتواصل",
       "billingEnabled": "الفوترة مفعّلة",
-      "billingEnabledDesc": "هل الشركة ضمن دورة الفوترة للمنصة",
+      "billingEnabledDesc": "السماح لهذه الشركة برؤية الدفع/Checkout عندما تكون واجهة دفع العملاء مفعّلة في المنصة → الفوترة. الخطط اليدوية في تلك الصفحة تبقى متاحة في كل الأحوال.",
+      "billingEnabledNeedsMaster": "يسري فقط بعد تشغيل «واجهة دفع العملاء» في المنصة → الفوترة.",
       "saveSettings": "حفظ الإعدادات",
-      "settingsSaved": "تم حفظ إعدادات الشركة"
+      "settingsSaved": "تم حفظ إعدادات الشركة",
+      "saveFailed": "تعذّر حفظ إعدادات الشركة"
     }
   },
   "platformCompanyDialogs": {
@@ -2646,7 +2656,21 @@
     "companyEmail": "البريد الإلكتروني للشركة",
     "primaryColor": "اللون الرئيسي (اختياري)",
     "clear": "مسح",
-    "saveChanges": "حفظ التغييرات"
+    "saveChanges": "حفظ التغييرات",
+    "billingTitle": "الاشتراك",
+    "billingHint": "عرض خطة الشركة. الدفع الذاتي سيظهر هنا عندما يكون جاهزاً.",
+    "openBilling": "فتح الاشتراك"
+  },
+  "companyBillingPage": {
+    "pageTitle": "الاشتراك",
+    "title": "الاشتراك",
+    "subtitle": "خطة شركتكم. الدفع الذاتي سيظهر هنا عندما يكون جاهزاً.",
+    "hiddenTitle": "الاشتراك غير متاح",
+    "hiddenDesc": "صفحات الدفع والاشتراك مخفية حالياً. تواصلوا مع مالك المنصة إذا احتجتم تغيير الخطة.",
+    "backToDashboard": "العودة إلى اللوحة الرئيسية",
+    "currentPlan": "الخطة الحالية",
+    "comingSoon": "الدفع الذاتي وبوابة العميل غير مفتوحين بعد. الخطة تُدار بواسطة مالك المنصة.",
+    "trialActive": "تجربة نشطة حالياً لهذه الشركة."
   },
   "jobTitlesPage": {
     "title": "إدارة المسميات الوظيفية",

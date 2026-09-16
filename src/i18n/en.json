@@ -926,6 +926,7 @@
     "shiftSettings": "Shift Settings",
     "jobTitles": "Job Titles",
     "companySettings": "Company Settings",
+    "companyBilling": "Subscription",
     "profile": "My Profile",
     "platformSection": "Platform Management",
     "companies": "Companies",
@@ -1424,7 +1425,8 @@
       "companyNotFound": "Company not found",
       "stripeNoCheckoutUrl": "Stripe did not return a checkout URL",
       "stripeNotConfigured": "Stripe is not configured.",
-      "noStripeCustomer": "No Stripe customer for this company. Start a payment first."
+      "noStripeCustomer": "No Stripe customer for this company. Start a payment first.",
+      "customerUiDisabled": "Customer payment is turned off. Contact the platform owner."
     },
     "stripeSetupTitle": "Stripe is not fully configured",
     "envPresent": "set",
@@ -1439,7 +1441,13 @@
     "portalNeedsCustomer": "Portal opens after the company has a Stripe customer (usually after the first Checkout).",
     "colAiMinutes": "AI minutes",
     "colStorage": "Storage",
-    "invoice": "Invoice"
+    "invoice": "Invoice",
+    "customerUiToggle": "Customer payment UI",
+    "customerUiToggleDesc": "Off: only you can use this page for manual plans. Other users will not see checkout, portal, or subscription self-serve. On: allowed companies can see payment UI.",
+    "customerUiOnToast": "Customer payment UI is visible for allowed companies",
+    "customerUiOffToast": "Customer payment UI is hidden from everyone except you",
+    "customerUiCompanyOn": "Customer payment allowed",
+    "customerUiCompanyOff": "Customer payment hidden"
   },
   "permissions": {
     "title": "Permission Management",
@@ -2314,9 +2322,11 @@
     "settings": {
       "contactEmail": "Contact email",
       "billingEnabled": "Billing enabled",
-      "billingEnabledDesc": "Whether the company is included in the platform billing cycle",
+      "billingEnabledDesc": "Allow this company to see payment/checkout when Customer payment UI is on at Platform → Billing. Manual plans on that page stay available either way.",
+      "billingEnabledNeedsMaster": "Takes effect only after you turn on Customer payment UI at Platform → Billing.",
       "saveSettings": "Save settings",
-      "settingsSaved": "Company settings saved"
+      "settingsSaved": "Company settings saved",
+      "saveFailed": "Could not save company settings"
     }
   },
   "platformCompanyDialogs": {
@@ -2646,7 +2656,21 @@
     "companyEmail": "Company email",
     "primaryColor": "Primary color (optional)",
     "clear": "Clear",
-    "saveChanges": "Save changes"
+    "saveChanges": "Save changes",
+    "billingTitle": "Subscription",
+    "billingHint": "View this company's plan. Checkout self-serve will appear here when it is ready.",
+    "openBilling": "Open subscription"
+  },
+  "companyBillingPage": {
+    "pageTitle": "Subscription",
+    "title": "Subscription",
+    "subtitle": "Your company's plan. Checkout self-serve will appear here when it is ready.",
+    "hiddenTitle": "Subscription is not available",
+    "hiddenDesc": "Payment and subscription pages are hidden for now. Contact the platform owner if you need a plan change.",
+    "backToDashboard": "Back to dashboard",
+    "currentPlan": "Current plan",
+    "comingSoon": "Self-serve checkout and the customer portal are not open yet. Your plan is managed by the platform owner.",
+    "trialActive": "A trial is currently active for this company."
   },
   "jobTitlesPage": {
     "title": "Job title management",

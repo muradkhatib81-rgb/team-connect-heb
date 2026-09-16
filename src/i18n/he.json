@@ -926,6 +926,7 @@
     "shiftSettings": "הגדרות משמרות",
     "jobTitles": "תפקידים",
     "companySettings": "הגדרות חברה",
+    "companyBilling": "מנוי",
     "profile": "הפרופיל שלי",
     "platformSection": "ניהול פלטפורמה",
     "companies": "חברות",
@@ -1424,7 +1425,8 @@
       "companyNotFound": "החברה לא נמצאה",
       "stripeNoCheckoutUrl": "Stripe לא החזיר כתובת תשלום",
       "stripeNotConfigured": "Stripe אינו מוגדר.",
-      "noStripeCustomer": "אין לקוח Stripe לחברה זו. התחילו בתשלום קודם."
+      "noStripeCustomer": "אין לקוח Stripe לחברה זו. התחילו בתשלום קודם.",
+      "customerUiDisabled": "תשלום ללקוחות כבוי. פנו לבעל הפלטפורמה."
     },
     "stripeSetupTitle": "Stripe עדיין לא מוגדר במלואו",
     "envPresent": "מוגדר",
@@ -1439,7 +1441,13 @@
     "portalNeedsCustomer": "הפורטל נפתח אחרי שיש ללקוח Stripe (בדרך כלל אחרי Checkout ראשון).",
     "colAiMinutes": "דקות AI",
     "colStorage": "אחסון",
-    "invoice": "חשבונית"
+    "invoice": "חשבונית",
+    "customerUiToggle": "ממשק תשלום ללקוחות",
+    "customerUiToggleDesc": "כבוי: רק אתם משתמשים בעמוד זה לתוכניות ידניות. משתמשים אחרים לא יראו תשלום, פורטל או מנוי עצמי. דלוק: חברות מורשות יכולות לראות ממשק תשלום.",
+    "customerUiOnToast": "ממשק התשלום ללקוחות גלוי לחברות מורשות",
+    "customerUiOffToast": "ממשק התשלום ללקוחות מוסתר מכולם מלבדכם",
+    "customerUiCompanyOn": "תשלום ללקוח מותר",
+    "customerUiCompanyOff": "תשלום ללקוח מוסתר"
   },
   "permissions": {
     "title": "ניהול הרשאות",
@@ -2314,9 +2322,11 @@
     "settings": {
       "contactEmail": "אימייל ליצירת קשר",
       "billingEnabled": "חיוב פעיל",
-      "billingEnabledDesc": "האם החברה כלולה במעגל החיוב של הפלטפורמה",
+      "billingEnabledDesc": "לאפשר לחברה לראות תשלום/Checkout כאשר ממשק התשלום ללקוחות דלוק ב־פלטפורמה → חיוב. תוכניות ידניות באותו עמוד נשארות זמינות בכל מצב.",
+      "billingEnabledNeedsMaster": "נכנס לתוקף רק אחרי הפעלת «ממשק תשלום ללקוחות» ב־פלטפורמה → חיוב.",
       "saveSettings": "שמירת הגדרות",
-      "settingsSaved": "הגדרות החברה נשמרו"
+      "settingsSaved": "הגדרות החברה נשמרו",
+      "saveFailed": "שמירת הגדרות החברה נכשלה"
     }
   },
   "platformCompanyDialogs": {
@@ -2646,7 +2656,21 @@
     "companyEmail": "דוא\"ל החברה",
     "primaryColor": "צבע ראשי (אופציונלי)",
     "clear": "נקה",
-    "saveChanges": "שמירת שינויים"
+    "saveChanges": "שמירת שינויים",
+    "billingTitle": "מנוי",
+    "billingHint": "צפייה בתוכנית החברה. תשלום עצמי יופיע כאן כשיהיה מוכן.",
+    "openBilling": "פתיחת מנוי"
+  },
+  "companyBillingPage": {
+    "pageTitle": "מנוי",
+    "title": "מנוי",
+    "subtitle": "תוכנית החברה. תשלום עצמי יופיע כאן כשיהיה מוכן.",
+    "hiddenTitle": "המנוי אינו זמין",
+    "hiddenDesc": "עמודי תשלום ומנוי מוסתרים כרגע. פנו לבעל הפלטפורמה אם נדרש שינוי תוכנית.",
+    "backToDashboard": "חזרה ללוח הראשי",
+    "currentPlan": "תוכנית נוכחית",
+    "comingSoon": "Checkout עצמי ופורטל הלקוח עדיין לא פתוחים. התוכנית מנוהלת על ידי בעל הפלטפורמה.",
+    "trialActive": "ניסיון פעיל כרגע לחברה זו."
   },
   "jobTitlesPage": {
     "title": "ניהול תפקידים",

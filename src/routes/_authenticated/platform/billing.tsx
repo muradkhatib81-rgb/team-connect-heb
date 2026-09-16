@@ -27,9 +27,11 @@ import {
   createBillingPortalSession,
   getBillingOverview,
   saveBillingAllocation,
+  setCustomerBillingVisible,
   setManualBillingPlan,
   startBillingTrial,
 } from "@/lib/billing.functions";
+import { CUSTOMER_BILLING_GATE_QUERY_KEY } from "@/lib/billing-visibility";
 import {
   DEFAULT_PLAN_ENTITLEMENTS,
   DEFAULT_TRIAL_DAYS,
@@ -82,6 +84,7 @@ function PlatformBillingPage() {
   const checkoutFn = useServerFn(createBillingCheckoutSession);
   const portalFn = useServerFn(createBillingPortalSession);
   const startTrialFn = useServerFn(startBillingTrial);
+  const setVisibleFn = useServerFn(setCustomerBillingVisible);
 
   const [selectedCompanyId, setSelectedCompanyId] = useState("");
   const [selectedBranchId, setSelectedBranchId] = useState(COMPANY_SCOPE);
@@ -303,6 +306,18 @@ function PlatformBillingPage() {
     onError: (e: Error) => toastBillingError(e),
   });
 
+  const visibilityMut = useMutation({
+    mutationFn: (visible: boolean) => setVisibleFn({ data: { visible } }),
+    onSuccess: (res) => {
+      toast.success(
+        res.visible ? t("platformBilling.customerUiOnToast") : t("platformBilling.customerUiOffToast"),
+      );
+      void qc.invalidateQueries({ queryKey: OVERVIEW_KEY });
+      void qc.invalidateQueries({ queryKey: CUSTOMER_BILLING_GATE_QUERY_KEY });
+    },
+    onError: (e: Error) => toastBillingError(e),
+  });
+
   const overview = overviewQ.data;
   const platformPlan = overview?.platform.plan ?? "free";
   const catalogForDraft = entitlements.find((e) => e.billing_plan === draftPlan);
@@ -318,13 +333,29 @@ function PlatformBillingPage() {
 
   return (
     <div className="space-y-6">
-      <header className="flex items-center gap-3">
-        <div className="size-11 shrink-0 rounded-xl bg-primary/10 text-primary flex items-center justify-center">
-          <CreditCard className="size-6" />
+      <header className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+        <div className="flex min-w-0 items-center gap-3">
+          <div className="size-11 shrink-0 rounded-xl bg-primary/10 text-primary flex items-center justify-center">
+            <CreditCard className="size-6" />
+          </div>
+          <div className="min-w-0">
+            <h1 className="break-words text-2xl sm:text-3xl font-bold">{t("platformBilling.title")}</h1>
+            <p className="text-sm text-muted-foreground mt-1">{t("platformBilling.subtitle")}</p>
+          </div>
         </div>
-        <div className="min-w-0">
-          <h1 className="break-words text-2xl sm:text-3xl font-bold">{t("platformBilling.title")}</h1>
-          <p className="text-sm text-muted-foreground mt-1">{t("platformBilling.subtitle")}</p>
+        <div className="flex items-center justify-between gap-4 rounded-xl border bg-card px-4 py-3 sm:max-w-md">
+          <div className="min-w-0">
+            <p className="text-sm font-medium">{t("platformBilling.customerUiToggle")}</p>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              {t("platformBilling.customerUiToggleDesc")}
+            </p>
+          </div>
+          <Switch
+            checked={overview?.customerBillingVisible === true}
+            onCheckedChange={(checked) => visibilityMut.mutate(checked)}
+            disabled={visibilityMut.isPending || overviewQ.isLoading || !overview}
+            aria-label={t("platformBilling.customerUiToggle")}
+          />
         </div>
       </header>
 
@@ -488,6 +519,11 @@ function PlatformBillingPage() {
                     </Badge>
                   )}
                   <Badge className={PLAN_TONES[companyPlan]}>{planLabel(companyPlan)}</Badge>
+                  <Badge variant="outline">
+                    {overview?.customerBillingVisible && selectedRow?.billingEnabled
+                      ? t("platformBilling.customerUiCompanyOn")
+                      : t("platformBilling.customerUiCompanyOff")}
+                  </Badge>
                 </div>
                 <p className="text-xs text-muted-foreground">
                   {t("platformBilling.statusLine", {

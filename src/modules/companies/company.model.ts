@@ -31,6 +31,8 @@ export interface Company extends BaseEntity {
   currency: string;
   language: string;
   timeZone: string;
+  /** Per-company customer payment opt-in. Default false when unset. */
+  billingEnabled?: boolean;
 }
 
 /** Sensible, honest defaults for a brand-new Company — nothing fabricated, just a starting point every field can override. */
