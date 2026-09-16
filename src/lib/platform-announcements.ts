@@ -54,13 +54,3 @@ export function isPlatformAnnouncementsAdminPath(pathname: string): boolean {
   const normalized = (pathname.split("?")[0] ?? "/").replace(/\/+$/, "") || "/";
   return normalized === PLATFORM_ANNOUNCEMENTS_ADMIN_PATH;
 }
-
-/** Stack every undismissed row; order is preserved from the server list. */
-export function undismissedAnnouncements<T extends { id: string }>(
-  rows: readonly T[] | null | undefined,
-  dismissedIds: readonly string[],
-): T[] {
-  if (!rows?.length) return [];
-  const dismissed = new Set(dismissedIds);
-  return rows.filter((row) => !dismissed.has(row.id));
-}
