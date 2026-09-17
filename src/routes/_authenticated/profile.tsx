@@ -1,13 +1,22 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
+import { useState } from "react";
 import { useAuth } from "@/lib/use-auth";
 import { useQuery } from "@tanstack/react-query";
+import { useServerFn } from "@tanstack/react-start";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Loader2, KeyRound, User, Umbrella } from "lucide-react";
+import { Loader2, KeyRound, User, Umbrella, Clock } from "lucide-react";
 import { ROLE_LABELS, isPlatformOwner, supportContactInstruction } from "@/lib/constants";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Plane } from "lucide-react";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import {
   formatLeaveDateRange,
   isEmployeeCurrentlyOnLeave,
@@ -17,6 +26,8 @@ import { useTranslation } from "react-i18next";
 import i18n from "@/i18n";
 import { resolveLeaveAccess } from "@/lib/leave-permissions";
 import { PushNotificationsSettings } from "@/components/push-notifications-settings";
+import { formatAttendanceHours, getMyAttendanceHoursHistory } from "@/lib/attendance.functions";
+import { currentJerusalemYearMonth, splitProfileAdjustments } from "@/lib/attendance-hours";
 
 
 export const Route = createFileRoute("/_authenticated/profile")({
@@ -159,6 +170,130 @@ function ProfilePage() {
         </Card>
       )}
 
+      <ProfileAttendanceHours userId={me.id} />
+
+    </div>
+  );
+}
+
+/** Self-view only. Shown if the punch card would show, or this employee has pay adjustments. */
+function ProfileAttendanceHours({ userId }: { userId: string }) {
+  const { t } = useTranslation();
+  const hoursFn = useServerFn(getMyAttendanceHoursHistory);
+  const [yearMonth, setYearMonth] = useState(currentJerusalemYearMonth);
+
+  const hoursQ = useQuery({
+    queryKey: ["attendance-profile-hours", userId, yearMonth],
+    queryFn: () => hoursFn({ data: { yearMonth } }),
+    staleTime: 15_000,
+  });
+
+  if (!hoursQ.data?.visible) return null;
+
+  const months = hoursQ.data.months.length > 0 ? [...hoursQ.data.months] : [yearMonth];
+  if (!months.includes(yearMonth)) months.unshift(yearMonth);
+  const isCurrent = yearMonth === hoursQ.data.currentYearMonth;
+  const hoursLabel = isCurrent ? t("profile.hoursThisMonth") : t("profile.hoursSelectedMonth");
+  const pay = hoursQ.data.estimated_pay;
+  const rate = hoursQ.data.hourly_rate;
+  const { selectedMonth, otherMonths } = splitProfileAdjustments({
+    selectedYearMonth: hoursQ.data.yearMonth || yearMonth,
+    monthAdjustments: hoursQ.data.adjustments ?? [],
+    allAdjustments: hoursQ.data.all_adjustments ?? hoursQ.data.adjustments ?? [],
+  });
+  const hasAdjustments = selectedMonth.length > 0 || otherMonths.length > 0;
+
+  return (
+    <Card className="p-6 space-y-4">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="flex items-start gap-2">
+          <Clock className="size-4 text-primary mt-0.5" />
+          <div>
+            <h2 className="font-semibold text-base">{t("profile.hoursHistory")}</h2>
+            <p className="text-sm text-muted-foreground">{t("profile.hoursHistoryHint")}</p>
+          </div>
+        </div>
+        <Select value={yearMonth} onValueChange={setYearMonth}>
+          <SelectTrigger className="w-[12rem]" aria-label={t("profile.hoursMonth")}>
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {months.map((m) => (
+              <SelectItem key={m} value={m}>
+                {m === hoursQ.data.currentYearMonth ? `${m} · ${t("profile.currentMonth")}` : m}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+        <div className="space-y-2">
+          <div className="flex items-center justify-between gap-3 border-b border-border/60 pb-3">
+            <span className="text-sm text-muted-foreground">{hoursLabel}</span>
+            <span className="text-sm font-semibold tabular-nums">
+              {formatAttendanceHours(hoursQ.data.total_minutes ?? 0)}
+            </span>
+          </div>
+          {rate != null || hasAdjustments ? (
+            <div className="flex items-center justify-between gap-3">
+              <span className="text-sm text-muted-foreground">{t("profile.estimatedPay")}</span>
+              <span className="text-sm font-semibold tabular-nums">
+                {pay == null
+                  ? "—"
+                  : Number(pay).toLocaleString(undefined, {
+                      minimumFractionDigits: 2,
+                      maximumFractionDigits: 2,
+                    })}
+              </span>
+            </div>
+          ) : null}
+          {hasAdjustments ? (
+            <div className="space-y-2 pt-1">
+              <p className="text-sm font-medium">{t("profile.adjustments")}</p>
+              {selectedMonth.map((a) => (
+                <ProfileAdjustmentLine key={a.id} adjustment={a} />
+              ))}
+              {otherMonths.length > 0 ? (
+                <>
+                  {selectedMonth.length > 0 ? (
+                    <p className="text-sm font-medium pt-1">{t("profile.adjustmentsOtherMonths")}</p>
+                  ) : null}
+                  {otherMonths.map((a) => (
+                    <ProfileAdjustmentLine key={a.id} adjustment={a} />
+                  ))}
+                </>
+              ) : null}
+            </div>
+          ) : null}
+        </div>
+    </Card>
+  );
+}
+
+function ProfileAdjustmentLine({
+  adjustment,
+}: {
+  adjustment: {
+    id: string;
+    type: string;
+    adjustment_date?: string;
+    note?: string | null;
+    signed_amount: number;
+  };
+}) {
+  const { t } = useTranslation();
+  return (
+    <div className="flex items-center justify-between gap-3 text-sm border-b border-border/60 pb-2 last:border-0 last:pb-0">
+      <span className="text-muted-foreground">
+        {t(`attendance.adjustmentTypes.${adjustment.type}`)}
+        {adjustment.adjustment_date ? ` · ${adjustment.adjustment_date}` : ""}
+        {adjustment.note ? ` · ${adjustment.note}` : ""}
+      </span>
+      <span className="font-semibold tabular-nums shrink-0">
+        {Number(adjustment.signed_amount).toLocaleString(undefined, {
+          minimumFractionDigits: 2,
+          maximumFractionDigits: 2,
+        })}
+      </span>
     </div>
   );
 }

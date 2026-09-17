@@ -1,11 +1,31 @@
 /**
  * بصمة الدوام / Attendance punch — isolated feature.
- * Does NOT read/write user_roles or user_task_permissions.
+ * Does NOT read/write user_roles, app_role, user_task_permissions, or the Permissions page.
+ * Hours report access is Platform Owner or attendance_user_grants.can_report only.
+ * Pay adjustments: Platform Owner or attendance_user_grants.can_adjust_pay + max amount.
+ * Manager roles (branch_manager / assistant_manager / department_manager) are never auto-granted.
  */
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
+import {
+  adjustmentSignedAmount,
+  clippedSessionSeconds,
+  currentJerusalemYearMonth,
+  estimatedPayFromSeconds,
+  estimatedPayWithAdjustments,
+  isPayAdjustmentType,
+  jerusalemMonthRange,
+  listProfileHoursMonths,
+  previousYearMonth,
+  secondsToHours,
+  secondsToMinutes,
+  sessionOverlapsRange,
+  sumAdjustmentSignedAmounts,
+  sumClippedSecondsForMonth,
+  type PayAdjustmentType,
+} from "@/lib/attendance-hours";
 
 async function assertPlatformOwner(supabase: any, userId: string) {
   const { data, error } = await supabase.rpc("is_platform_owner", { _user_id: userId });
@@ -38,6 +58,9 @@ export type AttendanceCapabilities = {
   can_view: boolean;
   can_edit: boolean;
   can_delete: boolean;
+  can_report: boolean;
+  can_adjust_pay: boolean;
+  adjust_pay_max_amount: number | null;
   is_platform_owner: boolean;
   show_employee_card: boolean;
   show_manager_card: boolean;
@@ -66,6 +89,9 @@ const emptyCaps = (): AttendanceCapabilities => ({
   can_view: false,
   can_edit: false,
   can_delete: false,
+  can_report: false,
+  can_adjust_pay: false,
+  adjust_pay_max_amount: null,
   is_platform_owner: false,
   show_employee_card: false,
   show_manager_card: false,
@@ -74,24 +100,22 @@ const emptyCaps = (): AttendanceCapabilities => ({
 
 function mapCaps(c: Record<string, unknown> | null | undefined): AttendanceCapabilities {
   if (!c) return emptyCaps();
+  const maxRaw = c.adjust_pay_max_amount;
+  const maxNum = maxRaw == null || maxRaw === "" ? null : Number(maxRaw);
   return {
     enabled: !!c.enabled,
     can_punch: !!c.can_punch,
     can_view: !!c.can_view,
     can_edit: !!c.can_edit,
     can_delete: !!c.can_delete,
+    can_report: !!c.can_report,
+    can_adjust_pay: !!c.can_adjust_pay,
+    adjust_pay_max_amount: maxNum != null && Number.isFinite(maxNum) ? maxNum : null,
     is_platform_owner: !!c.is_platform_owner,
     show_employee_card: !!c.show_employee_card,
     show_manager_card: !!c.show_manager_card,
     hide_reason: c.hide_reason != null ? String(c.hide_reason) : null,
   };
-}
-
-function durationMinutes(clockIn: string, clockOut: string | null): number | null {
-  if (!clockOut) return null;
-  const ms = new Date(clockOut).getTime() - new Date(clockIn).getTime();
-  if (!Number.isFinite(ms) || ms < 0) return null;
-  return Math.ceil(ms / 60000);
 }
 
 export const getAttendanceCapabilities = createServerFn({ method: "GET" })
@@ -173,7 +197,7 @@ export const listAttendanceUserGrants = createServerFn({ method: "GET" })
     await assertPlatformOwner(supabase, userId);
     let q = supabase
       .from("attendance_user_grants")
-      .select("id, user_id, branch_id, can_view, can_edit, can_delete, created_at")
+      .select("id, user_id, branch_id, company_id, can_view, can_edit, can_delete, can_report, can_adjust_pay, adjust_pay_max_amount, created_at")
       .order("created_at", { ascending: false });
     if (data?.branchId) q = q.eq("branch_id", data.branchId);
     const { data: rows, error } = await q;
@@ -201,53 +225,90 @@ export const upsertAttendanceUserGrant = createServerFn({ method: "POST" })
   .inputValidator(
     z.object({
       userId: z.string().uuid(),
-      branchId: z.string().uuid(),
+      branchId: z.string().uuid().optional(),
+      companyId: z.string().uuid().optional(),
       can_view: z.boolean(),
       can_edit: z.boolean(),
       can_delete: z.boolean(),
+      can_report: z.boolean().default(false),
+      can_adjust_pay: z.boolean().default(false),
+      adjust_pay_max_amount: z.number().positive().max(100000).nullable().optional(),
     }),
   )
   .handler(async ({ data, context }) => {
     const { supabase, userId } = context as { supabase: any; userId: string };
     await assertPlatformOwner(supabase, userId);
-    const branchId = await resolveOperationalBranchId(data.branchId);
-    if (!data.can_view && !data.can_edit && !data.can_delete) {
-      const { error } = await supabase
-        .from("attendance_user_grants")
-        .delete()
-        .eq("user_id", data.userId)
-        .eq("branch_id", branchId);
+    const anyCap =
+      data.can_view || data.can_edit || data.can_delete || data.can_report || data.can_adjust_pay;
+    const branchId = data.branchId ? await resolveOperationalBranchId(data.branchId) : null;
+    const companyId = data.companyId ?? null;
+    if (!branchId && !companyId) throw new Error("COMPANY_OR_BRANCH_REQUIRED");
+    if (data.can_adjust_pay) {
+      const max = data.adjust_pay_max_amount;
+      if (max == null || !Number.isFinite(max) || max <= 0) throw new Error("ADJUST_CAP_REQUIRED");
+    }
+
+    let existingQ = supabase
+      .from("attendance_user_grants")
+      .select("id")
+      .eq("user_id", data.userId);
+    existingQ = branchId
+      ? existingQ.eq("branch_id", branchId)
+      : existingQ.is("branch_id", null).eq("company_id", companyId);
+    const { data: existing, error: existingErr } = await existingQ.maybeSingle();
+    if (existingErr) throw new Error(existingErr.message);
+
+    if (!anyCap) {
+      if (!existing?.id) return { ok: true, removed: true };
+      const { error } = await supabase.from("attendance_user_grants").delete().eq("id", existing.id);
       if (error) throw new Error(error.message);
       return { ok: true, removed: true };
     }
-    const { error } = await supabase.from("attendance_user_grants").upsert(
-      {
-        user_id: data.userId,
-        branch_id: branchId,
-        can_view: data.can_view,
-        can_edit: data.can_edit,
-        can_delete: data.can_delete,
-        granted_by: userId,
-        updated_at: new Date().toISOString(),
-      },
-      { onConflict: "user_id,branch_id" },
-    );
-    if (error) throw new Error(error.message);
+
+    const row = {
+      user_id: data.userId,
+      branch_id: branchId,
+      company_id: companyId,
+      can_view: data.can_view,
+      can_edit: data.can_edit,
+      can_delete: data.can_delete,
+      can_report: data.can_report,
+      can_adjust_pay: data.can_adjust_pay,
+      adjust_pay_max_amount: data.can_adjust_pay ? data.adjust_pay_max_amount ?? null : null,
+      granted_by: userId,
+      updated_at: new Date().toISOString(),
+    };
+    if (existing?.id) {
+      const { error } = await supabase.from("attendance_user_grants").update(row).eq("id", existing.id);
+      if (error) throw new Error(error.message);
+    } else {
+      const { error } = await supabase.from("attendance_user_grants").insert(row);
+      if (error) throw new Error(error.message);
+    }
     return { ok: true };
   });
 
 export const listBranchProfilesForAttendanceGrants = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
-  .inputValidator(z.object({ branchId: z.string().uuid() }))
+  .inputValidator(
+    z.object({
+      branchId: z.string().uuid().optional(),
+      companyId: z.string().uuid().optional(),
+    }),
+  )
   .handler(async ({ data, context }) => {
     const { supabase, userId } = context as { supabase: any; userId: string };
     await assertPlatformOwner(supabase, userId);
-    const branchId = await resolveOperationalBranchId(data.branchId);
-    const { data: rows, error } = await supabase
-      .from("profiles")
-      .select("id, full_name, id_number, department_id")
-      .eq("branch_id", branchId)
-      .order("full_name");
+    let q = supabase.from("profiles").select("id, full_name, id_number, department_id, branch_id").order("full_name");
+    if (data.branchId) {
+      const branchId = await resolveOperationalBranchId(data.branchId);
+      q = q.eq("branch_id", branchId);
+    } else if (data.companyId) {
+      q = q.eq("company_id", data.companyId);
+    } else {
+      return [];
+    }
+    const { data: rows, error } = await q;
     if (error) throw new Error(error.message);
     return rows ?? [];
   });
@@ -461,14 +522,20 @@ export const getMyAttendanceMonth = createServerFn({ method: "GET" })
       return { sessions: [] as AttendanceSession[], total_minutes: 0, open: null as AttendanceSession | null };
     }
 
+    const range = jerusalemMonthRange(data.yearMonth);
+    if (!range) {
+      return { sessions: [] as AttendanceSession[], total_minutes: 0, open: null as AttendanceSession | null };
+    }
+    const prevYm = previousYearMonth(data.yearMonth);
+
     const { data: rows, error } = await supabase
       .from("attendance_sessions")
       .select(
         "id, user_id, branch_id, department_id, clock_in_at, clock_out_at, year_month, source, note",
       )
       .eq("user_id", userId)
-      .eq("year_month", data.yearMonth)
       .is("deleted_at", null)
+      .or(`year_month.eq."${data.yearMonth}",year_month.eq."${prevYm}",clock_out_at.is.null`)
       .order("clock_in_at", { ascending: false });
     if (error) {
       if (/does not exist|relation/i.test(error.message)) {
@@ -477,13 +544,273 @@ export const getMyAttendanceMonth = createServerFn({ method: "GET" })
       throw new Error(error.message);
     }
 
-    const sessions: AttendanceSession[] = (rows ?? []).map((r: any) => ({
-      ...r,
-      duration_minutes: durationMinutes(r.clock_in_at, r.clock_out_at),
-    }));
+    const sessions: AttendanceSession[] = (rows ?? [])
+      .filter((r: any) =>
+        sessionOverlapsRange({
+          clockInAt: r.clock_in_at,
+          clockOutAt: r.clock_out_at,
+          rangeStart: range.start,
+          rangeEnd: range.end,
+        }),
+      )
+      .map((r: any) => ({
+        ...r,
+        duration_minutes: r.clock_out_at
+          ? secondsToMinutes(
+              clippedSessionSeconds({
+                clockInAt: r.clock_in_at,
+                clockOutAt: r.clock_out_at,
+                rangeStart: range.start,
+                rangeEnd: range.end,
+              }),
+            )
+          : null,
+      }));
     const open = sessions.find((s) => !s.clock_out_at) ?? null;
     const total_minutes = sessions.reduce((sum, s) => sum + (s.duration_minutes ?? 0), 0);
     return { sessions, total_minutes, open };
+  });
+
+export type AttendancePayAdjustment = {
+  id: string;
+  employee_id?: string;
+  full_name?: string | null;
+  id_number?: string | null;
+  adjustment_date: string;
+  year_month: string;
+  type: PayAdjustmentType;
+  amount: number;
+  signed_amount: number;
+  note: string | null;
+  created_at?: string;
+};
+
+function mapPayAdjustment(raw: Record<string, unknown>): AttendancePayAdjustment | null {
+  const type = typeof raw.type === "string" && isPayAdjustmentType(raw.type) ? raw.type : null;
+  const amount = Number(raw.amount);
+  if (!type || !Number.isFinite(amount)) return null;
+  const signedRaw = raw.signed_amount == null ? null : Number(raw.signed_amount);
+  return {
+    id: String(raw.id ?? ""),
+    employee_id: raw.employee_id != null ? String(raw.employee_id) : undefined,
+    full_name: raw.full_name != null ? String(raw.full_name) : null,
+    id_number: raw.id_number != null ? String(raw.id_number) : null,
+    adjustment_date: String(raw.adjustment_date ?? ""),
+    year_month: String(raw.year_month ?? ""),
+    type,
+    amount,
+    signed_amount:
+      signedRaw != null && Number.isFinite(signedRaw)
+        ? signedRaw
+        : adjustmentSignedAmount(type, amount),
+    note: raw.note != null ? String(raw.note) : null,
+    created_at: raw.created_at != null ? String(raw.created_at) : undefined,
+  };
+}
+
+export type AttendanceHoursHistory = {
+  visible: boolean;
+  yearMonth: string;
+  currentYearMonth: string;
+  months: string[];
+  total_seconds: number;
+  total_minutes: number;
+  total_hours: number;
+  hourly_rate: number | null;
+  hours_pay: number | null;
+  adjustment_net: number;
+  adjustments: AttendancePayAdjustment[];
+  all_adjustments: AttendancePayAdjustment[];
+  estimated_pay: number | null;
+};
+
+function hiddenHoursHistory(yearMonth: string, currentYearMonth: string): AttendanceHoursHistory {
+  return {
+    visible: false,
+    yearMonth,
+    currentYearMonth,
+    months: [],
+    total_seconds: 0,
+    total_minutes: 0,
+    total_hours: 0,
+    hourly_rate: null,
+    hours_pay: null,
+    adjustment_net: 0,
+    adjustments: [],
+    all_adjustments: [],
+    estimated_pay: null,
+  };
+}
+
+function mapHoursHistory(raw: Record<string, unknown>, fallbackYm: string): AttendanceHoursHistory {
+  const yearMonth = typeof raw.year_month === "string" ? raw.year_month : fallbackYm;
+  const currentYearMonth =
+    typeof raw.current_year_month === "string" ? raw.current_year_month : currentJerusalemYearMonth();
+  const months = Array.isArray(raw.months)
+    ? raw.months.filter((m): m is string => typeof m === "string" && /^\d{4}-\d{2}$/.test(m))
+    : [];
+  const seconds = Number(raw.total_seconds ?? 0);
+  const rateRaw = raw.hourly_rate == null || raw.hourly_rate === "" ? null : Number(raw.hourly_rate);
+  const payRaw = raw.estimated_pay == null || raw.estimated_pay === "" ? null : Number(raw.estimated_pay);
+  const hoursPayRaw = raw.hours_pay == null || raw.hours_pay === "" ? null : Number(raw.hours_pay);
+  const adjNetRaw = Number(raw.adjustment_net ?? 0);
+  const adjustments = Array.isArray(raw.adjustments)
+    ? raw.adjustments
+        .map((row) =>
+          row && typeof row === "object" ? mapPayAdjustment(row as Record<string, unknown>) : null,
+        )
+        .filter((row): row is AttendancePayAdjustment => !!row)
+    : [];
+  const allAdjustments = Array.isArray(raw.all_adjustments)
+    ? raw.all_adjustments
+        .map((row) =>
+          row && typeof row === "object" ? mapPayAdjustment(row as Record<string, unknown>) : null,
+        )
+        .filter((row): row is AttendancePayAdjustment => !!row)
+    : adjustments;
+  return {
+    visible: !!raw.visible,
+    yearMonth,
+    currentYearMonth,
+    months,
+    total_seconds: Number.isFinite(seconds) ? seconds : 0,
+    total_minutes: Number(raw.total_minutes ?? secondsToMinutes(Number.isFinite(seconds) ? seconds : 0)) || 0,
+    total_hours: Number(raw.total_hours ?? secondsToHours(Number.isFinite(seconds) ? seconds : 0)) || 0,
+    hourly_rate: rateRaw != null && Number.isFinite(rateRaw) ? rateRaw : null,
+    hours_pay: hoursPayRaw != null && Number.isFinite(hoursPayRaw) ? hoursPayRaw : null,
+    adjustment_net: Number.isFinite(adjNetRaw) ? adjNetRaw : 0,
+    adjustments,
+    all_adjustments: allAdjustments,
+    estimated_pay: payRaw != null && Number.isFinite(payRaw) ? payRaw : null,
+  };
+}
+
+async function loadOwnPayAdjustments(
+  supabase: any,
+  userId: string,
+): Promise<AttendancePayAdjustment[]> {
+  const { data, error } = await supabase
+    .from("attendance_pay_adjustments")
+    .select("id, employee_id, adjustment_date, year_month, adjustment_type, amount, note, created_at")
+    .eq("employee_id", userId)
+    .order("adjustment_date", { ascending: true })
+    .order("created_at", { ascending: true });
+  if (error) {
+    if (/does not exist|relation/i.test(error.message)) return [];
+    throw new Error(error.message);
+  }
+  return (data ?? [])
+    .map((row: Record<string, unknown>) =>
+      mapPayAdjustment({
+        ...row,
+        type: row.adjustment_type,
+        signed_amount: isPayAdjustmentType(String(row.adjustment_type ?? ""))
+          ? adjustmentSignedAmount(row.adjustment_type as PayAdjustmentType, Number(row.amount))
+          : 0,
+      }),
+    )
+    .filter((row: AttendancePayAdjustment | null): row is AttendancePayAdjustment => !!row);
+}
+
+/**
+ * Own profile hours + own pay adjustments (auth user). No employeeId —
+ * managers cannot snoop others via this function.
+ * Visible if the punch card would show OR the employee has ledger rows.
+ */
+export const getMyAttendanceHoursHistory = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator(
+    z.object({
+      yearMonth: z.string().regex(/^\d{4}-\d{2}$/).optional(),
+    }),
+  )
+  .handler(async ({ data, context }): Promise<AttendanceHoursHistory> => {
+    const { supabase, userId } = context as { supabase: any; userId: string };
+    const current = currentJerusalemYearMonth();
+    const yearMonth = data.yearMonth ?? current;
+
+    const rpc = await supabase.rpc("get_attendance_my_hours_history", {
+      _year_month: yearMonth,
+    });
+    if (!rpc.error) {
+      return mapHoursHistory((rpc.data ?? {}) as Record<string, unknown>, yearMonth);
+    }
+    if (!/does not exist|function/i.test(rpc.error.message)) {
+      throw new Error(rpc.error.message);
+    }
+
+    const allAdjustments = await loadOwnPayAdjustments(supabase, userId);
+
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("branch_id")
+      .eq("id", userId)
+      .maybeSingle();
+    const branchId = profile?.branch_id ?? null;
+    let punchVisible = false;
+    if (branchId) {
+      const caps = await supabase.rpc("get_attendance_my_capabilities", {
+        _branch_id: branchId,
+      });
+      if (caps.error && !/does not exist|function/i.test(caps.error.message)) {
+        throw new Error(caps.error.message);
+      }
+      const mapped = mapCaps(caps.data as Record<string, unknown>);
+      punchVisible = mapped.enabled && mapped.show_employee_card;
+    }
+    if (!punchVisible && allAdjustments.length === 0) {
+      return hiddenHoursHistory(yearMonth, current);
+    }
+
+    let sessions: { clockInAt: string; clockOutAt: string | null }[] = [];
+    if (punchVisible) {
+      const { data: rows, error } = await supabase
+        .from("attendance_sessions")
+        .select("clock_in_at, clock_out_at")
+        .eq("user_id", userId)
+        .is("deleted_at", null);
+      if (error && !/does not exist|relation/i.test(error.message)) {
+        throw new Error(error.message);
+      }
+      sessions = (rows ?? []).map((r: any) => ({
+        clockInAt: r.clock_in_at,
+        clockOutAt: r.clock_out_at,
+      }));
+    }
+    const months = listProfileHoursMonths(sessions);
+    for (const adj of allAdjustments) {
+      if (adj.year_month && !months.includes(adj.year_month)) months.push(adj.year_month);
+    }
+    months.sort((a, b) => (a < b ? 1 : a > b ? -1 : 0));
+    const total_seconds = sumClippedSecondsForMonth(sessions, yearMonth);
+    let hourly_rate: number | null = null;
+    const wage = await supabase
+      .from("employee_hourly_wages")
+      .select("hourly_rate")
+      .eq("user_id", userId)
+      .maybeSingle();
+    if (!wage.error && wage.data?.hourly_rate != null) {
+      const n = Number(wage.data.hourly_rate);
+      if (Number.isFinite(n)) hourly_rate = n;
+    }
+    const hoursPay = estimatedPayFromSeconds(total_seconds, hourly_rate);
+    const monthAdj = allAdjustments.filter((adj) => adj.year_month === yearMonth);
+    const adjNet = sumAdjustmentSignedAmounts(monthAdj);
+    return {
+      visible: true,
+      yearMonth,
+      currentYearMonth: current,
+      months,
+      total_seconds,
+      total_minutes: secondsToMinutes(total_seconds),
+      total_hours: secondsToHours(total_seconds),
+      hourly_rate,
+      hours_pay: hoursPay,
+      adjustment_net: adjNet,
+      adjustments: monthAdj,
+      all_adjustments: allAdjustments,
+      estimated_pay: estimatedPayWithAdjustments(hoursPay, adjNet),
+    };
   });
 
 export const getAttendanceLookup = createServerFn({ method: "GET" })
@@ -523,14 +850,18 @@ export const getAttendanceLookup = createServerFn({ method: "GET" })
       if (employeeIds.length === 0) return { sessions: [], total_minutes: 0 };
     }
 
+    const range = jerusalemMonthRange(data.yearMonth);
+    if (!range) return { sessions: [], total_minutes: 0 };
+    const prevYm = previousYearMonth(data.yearMonth);
+
     let q = supabase
       .from("attendance_sessions")
       .select(
         "id, user_id, branch_id, department_id, clock_in_at, clock_out_at, year_month, source, note",
       )
       .eq("branch_id", data.branchId)
-      .eq("year_month", data.yearMonth)
       .is("deleted_at", null)
+      .or(`year_month.eq."${data.yearMonth}",year_month.eq."${prevYm}",clock_out_at.is.null`)
       .order("clock_in_at", { ascending: false });
 
     if (employeeIds) q = q.in("user_id", employeeIds);
@@ -555,13 +886,31 @@ export const getAttendanceLookup = createServerFn({ method: "GET" })
     const idById = new Map((profiles ?? []).map((p: any) => [p.id, p.id_number]));
     const deptById = new Map((depts ?? []).map((d: any) => [d.id, d.name]));
 
-    const sessions: AttendanceSession[] = (rows ?? []).map((r: any) => ({
-      ...r,
-      duration_minutes: durationMinutes(r.clock_in_at, r.clock_out_at),
-      employee_name: nameById.get(r.user_id) ?? null,
-      id_number: idById.get(r.user_id) ?? null,
-      department_name: r.department_id ? (deptById.get(r.department_id) ?? null) : null,
-    }));
+    const sessions: AttendanceSession[] = (rows ?? [])
+      .filter((r: any) =>
+        sessionOverlapsRange({
+          clockInAt: r.clock_in_at,
+          clockOutAt: r.clock_out_at,
+          rangeStart: range.start,
+          rangeEnd: range.end,
+        }),
+      )
+      .map((r: any) => ({
+        ...r,
+        duration_minutes: r.clock_out_at
+          ? secondsToMinutes(
+              clippedSessionSeconds({
+                clockInAt: r.clock_in_at,
+                clockOutAt: r.clock_out_at,
+                rangeStart: range.start,
+                rangeEnd: range.end,
+              }),
+            )
+          : null,
+        employee_name: nameById.get(r.user_id) ?? null,
+        id_number: idById.get(r.user_id) ?? null,
+        department_name: r.department_id ? (deptById.get(r.department_id) ?? null) : null,
+      }));
     const total_minutes = sessions.reduce((sum, s) => sum + (s.duration_minutes ?? 0), 0);
     return { sessions, total_minutes, actorId: userId };
   });
@@ -607,6 +956,388 @@ export const manualEditAttendanceSession = createServerFn({ method: "POST" })
     return result;
   });
 
+export type AttendanceReportScope = {
+  company_id: string | null;
+  company_name: string | null;
+  branch_id: string | null;
+  branch_name: string | null;
+  has_branches: boolean;
+  scope_kind: "company" | "branch";
+};
+
+export type AttendanceHoursReportRow = {
+  user_id: string;
+  full_name: string | null;
+  id_number: string | null;
+  department_id?: string | null;
+  department_name?: string | null;
+  total_seconds: number;
+  total_minutes: number;
+  total_hours: number;
+  hourly_rate: number | null;
+  hours_pay?: number | null;
+  adjustment_net?: number;
+  adjustments?: AttendancePayAdjustment[];
+  estimated_pay: number | null;
+};
+
+export type AttendanceHoursReportDepartmentTotal = {
+  department_id: string | null;
+  department_name: string | null;
+  total_seconds: number;
+  total_minutes: number;
+  total_hours: number;
+  estimated_pay: number;
+};
+
+export type AttendanceHoursReport = {
+  ok: boolean;
+  from: string;
+  to: string;
+  branch_id: string | null;
+  company_id: string | null;
+  department_id?: string | null;
+  department_name?: string | null;
+  department_ids?: string[];
+  departments?: Array<{ id: string; name: string }>;
+  filter: string;
+  rows: AttendanceHoursReportRow[];
+  totals: {
+    total_seconds: number;
+    total_minutes: number;
+    total_hours: number;
+    adjustment_net?: number;
+    estimated_pay: number;
+  };
+  department_totals?: AttendanceHoursReportDepartmentTotal[];
+  employee_ids?: string[];
+};
+
+export type AttendanceReportDepartment = {
+  id: string;
+  name: string;
+  is_active?: boolean;
+};
+
+export const listAttendanceReportScopes = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    const { supabase } = context as { supabase: any };
+    const { data, error } = await supabase.rpc("list_attendance_report_scopes");
+    if (error) {
+      if (/does not exist|function/i.test(error.message)) {
+        return { is_platform_owner: false, can_report: false, scopes: [] as AttendanceReportScope[] };
+      }
+      throw new Error(error.message);
+    }
+    const payload = (data ?? {}) as Record<string, unknown>;
+    return {
+      is_platform_owner: !!payload.is_platform_owner,
+      can_report: !!payload.can_report,
+      scopes: (Array.isArray(payload.scopes) ? payload.scopes : []) as AttendanceReportScope[],
+    };
+  });
+
+export const listAttendanceReportDepartments = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator(
+    z.object({
+      branchId: z.string().uuid().optional(),
+      companyId: z.string().uuid().optional(),
+    }),
+  )
+  .handler(async ({ data, context }) => {
+    const { supabase } = context as { supabase: any };
+    const { data: rows, error } = await supabase.rpc("list_attendance_report_departments", {
+      _branch_id: data.branchId ?? null,
+      _company_id: data.companyId ?? null,
+    });
+    if (error) {
+      if (/does not exist|function/i.test(error.message)) return [];
+      throw new Error(error.message);
+    }
+    return (Array.isArray(rows) ? rows : []) as AttendanceReportDepartment[];
+  });
+
+export const listAttendanceReportEmployees = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator(
+    z.object({
+      branchId: z.string().uuid().optional(),
+      companyId: z.string().uuid().optional(),
+      departmentId: z.string().uuid().optional(),
+      departmentIds: z.array(z.string().uuid()).max(80).optional(),
+    }),
+  )
+  .handler(async ({ data, context }) => {
+    const { supabase } = context as { supabase: any };
+    const departmentIds = [
+      ...new Set([...(data.departmentIds ?? []), ...(data.departmentId ? [data.departmentId] : [])]),
+    ];
+    const { data: rows, error } = await supabase.rpc("list_attendance_report_employees", {
+      _branch_id: data.branchId ?? null,
+      _company_id: data.companyId ?? null,
+      _department_ids: departmentIds.length ? departmentIds : null,
+    });
+    if (error) throw new Error(error.message);
+    return (Array.isArray(rows) ? rows : []) as Array<{
+      id: string;
+      full_name: string | null;
+      id_number: string | null;
+      department_id?: string | null;
+    }>;
+  });
+
+export const getAttendanceHoursReport = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator(
+    z.object({
+      from: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+      to: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+      branchId: z.string().uuid().optional(),
+      companyId: z.string().uuid().optional(),
+      filter: z.enum(["all", "punchers", "one", "employees"]).default("punchers"),
+      employeeId: z.string().uuid().optional(),
+      employeeIds: z.array(z.string().uuid()).max(200).optional(),
+      departmentId: z.string().uuid().optional(),
+      departmentIds: z.array(z.string().uuid()).max(80).optional(),
+    }),
+  )
+  .handler(async ({ data, context }): Promise<AttendanceHoursReport> => {
+    const { supabase } = context as { supabase: any };
+    const departmentIds = [
+      ...new Set([...(data.departmentIds ?? []), ...(data.departmentId ? [data.departmentId] : [])]),
+    ];
+    const employeeIds = [
+      ...new Set([...(data.employeeIds ?? []), ...(data.employeeId ? [data.employeeId] : [])]),
+    ];
+    const filter = data.filter === "one" ? "employees" : data.filter;
+    const { data: result, error } = await supabase.rpc("get_attendance_hours_report", {
+      _from: data.from,
+      _to: data.to,
+      _branch_id: data.branchId ?? null,
+      _company_id: data.companyId ?? null,
+      _filter: filter,
+      _employee_id: null,
+      _department_ids: departmentIds.length ? departmentIds : null,
+      _employee_ids: employeeIds.length ? employeeIds : null,
+    });
+    if (error) throw new Error(error.message);
+    const payload = (result ?? {}) as AttendanceHoursReport;
+    return {
+      ok: !!payload.ok,
+      from: payload.from ?? data.from,
+      to: payload.to ?? data.to,
+      branch_id: payload.branch_id ?? null,
+      company_id: payload.company_id ?? null,
+      department_id: payload.department_id ?? (departmentIds.length === 1 ? departmentIds[0] : null),
+      department_name: payload.department_name ?? null,
+      department_ids: Array.isArray(payload.department_ids) ? payload.department_ids : departmentIds,
+      departments: Array.isArray(payload.departments) ? payload.departments : [],
+      employee_ids: Array.isArray(payload.employee_ids) ? payload.employee_ids : employeeIds,
+      filter: payload.filter ?? filter,
+      rows: Array.isArray(payload.rows)
+        ? payload.rows.map((row: any) => ({
+            ...row,
+            adjustments: Array.isArray(row.adjustments)
+              ? row.adjustments
+                  .map((a: unknown) =>
+                    a && typeof a === "object" ? mapPayAdjustment(a as Record<string, unknown>) : null,
+                  )
+                  .filter((a: AttendancePayAdjustment | null): a is AttendancePayAdjustment => !!a)
+              : [],
+            adjustment_net: Number(row.adjustment_net ?? 0) || 0,
+          }))
+        : [],
+      totals: payload.totals ?? {
+        total_seconds: 0,
+        total_minutes: 0,
+        total_hours: 0,
+        adjustment_net: 0,
+        estimated_pay: 0,
+      },
+      department_totals: Array.isArray(payload.department_totals) ? payload.department_totals : [],
+    };
+  });
+
+export const listAttendanceAdjustScopes = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    const { supabase } = context as { supabase: any };
+    const { data, error } = await supabase.rpc("list_attendance_adjust_scopes");
+    if (error) {
+      if (/does not exist|function/i.test(error.message)) {
+        return {
+          is_platform_owner: false,
+          can_adjust_pay: false,
+          adjust_pay_max_amount: null as number | null,
+          scopes: [] as AttendanceReportScope[],
+        };
+      }
+      throw new Error(error.message);
+    }
+    const payload = (data ?? {}) as Record<string, unknown>;
+    const maxRaw = payload.adjust_pay_max_amount;
+    const maxNum = maxRaw == null || maxRaw === "" ? null : Number(maxRaw);
+    return {
+      is_platform_owner: !!payload.is_platform_owner,
+      can_adjust_pay: !!payload.can_adjust_pay,
+      adjust_pay_max_amount: maxNum != null && Number.isFinite(maxNum) ? maxNum : null,
+      scopes: (Array.isArray(payload.scopes) ? payload.scopes : []) as Array<
+        AttendanceReportScope & { adjust_pay_max_amount?: number | null }
+      >,
+    };
+  });
+
+export const listAttendanceAdjustEmployees = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator(
+    z.object({
+      branchId: z.string().uuid().optional(),
+      companyId: z.string().uuid().optional(),
+    }),
+  )
+  .handler(async ({ data, context }) => {
+    const { supabase } = context as { supabase: any };
+    const { data: rows, error } = await supabase.rpc("list_attendance_adjust_employees", {
+      _branch_id: data.branchId ?? null,
+      _company_id: data.companyId ?? null,
+    });
+    if (error) throw new Error(error.message);
+    return (Array.isArray(rows) ? rows : []) as Array<{
+      id: string;
+      full_name: string | null;
+      id_number: string | null;
+      hourly_rate: number | null;
+      suggested_day_amount: number | null;
+    }>;
+  });
+
+export const createAttendancePayAdjustment = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator(
+    z.object({
+      employeeId: z.string().uuid(),
+      branchId: z.string().uuid().optional(),
+      companyId: z.string().uuid().optional(),
+      type: z.enum(["deduct_work_day", "deduct_amount", "add_amount"]),
+      amount: z.number().positive().max(100000),
+      adjustmentDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+      note: z.string().max(500).optional(),
+    }),
+  )
+  .handler(async ({ data, context }) => {
+    const { supabase } = context as { supabase: any };
+    const { data: result, error } = await supabase.rpc("create_attendance_pay_adjustment", {
+      _employee_id: data.employeeId,
+      _branch_id: data.branchId ?? null,
+      _company_id: data.companyId ?? null,
+      _adjustment_type: data.type,
+      _amount: data.amount,
+      _adjustment_date: data.adjustmentDate ?? null,
+      _note: data.note ?? null,
+    });
+    if (error) throw new Error(error.message);
+    return result;
+  });
+
+export const listAttendancePayAdjustments = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator(
+    z.object({
+      branchId: z.string().uuid().optional(),
+      companyId: z.string().uuid().optional(),
+    }),
+  )
+  .handler(async ({ data, context }) => {
+    const { supabase } = context as { supabase: any };
+    const { data: rows, error } = await supabase.rpc("list_attendance_pay_adjustments", {
+      _branch_id: data.branchId ?? null,
+      _company_id: data.companyId ?? null,
+      _limit: 50,
+    });
+    if (error) {
+      if (/does not exist|function/i.test(error.message)) return [] as AttendancePayAdjustment[];
+      throw new Error(error.message);
+    }
+    return (Array.isArray(rows) ? rows : [])
+      .map((row: unknown) =>
+        row && typeof row === "object" ? mapPayAdjustment(row as Record<string, unknown>) : null,
+      )
+      .filter((row): row is AttendancePayAdjustment => !!row);
+  });
+
+export const listAttendanceWageProfiles = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator(
+    z.object({
+      branchId: z.string().uuid().optional(),
+      companyId: z.string().uuid().optional(),
+    }),
+  )
+  .handler(async ({ data, context }) => {
+    const { supabase, userId } = context as { supabase: any; userId: string };
+    await assertPlatformOwner(supabase, userId);
+    let q = supabaseAdmin
+      .from("profiles")
+      .select("id, full_name, id_number, branch_id, company_id")
+      .order("full_name");
+    if (data.branchId) {
+      const branchId = await resolveOperationalBranchId(data.branchId);
+      q = q.eq("branch_id", branchId);
+    } else if (data.companyId) {
+      q = q.eq("company_id", data.companyId);
+    } else {
+      return [];
+    }
+    const { data: rows, error } = await q;
+    if (error) throw new Error(error.message);
+    const list = rows ?? [];
+    const ids = list.map((r: any) => r.id);
+    if (ids.length === 0) return [];
+    const { data: wages, error: wageErr } = await supabase
+      .from("employee_hourly_wages")
+      .select("user_id, hourly_rate")
+      .in("user_id", ids);
+    if (wageErr && !/does not exist|relation|column/i.test(wageErr.message)) {
+      throw new Error(wageErr.message);
+    }
+    const rateById = new Map((wages ?? []).map((w: any) => [w.user_id, Number(w.hourly_rate)]));
+    return list.map((r: any) => ({
+      ...r,
+      hourly_rate: rateById.has(r.id) ? rateById.get(r.id)! : null,
+    }));
+  });
+
+export const upsertEmployeeHourlyWage = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator(
+    z.object({
+      userId: z.string().uuid(),
+      hourlyRate: z.number().min(0).max(100000).nullable(),
+    }),
+  )
+  .handler(async ({ data, context }) => {
+    const { supabase, userId } = context as { supabase: any; userId: string };
+    await assertPlatformOwner(supabase, userId);
+    if (data.hourlyRate == null) {
+      const { error } = await supabase.from("employee_hourly_wages").delete().eq("user_id", data.userId);
+      if (error) throw new Error(error.message);
+      return { ok: true, removed: true };
+    }
+    const { error } = await supabase.from("employee_hourly_wages").upsert(
+      {
+        user_id: data.userId,
+        hourly_rate: data.hourlyRate,
+        updated_by: userId,
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: "user_id" },
+    );
+    if (error) throw new Error(error.message);
+    return { ok: true };
+  });
+
 /** Map Postgres exception text → i18n key suffix */
 export function attendanceErrorKey(message: string): string {
   const m = message.toUpperCase();
@@ -624,6 +1355,14 @@ export function attendanceErrorKey(message: string): string {
   if (m.includes("WRONG_BRANCH")) return "wrongBranch";
   if (m.includes("INACTIVE")) return "inactive";
   if (m.includes("ROLE_DENIED")) return "roleDenied";
+  if (m.includes("BRANCH_REQUIRED")) return "branchRequired";
+  if (m.includes("EMPLOYEE_REQUIRED")) return "employeeRequired";
+  if (m.includes("COMPANY_OR_BRANCH_REQUIRED")) return "companyOrBranchRequired";
+  if (m.includes("INVALID_DEPARTMENT")) return "invalidDepartment";
+  if (m.includes("ADJUST_CAP_EXCEEDED")) return "adjustCapExceeded";
+  if (m.includes("ADJUST_CAP_REQUIRED")) return "adjustCapRequired";
+  if (m.includes("INVALID_ADJUSTMENT_TYPE")) return "invalidAdjustmentType";
+  if (m.includes("INVALID_AMOUNT")) return "invalidAmount";
   return "generic";
 }
 
@@ -681,6 +1420,76 @@ export function sessionsToExcelXml(sessions: AttendanceSession[]): string {
 <Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet"
  xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">
 <Worksheet ss:Name="Attendance"><Table>${table}</Table></Worksheet>
+</Workbook>`;
+}
+
+export function hoursReportToExcelXml(report: AttendanceHoursReport): string {
+  const isEmployeeFilter = report.filter === "employees" || report.filter === "one";
+  const selectedNames = (report.departments ?? [])
+    .map((d) => d.name)
+    .filter(Boolean)
+    .join(", ");
+  const header = [
+    "employee_name",
+    "id_number",
+    "department",
+    "hours",
+    "hourly_rate",
+    "estimated_pay",
+    "adjustments",
+  ];
+  const totalLabel = isEmployeeFilter
+    ? "SELECTED EMPLOYEES TOTAL"
+    : selectedNames
+      ? `SELECTED DEPARTMENTS TOTAL (${selectedNames})`
+      : "TOTAL";
+  const rows = [
+    header,
+    ...report.rows.map((r) => [
+      r.full_name ?? "",
+      r.id_number ?? "",
+      r.department_name ?? "",
+      String(r.total_hours ?? ""),
+      r.hourly_rate == null ? "" : String(r.hourly_rate),
+      r.estimated_pay == null ? "" : String(r.estimated_pay),
+      (r.adjustments ?? [])
+        .map((a) => `${a.type}:${a.signed_amount}`)
+        .join("; "),
+    ]),
+    ...(report.department_totals ?? [])
+      .filter(() => (report.department_ids ?? []).length > 1)
+      .map((d) => [
+        `SUBTOTAL (${d.department_name ?? ""})`,
+        "",
+        d.department_name ?? "",
+        String(d.total_hours ?? 0),
+        "",
+        String(d.estimated_pay ?? 0),
+        "",
+      ]),
+    [
+      totalLabel,
+      "",
+      selectedNames,
+      String(report.totals.total_hours ?? 0),
+      "",
+      String(report.totals.estimated_pay ?? 0),
+      "",
+    ],
+  ];
+  const table = rows
+    .map(
+      (row) =>
+        `<Row>${row
+          .map((cell) => `<Cell><Data ss:Type="String">${xmlEscape(cell)}</Data></Cell>`)
+          .join("")}</Row>`,
+    )
+    .join("");
+  return `<?xml version="1.0"?>
+<?mso-application progid="Excel.Sheet"?>
+<Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet"
+ xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">
+<Worksheet ss:Name="Hours"><Table>${table}</Table></Worksheet>
 </Workbook>`;
 }
 

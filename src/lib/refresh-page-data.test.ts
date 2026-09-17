@@ -11,6 +11,9 @@ test("refresh policy keeps session, chrome, and Ask AI keys", () => {
   assert.equal(refreshKeyPolicy(["company-settings"]), "keep");
   assert.equal(refreshKeyPolicy(["customer-billing-gate"]), "keep");
   assert.equal(refreshKeyPolicy(["platform-feature-flag-state"]), "keep");
+  assert.equal(refreshKeyPolicy(["attendance-caps", "b1"]), "keep");
+  assert.equal(refreshKeyPolicy(["attendance-report-scopes"]), "keep");
+  assert.equal(refreshKeyPolicy(["attendance-adjust-scopes"]), "keep");
 });
 
 test("refresh policy soft-refetches company/branch lists used by platform pages", () => {

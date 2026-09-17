@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
@@ -34,29 +34,25 @@ import {
   getAttendanceCapabilities,
   getAttendanceLookup,
   getMyAttendanceMonth,
+  listAttendanceAdjustScopes,
+  listAttendanceReportScopes,
   manualEditAttendanceSession,
   sessionsToExcelXml,
   softDeleteAttendanceSession,
   type AttendanceSession,
 } from "@/lib/attendance.functions";
+import { currentJerusalemYearMonth, jerusalemMonthOptions } from "@/lib/attendance-hours";
 
 export const Route = createFileRoute("/_authenticated/attendance")({
   component: AttendancePage,
 });
 
 function currentYearMonth() {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+  return currentJerusalemYearMonth();
 }
 
 function monthOptions(count = 12) {
-  const out: string[] = [];
-  const now = new Date();
-  for (let i = 0; i < count; i++) {
-    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
-    out.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`);
-  }
-  return out;
+  return jerusalemMonthOptions(count);
 }
 
 function toLocalInputValue(iso: string | null | undefined) {
@@ -80,6 +76,8 @@ function AttendancePage() {
   const lookupFn = useServerFn(getAttendanceLookup);
   const deleteFn = useServerFn(softDeleteAttendanceSession);
   const editFn = useServerFn(manualEditAttendanceSession);
+  const reportScopesFn = useServerFn(listAttendanceReportScopes);
+  const adjustScopesFn = useServerFn(listAttendanceAdjustScopes);
 
   const [yearMonth, setYearMonth] = useState(currentYearMonth);
   const [mgrMonth, setMgrMonth] = useState(currentYearMonth);
@@ -94,6 +92,14 @@ function AttendancePage() {
     queryKey: ["attendance-caps", branchId],
     enabled: !!branchId,
     queryFn: () => capsFn({ data: { branchId: branchId! } }),
+  });
+  const reportAccessQ = useQuery({
+    queryKey: ["attendance-report-scopes"],
+    queryFn: () => reportScopesFn(),
+  });
+  const adjustAccessQ = useQuery({
+    queryKey: ["attendance-adjust-scopes"],
+    queryFn: () => adjustScopesFn(),
   });
 
   const myQ = useQuery({
@@ -195,6 +201,7 @@ function AttendancePage() {
       toast.success(kind === "in" ? t("attendance.punchedIn") : t("attendance.punchedOut"));
       void qc.invalidateQueries({ queryKey: ["attendance-my"] });
       void qc.invalidateQueries({ queryKey: ["attendance-lookup"] });
+      void qc.invalidateQueries({ queryKey: ["attendance-profile-hours"] });
     },
     onError: (e: Error) => {
       toast.error(t(`attendance.errors.${attendanceErrorKey(e.message)}`));
@@ -207,6 +214,7 @@ function AttendancePage() {
       toast.success(t("attendance.deleted"));
       void qc.invalidateQueries({ queryKey: ["attendance-lookup"] });
       void qc.invalidateQueries({ queryKey: ["attendance-my"] });
+      void qc.invalidateQueries({ queryKey: ["attendance-profile-hours"] });
     },
     onError: (e: Error) => toast.error(t(`attendance.errors.${attendanceErrorKey(e.message)}`)),
   });
@@ -228,6 +236,7 @@ function AttendancePage() {
       setEditSession(null);
       void qc.invalidateQueries({ queryKey: ["attendance-lookup"] });
       void qc.invalidateQueries({ queryKey: ["attendance-my"] });
+      void qc.invalidateQueries({ queryKey: ["attendance-profile-hours"] });
     },
     onError: (e: Error) => toast.error(t(`attendance.errors.${attendanceErrorKey(e.message)}`)),
   });
@@ -298,6 +307,22 @@ function AttendancePage() {
         <div>
           <h1 className="text-xl font-semibold">{t("attendance.title")}</h1>
           <p className="text-sm text-muted-foreground">{t("attendance.subtitle")}</p>
+          {reportAccessQ.data?.can_report ? (
+            <Link
+              to="/attendance-report"
+              className="mt-1 inline-block text-xs text-primary hover:underline"
+            >
+              {t("attendance.reportTitle")}
+            </Link>
+          ) : null}
+          {adjustAccessQ.data?.can_adjust_pay ? (
+            <Link
+              to="/attendance-adjustments"
+              className="mt-1 ms-3 inline-block text-xs text-primary hover:underline"
+            >
+              {t("attendance.adjustTitle")}
+            </Link>
+          ) : null}
         </div>
       </div>
 

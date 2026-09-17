@@ -17,6 +17,8 @@ const SESSION_OR_SHELL_HEADS = new Set<unknown>([
   "shell-can-manage-breaks",
   "shell-comm-unread",
   "attendance-caps",
+  "attendance-report-scopes",
+  "attendance-adjust-scopes",
   "custody-caps",
   "notif",
   "company-settings",
