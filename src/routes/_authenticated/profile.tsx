@@ -27,7 +27,7 @@ import i18n from "@/i18n";
 import { resolveLeaveAccess } from "@/lib/leave-permissions";
 import { PushNotificationsSettings } from "@/components/push-notifications-settings";
 import { formatAttendanceHours, getMyAttendanceHoursHistory } from "@/lib/attendance.functions";
-import { currentJerusalemYearMonth } from "@/lib/attendance-hours";
+import { currentJerusalemYearMonth, splitProfileAdjustments } from "@/lib/attendance-hours";
 
 
 export const Route = createFileRoute("/_authenticated/profile")({
@@ -176,7 +176,7 @@ function ProfilePage() {
   );
 }
 
-/** Self-view only. Hidden unless attendance is on and the punch card would show. */
+/** Self-view only. Shown if the punch card would show, or this employee has pay adjustments. */
 function ProfileAttendanceHours({ userId }: { userId: string }) {
   const { t } = useTranslation();
   const hoursFn = useServerFn(getMyAttendanceHoursHistory);
@@ -196,6 +196,12 @@ function ProfileAttendanceHours({ userId }: { userId: string }) {
   const hoursLabel = isCurrent ? t("profile.hoursThisMonth") : t("profile.hoursSelectedMonth");
   const pay = hoursQ.data.estimated_pay;
   const rate = hoursQ.data.hourly_rate;
+  const { selectedMonth, otherMonths } = splitProfileAdjustments({
+    selectedYearMonth: hoursQ.data.yearMonth || yearMonth,
+    monthAdjustments: hoursQ.data.adjustments ?? [],
+    allAdjustments: hoursQ.data.all_adjustments ?? hoursQ.data.adjustments ?? [],
+  });
+  const hasAdjustments = selectedMonth.length > 0 || otherMonths.length > 0;
 
   return (
     <Card className="p-6 space-y-4">
@@ -227,7 +233,7 @@ function ProfileAttendanceHours({ userId }: { userId: string }) {
               {formatAttendanceHours(hoursQ.data.total_minutes ?? 0)}
             </span>
           </div>
-          {rate != null || (hoursQ.data.adjustments ?? []).length > 0 ? (
+          {rate != null || hasAdjustments ? (
             <div className="flex items-center justify-between gap-3">
               <span className="text-sm text-muted-foreground">{t("profile.estimatedPay")}</span>
               <span className="text-sm font-semibold tabular-nums">
@@ -240,31 +246,55 @@ function ProfileAttendanceHours({ userId }: { userId: string }) {
               </span>
             </div>
           ) : null}
-          {(hoursQ.data.adjustments ?? []).length > 0 ? (
+          {hasAdjustments ? (
             <div className="space-y-2 pt-1">
               <p className="text-sm font-medium">{t("profile.adjustments")}</p>
-              {hoursQ.data.adjustments.map((a) => (
-                <div
-                  key={a.id}
-                  className="flex items-center justify-between gap-3 text-sm border-b border-border/60 pb-2 last:border-0 last:pb-0"
-                >
-                  <span className="text-muted-foreground">
-                    {t(`attendance.adjustmentTypes.${a.type}`)}
-                    {a.adjustment_date ? ` · ${a.adjustment_date}` : ""}
-                    {a.note ? ` · ${a.note}` : ""}
-                  </span>
-                  <span className="font-semibold tabular-nums shrink-0">
-                    {Number(a.signed_amount).toLocaleString(undefined, {
-                      minimumFractionDigits: 2,
-                      maximumFractionDigits: 2,
-                    })}
-                  </span>
-                </div>
+              {selectedMonth.map((a) => (
+                <ProfileAdjustmentLine key={a.id} adjustment={a} />
               ))}
+              {otherMonths.length > 0 ? (
+                <>
+                  {selectedMonth.length > 0 ? (
+                    <p className="text-sm font-medium pt-1">{t("profile.adjustmentsOtherMonths")}</p>
+                  ) : null}
+                  {otherMonths.map((a) => (
+                    <ProfileAdjustmentLine key={a.id} adjustment={a} />
+                  ))}
+                </>
+              ) : null}
             </div>
           ) : null}
         </div>
     </Card>
+  );
+}
+
+function ProfileAdjustmentLine({
+  adjustment,
+}: {
+  adjustment: {
+    id: string;
+    type: string;
+    adjustment_date?: string;
+    note?: string | null;
+    signed_amount: number;
+  };
+}) {
+  const { t } = useTranslation();
+  return (
+    <div className="flex items-center justify-between gap-3 text-sm border-b border-border/60 pb-2 last:border-0 last:pb-0">
+      <span className="text-muted-foreground">
+        {t(`attendance.adjustmentTypes.${adjustment.type}`)}
+        {adjustment.adjustment_date ? ` · ${adjustment.adjustment_date}` : ""}
+        {adjustment.note ? ` · ${adjustment.note}` : ""}
+      </span>
+      <span className="font-semibold tabular-nums shrink-0">
+        {Number(adjustment.signed_amount).toLocaleString(undefined, {
+          minimumFractionDigits: 2,
+          maximumFractionDigits: 2,
+        })}
+      </span>
+    </div>
   );
 }
 

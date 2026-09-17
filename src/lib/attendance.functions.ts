@@ -10,9 +10,11 @@ import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
 import {
+  adjustmentSignedAmount,
   clippedSessionSeconds,
   currentJerusalemYearMonth,
   estimatedPayFromSeconds,
+  estimatedPayWithAdjustments,
   isPayAdjustmentType,
   jerusalemMonthRange,
   listProfileHoursMonths,
@@ -20,6 +22,7 @@ import {
   secondsToHours,
   secondsToMinutes,
   sessionOverlapsRange,
+  sumAdjustmentSignedAmounts,
   sumClippedSecondsForMonth,
   type PayAdjustmentType,
 } from "@/lib/attendance-hours";
@@ -596,7 +599,10 @@ function mapPayAdjustment(raw: Record<string, unknown>): AttendancePayAdjustment
     year_month: String(raw.year_month ?? ""),
     type,
     amount,
-    signed_amount: signedRaw != null && Number.isFinite(signedRaw) ? signedRaw : 0,
+    signed_amount:
+      signedRaw != null && Number.isFinite(signedRaw)
+        ? signedRaw
+        : adjustmentSignedAmount(type, amount),
     note: raw.note != null ? String(raw.note) : null,
     created_at: raw.created_at != null ? String(raw.created_at) : undefined,
   };
@@ -614,6 +620,7 @@ export type AttendanceHoursHistory = {
   hours_pay: number | null;
   adjustment_net: number;
   adjustments: AttendancePayAdjustment[];
+  all_adjustments: AttendancePayAdjustment[];
   estimated_pay: number | null;
 };
 
@@ -630,6 +637,7 @@ function hiddenHoursHistory(yearMonth: string, currentYearMonth: string): Attend
     hours_pay: null,
     adjustment_net: 0,
     adjustments: [],
+    all_adjustments: [],
     estimated_pay: null,
   };
 }
@@ -653,6 +661,13 @@ function mapHoursHistory(raw: Record<string, unknown>, fallbackYm: string): Atte
         )
         .filter((row): row is AttendancePayAdjustment => !!row)
     : [];
+  const allAdjustments = Array.isArray(raw.all_adjustments)
+    ? raw.all_adjustments
+        .map((row) =>
+          row && typeof row === "object" ? mapPayAdjustment(row as Record<string, unknown>) : null,
+        )
+        .filter((row): row is AttendancePayAdjustment => !!row)
+    : adjustments;
   return {
     visible: !!raw.visible,
     yearMonth,
@@ -665,14 +680,42 @@ function mapHoursHistory(raw: Record<string, unknown>, fallbackYm: string): Atte
     hours_pay: hoursPayRaw != null && Number.isFinite(hoursPayRaw) ? hoursPayRaw : null,
     adjustment_net: Number.isFinite(adjNetRaw) ? adjNetRaw : 0,
     adjustments,
+    all_adjustments: allAdjustments,
     estimated_pay: payRaw != null && Number.isFinite(payRaw) ? payRaw : null,
   };
 }
 
+async function loadOwnPayAdjustments(
+  supabase: any,
+  userId: string,
+): Promise<AttendancePayAdjustment[]> {
+  const { data, error } = await supabase
+    .from("attendance_pay_adjustments")
+    .select("id, employee_id, adjustment_date, year_month, adjustment_type, amount, note, created_at")
+    .eq("employee_id", userId)
+    .order("adjustment_date", { ascending: true })
+    .order("created_at", { ascending: true });
+  if (error) {
+    if (/does not exist|relation/i.test(error.message)) return [];
+    throw new Error(error.message);
+  }
+  return (data ?? [])
+    .map((row: Record<string, unknown>) =>
+      mapPayAdjustment({
+        ...row,
+        type: row.adjustment_type,
+        signed_amount: isPayAdjustmentType(String(row.adjustment_type ?? ""))
+          ? adjustmentSignedAmount(row.adjustment_type as PayAdjustmentType, Number(row.amount))
+          : 0,
+      }),
+    )
+    .filter((row: AttendancePayAdjustment | null): row is AttendancePayAdjustment => !!row);
+}
+
 /**
- * Own profile hours only (auth user). No employeeId — managers cannot
- * snoop others via this function. Hidden unless attendance is enabled
- * and show_employee_card (punch allow + feature), same as the punch card.
+ * Own profile hours + own pay adjustments (auth user). No employeeId —
+ * managers cannot snoop others via this function.
+ * Visible if the punch card would show OR the employee has ledger rows.
  */
 export const getMyAttendanceHoursHistory = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
@@ -696,41 +739,49 @@ export const getMyAttendanceHoursHistory = createServerFn({ method: "GET" })
       throw new Error(rpc.error.message);
     }
 
+    const allAdjustments = await loadOwnPayAdjustments(supabase, userId);
+
     const { data: profile } = await supabase
       .from("profiles")
       .select("branch_id")
       .eq("id", userId)
       .maybeSingle();
     const branchId = profile?.branch_id ?? null;
-    if (!branchId) return hiddenHoursHistory(yearMonth, current);
-
-    const caps = await supabase.rpc("get_attendance_my_capabilities", {
-      _branch_id: branchId,
-    });
-    if (caps.error && !/does not exist|function/i.test(caps.error.message)) {
-      throw new Error(caps.error.message);
+    let punchVisible = false;
+    if (branchId) {
+      const caps = await supabase.rpc("get_attendance_my_capabilities", {
+        _branch_id: branchId,
+      });
+      if (caps.error && !/does not exist|function/i.test(caps.error.message)) {
+        throw new Error(caps.error.message);
+      }
+      const mapped = mapCaps(caps.data as Record<string, unknown>);
+      punchVisible = mapped.enabled && mapped.show_employee_card;
     }
-    const mapped = mapCaps(caps.data as Record<string, unknown>);
-    if (!mapped.enabled || !mapped.show_employee_card) {
+    if (!punchVisible && allAdjustments.length === 0) {
       return hiddenHoursHistory(yearMonth, current);
     }
 
-    const { data: rows, error } = await supabase
-      .from("attendance_sessions")
-      .select("clock_in_at, clock_out_at")
-      .eq("user_id", userId)
-      .is("deleted_at", null);
-    if (error) {
-      if (/does not exist|relation/i.test(error.message)) {
-        return hiddenHoursHistory(yearMonth, current);
+    let sessions: { clockInAt: string; clockOutAt: string | null }[] = [];
+    if (punchVisible) {
+      const { data: rows, error } = await supabase
+        .from("attendance_sessions")
+        .select("clock_in_at, clock_out_at")
+        .eq("user_id", userId)
+        .is("deleted_at", null);
+      if (error && !/does not exist|relation/i.test(error.message)) {
+        throw new Error(error.message);
       }
-      throw new Error(error.message);
+      sessions = (rows ?? []).map((r: any) => ({
+        clockInAt: r.clock_in_at,
+        clockOutAt: r.clock_out_at,
+      }));
     }
-    const sessions = (rows ?? []).map((r: any) => ({
-      clockInAt: r.clock_in_at,
-      clockOutAt: r.clock_out_at,
-    }));
     const months = listProfileHoursMonths(sessions);
+    for (const adj of allAdjustments) {
+      if (adj.year_month && !months.includes(adj.year_month)) months.push(adj.year_month);
+    }
+    months.sort((a, b) => (a < b ? 1 : a > b ? -1 : 0));
     const total_seconds = sumClippedSecondsForMonth(sessions, yearMonth);
     let hourly_rate: number | null = null;
     const wage = await supabase
@@ -743,6 +794,8 @@ export const getMyAttendanceHoursHistory = createServerFn({ method: "GET" })
       if (Number.isFinite(n)) hourly_rate = n;
     }
     const hoursPay = estimatedPayFromSeconds(total_seconds, hourly_rate);
+    const monthAdj = allAdjustments.filter((adj) => adj.year_month === yearMonth);
+    const adjNet = sumAdjustmentSignedAmounts(monthAdj);
     return {
       visible: true,
       yearMonth,
@@ -753,9 +806,10 @@ export const getMyAttendanceHoursHistory = createServerFn({ method: "GET" })
       total_hours: secondsToHours(total_seconds),
       hourly_rate,
       hours_pay: hoursPay,
-      adjustment_net: 0,
-      adjustments: [],
-      estimated_pay: hoursPay,
+      adjustment_net: adjNet,
+      adjustments: monthAdj,
+      all_adjustments: allAdjustments,
+      estimated_pay: estimatedPayWithAdjustments(hoursPay, adjNet),
     };
   });
 

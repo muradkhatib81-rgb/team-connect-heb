@@ -7,6 +7,9 @@ import {
   adjustmentSignedAmount,
   estimatedPayFromSeconds,
   estimatedPayWithAdjustments,
+  hoursReportIncludesAdjustments,
+  profileHoursBlockVisible,
+  splitProfileAdjustments,
   suggestedWorkDayDeduction,
   sumAdjustmentSignedAmounts,
   employeeMatchesPickerQuery,
@@ -212,6 +215,33 @@ test("estimated pay folds hours×rate with deductions and additions", () => {
   assert.equal(estimatedPayWithAdjustments(hoursPay, net), 30);
   assert.equal(estimatedPayWithAdjustments(null, 0), null);
   assert.equal(estimatedPayWithAdjustments(null, -80), -80);
+});
+
+test("employee profile shows the hours/adjustments block when they have a deduction even without punch card", () => {
+  assert.equal(profileHoursBlockVisible(false, true), true);
+  assert.equal(profileHoursBlockVisible(true, false), true);
+  assert.equal(profileHoursBlockVisible(false, false), false);
+});
+
+test("hours report lists adjustments only for the same audience who can run it", () => {
+  assert.equal(hoursReportIncludesAdjustments(true), true);
+  assert.equal(hoursReportIncludesAdjustments(false), false);
+});
+
+test("profile lists other-month deductions so the current month cannot hide them", () => {
+  const split = splitProfileAdjustments({
+    selectedYearMonth: "2026-09",
+    monthAdjustments: [],
+    allAdjustments: [
+      { id: "aug-deduct", year_month: "2026-08", type: "deduct_amount" as const, amount: 80 },
+      { id: "jul-add", year_month: "2026-07", type: "add_amount" as const, amount: 20 },
+    ],
+  });
+  assert.equal(split.selectedMonth.length, 0);
+  assert.deepEqual(
+    split.otherMonths.map((row) => row.id),
+    ["aug-deduct", "jul-add"],
+  );
 });
 
 test("fractional hours round to 2 decimals before pay", () => {

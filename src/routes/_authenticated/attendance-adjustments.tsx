@@ -281,6 +281,7 @@ function AttendanceAdjustmentsPage() {
 
       <div className="space-y-2">
         <h2 className="font-semibold">{t("attendance.recentAdjustments")}</h2>
+        <p className="text-xs text-muted-foreground">{t("attendance.adjustRecentHint")}</p>
         {recentQ.isLoading ? (
           <div className="flex justify-center py-6">
             <Loader2 className="size-5 animate-spin text-muted-foreground" />

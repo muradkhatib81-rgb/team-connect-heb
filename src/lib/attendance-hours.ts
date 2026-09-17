@@ -216,6 +216,45 @@ export function adjustmentExceedsCap(args: {
   return args.amount > max + 1e-9;
 }
 
+/**
+ * Employee profile hours/adjustments block: punch card OR any own ledger row.
+ * Managers cannot use this to view someone else.
+ */
+export function profileHoursBlockVisible(
+  punchCardVisible: boolean,
+  hasOwnAdjustments: boolean,
+): boolean {
+  return punchCardVisible || hasOwnAdjustments;
+}
+
+/**
+ * Adjustments on the hours report use the same audience as running the report
+ * (Platform Owner or can_report). Creating adjustments is a separate grant.
+ */
+export function hoursReportIncludesAdjustments(canRunHoursReport: boolean): boolean {
+  return canRunHoursReport;
+}
+
+/**
+ * Profile MUST list that employee's deductions/additions with type labels.
+ * Selected-month rows stay tied to estimated pay; other months still appear
+ * so a current-month view cannot hide an earlier deduction.
+ */
+export function splitProfileAdjustments<T extends { id: string; year_month?: string }>(args: {
+  selectedYearMonth: string;
+  monthAdjustments: T[];
+  allAdjustments: T[];
+}): { selectedMonth: T[]; otherMonths: T[] } {
+  const fromAll = args.allAdjustments.filter((row) => row.year_month === args.selectedYearMonth);
+  const selectedMonth = args.monthAdjustments.length > 0 ? args.monthAdjustments : fromAll;
+  const selectedIds = new Set(selectedMonth.map((row) => row.id).filter(Boolean));
+  const otherMonths = args.allAdjustments.filter((row) => {
+    if (selectedIds.has(row.id)) return false;
+    return row.year_month !== args.selectedYearMonth;
+  });
+  return { selectedMonth, otherMonths };
+}
+
 export function formatAttendanceHoursFromSeconds(seconds: number): string {
   const minutes = secondsToMinutes(seconds);
   const h = Math.floor(minutes / 60);
