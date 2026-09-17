@@ -1,12 +1,12 @@
 import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { ClipboardList, Fingerprint } from "lucide-react";
+import { ClipboardList, Fingerprint, Banknote } from "lucide-react";
 import { Link } from "@tanstack/react-router";
 import { useTranslation } from "react-i18next";
 import { Card } from "@/components/ui/card";
 import { useAuth } from "@/lib/use-auth";
 import { useActiveBranch } from "@/lib/use-active-branch";
-import { getAttendanceCapabilities, listAttendanceReportScopes } from "@/lib/attendance.functions";
+import { getAttendanceCapabilities, listAttendanceAdjustScopes, listAttendanceReportScopes } from "@/lib/attendance.functions";
 
 const DASH_TILE =
   "card-elevated flex h-full min-h-[4.75rem] cursor-pointer p-3 transition-colors border border-sky-300/50 bg-sky-50/50 hover:bg-sky-50";
@@ -23,6 +23,7 @@ export function AttendanceDashboardCard() {
   const branchId = activeBranchId ?? profile?.branch_id ?? null;
   const capsFn = useServerFn(getAttendanceCapabilities);
   const reportFn = useServerFn(listAttendanceReportScopes);
+  const adjustFn = useServerFn(listAttendanceAdjustScopes);
 
   const capsQ = useQuery({
     queryKey: ["attendance-caps", branchId],
@@ -35,10 +36,16 @@ export function AttendanceDashboardCard() {
     queryFn: () => reportFn(),
     staleTime: 60_000,
   });
+  const adjustQ = useQuery({
+    queryKey: ["attendance-adjust-scopes"],
+    queryFn: () => adjustFn(),
+    staleTime: 60_000,
+  });
 
   const showPunch = !!capsQ.data?.show_employee_card || !!capsQ.data?.show_manager_card;
   const showReport = !!reportQ.data?.can_report;
-  if (!showPunch && !showReport) return null;
+  const showAdjust = !!adjustQ.data?.can_adjust_pay;
+  if (!showPunch && !showReport && !showAdjust) return null;
 
   return (
     <div className="contents">
@@ -71,6 +78,21 @@ export function AttendanceDashboardCard() {
               <div className="min-w-0 flex-1 self-center">
                 <h3 className={DASH_TILE_TITLE}>{t("attendance.reportTitle")}</h3>
                 <p className={DASH_TILE_SUB}>{t("attendance.reportSubtitle")}</p>
+              </div>
+            </div>
+          </Card>
+        </Link>
+      ) : null}
+      {showAdjust ? (
+        <Link to="/attendance-adjustments" className="block">
+          <Card className={DASH_TILE}>
+            <div className="flex h-full w-full items-center gap-2.5">
+              <div className={DASH_TILE_ICON}>
+                <Banknote className="size-4" />
+              </div>
+              <div className="min-w-0 flex-1 self-center">
+                <h3 className={DASH_TILE_TITLE}>{t("attendance.adjustTitle")}</h3>
+                <p className={DASH_TILE_SUB}>{t("attendance.adjustSubtitle")}</p>
               </div>
             </div>
           </Card>

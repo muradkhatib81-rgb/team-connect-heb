@@ -55,7 +55,8 @@
     "hoursThisMonth": "שעות החודש",
     "hoursSelectedMonth": "שעות",
     "estimatedPay": "אומדן שכר",
-    "currentMonth": "נוכחי"
+    "currentMonth": "נוכחי",
+    "adjustments": "התאמות שכר"
   },
   "push": {
     "title": "התראות פעמון",
@@ -954,6 +955,7 @@
     "opsErrors": "יומן בקרה",
     "attendance": "טביעת נוכחות",
     "attendanceHours": "שעות נוכחות",
+    "attendanceAdjustments": "התאמות שכר",
     "companyDashboard": "דשבורד חברה",
     "branches": "סניפים",
     "companyManagers": "מנהלי החברה",
@@ -991,7 +993,7 @@
       "employee": "עובד"
     },
     "geoHint": "הגדר GPS פעם אחת לסניף. חל אוטומטית על כל עובדי הסניף הנוכחיים והחדשים — לא לפי עובד.",
-    "grantsHint": "הענק צפייה / עריכה / מחיקה / דוח שעות בלי לשנות תפקידי מערכת או את מסך ההרשאות. דוח השעות אינו אוטומטי למנהל סניף, סגן מנהל או אחראי מחלקה.",
+    "grantsHint": "הענק צפייה / עריכה / מחיקה / דוח שעות / התאמות שכר בלי לשנות תפקידי מערכת או את מסך ההרשאות. דוח השעות והתאמות השכר אינם אוטומטיים למנהל סניף, סגן מנהל או אחראי מחלקה.",
     "scopeType": "היקף",
     "scopeTarget": "יעד",
     "company": "חברה",
@@ -1014,6 +1016,9 @@
     "canEdit": "עריכת טביעות",
     "canDelete": "מחיקת שעות",
     "canReport": "דוח שעות",
+    "canAdjustPay": "התאמות שכר",
+    "adjustPayMax": "סכום מקסימלי להתאמה אחת",
+    "adjustPayMaxHint": "בעל ההענקה לא יוכל לשמור תוספת או ניכוי גדולים מסכום זה.",
     "saveGrant": "שמירת הענקה",
     "grantWholeCompany": "לחברה אין סניפים — הענקת הדוח חלה על כל החברה.",
     "chooseCompanyFirst": "בחרו חברה קודם",
@@ -1077,6 +1082,24 @@
     "departments": "מחלקות",
     "reportEmpty": "אין שעות בטווח זה",
     "reportForbidden": "אין לך הרשאה להפיק את דוח שעות הנוכחות.",
+    "adjustTitle": "התאמות שכר",
+    "adjustSubtitle": "הוספת ניכוי או תוספת לרשומת השכר של העובד. השמירה נרשמת מיד.",
+    "adjustForbidden": "אין לך הרשאה לרשום התאמות שכר.",
+    "adjustmentType": "סוג",
+    "adjustmentAmount": "סכום",
+    "adjustmentDate": "תאריך",
+    "adjustmentNote": "סיבה (אופציונלי)",
+    "saveAdjustment": "שמירת התאמה",
+    "adjustmentSaved": "ההתאמה נשמרה ברשומת העובד",
+    "recentAdjustments": "התאמות אחרונות",
+    "noAdjustments": "אין התאמות עדיין",
+    "adjustWorkDayHint": "הצעה לפי שכר לשעה × 8 שעות: {{amount}}",
+    "adjustCapHint": "המקסימום להתאמה אחת הוא {{max}}.",
+    "adjustmentTypes": {
+      "deduct_work_day": "ניכוי יום עבודה",
+      "deduct_amount": "ניכוי סכום",
+      "add_amount": "תוספת"
+    },
     "chooseScope": "בחרו סניף או חברה",
     "backToPunch": "טביעת נוכחות",
     "notEnabled": "טביעת נוכחות עדיין לא הופעלה לסניף זה.",
@@ -1110,6 +1133,10 @@
       "employeeRequired": "בחרו עובד אחד לפחות",
       "companyOrBranchRequired": "בחרו חברה או סניף",
       "invalidDepartment": "בחרו מחלקה מהסניף או מהחברה",
+      "adjustCapExceeded": "הסכום גבוה ממגבלת התאמת השכר שלך",
+      "adjustCapRequired": "יש להגדיר סכום מקסימלי להתאמות שכר",
+      "invalidAdjustmentType": "בחרו סוג התאמה תקין",
+      "invalidAmount": "יש להזין סכום חיובי",
       "generic": "לא ניתן להשלים את הטביעה"
     }
   },

@@ -69,6 +69,8 @@ function PlatformAttendancePage() {
   const [canEdit, setCanEdit] = useState(false);
   const [canDelete, setCanDelete] = useState(false);
   const [canReport, setCanReport] = useState(false);
+  const [canAdjustPay, setCanAdjustPay] = useState(false);
+  const [adjustPayMax, setAdjustPayMax] = useState("");
 
   const [wageCompanyId, setWageCompanyId] = useState("");
   const [wageBranchId, setWageBranchId] = useState("");
@@ -211,6 +213,10 @@ function PlatformAttendancePage() {
           can_edit: canEdit,
           can_delete: canDelete,
           can_report: canReport,
+          can_adjust_pay: canAdjustPay,
+          adjust_pay_max_amount: canAdjustPay
+            ? (Number(adjustPayMax) > 0 ? Number(adjustPayMax) : null)
+            : null,
         },
       }),
     onSuccess: () => {
@@ -218,6 +224,7 @@ function PlatformAttendancePage() {
       void qc.invalidateQueries({ queryKey: ["attendance-grants"] });
       void qc.invalidateQueries({ queryKey: ["attendance-caps"] });
       void qc.invalidateQueries({ queryKey: ["attendance-report-scopes"] });
+      void qc.invalidateQueries({ queryKey: ["attendance-adjust-scopes"] });
     },
     onError: (e: Error) => toast.error(e.message),
   });
@@ -513,13 +520,36 @@ function PlatformAttendancePage() {
                 <Switch checked={canReport} onCheckedChange={setCanReport} />
                 {t("attendance.canReport")}
               </label>
+              <label className="flex items-center gap-2 text-sm">
+                <Switch
+                  checked={canAdjustPay}
+                  onCheckedChange={(v) => {
+                    setCanAdjustPay(v);
+                    if (!v) setAdjustPayMax("");
+                  }}
+                />
+                {t("attendance.canAdjustPay")}
+              </label>
             </div>
+            {canAdjustPay ? (
+              <div className="space-y-1.5 max-w-xs">
+                <Label>{t("attendance.adjustPayMax")}</Label>
+                <Input
+                  inputMode="decimal"
+                  value={adjustPayMax}
+                  onChange={(e) => setAdjustPayMax(e.target.value)}
+                  placeholder="0.00"
+                />
+                <p className="text-xs text-muted-foreground">{t("attendance.adjustPayMaxHint")}</p>
+              </div>
+            ) : null}
             <Button
               onClick={() => saveGrantMut.mutate()}
               disabled={
                 !grantUserId ||
                 saveGrantMut.isPending ||
-                (grantCompanyHasBranches ? !grantBranchId : !grantCompanyId)
+                (grantCompanyHasBranches ? !grantBranchId : !grantCompanyId) ||
+                (canAdjustPay && !(Number(adjustPayMax) > 0))
               }
             >
               {saveGrantMut.isPending ? <Loader2 className="size-4 animate-spin" /> : null}
@@ -545,6 +575,11 @@ function PlatformAttendancePage() {
                       g.can_edit ? t("attendance.canEdit") : null,
                       g.can_delete ? t("attendance.canDelete") : null,
                       g.can_report ? t("attendance.canReport") : null,
+                      g.can_adjust_pay
+                        ? `${t("attendance.canAdjustPay")}${
+                            g.adjust_pay_max_amount != null ? ` (${g.adjust_pay_max_amount})` : ""
+                          }`
+                        : null,
                     ]
                       .filter(Boolean)
                       .join(" · ")}

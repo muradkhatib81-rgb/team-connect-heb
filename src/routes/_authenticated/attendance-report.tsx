@@ -415,6 +415,18 @@ function AttendanceHoursReportPage() {
                       {(isEmployeeFilter || departmentIds.length !== 1) && row.department_name ? (
                         <div className="text-xs text-muted-foreground">{row.department_name}</div>
                       ) : null}
+                      {(row.adjustments ?? []).length > 0 ? (
+                        <ul className="mt-1 space-y-0.5">
+                          {row.adjustments!.map((a) => (
+                            <li key={a.id} className="text-xs text-muted-foreground">
+                              {t(`attendance.adjustmentTypes.${a.type}`)}
+                              {": "}
+                              {formatMoney(a.signed_amount)}
+                              {a.adjustment_date ? ` · ${a.adjustment_date}` : ""}
+                            </li>
+                          ))}
+                        </ul>
+                      ) : null}
                     </TableCell>
                     <TableCell>{formatAttendanceHours(row.total_minutes ?? 0)}</TableCell>
                     <TableCell>

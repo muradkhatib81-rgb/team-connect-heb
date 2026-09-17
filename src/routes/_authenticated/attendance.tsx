@@ -34,6 +34,7 @@ import {
   getAttendanceCapabilities,
   getAttendanceLookup,
   getMyAttendanceMonth,
+  listAttendanceAdjustScopes,
   listAttendanceReportScopes,
   manualEditAttendanceSession,
   sessionsToExcelXml,
@@ -76,6 +77,7 @@ function AttendancePage() {
   const deleteFn = useServerFn(softDeleteAttendanceSession);
   const editFn = useServerFn(manualEditAttendanceSession);
   const reportScopesFn = useServerFn(listAttendanceReportScopes);
+  const adjustScopesFn = useServerFn(listAttendanceAdjustScopes);
 
   const [yearMonth, setYearMonth] = useState(currentYearMonth);
   const [mgrMonth, setMgrMonth] = useState(currentYearMonth);
@@ -94,6 +96,10 @@ function AttendancePage() {
   const reportAccessQ = useQuery({
     queryKey: ["attendance-report-scopes"],
     queryFn: () => reportScopesFn(),
+  });
+  const adjustAccessQ = useQuery({
+    queryKey: ["attendance-adjust-scopes"],
+    queryFn: () => adjustScopesFn(),
   });
 
   const myQ = useQuery({
@@ -307,6 +313,14 @@ function AttendancePage() {
               className="mt-1 inline-block text-xs text-primary hover:underline"
             >
               {t("attendance.reportTitle")}
+            </Link>
+          ) : null}
+          {adjustAccessQ.data?.can_adjust_pay ? (
+            <Link
+              to="/attendance-adjustments"
+              className="mt-1 ms-3 inline-block text-xs text-primary hover:underline"
+            >
+              {t("attendance.adjustTitle")}
             </Link>
           ) : null}
         </div>

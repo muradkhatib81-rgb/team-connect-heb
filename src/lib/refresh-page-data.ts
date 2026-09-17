@@ -18,6 +18,7 @@ const SESSION_OR_SHELL_HEADS = new Set<unknown>([
   "shell-comm-unread",
   "attendance-caps",
   "attendance-report-scopes",
+  "attendance-adjust-scopes",
   "custody-caps",
   "notif",
   "company-settings",

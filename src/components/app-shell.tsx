@@ -35,6 +35,7 @@ import {
   Sparkles,
   AlertTriangle,
   Fingerprint,
+  Banknote,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
@@ -103,7 +104,7 @@ import {
 } from "@/lib/realtime-bridge-sync";
 import { useAiAccess } from "@/lib/use-ai-access";
 import { bindPushToneListener } from "@/lib/alert-tone";
-import { getAttendanceCapabilities, listAttendanceReportScopes } from "@/lib/attendance.functions";
+import { getAttendanceCapabilities, listAttendanceAdjustScopes, listAttendanceReportScopes } from "@/lib/attendance.functions";
 
 interface NavItem {
   to: string;
@@ -162,6 +163,7 @@ export function AppShell({ children }: { children: ReactNode }) {
 
   const attendanceCapsFn = useServerFn(getAttendanceCapabilities);
   const attendanceReportScopesFn = useServerFn(listAttendanceReportScopes);
+  const attendanceAdjustScopesFn = useServerFn(listAttendanceAdjustScopes);
   const attendanceBranchId = activeBranchId ?? profile?.branch_id ?? null;
   const attendanceCapsQ = useQuery({
     enabled: !!attendanceBranchId,
@@ -175,9 +177,16 @@ export function AppShell({ children }: { children: ReactNode }) {
     staleTime: 60_000,
     queryFn: () => attendanceReportScopesFn(),
   });
+  const attendanceAdjustQ = useQuery({
+    enabled: !!profile?.id,
+    queryKey: ["attendance-adjust-scopes"],
+    staleTime: 60_000,
+    queryFn: () => attendanceAdjustScopesFn(),
+  });
   const showAttendanceNav =
     !!attendanceCapsQ.data?.show_employee_card || !!attendanceCapsQ.data?.show_manager_card;
   const showAttendanceReportNav = !!attendanceReportQ.data?.can_report;
+  const showAttendanceAdjustNav = !!attendanceAdjustQ.data?.can_adjust_pay;
 
   // Unread messages count (announcements module removed)
   const commUnreadQ = useQuery({
@@ -408,6 +417,13 @@ export function AppShell({ children }: { children: ReactNode }) {
       label: t("nav.attendanceHours"),
       icon: ClipboardList,
       visible: showAttendanceReportNav,
+      section: branchSection,
+    },
+    {
+      to: "/attendance-adjustments",
+      label: t("nav.attendanceAdjustments"),
+      icon: Banknote,
+      visible: showAttendanceAdjustNav,
       section: branchSection,
     },
     {

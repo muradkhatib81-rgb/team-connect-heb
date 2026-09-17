@@ -55,7 +55,8 @@
     "hoursThisMonth": "ساعات هذا الشهر",
     "hoursSelectedMonth": "الساعات",
     "estimatedPay": "تقدير الأجر",
-    "currentMonth": "الحالي"
+    "currentMonth": "الحالي",
+    "adjustments": "تعديلات الأجر"
   },
   "push": {
     "title": "إشعارات الجرس",
@@ -954,6 +955,7 @@
     "opsErrors": "سجل الرقابة",
     "attendance": "بصمة الدوام",
     "attendanceHours": "ساعات الدوام",
+    "attendanceAdjustments": "تعديلات الأجر",
     "companyDashboard": "لوحة تحكم الشركة",
     "branches": "الفروع",
     "companyManagers": "مديرو الشركة",
@@ -991,7 +993,7 @@
       "employee": "موظف"
     },
     "geoHint": "حدّد GPS مرة واحدة على الفرع. ينطبق تلقائياً على كل موظفي الفرع الحاليين والجدد — مش لكل موظف لوحده.",
-    "grantsHint": "امنح مشاهدة / تعديل / مسح / تقرير الساعات بدون تغيير أدوار النظام أو صفحة الصلاحيات. تقرير الساعات لا يُعطى تلقائياً لمدير فرع أو نائب مدير أو رئيس قسم.",
+    "grantsHint": "امنح مشاهدة / تعديل / مسح / تقرير الساعات / تعديلات الأجر بدون تغيير أدوار النظام أو صفحة الصلاحيات. تقرير الساعات وتعديلات الأجر لا تُعطى تلقائياً لمدير فرع أو نائب مدير أو رئيس قسم.",
     "scopeType": "النطاق",
     "scopeTarget": "الهدف",
     "company": "شركة",
@@ -1014,6 +1016,9 @@
     "canEdit": "تعديل البصمة",
     "canDelete": "مسح ساعات",
     "canReport": "تقرير الساعات",
+    "canAdjustPay": "تعديلات الأجر",
+    "adjustPayMax": "الحد الأقصى لكل تعديل",
+    "adjustPayMaxHint": "صاحب المنحة لا يقدر يحفظ إضافة أو خصم أكبر من هذا المبلغ.",
     "saveGrant": "حفظ المنح",
     "grantWholeCompany": "هذه الشركة بدون فروع — منح التقرير يشمل الشركة كلها.",
     "chooseCompanyFirst": "اختر شركة أولاً",
@@ -1077,6 +1082,24 @@
     "departments": "الأقسام",
     "reportEmpty": "ما في ساعات في هذا النطاق",
     "reportForbidden": "ما عندك صلاحية لتشغيل تقرير ساعات الدوام.",
+    "adjustTitle": "تعديلات الأجر",
+    "adjustSubtitle": "أضف خصماً أو إضافة على سجل أجر الموظف. الحفظ يُرفَق فوراً.",
+    "adjustForbidden": "ما عندك صلاحية لتسجيل تعديلات الأجر.",
+    "adjustmentType": "النوع",
+    "adjustmentAmount": "المبلغ",
+    "adjustmentDate": "التاريخ",
+    "adjustmentNote": "السبب (اختياري)",
+    "saveAdjustment": "حفظ التعديل",
+    "adjustmentSaved": "تم حفظ التعديل على سجل الموظف",
+    "recentAdjustments": "التعديلات الأخيرة",
+    "noAdjustments": "ما في تعديلات بعد",
+    "adjustWorkDayHint": "اقتراح من الأجر بالساعة × 8 ساعات: {{amount}}",
+    "adjustCapHint": "الحد الأقصى لكل تعديل هو {{max}}.",
+    "adjustmentTypes": {
+      "deduct_work_day": "خصم يوم عمل",
+      "deduct_amount": "خصم مبلغ",
+      "add_amount": "إضافة مبلغ"
+    },
     "chooseScope": "اختر فرعاً أو شركة",
     "backToPunch": "بصمة الدوام",
     "notEnabled": "بصمة الدوام غير مفعّلة لهذا الفرع بعد.",
@@ -1110,6 +1133,10 @@
       "employeeRequired": "اختر موظفاً واحداً على الأقل",
       "companyOrBranchRequired": "اختر شركة أو فرعاً",
       "invalidDepartment": "اختر قسماً من هذا الفرع أو الشركة",
+      "adjustCapExceeded": "المبلغ أعلى من حد تعديل الأجر المسموح لك",
+      "adjustCapRequired": "حدّد مبلغاً أقصى لتعديلات الأجر",
+      "invalidAdjustmentType": "اختر نوع تعديل صحيح",
+      "invalidAmount": "أدخل مبلغاً موجباً",
       "generic": "ما قدرنا نكمّل البصمة"
     }
   },

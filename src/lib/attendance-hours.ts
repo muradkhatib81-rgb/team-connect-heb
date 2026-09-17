@@ -156,6 +156,66 @@ export function estimatedPayFromSeconds(seconds: number, hourlyRate: number | nu
   return Math.round(hours * hourlyRate * 100) / 100;
 }
 
+export const PAY_ADJUSTMENT_TYPES = ["deduct_work_day", "deduct_amount", "add_amount"] as const;
+export type PayAdjustmentType = (typeof PAY_ADJUSTMENT_TYPES)[number];
+export const REFERENCE_WORK_DAY_HOURS = 8;
+
+export function isPayAdjustmentType(value: string | null | undefined): value is PayAdjustmentType {
+  return !!value && (PAY_ADJUSTMENT_TYPES as readonly string[]).includes(value);
+}
+
+/** Suggested deduct-work-day amount: hourly rate × 8 (reference day). */
+export function suggestedWorkDayDeduction(
+  hourlyRate: number | null | undefined,
+  hours = REFERENCE_WORK_DAY_HOURS,
+): number | null {
+  if (hourlyRate == null || !Number.isFinite(hourlyRate) || hourlyRate < 0) return null;
+  return Math.round(hourlyRate * hours * 100) / 100;
+}
+
+/** Amount is stored positive; sign comes from type (add vs deduct). */
+export function adjustmentSignedAmount(type: PayAdjustmentType, amount: number): number {
+  if (!Number.isFinite(amount) || amount <= 0) return 0;
+  const abs = Math.round(amount * 100) / 100;
+  return type === "add_amount" ? abs : -abs;
+}
+
+export function sumAdjustmentSignedAmounts(
+  rows: Array<{ type: PayAdjustmentType; amount: number }>,
+): number {
+  const net = rows.reduce((sum, r) => sum + adjustmentSignedAmount(r.type, r.amount), 0);
+  return Math.round(net * 100) / 100;
+}
+
+/**
+ * Hours×rate folded with the ledger: − deductions + additions.
+ * No rate and no adjustments → null. Adjustments alone still produce a total.
+ */
+export function estimatedPayWithAdjustments(
+  hoursPay: number | null | undefined,
+  adjustmentNet: number,
+): number | null {
+  const adj = Number.isFinite(adjustmentNet) ? adjustmentNet : 0;
+  if ((hoursPay == null || !Number.isFinite(hoursPay)) && adj === 0) return null;
+  return Math.round(((hoursPay ?? 0) + adj) * 100) / 100;
+}
+
+/**
+ * Single-adjustment cap. Platform Owner is unlimited.
+ * Grantees without a positive max cannot post.
+ */
+export function adjustmentExceedsCap(args: {
+  amount: number;
+  maxAmount: number | null | undefined;
+  isPlatformOwner: boolean;
+}): boolean {
+  if (args.isPlatformOwner) return false;
+  if (!Number.isFinite(args.amount) || args.amount <= 0) return true;
+  const max = args.maxAmount;
+  if (max == null || !Number.isFinite(max) || max <= 0) return true;
+  return args.amount > max + 1e-9;
+}
+
 export function formatAttendanceHoursFromSeconds(seconds: number): string {
   const minutes = secondsToMinutes(seconds);
   const h = Math.floor(minutes / 60);

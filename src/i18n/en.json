@@ -55,7 +55,8 @@
     "hoursThisMonth": "Hours this month",
     "hoursSelectedMonth": "Hours",
     "estimatedPay": "Estimated pay",
-    "currentMonth": "Current"
+    "currentMonth": "Current",
+    "adjustments": "Pay adjustments"
   },
   "push": {
     "title": "Bell notifications",
@@ -954,6 +955,7 @@
     "opsErrors": "Control Log",
     "attendance": "Attendance Punch",
     "attendanceHours": "Attendance hours",
+    "attendanceAdjustments": "Pay adjustments",
     "companyDashboard": "Company Dashboard",
     "branches": "Branches",
     "companyManagers": "Company Managers",
@@ -991,7 +993,7 @@
       "employee": "Employee"
     },
     "geoHint": "Set GPS once on the branch. It applies automatically to all current and future employees of this branch — not per employee.",
-    "grantsHint": "Grant view / edit / delete / hours report without changing system roles or the Permissions page. Hours report is never automatic for branch manager, deputy, or department head.",
+    "grantsHint": "Grant view / edit / delete / hours report / pay adjustments without changing system roles or the Permissions page. Hours report and pay adjustments are never automatic for branch manager, deputy, or department head.",
     "scopeType": "Scope",
     "scopeTarget": "Target",
     "company": "Company",
@@ -1014,6 +1016,9 @@
     "canEdit": "Edit punches",
     "canDelete": "Delete hours",
     "canReport": "Hours report",
+    "canAdjustPay": "Pay adjustments",
+    "adjustPayMax": "Max amount per adjustment",
+    "adjustPayMaxHint": "The grantee cannot save a single addition or deduction larger than this amount.",
     "saveGrant": "Save grant",
     "grantWholeCompany": "This company has no branches — report grant covers the whole company.",
     "chooseCompanyFirst": "Choose a company first",
@@ -1077,6 +1082,24 @@
     "departments": "Departments",
     "reportEmpty": "No hours in this range",
     "reportForbidden": "You do not have permission to run the attendance hours report.",
+    "adjustTitle": "Pay adjustments",
+    "adjustSubtitle": "Add a deduction or addition to an employee’s pay record. Saving attaches it immediately.",
+    "adjustForbidden": "You do not have permission to post pay adjustments.",
+    "adjustmentType": "Type",
+    "adjustmentAmount": "Amount",
+    "adjustmentDate": "Date",
+    "adjustmentNote": "Reason (optional)",
+    "saveAdjustment": "Save adjustment",
+    "adjustmentSaved": "Adjustment saved on the employee record",
+    "recentAdjustments": "Recent adjustments",
+    "noAdjustments": "No adjustments yet",
+    "adjustWorkDayHint": "Suggested from hourly rate × 8 hours: {{amount}}",
+    "adjustCapHint": "Your maximum per adjustment is {{max}}.",
+    "adjustmentTypes": {
+      "deduct_work_day": "Deduct work day",
+      "deduct_amount": "Deduction",
+      "add_amount": "Addition"
+    },
     "chooseScope": "Choose a branch or company",
     "backToPunch": "Attendance punch",
     "notEnabled": "Attendance Punch is not enabled for this branch yet.",
@@ -1110,6 +1133,10 @@
       "employeeRequired": "Choose at least one employee",
       "companyOrBranchRequired": "Choose a company or a branch",
       "invalidDepartment": "Choose a department from this branch or company",
+      "adjustCapExceeded": "This amount is above your pay-adjustment limit",
+      "adjustCapRequired": "Set a maximum amount for pay adjustments",
+      "invalidAdjustmentType": "Choose a valid adjustment type",
+      "invalidAmount": "Enter a positive amount",
       "generic": "Could not complete the punch"
     }
   },

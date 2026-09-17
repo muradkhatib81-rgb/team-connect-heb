@@ -3,7 +3,12 @@ import { test } from "node:test";
 import {
   clippedSessionSeconds,
   currentJerusalemYearMonth,
+  adjustmentExceedsCap,
+  adjustmentSignedAmount,
   estimatedPayFromSeconds,
+  estimatedPayWithAdjustments,
+  suggestedWorkDayDeduction,
+  sumAdjustmentSignedAmounts,
   employeeMatchesPickerQuery,
   employeePickerLabel,
   filterHoursReportPeople,
@@ -162,6 +167,51 @@ test("per-employee pay uses that employee's hourly rate", () => {
   assert.equal(estimatedPayFromSeconds(fourHours, 30), 120);
   assert.equal(estimatedPayFromSeconds(fourHours, 34), 136);
   assert.equal(estimatedPayFromSeconds(fourHours, null), null);
+});
+
+test("deduct work day suggests hourly_rate × 8", () => {
+  assert.equal(suggestedWorkDayDeduction(30), 240);
+  assert.equal(suggestedWorkDayDeduction(34.5), 276);
+  assert.equal(suggestedWorkDayDeduction(null), null);
+});
+
+test("adjustment sign is implied by type; amount stays positive", () => {
+  assert.equal(adjustmentSignedAmount("add_amount", 50), 50);
+  assert.equal(adjustmentSignedAmount("deduct_amount", 50), -50);
+  assert.equal(adjustmentSignedAmount("deduct_work_day", 240), -240);
+  assert.equal(adjustmentSignedAmount("add_amount", 0), 0);
+});
+
+test("single-adjustment cap blocks amounts above PO-set max; owner is unlimited", () => {
+  assert.equal(
+    adjustmentExceedsCap({ amount: 100, maxAmount: 100, isPlatformOwner: false }),
+    false,
+  );
+  assert.equal(
+    adjustmentExceedsCap({ amount: 100.01, maxAmount: 100, isPlatformOwner: false }),
+    true,
+  );
+  assert.equal(
+    adjustmentExceedsCap({ amount: 1, maxAmount: null, isPlatformOwner: false }),
+    true,
+  );
+  assert.equal(
+    adjustmentExceedsCap({ amount: 99999, maxAmount: 10, isPlatformOwner: true }),
+    false,
+  );
+});
+
+test("estimated pay folds hours×rate with deductions and additions", () => {
+  const hoursPay = estimatedPayFromSeconds(8 * 3600, 30); // 240
+  const net = sumAdjustmentSignedAmounts([
+    { type: "deduct_work_day", amount: 240 },
+    { type: "add_amount", amount: 50 },
+    { type: "deduct_amount", amount: 20 },
+  ]);
+  assert.equal(net, -210);
+  assert.equal(estimatedPayWithAdjustments(hoursPay, net), 30);
+  assert.equal(estimatedPayWithAdjustments(null, 0), null);
+  assert.equal(estimatedPayWithAdjustments(null, -80), -80);
 });
 
 test("fractional hours round to 2 decimals before pay", () => {

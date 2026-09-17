@@ -2,6 +2,7 @@
  * بصمة الدوام / Attendance punch — isolated feature.
  * Does NOT read/write user_roles, app_role, user_task_permissions, or the Permissions page.
  * Hours report access is Platform Owner or attendance_user_grants.can_report only.
+ * Pay adjustments: Platform Owner or attendance_user_grants.can_adjust_pay + max amount.
  * Manager roles (branch_manager / assistant_manager / department_manager) are never auto-granted.
  */
 import { createServerFn } from "@tanstack/react-start";
@@ -12,6 +13,7 @@ import {
   clippedSessionSeconds,
   currentJerusalemYearMonth,
   estimatedPayFromSeconds,
+  isPayAdjustmentType,
   jerusalemMonthRange,
   listProfileHoursMonths,
   previousYearMonth,
@@ -19,6 +21,7 @@ import {
   secondsToMinutes,
   sessionOverlapsRange,
   sumClippedSecondsForMonth,
+  type PayAdjustmentType,
 } from "@/lib/attendance-hours";
 
 async function assertPlatformOwner(supabase: any, userId: string) {
@@ -53,6 +56,8 @@ export type AttendanceCapabilities = {
   can_edit: boolean;
   can_delete: boolean;
   can_report: boolean;
+  can_adjust_pay: boolean;
+  adjust_pay_max_amount: number | null;
   is_platform_owner: boolean;
   show_employee_card: boolean;
   show_manager_card: boolean;
@@ -82,6 +87,8 @@ const emptyCaps = (): AttendanceCapabilities => ({
   can_edit: false,
   can_delete: false,
   can_report: false,
+  can_adjust_pay: false,
+  adjust_pay_max_amount: null,
   is_platform_owner: false,
   show_employee_card: false,
   show_manager_card: false,
@@ -90,6 +97,8 @@ const emptyCaps = (): AttendanceCapabilities => ({
 
 function mapCaps(c: Record<string, unknown> | null | undefined): AttendanceCapabilities {
   if (!c) return emptyCaps();
+  const maxRaw = c.adjust_pay_max_amount;
+  const maxNum = maxRaw == null || maxRaw === "" ? null : Number(maxRaw);
   return {
     enabled: !!c.enabled,
     can_punch: !!c.can_punch,
@@ -97,6 +106,8 @@ function mapCaps(c: Record<string, unknown> | null | undefined): AttendanceCapab
     can_edit: !!c.can_edit,
     can_delete: !!c.can_delete,
     can_report: !!c.can_report,
+    can_adjust_pay: !!c.can_adjust_pay,
+    adjust_pay_max_amount: maxNum != null && Number.isFinite(maxNum) ? maxNum : null,
     is_platform_owner: !!c.is_platform_owner,
     show_employee_card: !!c.show_employee_card,
     show_manager_card: !!c.show_manager_card,
@@ -183,7 +194,7 @@ export const listAttendanceUserGrants = createServerFn({ method: "GET" })
     await assertPlatformOwner(supabase, userId);
     let q = supabase
       .from("attendance_user_grants")
-      .select("id, user_id, branch_id, company_id, can_view, can_edit, can_delete, can_report, created_at")
+      .select("id, user_id, branch_id, company_id, can_view, can_edit, can_delete, can_report, can_adjust_pay, adjust_pay_max_amount, created_at")
       .order("created_at", { ascending: false });
     if (data?.branchId) q = q.eq("branch_id", data.branchId);
     const { data: rows, error } = await q;
@@ -217,15 +228,22 @@ export const upsertAttendanceUserGrant = createServerFn({ method: "POST" })
       can_edit: z.boolean(),
       can_delete: z.boolean(),
       can_report: z.boolean().default(false),
+      can_adjust_pay: z.boolean().default(false),
+      adjust_pay_max_amount: z.number().positive().max(100000).nullable().optional(),
     }),
   )
   .handler(async ({ data, context }) => {
     const { supabase, userId } = context as { supabase: any; userId: string };
     await assertPlatformOwner(supabase, userId);
-    const anyCap = data.can_view || data.can_edit || data.can_delete || data.can_report;
+    const anyCap =
+      data.can_view || data.can_edit || data.can_delete || data.can_report || data.can_adjust_pay;
     const branchId = data.branchId ? await resolveOperationalBranchId(data.branchId) : null;
     const companyId = data.companyId ?? null;
     if (!branchId && !companyId) throw new Error("COMPANY_OR_BRANCH_REQUIRED");
+    if (data.can_adjust_pay) {
+      const max = data.adjust_pay_max_amount;
+      if (max == null || !Number.isFinite(max) || max <= 0) throw new Error("ADJUST_CAP_REQUIRED");
+    }
 
     let existingQ = supabase
       .from("attendance_user_grants")
@@ -252,6 +270,8 @@ export const upsertAttendanceUserGrant = createServerFn({ method: "POST" })
       can_edit: data.can_edit,
       can_delete: data.can_delete,
       can_report: data.can_report,
+      can_adjust_pay: data.can_adjust_pay,
+      adjust_pay_max_amount: data.can_adjust_pay ? data.adjust_pay_max_amount ?? null : null,
       granted_by: userId,
       updated_at: new Date().toISOString(),
     };
@@ -548,6 +568,40 @@ export const getMyAttendanceMonth = createServerFn({ method: "GET" })
     return { sessions, total_minutes, open };
   });
 
+export type AttendancePayAdjustment = {
+  id: string;
+  employee_id?: string;
+  full_name?: string | null;
+  id_number?: string | null;
+  adjustment_date: string;
+  year_month: string;
+  type: PayAdjustmentType;
+  amount: number;
+  signed_amount: number;
+  note: string | null;
+  created_at?: string;
+};
+
+function mapPayAdjustment(raw: Record<string, unknown>): AttendancePayAdjustment | null {
+  const type = typeof raw.type === "string" && isPayAdjustmentType(raw.type) ? raw.type : null;
+  const amount = Number(raw.amount);
+  if (!type || !Number.isFinite(amount)) return null;
+  const signedRaw = raw.signed_amount == null ? null : Number(raw.signed_amount);
+  return {
+    id: String(raw.id ?? ""),
+    employee_id: raw.employee_id != null ? String(raw.employee_id) : undefined,
+    full_name: raw.full_name != null ? String(raw.full_name) : null,
+    id_number: raw.id_number != null ? String(raw.id_number) : null,
+    adjustment_date: String(raw.adjustment_date ?? ""),
+    year_month: String(raw.year_month ?? ""),
+    type,
+    amount,
+    signed_amount: signedRaw != null && Number.isFinite(signedRaw) ? signedRaw : 0,
+    note: raw.note != null ? String(raw.note) : null,
+    created_at: raw.created_at != null ? String(raw.created_at) : undefined,
+  };
+}
+
 export type AttendanceHoursHistory = {
   visible: boolean;
   yearMonth: string;
@@ -557,6 +611,9 @@ export type AttendanceHoursHistory = {
   total_minutes: number;
   total_hours: number;
   hourly_rate: number | null;
+  hours_pay: number | null;
+  adjustment_net: number;
+  adjustments: AttendancePayAdjustment[];
   estimated_pay: number | null;
 };
 
@@ -570,6 +627,9 @@ function hiddenHoursHistory(yearMonth: string, currentYearMonth: string): Attend
     total_minutes: 0,
     total_hours: 0,
     hourly_rate: null,
+    hours_pay: null,
+    adjustment_net: 0,
+    adjustments: [],
     estimated_pay: null,
   };
 }
@@ -584,6 +644,15 @@ function mapHoursHistory(raw: Record<string, unknown>, fallbackYm: string): Atte
   const seconds = Number(raw.total_seconds ?? 0);
   const rateRaw = raw.hourly_rate == null || raw.hourly_rate === "" ? null : Number(raw.hourly_rate);
   const payRaw = raw.estimated_pay == null || raw.estimated_pay === "" ? null : Number(raw.estimated_pay);
+  const hoursPayRaw = raw.hours_pay == null || raw.hours_pay === "" ? null : Number(raw.hours_pay);
+  const adjNetRaw = Number(raw.adjustment_net ?? 0);
+  const adjustments = Array.isArray(raw.adjustments)
+    ? raw.adjustments
+        .map((row) =>
+          row && typeof row === "object" ? mapPayAdjustment(row as Record<string, unknown>) : null,
+        )
+        .filter((row): row is AttendancePayAdjustment => !!row)
+    : [];
   return {
     visible: !!raw.visible,
     yearMonth,
@@ -593,6 +662,9 @@ function mapHoursHistory(raw: Record<string, unknown>, fallbackYm: string): Atte
     total_minutes: Number(raw.total_minutes ?? secondsToMinutes(Number.isFinite(seconds) ? seconds : 0)) || 0,
     total_hours: Number(raw.total_hours ?? secondsToHours(Number.isFinite(seconds) ? seconds : 0)) || 0,
     hourly_rate: rateRaw != null && Number.isFinite(rateRaw) ? rateRaw : null,
+    hours_pay: hoursPayRaw != null && Number.isFinite(hoursPayRaw) ? hoursPayRaw : null,
+    adjustment_net: Number.isFinite(adjNetRaw) ? adjNetRaw : 0,
+    adjustments,
     estimated_pay: payRaw != null && Number.isFinite(payRaw) ? payRaw : null,
   };
 }
@@ -670,6 +742,7 @@ export const getMyAttendanceHoursHistory = createServerFn({ method: "GET" })
       const n = Number(wage.data.hourly_rate);
       if (Number.isFinite(n)) hourly_rate = n;
     }
+    const hoursPay = estimatedPayFromSeconds(total_seconds, hourly_rate);
     return {
       visible: true,
       yearMonth,
@@ -679,7 +752,10 @@ export const getMyAttendanceHoursHistory = createServerFn({ method: "GET" })
       total_minutes: secondsToMinutes(total_seconds),
       total_hours: secondsToHours(total_seconds),
       hourly_rate,
-      estimated_pay: estimatedPayFromSeconds(total_seconds, hourly_rate),
+      hours_pay: hoursPay,
+      adjustment_net: 0,
+      adjustments: [],
+      estimated_pay: hoursPay,
     };
   });
 
@@ -845,6 +921,9 @@ export type AttendanceHoursReportRow = {
   total_minutes: number;
   total_hours: number;
   hourly_rate: number | null;
+  hours_pay?: number | null;
+  adjustment_net?: number;
+  adjustments?: AttendancePayAdjustment[];
   estimated_pay: number | null;
 };
 
@@ -873,6 +952,7 @@ export type AttendanceHoursReport = {
     total_seconds: number;
     total_minutes: number;
     total_hours: number;
+    adjustment_net?: number;
     estimated_pay: number;
   };
   department_totals?: AttendanceHoursReportDepartmentTotal[];
@@ -1002,15 +1082,135 @@ export const getAttendanceHoursReport = createServerFn({ method: "GET" })
       departments: Array.isArray(payload.departments) ? payload.departments : [],
       employee_ids: Array.isArray(payload.employee_ids) ? payload.employee_ids : employeeIds,
       filter: payload.filter ?? filter,
-      rows: Array.isArray(payload.rows) ? payload.rows : [],
+      rows: Array.isArray(payload.rows)
+        ? payload.rows.map((row: any) => ({
+            ...row,
+            adjustments: Array.isArray(row.adjustments)
+              ? row.adjustments
+                  .map((a: unknown) =>
+                    a && typeof a === "object" ? mapPayAdjustment(a as Record<string, unknown>) : null,
+                  )
+                  .filter((a: AttendancePayAdjustment | null): a is AttendancePayAdjustment => !!a)
+              : [],
+            adjustment_net: Number(row.adjustment_net ?? 0) || 0,
+          }))
+        : [],
       totals: payload.totals ?? {
         total_seconds: 0,
         total_minutes: 0,
         total_hours: 0,
+        adjustment_net: 0,
         estimated_pay: 0,
       },
       department_totals: Array.isArray(payload.department_totals) ? payload.department_totals : [],
     };
+  });
+
+export const listAttendanceAdjustScopes = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    const { supabase } = context as { supabase: any };
+    const { data, error } = await supabase.rpc("list_attendance_adjust_scopes");
+    if (error) {
+      if (/does not exist|function/i.test(error.message)) {
+        return {
+          is_platform_owner: false,
+          can_adjust_pay: false,
+          adjust_pay_max_amount: null as number | null,
+          scopes: [] as AttendanceReportScope[],
+        };
+      }
+      throw new Error(error.message);
+    }
+    const payload = (data ?? {}) as Record<string, unknown>;
+    const maxRaw = payload.adjust_pay_max_amount;
+    const maxNum = maxRaw == null || maxRaw === "" ? null : Number(maxRaw);
+    return {
+      is_platform_owner: !!payload.is_platform_owner,
+      can_adjust_pay: !!payload.can_adjust_pay,
+      adjust_pay_max_amount: maxNum != null && Number.isFinite(maxNum) ? maxNum : null,
+      scopes: (Array.isArray(payload.scopes) ? payload.scopes : []) as Array<
+        AttendanceReportScope & { adjust_pay_max_amount?: number | null }
+      >,
+    };
+  });
+
+export const listAttendanceAdjustEmployees = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator(
+    z.object({
+      branchId: z.string().uuid().optional(),
+      companyId: z.string().uuid().optional(),
+    }),
+  )
+  .handler(async ({ data, context }) => {
+    const { supabase } = context as { supabase: any };
+    const { data: rows, error } = await supabase.rpc("list_attendance_adjust_employees", {
+      _branch_id: data.branchId ?? null,
+      _company_id: data.companyId ?? null,
+    });
+    if (error) throw new Error(error.message);
+    return (Array.isArray(rows) ? rows : []) as Array<{
+      id: string;
+      full_name: string | null;
+      id_number: string | null;
+      hourly_rate: number | null;
+      suggested_day_amount: number | null;
+    }>;
+  });
+
+export const createAttendancePayAdjustment = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator(
+    z.object({
+      employeeId: z.string().uuid(),
+      branchId: z.string().uuid().optional(),
+      companyId: z.string().uuid().optional(),
+      type: z.enum(["deduct_work_day", "deduct_amount", "add_amount"]),
+      amount: z.number().positive().max(100000),
+      adjustmentDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+      note: z.string().max(500).optional(),
+    }),
+  )
+  .handler(async ({ data, context }) => {
+    const { supabase } = context as { supabase: any };
+    const { data: result, error } = await supabase.rpc("create_attendance_pay_adjustment", {
+      _employee_id: data.employeeId,
+      _branch_id: data.branchId ?? null,
+      _company_id: data.companyId ?? null,
+      _adjustment_type: data.type,
+      _amount: data.amount,
+      _adjustment_date: data.adjustmentDate ?? null,
+      _note: data.note ?? null,
+    });
+    if (error) throw new Error(error.message);
+    return result;
+  });
+
+export const listAttendancePayAdjustments = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator(
+    z.object({
+      branchId: z.string().uuid().optional(),
+      companyId: z.string().uuid().optional(),
+    }),
+  )
+  .handler(async ({ data, context }) => {
+    const { supabase } = context as { supabase: any };
+    const { data: rows, error } = await supabase.rpc("list_attendance_pay_adjustments", {
+      _branch_id: data.branchId ?? null,
+      _company_id: data.companyId ?? null,
+      _limit: 50,
+    });
+    if (error) {
+      if (/does not exist|function/i.test(error.message)) return [] as AttendancePayAdjustment[];
+      throw new Error(error.message);
+    }
+    return (Array.isArray(rows) ? rows : [])
+      .map((row: unknown) =>
+        row && typeof row === "object" ? mapPayAdjustment(row as Record<string, unknown>) : null,
+      )
+      .filter((row): row is AttendancePayAdjustment => !!row);
   });
 
 export const listAttendanceWageProfiles = createServerFn({ method: "GET" })
@@ -1105,6 +1305,10 @@ export function attendanceErrorKey(message: string): string {
   if (m.includes("EMPLOYEE_REQUIRED")) return "employeeRequired";
   if (m.includes("COMPANY_OR_BRANCH_REQUIRED")) return "companyOrBranchRequired";
   if (m.includes("INVALID_DEPARTMENT")) return "invalidDepartment";
+  if (m.includes("ADJUST_CAP_EXCEEDED")) return "adjustCapExceeded";
+  if (m.includes("ADJUST_CAP_REQUIRED")) return "adjustCapRequired";
+  if (m.includes("INVALID_ADJUSTMENT_TYPE")) return "invalidAdjustmentType";
+  if (m.includes("INVALID_AMOUNT")) return "invalidAmount";
   return "generic";
 }
 
@@ -1178,6 +1382,7 @@ export function hoursReportToExcelXml(report: AttendanceHoursReport): string {
     "hours",
     "hourly_rate",
     "estimated_pay",
+    "adjustments",
   ];
   const totalLabel = isEmployeeFilter
     ? "SELECTED EMPLOYEES TOTAL"
@@ -1193,6 +1398,9 @@ export function hoursReportToExcelXml(report: AttendanceHoursReport): string {
       String(r.total_hours ?? ""),
       r.hourly_rate == null ? "" : String(r.hourly_rate),
       r.estimated_pay == null ? "" : String(r.estimated_pay),
+      (r.adjustments ?? [])
+        .map((a) => `${a.type}:${a.signed_amount}`)
+        .join("; "),
     ]),
     ...(report.department_totals ?? [])
       .filter(() => (report.department_ids ?? []).length > 1)
@@ -1203,6 +1411,7 @@ export function hoursReportToExcelXml(report: AttendanceHoursReport): string {
         String(d.total_hours ?? 0),
         "",
         String(d.estimated_pay ?? 0),
+        "",
       ]),
     [
       totalLabel,
@@ -1211,6 +1420,7 @@ export function hoursReportToExcelXml(report: AttendanceHoursReport): string {
       String(report.totals.total_hours ?? 0),
       "",
       String(report.totals.estimated_pay ?? 0),
+      "",
     ],
   ];
   const table = rows

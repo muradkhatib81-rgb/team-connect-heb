@@ -227,7 +227,7 @@ function ProfileAttendanceHours({ userId }: { userId: string }) {
               {formatAttendanceHours(hoursQ.data.total_minutes ?? 0)}
             </span>
           </div>
-          {rate != null ? (
+          {rate != null || (hoursQ.data.adjustments ?? []).length > 0 ? (
             <div className="flex items-center justify-between gap-3">
               <span className="text-sm text-muted-foreground">{t("profile.estimatedPay")}</span>
               <span className="text-sm font-semibold tabular-nums">
@@ -238,6 +238,29 @@ function ProfileAttendanceHours({ userId }: { userId: string }) {
                       maximumFractionDigits: 2,
                     })}
               </span>
+            </div>
+          ) : null}
+          {(hoursQ.data.adjustments ?? []).length > 0 ? (
+            <div className="space-y-2 pt-1">
+              <p className="text-sm font-medium">{t("profile.adjustments")}</p>
+              {hoursQ.data.adjustments.map((a) => (
+                <div
+                  key={a.id}
+                  className="flex items-center justify-between gap-3 text-sm border-b border-border/60 pb-2 last:border-0 last:pb-0"
+                >
+                  <span className="text-muted-foreground">
+                    {t(`attendance.adjustmentTypes.${a.type}`)}
+                    {a.adjustment_date ? ` · ${a.adjustment_date}` : ""}
+                    {a.note ? ` · ${a.note}` : ""}
+                  </span>
+                  <span className="font-semibold tabular-nums shrink-0">
+                    {Number(a.signed_amount).toLocaleString(undefined, {
+                      minimumFractionDigits: 2,
+                      maximumFractionDigits: 2,
+                    })}
+                  </span>
+                </div>
+              ))}
             </div>
           ) : null}
         </div>
