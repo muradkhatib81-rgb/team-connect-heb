@@ -3,6 +3,8 @@
  * Shared by month totals, the hours report, and unit tests.
  */
 
+import { employeeMatchesSearch } from "./employee-name.ts";
+
 const TZ = "Asia/Jerusalem";
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 const YEAR_MONTH_RE = /^\d{4}-\d{2}$/;
@@ -426,11 +428,7 @@ export function employeeMatchesPickerQuery(
   idNumber: string | null | undefined,
   query: string,
 ): boolean {
-  const q = query.trim().toLowerCase();
-  if (!q) return true;
-  const name = (fullName ?? "").toLowerCase();
-  const id = (idNumber ?? "").toLowerCase();
-  return name.includes(q) || id.includes(q);
+  return employeeMatchesSearch({ full_name: fullName, id_number: idNumber }, query);
 }
 
 export function personMatchesDepartments(

@@ -41,6 +41,7 @@ import {
   LEAVE_LIFECYCLE_ROW,
   leaveOffLabel,
 } from "@/lib/employee-leave";
+import { filterEmployeesByNameOrId } from "@/lib/employee-name";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -1071,16 +1072,8 @@ function BalancesTab({ types }: { types: LeaveTypeRow[] }) {
   });
 
   const filteredEmployees = useMemo(() => {
-    const q = search.trim().toLowerCase();
     const all = employeesQ.data ?? [];
-    if (!q) return all.slice(0, 40);
-    return all
-      .filter((e) => {
-        const name = empDisplayName(e).toLowerCase();
-        const idn = (e.id_number ?? "").toLowerCase();
-        return name.includes(q) || idn.includes(q);
-      })
-      .slice(0, 40);
+    return filterEmployeesByNameOrId(all, search).slice(0, 40);
   }, [employeesQ.data, search]);
 
   const selected = useMemo(

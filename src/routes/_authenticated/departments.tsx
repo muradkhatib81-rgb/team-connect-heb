@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/use-auth";
@@ -50,7 +50,8 @@ import {
 import { Switch } from "@/components/ui/switch";
 import { Loader2, Building2, Plus, Pencil, Trash2, User, UserPlus, Crown } from "lucide-react";
 import { toast } from "sonner";
-import { formatEmployeeName } from "@/lib/employee-name";
+import { filterEmployeesByNameOrId, formatEmployeeName } from "@/lib/employee-name";
+import { EmployeeListSearch } from "@/components/employee-list-search";
 import { CreateEmployeeDialog } from "@/routes/_authenticated/employees";
 import { ProfilePhoneField } from "@/components/contact-actions";
 import i18n from "@/i18n";
@@ -356,6 +357,7 @@ function DeptEmployeesDialog({
   const qc = useQueryClient();
   const updateFn = useServerFn(updateDepartment);
   const [addingEmployee, setAddingEmployee] = useState(false);
+  const [employeeSearch, setEmployeeSearch] = useState("");
 
   const q = useQuery({
     enabled: open && !!deptId,
@@ -370,7 +372,7 @@ function DeptEmployeesDialog({
       if (dErr) throw dErr;
       const { data: emps, error: eErr } = await supabase
         .from("profiles")
-        .select("id, first_name, last_name, full_name, is_active, on_leave, leave_start_date, leave_end_date, avatar_url, department_id")
+        .select("id, first_name, last_name, full_name, id_number, is_active, on_leave, leave_start_date, leave_end_date, avatar_url, department_id")
         .eq("department_id", deptId)
         .order("first_name")
         .order("last_name");
@@ -463,6 +465,15 @@ function DeptEmployeesDialog({
   });
 
   const deptRow = departments.find((d) => d.id === deptId);
+  const departmentEmployees = q.data?.employees ?? [];
+  const visibleDepartmentEmployees = useMemo(
+    () => filterEmployeesByNameOrId(departmentEmployees, employeeSearch),
+    [departmentEmployees, employeeSearch],
+  );
+
+  useEffect(() => {
+    setEmployeeSearch("");
+  }, [deptId]);
 
   return (
     <>
@@ -507,59 +518,72 @@ function DeptEmployeesDialog({
             <div className="flex justify-center py-8">
               <Loader2 className="size-5 animate-spin text-primary" />
             </div>
-          ) : !q.data || q.data.employees.length === 0 ? (
+          ) : !q.data || departmentEmployees.length === 0 ? (
             <p className="text-sm text-muted-foreground py-6 text-center">
               {canManage ? t("departmentsPage.noEmployeesCanManage") : t("departmentsPage.noEmployees")}
             </p>
           ) : (
-            <ul className="divide-y max-h-[60vh] overflow-auto">
-              {q.data.employees.map((emp: any) => {
-                const conflictDept = otherManagersQuery.data?.[emp.id];
-                const canSetManager =
-                  canManage &&
-                  emp.is_active &&
-                  !emp.isManager &&
-                  !conflictDept;
+            <div className="space-y-2">
+              <EmployeeListSearch
+                value={employeeSearch}
+                onChange={setEmployeeSearch}
+                placeholder={t("departmentsPage.searchEmployees")}
+              />
+              {visibleDepartmentEmployees.length === 0 ? (
+                <p className="text-sm text-muted-foreground py-6 text-center">
+                  {t("departmentsPage.noEmployeeSearchResults")}
+                </p>
+              ) : (
+                <ul className="divide-y max-h-[60vh] overflow-auto">
+                  {visibleDepartmentEmployees.map((emp: any) => {
+                    const conflictDept = otherManagersQuery.data?.[emp.id];
+                    const canSetManager =
+                      canManage &&
+                      emp.is_active &&
+                      !emp.isManager &&
+                      !conflictDept;
 
-                return (
-                  <li key={emp.id} className="py-3 px-2">
-                    <div className="flex items-start justify-between gap-2">
-                      {onSelectEmployee ? (
-                        <button
-                          type="button"
-                          onClick={() => onSelectEmployee(emp.id)}
-                          className="flex-1 min-w-0 text-right hover:bg-accent/30 rounded-md -m-1 p-1"
-                        >
-                          <EmployeeListItem emp={emp} />
-                        </button>
-                      ) : (
-                        <div className="flex-1 min-w-0">
-                          <EmployeeListItem emp={emp} />
+                    return (
+                      <li key={emp.id} className="py-3 px-2">
+                        <div className="flex items-start justify-between gap-2">
+                          {onSelectEmployee ? (
+                            <button
+                              type="button"
+                              onClick={() => onSelectEmployee(emp.id)}
+                              className="flex-1 min-w-0 text-right hover:bg-accent/30 rounded-md -m-1 p-1"
+                            >
+                              <EmployeeListItem emp={emp} />
+                            </button>
+                          ) : (
+                            <div className="flex-1 min-w-0">
+                              <EmployeeListItem emp={emp} />
+                            </div>
+                          )}
+                          {canSetManager && (
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="outline"
+                              className="gap-1 shrink-0 h-8 text-xs"
+                              disabled={setManagerMut.isPending}
+                              onClick={() => setManagerMut.mutate(emp.id)}
+                            >
+                              <Crown className="size-3.5" />
+                              {t("departmentsPage.departmentManager")}
+                            </Button>
+                          )}
                         </div>
-                      )}
-                      {canSetManager && (
-                        <Button
-                          type="button"
-                          size="sm"
-                          variant="outline"
-                          className="gap-1 shrink-0 h-8 text-xs"
-                          disabled={setManagerMut.isPending}
-                          onClick={() => setManagerMut.mutate(emp.id)}
-                        >
-                          <Crown className="size-3.5" />
-                          {t("departmentsPage.departmentManager")}
-                        </Button>
-                      )}
-                    </div>
-                    {conflictDept && canManage && !emp.isManager && (
-                      <p className="text-xs text-muted-foreground mt-1 mr-1">
-                        {t("departmentsPage.managerOfOther", { dept: conflictDept })}
-                      </p>
-                    )}
-                  </li>
-                );
-              })}
-            </ul>
+                        {conflictDept && canManage && !emp.isManager && (
+                          <p className="text-xs text-muted-foreground mt-1 mr-1">
+                            {t("departmentsPage.managerOfOther", { dept: conflictDept })}
+                          </p>
+                        )}
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+            </div>
           )}
         </DialogContent>
       </Dialog>

@@ -27,6 +27,7 @@ import {
 import { Trophy, Plus, Pencil, Trash2, Loader2, Upload, History, ImageOff } from "lucide-react";
 import { toast } from "sonner";
 import { isNonEmployeeIdentity } from "@/lib/employee-identity";
+import { filterEmployeesByNameOrId } from "@/lib/employee-name";
 
 export const Route = createFileRoute("/_authenticated/employee-of-month")({
   component: EomManagePage,
@@ -451,15 +452,10 @@ function EomEditDialog({
     [employees, existingIds, mode],
   );
 
-  const filteredPool = useMemo(() => {
-    const q = employeeSearch.trim().toLowerCase();
-    if (!q) return pool;
-    return pool.filter((e) => {
-      const name = (e.full_name ?? "").toLowerCase();
-      const idn = (e.id_number ?? "").toLowerCase();
-      return name.includes(q) || idn.includes(q);
-    });
-  }, [pool, employeeSearch]);
+  const filteredPool = useMemo(
+    () => filterEmployeesByNameOrId(pool, employeeSearch),
+    [pool, employeeSearch],
+  );
 
   const selectedEmployee = useMemo(
     () => employees.find((e) => e.id === employeeId) ?? null,

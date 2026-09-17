@@ -445,6 +445,7 @@ function AttendancePage() {
                 value={employeeId || "__all__"}
                 onChange={(v) => setEmployeeId(v === "__all__" ? "" : v)}
                 placeholder={t("attendance.choose")}
+                searchPlaceholder={t("attendance.searchEmployees")}
               />
             </div>
             <div className="space-y-1.5">

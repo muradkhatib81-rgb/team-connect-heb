@@ -415,11 +415,7 @@ function EmployeesPage() {
       if (filterMode === "managers" && !isManagerRole(e.id)) return false;
       if (filterMode === "workers" && isManagerRole(e.id)) return false;
       if (!term) return true;
-      return (
-        employeeMatchesSearch(e, term) ||
-        (e.id_number ?? "").includes(term) ||
-        (e.phone ?? "").includes(term)
-      );
+      return employeeMatchesSearch(e, term) || (e.phone ?? "").includes(term);
     });
   }, [employees, debouncedSearch, deptFilter, filterMode, isDeptManagerOnly, me?.id, onBreakSet, rolesMap]);
 
