@@ -1,6 +1,8 @@
 /**
  * بصمة الدوام / Attendance punch — isolated feature.
- * Does NOT read/write user_roles or user_task_permissions.
+ * Does NOT read/write user_roles, app_role, user_task_permissions, or the Permissions page.
+ * Hours report access is Platform Owner or attendance_user_grants.can_report only.
+ * Manager roles (branch_manager / assistant_manager / department_manager) are never auto-granted.
  */
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";

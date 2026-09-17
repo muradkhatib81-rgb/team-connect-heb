@@ -1,6 +1,8 @@
 -- Attendance hours report: live department filter (not hardcoded).
 -- When a department is selected, rows are that department's employees
 -- (punchers / all / one) and totals are the department sum.
+-- Does NOT touch user_roles / user_task_permissions / app_role.
+-- Access remains attendance_can_run_hours_report (PO or can_report grant only).
 
 DROP FUNCTION IF EXISTS public.list_attendance_report_employees(uuid, uuid);
 DROP FUNCTION IF EXISTS public.get_attendance_hours_report(date, date, uuid, uuid, text, uuid);

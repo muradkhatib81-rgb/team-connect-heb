@@ -1,5 +1,8 @@
 -- Attendance hours report + per-employee hourly wage.
--- Isolated from user_roles / user_task_permissions.
+-- Isolated from user_roles / user_task_permissions / app_role / Permissions page.
+-- Hours report access is ONLY Platform Owner or attendance_user_grants.can_report.
+-- Do NOT auto-grant can_report to branch_manager, assistant_manager,
+-- department_manager, or any role. Do not consult has_role() for report access.
 --
 -- Data retention (requirement: keep punch history usable ≥ 12 months):
 --   * No existing pg_cron / purge job deletes or archives attendance_sessions.
@@ -159,6 +162,8 @@ $$;
 REVOKE ALL ON FUNCTION public.attendance_company_branch_count(uuid) FROM PUBLIC, anon;
 GRANT EXECUTE ON FUNCTION public.attendance_company_branch_count(uuid) TO authenticated, service_role;
 
+-- Report gate: is_platform_owner OR attendance_user_grants.can_report for scope.
+-- Intentionally ignores user_roles / user_task_permissions / has_role().
 CREATE OR REPLACE FUNCTION public.attendance_can_run_hours_report(
   _branch_id uuid,
   _company_id uuid

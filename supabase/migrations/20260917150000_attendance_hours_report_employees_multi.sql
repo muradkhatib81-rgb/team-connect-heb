@@ -1,6 +1,8 @@
 -- Hours report: multi-select employees (name / national ID picker on the client).
 -- Filter mode 'employees' (and legacy 'one') uses explicit employee ids as the
 -- primary population — they may belong to different departments.
+-- Does NOT touch user_roles / user_task_permissions / app_role.
+-- Access remains attendance_can_run_hours_report (PO or can_report grant only).
 
 DROP FUNCTION IF EXISTS public.get_attendance_hours_report(date, date, uuid, uuid, text, uuid);
 DROP FUNCTION IF EXISTS public.get_attendance_hours_report(date, date, uuid, uuid, text, uuid, uuid);

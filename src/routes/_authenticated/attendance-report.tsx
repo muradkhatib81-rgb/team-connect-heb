@@ -38,6 +38,8 @@ import {
 } from "@/lib/attendance.functions";
 import { employeePickerLabel, currentJerusalemYearMonth, yearMonthStartDate } from "@/lib/attendance-hours";
 
+/** Hours report UI. Access is gated by listAttendanceReportScopes (can_report grant / PO), not roles. */
+
 export const Route = createFileRoute("/_authenticated/attendance-report")({
   component: AttendanceHoursReportPage,
 });

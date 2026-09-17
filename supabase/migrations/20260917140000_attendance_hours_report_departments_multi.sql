@@ -1,5 +1,7 @@
 -- Hours report: multi-select departments (ANY of the selected ids).
 -- Empty / null array = all departments in the branch/company scope.
+-- Does NOT touch user_roles / user_task_permissions / app_role.
+-- Access remains attendance_can_run_hours_report (PO or can_report grant only).
 
 DROP FUNCTION IF EXISTS public.list_attendance_report_employees(uuid, uuid);
 DROP FUNCTION IF EXISTS public.list_attendance_report_employees(uuid, uuid, uuid);
