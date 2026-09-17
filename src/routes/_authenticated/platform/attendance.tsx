@@ -27,11 +27,13 @@ import {
   listAttendanceFeatureScopes,
   listAttendanceRolePunchSettings,
   listAttendanceUserGrants,
+  listAttendanceWageProfiles,
   listBranchProfilesForAttendanceGrants,
   setAttendanceRolePunch,
   updateBranchAttendanceGeo,
   upsertAttendanceFeatureScope,
   upsertAttendanceUserGrant,
+  upsertEmployeeHourlyWage,
   type AttendancePunchCategory,
 } from "@/lib/attendance.functions";
 
@@ -50,6 +52,8 @@ function PlatformAttendancePage() {
   const listGrantsFn = useServerFn(listAttendanceUserGrants);
   const upsertGrantFn = useServerFn(upsertAttendanceUserGrant);
   const listProfilesFn = useServerFn(listBranchProfilesForAttendanceGrants);
+  const listWagesFn = useServerFn(listAttendanceWageProfiles);
+  const upsertWageFn = useServerFn(upsertEmployeeHourlyWage);
   const getGeoFn = useServerFn(getBranchAttendanceGeo);
   const updateGeoFn = useServerFn(updateBranchAttendanceGeo);
   const listRolePunchFn = useServerFn(listAttendanceRolePunchSettings);
@@ -58,11 +62,17 @@ function PlatformAttendancePage() {
   const [scopeType, setScopeType] = useState<"company" | "branch">("branch");
   const [scopeId, setScopeId] = useState("");
 
+  const [grantCompanyId, setGrantCompanyId] = useState("");
   const [grantBranchId, setGrantBranchId] = useState("");
   const [grantUserId, setGrantUserId] = useState("");
   const [canView, setCanView] = useState(true);
   const [canEdit, setCanEdit] = useState(false);
   const [canDelete, setCanDelete] = useState(false);
+  const [canReport, setCanReport] = useState(false);
+
+  const [wageCompanyId, setWageCompanyId] = useState("");
+  const [wageBranchId, setWageBranchId] = useState("");
+  const [wageDrafts, setWageDrafts] = useState<Record<string, string>>({});
 
   const [geoBranchId, setGeoBranchId] = useState("");
   const [geoLat, setGeoLat] = useState("");
@@ -83,9 +93,14 @@ function PlatformAttendancePage() {
     queryFn: () => listGrantsFn(),
   });
   const grantProfilesQ = useQuery({
-    queryKey: ["attendance-grant-profiles", grantBranchId],
-    enabled: !!grantBranchId,
-    queryFn: () => listProfilesFn({ data: { branchId: grantBranchId } }),
+    queryKey: ["attendance-grant-profiles", grantCompanyId, grantBranchId],
+    enabled: !!grantBranchId || !!grantCompanyId,
+    queryFn: () =>
+      listProfilesFn({
+        data: grantBranchId
+          ? { branchId: grantBranchId }
+          : { companyId: grantCompanyId },
+      }),
   });
   const geoQ = useQuery({
     queryKey: ["attendance-geo", geoBranchId],
@@ -126,6 +141,41 @@ function PlatformAttendancePage() {
     [grantProfilesQ.data],
   );
 
+  const branchesByCompany = useMemo(() => {
+    const map = new Map<string, { id: string; label: string }[]>();
+    for (const b of operationalBranches) {
+      const companyId = String((b as any).companyId ?? (b as any).company_id ?? "");
+      if (!companyId) continue;
+      const list = map.get(companyId) ?? [];
+      list.push({
+        id: String(b.sourceBranchId),
+        label: String(b.name ?? b.code ?? b.sourceBranchId),
+      });
+      map.set(companyId, list);
+    }
+    return map;
+  }, [operationalBranches]);
+
+  const grantCompanyHasBranches = (branchesByCompany.get(grantCompanyId)?.length ?? 0) > 0;
+  const wageCompanyHasBranches = (branchesByCompany.get(wageCompanyId)?.length ?? 0) > 0;
+  const grantBranchOptions = grantCompanyId
+    ? (branchesByCompany.get(grantCompanyId) ?? [])
+    : branchOptions;
+  const wageBranchOptions = wageCompanyId
+    ? (branchesByCompany.get(wageCompanyId) ?? [])
+    : branchOptions;
+
+  const wagesQ = useQuery({
+    queryKey: ["attendance-wages", wageCompanyId, wageBranchId],
+    enabled: !!wageBranchId || (!!wageCompanyId && !wageCompanyHasBranches),
+    queryFn: () =>
+      listWagesFn({
+        data: wageBranchId
+          ? { branchId: wageBranchId }
+          : { companyId: wageCompanyId },
+      }),
+  });
+
   const enableMut = useMutation({
     mutationFn: () =>
       upsertScopeFn({
@@ -155,16 +205,19 @@ function PlatformAttendancePage() {
       upsertGrantFn({
         data: {
           userId: grantUserId,
-          branchId: grantBranchId,
+          branchId: grantBranchId || undefined,
+          companyId: grantCompanyId || undefined,
           can_view: canView,
           can_edit: canEdit,
           can_delete: canDelete,
+          can_report: canReport,
         },
       }),
     onSuccess: () => {
       toast.success(t("attendance.grantSaved"));
       void qc.invalidateQueries({ queryKey: ["attendance-grants"] });
       void qc.invalidateQueries({ queryKey: ["attendance-caps"] });
+      void qc.invalidateQueries({ queryKey: ["attendance-report-scopes"] });
     },
     onError: (e: Error) => toast.error(e.message),
   });
@@ -197,6 +250,16 @@ function PlatformAttendancePage() {
     onError: (e: Error) => toast.error(e.message),
   });
 
+  const saveWageMut = useMutation({
+    mutationFn: (args: { userId: string; hourlyRate: number | null }) =>
+      upsertWageFn({ data: args }),
+    onSuccess: () => {
+      toast.success(t("attendance.wageSaved"));
+      void qc.invalidateQueries({ queryKey: ["attendance-wages"] });
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
   useEffect(() => {
     if (!geoQ.data || !geoBranchId) return;
     setGeoLat(geoQ.data.geo_lat != null ? String(geoQ.data.geo_lat) : "");
@@ -222,6 +285,7 @@ function PlatformAttendancePage() {
           <TabsTrigger value="titles">{t("attendance.tabTitles")}</TabsTrigger>
           <TabsTrigger value="geo">{t("attendance.tabGeo")}</TabsTrigger>
           <TabsTrigger value="grants">{t("attendance.tabGrants")}</TabsTrigger>
+          <TabsTrigger value="wages">{t("attendance.tabWages")}</TabsTrigger>
         </TabsList>
 
         <TabsContent value="titles" className="mt-4 space-y-4">
@@ -391,24 +455,43 @@ function PlatformAttendancePage() {
           <Card className="space-y-3 p-4">
             <div className="grid gap-3 sm:grid-cols-2">
               <div className="space-y-1.5">
-                <Label>{t("attendance.branch")}</Label>
+                <Label>{t("attendance.company")}</Label>
                 <SearchableSingleSelect
-                  options={branchOptions}
-                  value={grantBranchId}
+                  options={companyOptions}
+                  value={grantCompanyId}
                   onChange={(v) => {
-                    setGrantBranchId(v);
+                    setGrantCompanyId(v);
+                    setGrantBranchId("");
                     setGrantUserId("");
                   }}
                   placeholder={t("attendance.choose")}
                 />
               </div>
-              <div className="space-y-1.5">
+              {grantCompanyHasBranches ? (
+                <div className="space-y-1.5">
+                  <Label>{t("attendance.branch")}</Label>
+                  <SearchableSingleSelect
+                    options={grantBranchOptions}
+                    value={grantBranchId}
+                    onChange={(v) => {
+                      setGrantBranchId(v);
+                      setGrantUserId("");
+                    }}
+                    placeholder={t("attendance.choose")}
+                  />
+                </div>
+              ) : (
+                <p className="self-end text-sm text-muted-foreground">
+                  {grantCompanyId ? t("attendance.grantWholeCompany") : t("attendance.chooseCompanyFirst")}
+                </p>
+              )}
+              <div className="space-y-1.5 sm:col-span-2">
                 <Label>{t("attendance.user")}</Label>
                 <SearchableSingleSelect
                   options={grantUserOptions}
                   value={grantUserId}
                   onChange={setGrantUserId}
-                  disabled={!grantBranchId}
+                  disabled={!grantBranchId && !(grantCompanyId && !grantCompanyHasBranches)}
                   placeholder={t("attendance.choose")}
                 />
               </div>
@@ -426,10 +509,18 @@ function PlatformAttendancePage() {
                 <Switch checked={canDelete} onCheckedChange={setCanDelete} />
                 {t("attendance.canDelete")}
               </label>
+              <label className="flex items-center gap-2 text-sm">
+                <Switch checked={canReport} onCheckedChange={setCanReport} />
+                {t("attendance.canReport")}
+              </label>
             </div>
             <Button
               onClick={() => saveGrantMut.mutate()}
-              disabled={!grantBranchId || !grantUserId || saveGrantMut.isPending}
+              disabled={
+                !grantUserId ||
+                saveGrantMut.isPending ||
+                (grantCompanyHasBranches ? !grantBranchId : !grantCompanyId)
+              }
             >
               {saveGrantMut.isPending ? <Loader2 className="size-4 animate-spin" /> : null}
               {t("attendance.saveGrant")}
@@ -438,8 +529,9 @@ function PlatformAttendancePage() {
 
           <div className="space-y-2">
             {(grantsQ.data ?? []).map((g: any) => {
-              const branchLabel =
-                branchOptions.find((b) => b.id === g.branch_id)?.label ?? g.branch_id;
+              const branchLabel = g.branch_id
+                ? branchOptions.find((b) => b.id === g.branch_id)?.label ?? g.branch_id
+                : t("attendance.wholeCompany");
               return (
                 <Card key={g.id} className="p-3 text-sm">
                   <p className="font-medium">
@@ -452,6 +544,7 @@ function PlatformAttendancePage() {
                       g.can_view ? t("attendance.canView") : null,
                       g.can_edit ? t("attendance.canEdit") : null,
                       g.can_delete ? t("attendance.canDelete") : null,
+                      g.can_report ? t("attendance.canReport") : null,
                     ]
                       .filter(Boolean)
                       .join(" · ")}
@@ -460,6 +553,99 @@ function PlatformAttendancePage() {
               );
             })}
           </div>
+        </TabsContent>
+
+        <TabsContent value="wages" className="mt-4 space-y-4">
+          <p className="text-sm text-muted-foreground">{t("attendance.wagesHint")}</p>
+          <Card className="space-y-3 p-4">
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div className="space-y-1.5">
+                <Label>{t("attendance.company")}</Label>
+                <SearchableSingleSelect
+                  options={companyOptions}
+                  value={wageCompanyId}
+                  onChange={(v) => {
+                    setWageCompanyId(v);
+                    setWageBranchId("");
+                    setWageDrafts({});
+                  }}
+                  placeholder={t("attendance.choose")}
+                />
+              </div>
+              {wageCompanyHasBranches ? (
+                <div className="space-y-1.5">
+                  <Label>{t("attendance.branch")}</Label>
+                  <SearchableSingleSelect
+                    options={wageBranchOptions}
+                    value={wageBranchId}
+                    onChange={(v) => {
+                      setWageBranchId(v);
+                      setWageDrafts({});
+                    }}
+                    placeholder={t("attendance.choose")}
+                  />
+                </div>
+              ) : (
+                <p className="self-end text-sm text-muted-foreground">
+                  {wageCompanyId ? t("attendance.grantWholeCompany") : t("attendance.chooseCompanyFirst")}
+                </p>
+              )}
+            </div>
+          </Card>
+          {wagesQ.isLoading ? (
+            <div className="flex justify-center py-8">
+              <Loader2 className="size-5 animate-spin text-muted-foreground" />
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {(wagesQ.data ?? []).length === 0 && (wageBranchId || (wageCompanyId && !wageCompanyHasBranches)) ? (
+                <p className="text-sm text-muted-foreground">{t("attendance.noWageEmployees")}</p>
+              ) : null}
+              {(wagesQ.data ?? []).map((row: any) => {
+                const draft =
+                  wageDrafts[row.id] ?? (row.hourly_rate == null ? "" : String(row.hourly_rate));
+                return (
+                  <Card key={row.id} className="flex flex-wrap items-center justify-between gap-3 p-3">
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-medium">{row.full_name ?? row.id}</p>
+                      {row.id_number ? (
+                        <p className="text-xs text-muted-foreground">{row.id_number}</p>
+                      ) : null}
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Input
+                        className="w-28"
+                        inputMode="decimal"
+                        value={draft}
+                        onChange={(e) =>
+                          setWageDrafts((prev) => ({ ...prev, [row.id]: e.target.value }))
+                        }
+                        placeholder="0.00"
+                      />
+                      <Button
+                        size="sm"
+                        disabled={saveWageMut.isPending}
+                        onClick={() => {
+                          const raw = draft.trim();
+                          const hourlyRate = raw === "" ? null : Number(raw);
+                          if (raw !== "" && (!Number.isFinite(hourlyRate) || (hourlyRate ?? 0) < 0)) {
+                            toast.error(t("attendance.wageInvalid"));
+                            return;
+                          }
+                          saveWageMut.mutate({
+                            userId: row.id,
+                            hourlyRate,
+                          });
+                        }}
+                      >
+                        {t("attendance.saveWage")}
+                      </Button>
+                    </div>
+                  </Card>
+                );
+              })}
+            </div>
+          )}
         </TabsContent>
       </Tabs>
     </div>

@@ -6,6 +6,13 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
+import {
+  clippedSessionSeconds,
+  jerusalemMonthRange,
+  previousYearMonth,
+  secondsToMinutes,
+  sessionOverlapsRange,
+} from "@/lib/attendance-hours";
 
 async function assertPlatformOwner(supabase: any, userId: string) {
   const { data, error } = await supabase.rpc("is_platform_owner", { _user_id: userId });
@@ -38,6 +45,7 @@ export type AttendanceCapabilities = {
   can_view: boolean;
   can_edit: boolean;
   can_delete: boolean;
+  can_report: boolean;
   is_platform_owner: boolean;
   show_employee_card: boolean;
   show_manager_card: boolean;
@@ -66,6 +74,7 @@ const emptyCaps = (): AttendanceCapabilities => ({
   can_view: false,
   can_edit: false,
   can_delete: false,
+  can_report: false,
   is_platform_owner: false,
   show_employee_card: false,
   show_manager_card: false,
@@ -80,18 +89,12 @@ function mapCaps(c: Record<string, unknown> | null | undefined): AttendanceCapab
     can_view: !!c.can_view,
     can_edit: !!c.can_edit,
     can_delete: !!c.can_delete,
+    can_report: !!c.can_report,
     is_platform_owner: !!c.is_platform_owner,
     show_employee_card: !!c.show_employee_card,
     show_manager_card: !!c.show_manager_card,
     hide_reason: c.hide_reason != null ? String(c.hide_reason) : null,
   };
-}
-
-function durationMinutes(clockIn: string, clockOut: string | null): number | null {
-  if (!clockOut) return null;
-  const ms = new Date(clockOut).getTime() - new Date(clockIn).getTime();
-  if (!Number.isFinite(ms) || ms < 0) return null;
-  return Math.ceil(ms / 60000);
 }
 
 export const getAttendanceCapabilities = createServerFn({ method: "GET" })
@@ -173,7 +176,7 @@ export const listAttendanceUserGrants = createServerFn({ method: "GET" })
     await assertPlatformOwner(supabase, userId);
     let q = supabase
       .from("attendance_user_grants")
-      .select("id, user_id, branch_id, can_view, can_edit, can_delete, created_at")
+      .select("id, user_id, branch_id, company_id, can_view, can_edit, can_delete, can_report, created_at")
       .order("created_at", { ascending: false });
     if (data?.branchId) q = q.eq("branch_id", data.branchId);
     const { data: rows, error } = await q;
@@ -201,53 +204,81 @@ export const upsertAttendanceUserGrant = createServerFn({ method: "POST" })
   .inputValidator(
     z.object({
       userId: z.string().uuid(),
-      branchId: z.string().uuid(),
+      branchId: z.string().uuid().optional(),
+      companyId: z.string().uuid().optional(),
       can_view: z.boolean(),
       can_edit: z.boolean(),
       can_delete: z.boolean(),
+      can_report: z.boolean().default(false),
     }),
   )
   .handler(async ({ data, context }) => {
     const { supabase, userId } = context as { supabase: any; userId: string };
     await assertPlatformOwner(supabase, userId);
-    const branchId = await resolveOperationalBranchId(data.branchId);
-    if (!data.can_view && !data.can_edit && !data.can_delete) {
-      const { error } = await supabase
-        .from("attendance_user_grants")
-        .delete()
-        .eq("user_id", data.userId)
-        .eq("branch_id", branchId);
+    const anyCap = data.can_view || data.can_edit || data.can_delete || data.can_report;
+    const branchId = data.branchId ? await resolveOperationalBranchId(data.branchId) : null;
+    const companyId = data.companyId ?? null;
+    if (!branchId && !companyId) throw new Error("COMPANY_OR_BRANCH_REQUIRED");
+
+    let existingQ = supabase
+      .from("attendance_user_grants")
+      .select("id")
+      .eq("user_id", data.userId);
+    existingQ = branchId
+      ? existingQ.eq("branch_id", branchId)
+      : existingQ.is("branch_id", null).eq("company_id", companyId);
+    const { data: existing, error: existingErr } = await existingQ.maybeSingle();
+    if (existingErr) throw new Error(existingErr.message);
+
+    if (!anyCap) {
+      if (!existing?.id) return { ok: true, removed: true };
+      const { error } = await supabase.from("attendance_user_grants").delete().eq("id", existing.id);
       if (error) throw new Error(error.message);
       return { ok: true, removed: true };
     }
-    const { error } = await supabase.from("attendance_user_grants").upsert(
-      {
-        user_id: data.userId,
-        branch_id: branchId,
-        can_view: data.can_view,
-        can_edit: data.can_edit,
-        can_delete: data.can_delete,
-        granted_by: userId,
-        updated_at: new Date().toISOString(),
-      },
-      { onConflict: "user_id,branch_id" },
-    );
-    if (error) throw new Error(error.message);
+
+    const row = {
+      user_id: data.userId,
+      branch_id: branchId,
+      company_id: companyId,
+      can_view: data.can_view,
+      can_edit: data.can_edit,
+      can_delete: data.can_delete,
+      can_report: data.can_report,
+      granted_by: userId,
+      updated_at: new Date().toISOString(),
+    };
+    if (existing?.id) {
+      const { error } = await supabase.from("attendance_user_grants").update(row).eq("id", existing.id);
+      if (error) throw new Error(error.message);
+    } else {
+      const { error } = await supabase.from("attendance_user_grants").insert(row);
+      if (error) throw new Error(error.message);
+    }
     return { ok: true };
   });
 
 export const listBranchProfilesForAttendanceGrants = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
-  .inputValidator(z.object({ branchId: z.string().uuid() }))
+  .inputValidator(
+    z.object({
+      branchId: z.string().uuid().optional(),
+      companyId: z.string().uuid().optional(),
+    }),
+  )
   .handler(async ({ data, context }) => {
     const { supabase, userId } = context as { supabase: any; userId: string };
     await assertPlatformOwner(supabase, userId);
-    const branchId = await resolveOperationalBranchId(data.branchId);
-    const { data: rows, error } = await supabase
-      .from("profiles")
-      .select("id, full_name, id_number, department_id")
-      .eq("branch_id", branchId)
-      .order("full_name");
+    let q = supabase.from("profiles").select("id, full_name, id_number, department_id, branch_id").order("full_name");
+    if (data.branchId) {
+      const branchId = await resolveOperationalBranchId(data.branchId);
+      q = q.eq("branch_id", branchId);
+    } else if (data.companyId) {
+      q = q.eq("company_id", data.companyId);
+    } else {
+      return [];
+    }
+    const { data: rows, error } = await q;
     if (error) throw new Error(error.message);
     return rows ?? [];
   });
@@ -461,14 +492,20 @@ export const getMyAttendanceMonth = createServerFn({ method: "GET" })
       return { sessions: [] as AttendanceSession[], total_minutes: 0, open: null as AttendanceSession | null };
     }
 
+    const range = jerusalemMonthRange(data.yearMonth);
+    if (!range) {
+      return { sessions: [] as AttendanceSession[], total_minutes: 0, open: null as AttendanceSession | null };
+    }
+    const prevYm = previousYearMonth(data.yearMonth);
+
     const { data: rows, error } = await supabase
       .from("attendance_sessions")
       .select(
         "id, user_id, branch_id, department_id, clock_in_at, clock_out_at, year_month, source, note",
       )
       .eq("user_id", userId)
-      .eq("year_month", data.yearMonth)
       .is("deleted_at", null)
+      .or(`year_month.eq."${data.yearMonth}",year_month.eq."${prevYm}",clock_out_at.is.null`)
       .order("clock_in_at", { ascending: false });
     if (error) {
       if (/does not exist|relation/i.test(error.message)) {
@@ -477,10 +514,28 @@ export const getMyAttendanceMonth = createServerFn({ method: "GET" })
       throw new Error(error.message);
     }
 
-    const sessions: AttendanceSession[] = (rows ?? []).map((r: any) => ({
-      ...r,
-      duration_minutes: durationMinutes(r.clock_in_at, r.clock_out_at),
-    }));
+    const sessions: AttendanceSession[] = (rows ?? [])
+      .filter((r: any) =>
+        sessionOverlapsRange({
+          clockInAt: r.clock_in_at,
+          clockOutAt: r.clock_out_at,
+          rangeStart: range.start,
+          rangeEnd: range.end,
+        }),
+      )
+      .map((r: any) => ({
+        ...r,
+        duration_minutes: r.clock_out_at
+          ? secondsToMinutes(
+              clippedSessionSeconds({
+                clockInAt: r.clock_in_at,
+                clockOutAt: r.clock_out_at,
+                rangeStart: range.start,
+                rangeEnd: range.end,
+              }),
+            )
+          : null,
+      }));
     const open = sessions.find((s) => !s.clock_out_at) ?? null;
     const total_minutes = sessions.reduce((sum, s) => sum + (s.duration_minutes ?? 0), 0);
     return { sessions, total_minutes, open };
@@ -523,14 +578,18 @@ export const getAttendanceLookup = createServerFn({ method: "GET" })
       if (employeeIds.length === 0) return { sessions: [], total_minutes: 0 };
     }
 
+    const range = jerusalemMonthRange(data.yearMonth);
+    if (!range) return { sessions: [], total_minutes: 0 };
+    const prevYm = previousYearMonth(data.yearMonth);
+
     let q = supabase
       .from("attendance_sessions")
       .select(
         "id, user_id, branch_id, department_id, clock_in_at, clock_out_at, year_month, source, note",
       )
       .eq("branch_id", data.branchId)
-      .eq("year_month", data.yearMonth)
       .is("deleted_at", null)
+      .or(`year_month.eq."${data.yearMonth}",year_month.eq."${prevYm}",clock_out_at.is.null`)
       .order("clock_in_at", { ascending: false });
 
     if (employeeIds) q = q.in("user_id", employeeIds);
@@ -555,13 +614,31 @@ export const getAttendanceLookup = createServerFn({ method: "GET" })
     const idById = new Map((profiles ?? []).map((p: any) => [p.id, p.id_number]));
     const deptById = new Map((depts ?? []).map((d: any) => [d.id, d.name]));
 
-    const sessions: AttendanceSession[] = (rows ?? []).map((r: any) => ({
-      ...r,
-      duration_minutes: durationMinutes(r.clock_in_at, r.clock_out_at),
-      employee_name: nameById.get(r.user_id) ?? null,
-      id_number: idById.get(r.user_id) ?? null,
-      department_name: r.department_id ? (deptById.get(r.department_id) ?? null) : null,
-    }));
+    const sessions: AttendanceSession[] = (rows ?? [])
+      .filter((r: any) =>
+        sessionOverlapsRange({
+          clockInAt: r.clock_in_at,
+          clockOutAt: r.clock_out_at,
+          rangeStart: range.start,
+          rangeEnd: range.end,
+        }),
+      )
+      .map((r: any) => ({
+        ...r,
+        duration_minutes: r.clock_out_at
+          ? secondsToMinutes(
+              clippedSessionSeconds({
+                clockInAt: r.clock_in_at,
+                clockOutAt: r.clock_out_at,
+                rangeStart: range.start,
+                rangeEnd: range.end,
+              }),
+            )
+          : null,
+        employee_name: nameById.get(r.user_id) ?? null,
+        id_number: idById.get(r.user_id) ?? null,
+        department_name: r.department_id ? (deptById.get(r.department_id) ?? null) : null,
+      }));
     const total_minutes = sessions.reduce((sum, s) => sum + (s.duration_minutes ?? 0), 0);
     return { sessions, total_minutes, actorId: userId };
   });
@@ -607,6 +684,195 @@ export const manualEditAttendanceSession = createServerFn({ method: "POST" })
     return result;
   });
 
+export type AttendanceReportScope = {
+  company_id: string | null;
+  company_name: string | null;
+  branch_id: string | null;
+  branch_name: string | null;
+  has_branches: boolean;
+  scope_kind: "company" | "branch";
+};
+
+export type AttendanceHoursReportRow = {
+  user_id: string;
+  full_name: string | null;
+  id_number: string | null;
+  total_seconds: number;
+  total_minutes: number;
+  total_hours: number;
+  hourly_rate: number | null;
+  estimated_pay: number | null;
+};
+
+export type AttendanceHoursReport = {
+  ok: boolean;
+  from: string;
+  to: string;
+  branch_id: string | null;
+  company_id: string | null;
+  filter: string;
+  rows: AttendanceHoursReportRow[];
+  totals: {
+    total_seconds: number;
+    total_minutes: number;
+    total_hours: number;
+    estimated_pay: number;
+  };
+};
+
+export const listAttendanceReportScopes = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    const { supabase } = context as { supabase: any };
+    const { data, error } = await supabase.rpc("list_attendance_report_scopes");
+    if (error) {
+      if (/does not exist|function/i.test(error.message)) {
+        return { is_platform_owner: false, can_report: false, scopes: [] as AttendanceReportScope[] };
+      }
+      throw new Error(error.message);
+    }
+    const payload = (data ?? {}) as Record<string, unknown>;
+    return {
+      is_platform_owner: !!payload.is_platform_owner,
+      can_report: !!payload.can_report,
+      scopes: (Array.isArray(payload.scopes) ? payload.scopes : []) as AttendanceReportScope[],
+    };
+  });
+
+export const listAttendanceReportEmployees = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator(
+    z.object({
+      branchId: z.string().uuid().optional(),
+      companyId: z.string().uuid().optional(),
+    }),
+  )
+  .handler(async ({ data, context }) => {
+    const { supabase } = context as { supabase: any };
+    const { data: rows, error } = await supabase.rpc("list_attendance_report_employees", {
+      _branch_id: data.branchId ?? null,
+      _company_id: data.companyId ?? null,
+    });
+    if (error) throw new Error(error.message);
+    return (Array.isArray(rows) ? rows : []) as Array<{
+      id: string;
+      full_name: string | null;
+      id_number: string | null;
+    }>;
+  });
+
+export const getAttendanceHoursReport = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator(
+    z.object({
+      from: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+      to: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+      branchId: z.string().uuid().optional(),
+      companyId: z.string().uuid().optional(),
+      filter: z.enum(["all", "punchers", "one"]).default("punchers"),
+      employeeId: z.string().uuid().optional(),
+    }),
+  )
+  .handler(async ({ data, context }): Promise<AttendanceHoursReport> => {
+    const { supabase } = context as { supabase: any };
+    const { data: result, error } = await supabase.rpc("get_attendance_hours_report", {
+      _from: data.from,
+      _to: data.to,
+      _branch_id: data.branchId ?? null,
+      _company_id: data.companyId ?? null,
+      _filter: data.filter,
+      _employee_id: data.employeeId ?? null,
+    });
+    if (error) throw new Error(error.message);
+    const payload = (result ?? {}) as AttendanceHoursReport;
+    return {
+      ok: !!payload.ok,
+      from: payload.from ?? data.from,
+      to: payload.to ?? data.to,
+      branch_id: payload.branch_id ?? null,
+      company_id: payload.company_id ?? null,
+      filter: payload.filter ?? data.filter,
+      rows: Array.isArray(payload.rows) ? payload.rows : [],
+      totals: payload.totals ?? {
+        total_seconds: 0,
+        total_minutes: 0,
+        total_hours: 0,
+        estimated_pay: 0,
+      },
+    };
+  });
+
+export const listAttendanceWageProfiles = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator(
+    z.object({
+      branchId: z.string().uuid().optional(),
+      companyId: z.string().uuid().optional(),
+    }),
+  )
+  .handler(async ({ data, context }) => {
+    const { supabase, userId } = context as { supabase: any; userId: string };
+    await assertPlatformOwner(supabase, userId);
+    let q = supabaseAdmin
+      .from("profiles")
+      .select("id, full_name, id_number, branch_id, company_id")
+      .order("full_name");
+    if (data.branchId) {
+      const branchId = await resolveOperationalBranchId(data.branchId);
+      q = q.eq("branch_id", branchId);
+    } else if (data.companyId) {
+      q = q.eq("company_id", data.companyId);
+    } else {
+      return [];
+    }
+    const { data: rows, error } = await q;
+    if (error) throw new Error(error.message);
+    const list = rows ?? [];
+    const ids = list.map((r: any) => r.id);
+    if (ids.length === 0) return [];
+    const { data: wages, error: wageErr } = await supabase
+      .from("employee_hourly_wages")
+      .select("user_id, hourly_rate")
+      .in("user_id", ids);
+    if (wageErr && !/does not exist|relation|column/i.test(wageErr.message)) {
+      throw new Error(wageErr.message);
+    }
+    const rateById = new Map((wages ?? []).map((w: any) => [w.user_id, Number(w.hourly_rate)]));
+    return list.map((r: any) => ({
+      ...r,
+      hourly_rate: rateById.has(r.id) ? rateById.get(r.id)! : null,
+    }));
+  });
+
+export const upsertEmployeeHourlyWage = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator(
+    z.object({
+      userId: z.string().uuid(),
+      hourlyRate: z.number().min(0).max(100000).nullable(),
+    }),
+  )
+  .handler(async ({ data, context }) => {
+    const { supabase, userId } = context as { supabase: any; userId: string };
+    await assertPlatformOwner(supabase, userId);
+    if (data.hourlyRate == null) {
+      const { error } = await supabase.from("employee_hourly_wages").delete().eq("user_id", data.userId);
+      if (error) throw new Error(error.message);
+      return { ok: true, removed: true };
+    }
+    const { error } = await supabase.from("employee_hourly_wages").upsert(
+      {
+        user_id: data.userId,
+        hourly_rate: data.hourlyRate,
+        updated_by: userId,
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: "user_id" },
+    );
+    if (error) throw new Error(error.message);
+    return { ok: true };
+  });
+
 /** Map Postgres exception text → i18n key suffix */
 export function attendanceErrorKey(message: string): string {
   const m = message.toUpperCase();
@@ -624,6 +890,9 @@ export function attendanceErrorKey(message: string): string {
   if (m.includes("WRONG_BRANCH")) return "wrongBranch";
   if (m.includes("INACTIVE")) return "inactive";
   if (m.includes("ROLE_DENIED")) return "roleDenied";
+  if (m.includes("BRANCH_REQUIRED")) return "branchRequired";
+  if (m.includes("EMPLOYEE_REQUIRED")) return "employeeRequired";
+  if (m.includes("COMPANY_OR_BRANCH_REQUIRED")) return "companyOrBranchRequired";
   return "generic";
 }
 
@@ -681,6 +950,47 @@ export function sessionsToExcelXml(sessions: AttendanceSession[]): string {
 <Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet"
  xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">
 <Worksheet ss:Name="Attendance"><Table>${table}</Table></Worksheet>
+</Workbook>`;
+}
+
+export function hoursReportToExcelXml(report: AttendanceHoursReport): string {
+  const header = [
+    "employee_name",
+    "id_number",
+    "hours",
+    "hourly_rate",
+    "estimated_pay",
+  ];
+  const rows = [
+    header,
+    ...report.rows.map((r) => [
+      r.full_name ?? "",
+      r.id_number ?? "",
+      String(r.total_hours ?? ""),
+      r.hourly_rate == null ? "" : String(r.hourly_rate),
+      r.estimated_pay == null ? "" : String(r.estimated_pay),
+    ]),
+    [
+      "TOTAL",
+      "",
+      String(report.totals.total_hours ?? 0),
+      "",
+      String(report.totals.estimated_pay ?? 0),
+    ],
+  ];
+  const table = rows
+    .map(
+      (row) =>
+        `<Row>${row
+          .map((cell) => `<Cell><Data ss:Type="String">${xmlEscape(cell)}</Data></Cell>`)
+          .join("")}</Row>`,
+    )
+    .join("");
+  return `<?xml version="1.0"?>
+<?mso-application progid="Excel.Sheet"?>
+<Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet"
+ xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">
+<Worksheet ss:Name="Hours"><Table>${table}</Table></Worksheet>
 </Workbook>`;
 }
 

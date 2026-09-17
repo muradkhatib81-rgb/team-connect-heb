@@ -1,0 +1,332 @@
+import { createFileRoute, Link } from "@tanstack/react-router";
+import { useMemo, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { useServerFn } from "@tanstack/react-start";
+import { ClipboardList, Download, Loader2 } from "lucide-react";
+import { toast } from "sonner";
+import { useTranslation } from "react-i18next";
+import { Card } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { SearchableSingleSelect } from "@/components/searchable-picker";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableFooter,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import {
+  attendanceErrorKey,
+  formatAttendanceHours,
+  getAttendanceHoursReport,
+  hoursReportToExcelXml,
+  listAttendanceReportEmployees,
+  listAttendanceReportScopes,
+  type AttendanceReportScope,
+} from "@/lib/attendance.functions";
+import { currentJerusalemYearMonth, yearMonthStartDate } from "@/lib/attendance-hours";
+
+export const Route = createFileRoute("/_authenticated/attendance-report")({
+  component: AttendanceHoursReportPage,
+});
+
+function jerusalemToday(): string {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Jerusalem",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(new Date());
+}
+
+function scopeKey(s: AttendanceReportScope): string {
+  return s.branch_id ? `b:${s.branch_id}` : `c:${s.company_id ?? ""}`;
+}
+
+function formatMoney(value: number | null | undefined): string {
+  if (value == null || Number.isNaN(Number(value))) return "—";
+  return Number(value).toLocaleString(undefined, {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
+}
+
+function AttendanceHoursReportPage() {
+  const { t } = useTranslation();
+  const scopesFn = useServerFn(listAttendanceReportScopes);
+  const employeesFn = useServerFn(listAttendanceReportEmployees);
+  const reportFn = useServerFn(getAttendanceHoursReport);
+
+  const [scopeId, setScopeId] = useState("");
+  const [fromDate, setFromDate] = useState(() => yearMonthStartDate(currentJerusalemYearMonth()));
+  const [toDate, setToDate] = useState(() => jerusalemToday());
+  const [filter, setFilter] = useState<"all" | "punchers" | "one">("punchers");
+  const [employeeId, setEmployeeId] = useState("");
+  const [runKey, setRunKey] = useState(0);
+
+  const scopesQ = useQuery({
+    queryKey: ["attendance-report-scopes"],
+    queryFn: () => scopesFn(),
+  });
+
+  const scopes = scopesQ.data?.scopes ?? [];
+  const selected = scopes.find((s) => scopeKey(s) === scopeId) ?? null;
+
+  const employeesQ = useQuery({
+    queryKey: ["attendance-report-employees", selected?.branch_id, selected?.company_id],
+    enabled: !!selected && (filter === "one" || filter === "all"),
+    queryFn: () =>
+      employeesFn({
+        data: {
+          branchId: selected?.branch_id ?? undefined,
+          companyId: selected?.company_id ?? undefined,
+        },
+      }),
+  });
+
+  const reportQ = useQuery({
+    queryKey: [
+      "attendance-hours-report",
+      runKey,
+      selected?.branch_id,
+      selected?.company_id,
+      fromDate,
+      toDate,
+      filter,
+      employeeId,
+    ],
+    enabled: runKey > 0 && !!selected && fromDate <= toDate && (filter !== "one" || !!employeeId),
+    queryFn: () =>
+      reportFn({
+        data: {
+          from: fromDate,
+          to: toDate,
+          branchId: selected?.branch_id ?? undefined,
+          companyId: selected?.company_id ?? undefined,
+          filter,
+          employeeId: filter === "one" ? employeeId || undefined : undefined,
+        },
+      }),
+  });
+
+  const scopeOptions = useMemo(
+    () =>
+      scopes.map((s) => ({
+        id: scopeKey(s),
+        label: s.branch_id
+          ? `${s.company_name ?? ""} · ${s.branch_name ?? s.branch_id}`
+          : `${s.company_name ?? s.company_id} · ${t("attendance.wholeCompany")}`,
+      })),
+    [scopes, t],
+  );
+
+  const employeeOptions = useMemo(
+    () =>
+      (employeesQ.data ?? []).map((p) => ({
+        id: p.id,
+        label: `${p.full_name ?? p.id}${p.id_number ? ` · ${p.id_number}` : ""}`,
+      })),
+    [employeesQ.data],
+  );
+
+  const downloadExcel = () => {
+    const report = reportQ.data;
+    if (!report?.rows?.length) return;
+    const xml = hoursReportToExcelXml(report);
+    const blob = new Blob([xml], { type: "application/vnd.ms-excel" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `attendance-hours-${fromDate}-${toDate}.xls`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const runReport = () => {
+    if (!selected) {
+      toast.error(t("attendance.chooseScope"));
+      return;
+    }
+    if (fromDate > toDate) {
+      toast.error(t(`attendance.errors.invalidRange`));
+      return;
+    }
+    if (filter === "one" && !employeeId) {
+      toast.error(t(`attendance.errors.employeeRequired`));
+      return;
+    }
+    setRunKey((k) => k + 1);
+  };
+
+  if (scopesQ.isLoading) {
+    return (
+      <div className="flex justify-center p-8">
+        <Loader2 className="size-6 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
+
+  if (!scopesQ.data?.can_report) {
+    return (
+      <div className="space-y-2 p-4 md:p-6">
+        <h1 className="text-xl font-semibold">{t("attendance.reportTitle")}</h1>
+        <p className="text-sm text-muted-foreground">{t("attendance.reportForbidden")}</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-6 p-4 md:p-6">
+      <div className="flex items-start gap-3">
+        <div className="flex size-10 items-center justify-center rounded-lg bg-primary/10 text-primary">
+          <ClipboardList className="size-5" />
+        </div>
+        <div className="min-w-0 flex-1">
+          <h1 className="text-xl font-semibold">{t("attendance.reportTitle")}</h1>
+          <p className="text-sm text-muted-foreground">{t("attendance.reportSubtitle")}</p>
+          <Link to="/attendance" className="mt-1 inline-block text-xs text-primary hover:underline">
+            {t("attendance.backToPunch")}
+          </Link>
+        </div>
+      </div>
+
+      <Card className="space-y-4 p-4">
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          <div className="space-y-1.5">
+            <Label>{t("attendance.reportScope")}</Label>
+            <SearchableSingleSelect
+              options={scopeOptions}
+              value={scopeId}
+              onChange={(v) => {
+                setScopeId(v);
+                setEmployeeId("");
+              }}
+              placeholder={t("attendance.choose")}
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label>{t("attendance.fromDate")}</Label>
+            <Input type="date" value={fromDate} onChange={(e) => setFromDate(e.target.value)} />
+          </div>
+          <div className="space-y-1.5">
+            <Label>{t("attendance.toDate")}</Label>
+            <Input type="date" value={toDate} onChange={(e) => setToDate(e.target.value)} />
+          </div>
+          <div className="space-y-1.5">
+            <Label>{t("attendance.employeeFilter")}</Label>
+            <Select
+              value={filter}
+              onValueChange={(v) => {
+                setFilter(v as "all" | "punchers" | "one");
+                if (v !== "one") setEmployeeId("");
+              }}
+            >
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="punchers">{t("attendance.filterPunchers")}</SelectItem>
+                <SelectItem value="all">{t("attendance.filterAll")}</SelectItem>
+                <SelectItem value="one">{t("attendance.filterOne")}</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          {filter === "one" ? (
+            <div className="space-y-1.5">
+              <Label>{t("attendance.employee")}</Label>
+              <SearchableSingleSelect
+                options={employeeOptions}
+                value={employeeId}
+                onChange={setEmployeeId}
+                disabled={!selected}
+                placeholder={t("attendance.choose")}
+              />
+            </div>
+          ) : null}
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <Button onClick={runReport} disabled={!scopeId || reportQ.isFetching}>
+            {reportQ.isFetching ? <Loader2 className="size-4 animate-spin" /> : null}
+            {t("attendance.runReport")}
+          </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            className="gap-1"
+            onClick={downloadExcel}
+            disabled={!reportQ.data?.rows?.length}
+          >
+            <Download className="size-3.5" />
+            {t("attendance.exportExcel")}
+          </Button>
+        </div>
+        {reportQ.isError ? (
+          <p className="text-sm text-destructive">
+            {t(`attendance.errors.${attendanceErrorKey((reportQ.error as Error).message)}`)}
+          </p>
+        ) : null}
+      </Card>
+
+      {runKey > 0 && reportQ.data ? (
+        <Card className="overflow-hidden p-0">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>{t("attendance.employee")}</TableHead>
+                <TableHead>{t("attendance.hoursCol")}</TableHead>
+                <TableHead>{t("attendance.hourlyRate")}</TableHead>
+                <TableHead>{t("attendance.estimatedPay")}</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {(reportQ.data.rows ?? []).length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={4} className="text-muted-foreground">
+                    {t("attendance.reportEmpty")}
+                  </TableCell>
+                </TableRow>
+              ) : (
+                reportQ.data.rows.map((row) => (
+                  <TableRow key={row.user_id}>
+                    <TableCell>
+                      <div className="font-medium">{row.full_name ?? row.user_id}</div>
+                      {row.id_number ? (
+                        <div className="text-xs text-muted-foreground">{row.id_number}</div>
+                      ) : null}
+                    </TableCell>
+                    <TableCell>{formatAttendanceHours(row.total_minutes ?? 0)}</TableCell>
+                    <TableCell>
+                      {row.hourly_rate == null ? t("attendance.rateUnset") : formatMoney(row.hourly_rate)}
+                    </TableCell>
+                    <TableCell>
+                      {row.estimated_pay == null ? "—" : formatMoney(row.estimated_pay)}
+                    </TableCell>
+                  </TableRow>
+                ))
+              )}
+            </TableBody>
+            <TableFooter>
+              <TableRow>
+                <TableCell>{t("attendance.totals")}</TableCell>
+                <TableCell>{formatAttendanceHours(reportQ.data.totals.total_minutes ?? 0)}</TableCell>
+                <TableCell />
+                <TableCell>{formatMoney(reportQ.data.totals.estimated_pay ?? 0)}</TableCell>
+              </TableRow>
+            </TableFooter>
+          </Table>
+        </Card>
+      ) : null}
+    </div>
+  );
+}

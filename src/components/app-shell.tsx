@@ -103,7 +103,7 @@ import {
 } from "@/lib/realtime-bridge-sync";
 import { useAiAccess } from "@/lib/use-ai-access";
 import { bindPushToneListener } from "@/lib/alert-tone";
-import { getAttendanceCapabilities } from "@/lib/attendance.functions";
+import { getAttendanceCapabilities, listAttendanceReportScopes } from "@/lib/attendance.functions";
 
 interface NavItem {
   to: string;
@@ -161,6 +161,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   });
 
   const attendanceCapsFn = useServerFn(getAttendanceCapabilities);
+  const attendanceReportScopesFn = useServerFn(listAttendanceReportScopes);
   const attendanceBranchId = activeBranchId ?? profile?.branch_id ?? null;
   const attendanceCapsQ = useQuery({
     enabled: !!attendanceBranchId,
@@ -168,8 +169,15 @@ export function AppShell({ children }: { children: ReactNode }) {
     staleTime: 60_000,
     queryFn: () => attendanceCapsFn({ data: { branchId: attendanceBranchId! } }),
   });
+  const attendanceReportQ = useQuery({
+    enabled: !!profile?.id,
+    queryKey: ["attendance-report-scopes"],
+    staleTime: 60_000,
+    queryFn: () => attendanceReportScopesFn(),
+  });
   const showAttendanceNav =
     !!attendanceCapsQ.data?.show_employee_card || !!attendanceCapsQ.data?.show_manager_card;
+  const showAttendanceReportNav = !!attendanceReportQ.data?.can_report;
 
   // Unread messages count (announcements module removed)
   const commUnreadQ = useQuery({
@@ -393,6 +401,13 @@ export function AppShell({ children }: { children: ReactNode }) {
       label: t("nav.attendance"),
       icon: Fingerprint,
       visible: showAttendanceNav,
+      section: branchSection,
+    },
+    {
+      to: "/attendance-report",
+      label: t("nav.attendanceHours"),
+      icon: ClipboardList,
+      visible: showAttendanceReportNav,
       section: branchSection,
     },
     {
