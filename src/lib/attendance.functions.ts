@@ -697,6 +697,8 @@ export type AttendanceHoursReportRow = {
   user_id: string;
   full_name: string | null;
   id_number: string | null;
+  department_id?: string | null;
+  department_name?: string | null;
   total_seconds: number;
   total_minutes: number;
   total_hours: number;
@@ -710,6 +712,8 @@ export type AttendanceHoursReport = {
   to: string;
   branch_id: string | null;
   company_id: string | null;
+  department_id?: string | null;
+  department_name?: string | null;
   filter: string;
   rows: AttendanceHoursReportRow[];
   totals: {
@@ -718,6 +722,12 @@ export type AttendanceHoursReport = {
     total_hours: number;
     estimated_pay: number;
   };
+};
+
+export type AttendanceReportDepartment = {
+  id: string;
+  name: string;
+  is_active?: boolean;
 };
 
 export const listAttendanceReportScopes = createServerFn({ method: "GET" })
@@ -739,7 +749,7 @@ export const listAttendanceReportScopes = createServerFn({ method: "GET" })
     };
   });
 
-export const listAttendanceReportEmployees = createServerFn({ method: "GET" })
+export const listAttendanceReportDepartments = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .inputValidator(
     z.object({
@@ -749,15 +759,39 @@ export const listAttendanceReportEmployees = createServerFn({ method: "GET" })
   )
   .handler(async ({ data, context }) => {
     const { supabase } = context as { supabase: any };
+    const { data: rows, error } = await supabase.rpc("list_attendance_report_departments", {
+      _branch_id: data.branchId ?? null,
+      _company_id: data.companyId ?? null,
+    });
+    if (error) {
+      if (/does not exist|function/i.test(error.message)) return [];
+      throw new Error(error.message);
+    }
+    return (Array.isArray(rows) ? rows : []) as AttendanceReportDepartment[];
+  });
+
+export const listAttendanceReportEmployees = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator(
+    z.object({
+      branchId: z.string().uuid().optional(),
+      companyId: z.string().uuid().optional(),
+      departmentId: z.string().uuid().optional(),
+    }),
+  )
+  .handler(async ({ data, context }) => {
+    const { supabase } = context as { supabase: any };
     const { data: rows, error } = await supabase.rpc("list_attendance_report_employees", {
       _branch_id: data.branchId ?? null,
       _company_id: data.companyId ?? null,
+      _department_id: data.departmentId ?? null,
     });
     if (error) throw new Error(error.message);
     return (Array.isArray(rows) ? rows : []) as Array<{
       id: string;
       full_name: string | null;
       id_number: string | null;
+      department_id?: string | null;
     }>;
   });
 
@@ -771,6 +805,7 @@ export const getAttendanceHoursReport = createServerFn({ method: "GET" })
       companyId: z.string().uuid().optional(),
       filter: z.enum(["all", "punchers", "one"]).default("punchers"),
       employeeId: z.string().uuid().optional(),
+      departmentId: z.string().uuid().optional(),
     }),
   )
   .handler(async ({ data, context }): Promise<AttendanceHoursReport> => {
@@ -782,6 +817,7 @@ export const getAttendanceHoursReport = createServerFn({ method: "GET" })
       _company_id: data.companyId ?? null,
       _filter: data.filter,
       _employee_id: data.employeeId ?? null,
+      _department_id: data.departmentId ?? null,
     });
     if (error) throw new Error(error.message);
     const payload = (result ?? {}) as AttendanceHoursReport;
@@ -791,6 +827,8 @@ export const getAttendanceHoursReport = createServerFn({ method: "GET" })
       to: payload.to ?? data.to,
       branch_id: payload.branch_id ?? null,
       company_id: payload.company_id ?? null,
+      department_id: payload.department_id ?? data.departmentId ?? null,
+      department_name: payload.department_name ?? null,
       filter: payload.filter ?? data.filter,
       rows: Array.isArray(payload.rows) ? payload.rows : [],
       totals: payload.totals ?? {
@@ -893,6 +931,7 @@ export function attendanceErrorKey(message: string): string {
   if (m.includes("BRANCH_REQUIRED")) return "branchRequired";
   if (m.includes("EMPLOYEE_REQUIRED")) return "employeeRequired";
   if (m.includes("COMPANY_OR_BRANCH_REQUIRED")) return "companyOrBranchRequired";
+  if (m.includes("INVALID_DEPARTMENT")) return "invalidDepartment";
   return "generic";
 }
 
@@ -957,22 +996,28 @@ export function hoursReportToExcelXml(report: AttendanceHoursReport): string {
   const header = [
     "employee_name",
     "id_number",
+    "department",
     "hours",
     "hourly_rate",
     "estimated_pay",
   ];
+  const totalLabel = report.department_name
+    ? `DEPARTMENT TOTAL (${report.department_name})`
+    : "TOTAL";
   const rows = [
     header,
     ...report.rows.map((r) => [
       r.full_name ?? "",
       r.id_number ?? "",
+      r.department_name ?? report.department_name ?? "",
       String(r.total_hours ?? ""),
       r.hourly_rate == null ? "" : String(r.hourly_rate),
       r.estimated_pay == null ? "" : String(r.estimated_pay),
     ]),
     [
-      "TOTAL",
+      totalLabel,
       "",
+      report.department_name ?? "",
       String(report.totals.total_hours ?? 0),
       "",
       String(report.totals.estimated_pay ?? 0),

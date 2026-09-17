@@ -177,3 +177,61 @@ export function jerusalemMonthOptions(count = 12, now: Date = new Date()): strin
   }
   return out;
 }
+
+export type HoursReportFilter = "all" | "punchers" | "one";
+
+/** One employee in the hours-report population (branch/company already scoped). */
+export type HoursReportPerson = {
+  userId: string;
+  departmentId: string | null;
+  seconds: number;
+  hourlyRate: number | null;
+};
+
+export function personMatchesDepartment(
+  departmentId: string | null | undefined,
+  selectedDepartmentId: string | null | undefined,
+): boolean {
+  if (selectedDepartmentId == null || selectedDepartmentId === "") return true;
+  return departmentId === selectedDepartmentId;
+}
+
+/**
+ * Apply punchers/all/one plus optional live department filter.
+ * Department match uses the employee's current department assignment.
+ */
+export function filterHoursReportPeople(args: {
+  people: HoursReportPerson[];
+  filter: HoursReportFilter;
+  departmentId?: string | null;
+  employeeId?: string | null;
+}): HoursReportPerson[] {
+  return args.people.filter((p) => {
+    if (!personMatchesDepartment(p.departmentId, args.departmentId)) return false;
+    if (args.filter === "one") {
+      return !!args.employeeId && p.userId === args.employeeId;
+    }
+    if (args.filter === "punchers") return p.seconds > 0;
+    return true;
+  });
+}
+
+/** Totals for a filtered set (department footer or whole-scope footer). */
+export function sumHoursReportTotals(people: HoursReportPerson[]): {
+  total_seconds: number;
+  total_minutes: number;
+  total_hours: number;
+  estimated_pay: number;
+} {
+  const total_seconds = people.reduce((sum, p) => sum + Math.max(0, p.seconds), 0);
+  const estimated_pay = people.reduce((sum, p) => {
+    const pay = estimatedPayFromSeconds(p.seconds, p.hourlyRate);
+    return sum + (pay ?? 0);
+  }, 0);
+  return {
+    total_seconds,
+    total_minutes: secondsToMinutes(total_seconds),
+    total_hours: secondsToHours(total_seconds),
+    estimated_pay: Math.round(estimated_pay * 100) / 100,
+  };
+}

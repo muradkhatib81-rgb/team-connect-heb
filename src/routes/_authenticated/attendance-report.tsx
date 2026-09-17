@@ -31,6 +31,7 @@ import {
   formatAttendanceHours,
   getAttendanceHoursReport,
   hoursReportToExcelXml,
+  listAttendanceReportDepartments,
   listAttendanceReportEmployees,
   listAttendanceReportScopes,
   type AttendanceReportScope,
@@ -66,6 +67,7 @@ function AttendanceHoursReportPage() {
   const { t } = useTranslation();
   const scopesFn = useServerFn(listAttendanceReportScopes);
   const employeesFn = useServerFn(listAttendanceReportEmployees);
+  const departmentsFn = useServerFn(listAttendanceReportDepartments);
   const reportFn = useServerFn(getAttendanceHoursReport);
 
   const [scopeId, setScopeId] = useState("");
@@ -73,6 +75,7 @@ function AttendanceHoursReportPage() {
   const [toDate, setToDate] = useState(() => jerusalemToday());
   const [filter, setFilter] = useState<"all" | "punchers" | "one">("punchers");
   const [employeeId, setEmployeeId] = useState("");
+  const [departmentId, setDepartmentId] = useState("");
   const [runKey, setRunKey] = useState(0);
 
   const scopesQ = useQuery({
@@ -83,14 +86,32 @@ function AttendanceHoursReportPage() {
   const scopes = scopesQ.data?.scopes ?? [];
   const selected = scopes.find((s) => scopeKey(s) === scopeId) ?? null;
 
+  const departmentsQ = useQuery({
+    queryKey: ["attendance-report-departments", selected?.branch_id, selected?.company_id],
+    enabled: !!selected,
+    queryFn: () =>
+      departmentsFn({
+        data: {
+          branchId: selected?.branch_id ?? undefined,
+          companyId: selected?.company_id ?? undefined,
+        },
+      }),
+  });
+
   const employeesQ = useQuery({
-    queryKey: ["attendance-report-employees", selected?.branch_id, selected?.company_id],
-    enabled: !!selected && (filter === "one" || filter === "all"),
+    queryKey: [
+      "attendance-report-employees",
+      selected?.branch_id,
+      selected?.company_id,
+      departmentId,
+    ],
+    enabled: !!selected && filter === "one",
     queryFn: () =>
       employeesFn({
         data: {
           branchId: selected?.branch_id ?? undefined,
           companyId: selected?.company_id ?? undefined,
+          departmentId: departmentId || undefined,
         },
       }),
   });
@@ -105,6 +126,7 @@ function AttendanceHoursReportPage() {
       toDate,
       filter,
       employeeId,
+      departmentId,
     ],
     enabled: runKey > 0 && !!selected && fromDate <= toDate && (filter !== "one" || !!employeeId),
     queryFn: () =>
@@ -116,6 +138,7 @@ function AttendanceHoursReportPage() {
           companyId: selected?.company_id ?? undefined,
           filter,
           employeeId: filter === "one" ? employeeId || undefined : undefined,
+          departmentId: departmentId || undefined,
         },
       }),
   });
@@ -139,6 +162,27 @@ function AttendanceHoursReportPage() {
       })),
     [employeesQ.data],
   );
+
+  const departmentOptions = useMemo(
+    () => [
+      { id: "__all__", label: t("attendance.allDepartments") },
+      ...(departmentsQ.data ?? []).map((d) => ({
+        id: d.id,
+        label: d.name,
+      })),
+    ],
+    [departmentsQ.data, t],
+  );
+
+  const selectedDepartmentName = departmentId
+    ? (reportQ.data?.department_name ??
+        (departmentsQ.data ?? []).find((d) => d.id === departmentId)?.name ??
+        null)
+    : null;
+
+  const totalsLabel = selectedDepartmentName
+    ? t("attendance.departmentTotalsNamed", { name: selectedDepartmentName })
+    : t("attendance.totals");
 
   const downloadExcel = () => {
     const report = reportQ.data;
@@ -195,6 +239,7 @@ function AttendanceHoursReportPage() {
         <div className="min-w-0 flex-1">
           <h1 className="text-xl font-semibold">{t("attendance.reportTitle")}</h1>
           <p className="text-sm text-muted-foreground">{t("attendance.reportSubtitle")}</p>
+          <p className="mt-1 text-xs text-muted-foreground">{t("attendance.reportDeptHint")}</p>
           <Link to="/attendance" className="mt-1 inline-block text-xs text-primary hover:underline">
             {t("attendance.backToPunch")}
           </Link>
@@ -211,6 +256,7 @@ function AttendanceHoursReportPage() {
               onChange={(v) => {
                 setScopeId(v);
                 setEmployeeId("");
+                setDepartmentId("");
               }}
               placeholder={t("attendance.choose")}
             />
@@ -222,6 +268,19 @@ function AttendanceHoursReportPage() {
           <div className="space-y-1.5">
             <Label>{t("attendance.toDate")}</Label>
             <Input type="date" value={toDate} onChange={(e) => setToDate(e.target.value)} />
+          </div>
+          <div className="space-y-1.5">
+            <Label>{t("attendance.department")}</Label>
+            <SearchableSingleSelect
+              options={departmentOptions}
+              value={departmentId || "__all__"}
+              onChange={(v) => {
+                setDepartmentId(v === "__all__" ? "" : v);
+                setEmployeeId("");
+              }}
+              disabled={!selected}
+              placeholder={t("attendance.choose")}
+            />
           </div>
           <div className="space-y-1.5">
             <Label>{t("attendance.employeeFilter")}</Label>
@@ -280,6 +339,12 @@ function AttendanceHoursReportPage() {
 
       {runKey > 0 && reportQ.data ? (
         <Card className="overflow-hidden p-0">
+          {selectedDepartmentName ? (
+            <div className="border-b px-4 py-3">
+              <p className="text-sm font-medium">{selectedDepartmentName}</p>
+              <p className="text-xs text-muted-foreground">{t("attendance.departmentReportCaption")}</p>
+            </div>
+          ) : null}
           <Table>
             <TableHeader>
               <TableRow>
@@ -304,6 +369,9 @@ function AttendanceHoursReportPage() {
                       {row.id_number ? (
                         <div className="text-xs text-muted-foreground">{row.id_number}</div>
                       ) : null}
+                      {!departmentId && row.department_name ? (
+                        <div className="text-xs text-muted-foreground">{row.department_name}</div>
+                      ) : null}
                     </TableCell>
                     <TableCell>{formatAttendanceHours(row.total_minutes ?? 0)}</TableCell>
                     <TableCell>
@@ -318,7 +386,7 @@ function AttendanceHoursReportPage() {
             </TableBody>
             <TableFooter>
               <TableRow>
-                <TableCell>{t("attendance.totals")}</TableCell>
+                <TableCell>{totalsLabel}</TableCell>
                 <TableCell>{formatAttendanceHours(reportQ.data.totals.total_minutes ?? 0)}</TableCell>
                 <TableCell />
                 <TableCell>{formatMoney(reportQ.data.totals.estimated_pay ?? 0)}</TableCell>

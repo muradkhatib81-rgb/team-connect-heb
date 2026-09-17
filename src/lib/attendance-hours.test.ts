@@ -4,14 +4,18 @@ import {
   clippedSessionSeconds,
   currentJerusalemYearMonth,
   estimatedPayFromSeconds,
+  filterHoursReportPeople,
   formatAttendanceHoursFromSeconds,
   jerusalemInclusiveDateRange,
   jerusalemMonthRange,
+  personMatchesDepartment,
   previousYearMonth,
   secondsToHours,
   secondsToMinutes,
   sessionOverlapsRange,
+  sumHoursReportTotals,
   yearMonthEndDate,
+  type HoursReportPerson,
 } from "./attendance-hours.ts";
 
 test("month helpers use calendar dates", () => {
@@ -156,4 +160,93 @@ test("current Jerusalem year-month is YYYY-MM", () => {
   const ym = currentJerusalemYearMonth(new Date("2026-09-17T22:00:00.000Z"));
   assert.match(ym, /^\d{4}-\d{2}$/);
   assert.equal(ym, "2026-09");
+});
+
+const MILK = "dept-milk";
+const MEAT = "dept-meat";
+
+function samplePeople(): HoursReportPerson[] {
+  return [
+    { userId: "a", departmentId: MILK, seconds: 8 * 3600, hourlyRate: 30 },
+    { userId: "b", departmentId: MILK, seconds: 4 * 3600, hourlyRate: 34 },
+    { userId: "c", departmentId: MILK, seconds: 0, hourlyRate: 20 },
+    { userId: "d", departmentId: MEAT, seconds: 6 * 3600, hourlyRate: 25 },
+    { userId: "e", departmentId: null, seconds: 2 * 3600, hourlyRate: 40 },
+  ];
+}
+
+test("all departments is a no-op match", () => {
+  assert.equal(personMatchesDepartment(MILK, null), true);
+  assert.equal(personMatchesDepartment(MILK, ""), true);
+  assert.equal(personMatchesDepartment(MILK, MILK), true);
+  assert.equal(personMatchesDepartment(MEAT, MILK), false);
+  assert.equal(personMatchesDepartment(null, MILK), false);
+});
+
+test("department + punchers keeps only that dept with hours", () => {
+  const rows = filterHoursReportPeople({
+    people: samplePeople(),
+    filter: "punchers",
+    departmentId: MILK,
+  });
+  assert.deepEqual(
+    rows.map((r) => r.userId),
+    ["a", "b"],
+  );
+});
+
+test("department + all includes zero-hour employees in that dept", () => {
+  const rows = filterHoursReportPeople({
+    people: samplePeople(),
+    filter: "all",
+    departmentId: MILK,
+  });
+  assert.deepEqual(
+    rows.map((r) => r.userId),
+    ["a", "b", "c"],
+  );
+});
+
+test("department + one employee only returns that person if they are in the dept", () => {
+  const inDept = filterHoursReportPeople({
+    people: samplePeople(),
+    filter: "one",
+    departmentId: MILK,
+    employeeId: "b",
+  });
+  assert.deepEqual(
+    inDept.map((r) => r.userId),
+    ["b"],
+  );
+  const otherDept = filterHoursReportPeople({
+    people: samplePeople(),
+    filter: "one",
+    departmentId: MILK,
+    employeeId: "d",
+  });
+  assert.equal(otherDept.length, 0);
+});
+
+test("department totals sum hours and per-employee pay for that dept", () => {
+  const rows = filterHoursReportPeople({
+    people: samplePeople(),
+    filter: "punchers",
+    departmentId: MILK,
+  });
+  const totals = sumHoursReportTotals(rows);
+  assert.equal(totals.total_hours, 12);
+  assert.equal(totals.total_minutes, 12 * 60);
+  // 8h × 30 + 4h × 34 = 240 + 136 = 376
+  assert.equal(totals.estimated_pay, 376);
+});
+
+test("unfiltered punchers still include every department", () => {
+  const rows = filterHoursReportPeople({
+    people: samplePeople(),
+    filter: "punchers",
+  });
+  assert.deepEqual(
+    rows.map((r) => r.userId),
+    ["a", "b", "d", "e"],
+  );
 });

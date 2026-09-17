@@ -1040,7 +1040,7 @@
     "punchedIn": "Clock-in recorded",
     "punchedOut": "Clock-out recorded",
     "reportTitle": "Attendance hours report",
-    "reportSubtitle": "Hours and pay estimate from punch sessions, for a date range",
+    "reportSubtitle": "Hours and pay estimate from punch sessions, for a date range. Filter by department when needed.",
     "reportScope": "Branch / company",
     "fromDate": "From date",
     "toDate": "To date",
@@ -1054,6 +1054,10 @@
     "estimatedPay": "Estimated pay",
     "rateUnset": "Not set",
     "totals": "Totals",
+    "departmentTotals": "Department total",
+    "departmentTotalsNamed": "Department total ({{name}})",
+    "departmentReportCaption": "Employees in this department for the selected dates, with hours, hourly rate, and estimated pay.",
+    "reportDeptHint": "When a department and dates are selected, the table lists that department’s employees and the footer is the department total.",
     "reportEmpty": "No hours in this range",
     "reportForbidden": "You do not have permission to run the attendance hours report.",
     "chooseScope": "Choose a branch or company",
@@ -1088,6 +1092,7 @@
       "branchRequired": "This company has branches — choose a branch",
       "employeeRequired": "Choose an employee",
       "companyOrBranchRequired": "Choose a company or a branch",
+      "invalidDepartment": "Choose a department from this branch or company",
       "generic": "Could not complete the punch"
     }
   },

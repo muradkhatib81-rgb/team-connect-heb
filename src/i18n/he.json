@@ -1040,7 +1040,7 @@
     "punchedIn": "הכניסה נרשמה",
     "punchedOut": "היציאה נרשמה",
     "reportTitle": "דוח שעות נוכחות",
-    "reportSubtitle": "שעות ואומדן שכר ממושבי טביעה, לפי טווח תאריכים",
+    "reportSubtitle": "שעות ואומדן שכר ממושבי טביעה, לפי טווח תאריכים. אפשר לסנן לפי מחלקה.",
     "reportScope": "סניף / חברה",
     "fromDate": "מתאריך",
     "toDate": "עד תאריך",
@@ -1054,6 +1054,10 @@
     "estimatedPay": "אומדן שכר",
     "rateUnset": "לא הוגדר",
     "totals": "סה״כ",
+    "departmentTotals": "סה״כ המחלקה",
+    "departmentTotalsNamed": "סה״כ המחלקה ({{name}})",
+    "departmentReportCaption": "עובדי המחלקה בטווח התאריכים שנבחר, עם שעות, שכר לשעה ואומדן שכר.",
+    "reportDeptHint": "כשמחלקה ותאריכים נבחרים, הטבלה מציגה את עובדי המחלקה והשורה התחתונה היא סה״כ המחלקה.",
     "reportEmpty": "אין שעות בטווח זה",
     "reportForbidden": "אין לך הרשאה להפיק את דוח שעות הנוכחות.",
     "chooseScope": "בחרו סניף או חברה",
@@ -1088,6 +1092,7 @@
       "branchRequired": "לחברה יש סניפים — בחרו סניף",
       "employeeRequired": "בחרו עובד",
       "companyOrBranchRequired": "בחרו חברה או סניף",
+      "invalidDepartment": "בחרו מחלקה מהסניף או מהחברה",
       "generic": "לא ניתן להשלים את הטביעה"
     }
   },
