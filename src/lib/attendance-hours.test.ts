@@ -4,11 +4,14 @@ import {
   clippedSessionSeconds,
   currentJerusalemYearMonth,
   estimatedPayFromSeconds,
+  employeeMatchesPickerQuery,
+  employeePickerLabel,
   filterHoursReportPeople,
   formatAttendanceHoursFromSeconds,
   jerusalemInclusiveDateRange,
   jerusalemMonthRange,
   normalizeDepartmentIds,
+  normalizeEmployeeIds,
   personMatchesDepartment,
   personMatchesDepartments,
   previousYearMonth,
@@ -210,7 +213,7 @@ test("department + all includes zero-hour employees in that dept", () => {
   );
 });
 
-test("department + one employee only returns that person if they are in the dept", () => {
+test("department + one employee is primary: selected person is kept even from another dept", () => {
   const inDept = filterHoursReportPeople({
     people: samplePeople(),
     filter: "one",
@@ -223,11 +226,14 @@ test("department + one employee only returns that person if they are in the dept
   );
   const otherDept = filterHoursReportPeople({
     people: samplePeople(),
-    filter: "one",
+    filter: "employees",
     departmentId: MILK,
-    employeeId: "d",
+    employeeIds: ["d"],
   });
-  assert.equal(otherDept.length, 0);
+  assert.deepEqual(
+    otherDept.map((r) => r.userId),
+    ["d"],
+  );
 });
 
 test("department totals sum hours and per-employee pay for that dept", () => {
@@ -284,24 +290,28 @@ test("multi-select departments is ANY-of (milk or meat), not only one", () => {
   );
 });
 
-test("multi-select + one employee only if they belong to a selected dept", () => {
-  const inSet = filterHoursReportPeople({
+test("multi-select employees can mix departments (milk + meat)", () => {
+  const rows = filterHoursReportPeople({
     people: samplePeople(),
-    filter: "one",
-    departmentIds: [MILK, MEAT],
-    employeeId: "d",
+    filter: "employees",
+    employeeIds: ["a", "d"],
   });
   assert.deepEqual(
-    inSet.map((r) => r.userId),
-    ["d"],
+    rows.map((r) => r.userId),
+    ["a", "d"],
   );
-  const outside = filterHoursReportPeople({
-    people: samplePeople(),
-    filter: "one",
-    departmentIds: [MILK, MEAT],
-    employeeId: "e",
-  });
-  assert.equal(outside.length, 0);
+  const totals = sumHoursReportTotals(rows);
+  assert.equal(totals.total_hours, 14);
+  // 8×30 + 6×25 = 240 + 150 = 390
+  assert.equal(totals.estimated_pay, 390);
+});
+
+test("employee picker label is name · national ID and search matches either", () => {
+  assert.equal(employeePickerLabel("Lina Haddad", "123456789"), "Lina Haddad · 123456789");
+  assert.equal(employeeMatchesPickerQuery("Lina Haddad", "123456789", "lina"), true);
+  assert.equal(employeeMatchesPickerQuery("Lina Haddad", "123456789", "123456"), true);
+  assert.equal(employeeMatchesPickerQuery("Lina Haddad", "123456789", "milk"), false);
+  assert.deepEqual(normalizeEmployeeIds(["a", "a", "d"]), ["a", "d"]);
 });
 
 test("selected-set totals cover all chosen departments; subtotals split by dept", () => {

@@ -734,6 +734,7 @@ export type AttendanceHoursReport = {
     estimated_pay: number;
   };
   department_totals?: AttendanceHoursReportDepartmentTotal[];
+  employee_ids?: string[];
 };
 
 export type AttendanceReportDepartment = {
@@ -819,8 +820,9 @@ export const getAttendanceHoursReport = createServerFn({ method: "GET" })
       to: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
       branchId: z.string().uuid().optional(),
       companyId: z.string().uuid().optional(),
-      filter: z.enum(["all", "punchers", "one"]).default("punchers"),
+      filter: z.enum(["all", "punchers", "one", "employees"]).default("punchers"),
       employeeId: z.string().uuid().optional(),
+      employeeIds: z.array(z.string().uuid()).max(200).optional(),
       departmentId: z.string().uuid().optional(),
       departmentIds: z.array(z.string().uuid()).max(80).optional(),
     }),
@@ -830,14 +832,19 @@ export const getAttendanceHoursReport = createServerFn({ method: "GET" })
     const departmentIds = [
       ...new Set([...(data.departmentIds ?? []), ...(data.departmentId ? [data.departmentId] : [])]),
     ];
+    const employeeIds = [
+      ...new Set([...(data.employeeIds ?? []), ...(data.employeeId ? [data.employeeId] : [])]),
+    ];
+    const filter = data.filter === "one" ? "employees" : data.filter;
     const { data: result, error } = await supabase.rpc("get_attendance_hours_report", {
       _from: data.from,
       _to: data.to,
       _branch_id: data.branchId ?? null,
       _company_id: data.companyId ?? null,
-      _filter: data.filter,
-      _employee_id: data.employeeId ?? null,
+      _filter: filter,
+      _employee_id: null,
       _department_ids: departmentIds.length ? departmentIds : null,
+      _employee_ids: employeeIds.length ? employeeIds : null,
     });
     if (error) throw new Error(error.message);
     const payload = (result ?? {}) as AttendanceHoursReport;
@@ -851,7 +858,8 @@ export const getAttendanceHoursReport = createServerFn({ method: "GET" })
       department_name: payload.department_name ?? null,
       department_ids: Array.isArray(payload.department_ids) ? payload.department_ids : departmentIds,
       departments: Array.isArray(payload.departments) ? payload.departments : [],
-      filter: payload.filter ?? data.filter,
+      employee_ids: Array.isArray(payload.employee_ids) ? payload.employee_ids : employeeIds,
+      filter: payload.filter ?? filter,
       rows: Array.isArray(payload.rows) ? payload.rows : [],
       totals: payload.totals ?? {
         total_seconds: 0,
@@ -1016,6 +1024,7 @@ export function sessionsToExcelXml(sessions: AttendanceSession[]): string {
 }
 
 export function hoursReportToExcelXml(report: AttendanceHoursReport): string {
+  const isEmployeeFilter = report.filter === "employees" || report.filter === "one";
   const selectedNames = (report.departments ?? [])
     .map((d) => d.name)
     .filter(Boolean)
@@ -1028,9 +1037,11 @@ export function hoursReportToExcelXml(report: AttendanceHoursReport): string {
     "hourly_rate",
     "estimated_pay",
   ];
-  const totalLabel = selectedNames
-    ? `SELECTED DEPARTMENTS TOTAL (${selectedNames})`
-    : "TOTAL";
+  const totalLabel = isEmployeeFilter
+    ? "SELECTED EMPLOYEES TOTAL"
+    : selectedNames
+      ? `SELECTED DEPARTMENTS TOTAL (${selectedNames})`
+      : "TOTAL";
   const rows = [
     header,
     ...report.rows.map((r) => [

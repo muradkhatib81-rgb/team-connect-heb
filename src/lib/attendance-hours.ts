@@ -178,7 +178,7 @@ export function jerusalemMonthOptions(count = 12, now: Date = new Date()): strin
   return out;
 }
 
-export type HoursReportFilter = "all" | "punchers" | "one";
+export type HoursReportFilter = "all" | "punchers" | "one" | "employees";
 
 /** One employee in the hours-report population (branch/company already scoped). */
 export type HoursReportPerson = {
@@ -188,14 +188,52 @@ export type HoursReportPerson = {
   hourlyRate: number | null;
 };
 
+export function normalizeIdList(
+  ids?: Array<string | null | undefined> | null,
+  singleId?: string | null,
+): string[] {
+  const fromArray = (ids ?? []).filter((id): id is string => !!id);
+  const merged = fromArray.length > 0 ? fromArray : singleId ? [singleId] : [];
+  return [...new Set(merged)];
+}
+
 /** Unique non-empty department ids. Empty means “all departments”. */
 export function normalizeDepartmentIds(
   departmentIds?: Array<string | null | undefined> | null,
   departmentId?: string | null,
 ): string[] {
-  const fromArray = (departmentIds ?? []).filter((id): id is string => !!id);
-  const merged = fromArray.length > 0 ? fromArray : departmentId ? [departmentId] : [];
-  return [...new Set(merged)];
+  return normalizeIdList(departmentIds, departmentId);
+}
+
+export function normalizeEmployeeIds(
+  employeeIds?: Array<string | null | undefined> | null,
+  employeeId?: string | null,
+): string[] {
+  return normalizeIdList(employeeIds, employeeId);
+}
+
+/** Label used in the hours-report employee picker: name · national ID. */
+export function employeePickerLabel(
+  fullName: string | null | undefined,
+  idNumber: string | null | undefined,
+): string {
+  const name = (fullName ?? "").trim();
+  const id = (idNumber ?? "").trim();
+  if (name && id) return `${name} · ${id}`;
+  return name || id;
+}
+
+/** Search matches full name or national ID number (case-insensitive). */
+export function employeeMatchesPickerQuery(
+  fullName: string | null | undefined,
+  idNumber: string | null | undefined,
+  query: string,
+): boolean {
+  const q = query.trim().toLowerCase();
+  if (!q) return true;
+  const name = (fullName ?? "").toLowerCase();
+  const id = (idNumber ?? "").toLowerCase();
+  return name.includes(q) || id.includes(q);
 }
 
 export function personMatchesDepartments(
@@ -214,10 +252,14 @@ export function personMatchesDepartment(
   return personMatchesDepartments(departmentId, selectedDepartmentId ? [selectedDepartmentId] : []);
 }
 
+export function isEmployeeSelectionFilter(filter: HoursReportFilter): boolean {
+  return filter === "one" || filter === "employees";
+}
+
 /**
- * Apply punchers/all/one plus optional live department filter (one or many).
- * Department match uses the employee's current department assignment.
- * An empty department list means all departments in the already-scoped population.
+ * Apply punchers/all/one/employees plus optional live department filter.
+ * Explicit employee multi-select is the primary filter (can mix departments).
+ * Department match uses the employee's current assignment when not selecting people.
  */
 export function filterHoursReportPeople(args: {
   people: HoursReportPerson[];
@@ -225,13 +267,15 @@ export function filterHoursReportPeople(args: {
   departmentId?: string | null;
   departmentIds?: Array<string | null | undefined> | null;
   employeeId?: string | null;
+  employeeIds?: Array<string | null | undefined> | null;
 }): HoursReportPerson[] {
+  const employeeIds = normalizeEmployeeIds(args.employeeIds, args.employeeId);
   const departmentIds = normalizeDepartmentIds(args.departmentIds, args.departmentId);
   return args.people.filter((p) => {
-    if (!personMatchesDepartments(p.departmentId, departmentIds)) return false;
-    if (args.filter === "one") {
-      return !!args.employeeId && p.userId === args.employeeId;
+    if (isEmployeeSelectionFilter(args.filter)) {
+      return employeeIds.includes(p.userId);
     }
+    if (!personMatchesDepartments(p.departmentId, departmentIds)) return false;
     if (args.filter === "punchers") return p.seconds > 0;
     return true;
   });
