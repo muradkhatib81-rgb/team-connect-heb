@@ -195,6 +195,7 @@ function AttendancePage() {
       toast.success(kind === "in" ? t("attendance.punchedIn") : t("attendance.punchedOut"));
       void qc.invalidateQueries({ queryKey: ["attendance-my"] });
       void qc.invalidateQueries({ queryKey: ["attendance-lookup"] });
+      void qc.invalidateQueries({ queryKey: ["attendance-profile-hours"] });
     },
     onError: (e: Error) => {
       toast.error(t(`attendance.errors.${attendanceErrorKey(e.message)}`));
@@ -207,6 +208,7 @@ function AttendancePage() {
       toast.success(t("attendance.deleted"));
       void qc.invalidateQueries({ queryKey: ["attendance-lookup"] });
       void qc.invalidateQueries({ queryKey: ["attendance-my"] });
+      void qc.invalidateQueries({ queryKey: ["attendance-profile-hours"] });
     },
     onError: (e: Error) => toast.error(t(`attendance.errors.${attendanceErrorKey(e.message)}`)),
   });
@@ -228,6 +230,7 @@ function AttendancePage() {
       setEditSession(null);
       void qc.invalidateQueries({ queryKey: ["attendance-lookup"] });
       void qc.invalidateQueries({ queryKey: ["attendance-my"] });
+      void qc.invalidateQueries({ queryKey: ["attendance-profile-hours"] });
     },
     onError: (e: Error) => toast.error(t(`attendance.errors.${attendanceErrorKey(e.message)}`)),
   });

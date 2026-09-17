@@ -23,6 +23,29 @@ export function previousYearMonth(yearMonth: string): string {
   return `${y}-${String(m - 1).padStart(2, "0")}`;
 }
 
+/** Next YYYY-MM in calendar order. */
+export function nextYearMonth(yearMonth: string): string {
+  const [y, m] = yearMonth.split("-").map(Number);
+  if (!y || !m) return yearMonth;
+  if (m === 12) return `${y + 1}-01`;
+  return `${y}-${String(m + 1).padStart(2, "0")}`;
+}
+
+/** Inclusive YYYY-MM sequence from `fromYm` through `toYm`. */
+export function yearMonthInclusiveRange(fromYm: string, toYm: string): string[] {
+  if (!YEAR_MONTH_RE.test(fromYm) || !YEAR_MONTH_RE.test(toYm) || fromYm > toYm) return [];
+  const out: string[] = [];
+  let ym = fromYm;
+  while (ym <= toYm) {
+    out.push(ym);
+    if (ym === toYm) break;
+    const next = nextYearMonth(ym);
+    if (next === ym) break;
+    ym = next;
+  }
+  return out;
+}
+
 /** Next calendar date YYYY-MM-DD (UTC date arithmetic; date-only). */
 export function nextIsoDate(isoDate: string): string {
   const [y, m, d] = isoDate.split("-").map(Number);
@@ -176,6 +199,81 @@ export function jerusalemMonthOptions(count = 12, now: Date = new Date()): strin
     out.push(ym);
   }
   return out;
+}
+
+/** YYYY-MM of an instant in Asia/Jerusalem. */
+export function jerusalemYearMonthOf(instant: string | Date): string | null {
+  const d = instant instanceof Date ? instant : new Date(instant);
+  if (Number.isNaN(d.getTime())) return null;
+  return currentJerusalemYearMonth(d);
+}
+
+export type HoursHistorySession = {
+  clockInAt: string | Date;
+  clockOutAt: string | Date | null | undefined;
+};
+
+/**
+ * Jerusalem months in which a closed session has clipped seconds > 0.
+ * Open sessions contribute none (they are not finished work).
+ * A punch that crosses 00:00 on the 1st appears in both months.
+ */
+export function yearMonthsWithClippedHours(session: HoursHistorySession): string[] {
+  if (session.clockOutAt == null || session.clockOutAt === "") return [];
+  const startYm = jerusalemYearMonthOf(session.clockInAt);
+  const endYm = jerusalemYearMonthOf(session.clockOutAt);
+  if (!startYm || !endYm) return [];
+  const from = startYm <= endYm ? startYm : endYm;
+  const to = startYm <= endYm ? endYm : startYm;
+  return yearMonthInclusiveRange(from, to).filter((ym) => {
+    const range = jerusalemMonthRange(ym);
+    if (!range) return false;
+    return (
+      clippedSessionSeconds({
+        clockInAt: session.clockInAt,
+        clockOutAt: session.clockOutAt,
+        rangeStart: range.start,
+        rangeEnd: range.end,
+      }) > 0
+    );
+  });
+}
+
+/** Sum clipped closed-session seconds for one Jerusalem calendar month. */
+export function sumClippedSecondsForMonth(
+  sessions: HoursHistorySession[],
+  yearMonth: string,
+): number {
+  const range = jerusalemMonthRange(yearMonth);
+  if (!range) return 0;
+  return sessions.reduce(
+    (sum, s) =>
+      sum +
+      clippedSessionSeconds({
+        clockInAt: s.clockInAt,
+        clockOutAt: s.clockOutAt,
+        rangeStart: range.start,
+        rangeEnd: range.end,
+      }),
+    0,
+  );
+}
+
+/**
+ * Profile hours picker: current Jerusalem month is always present (resets
+ * at month start even if this month has 0 hours). Previous months stay if
+ * they have closed clipped hours. Newest first. Live from sessions — not a cache.
+ */
+export function listProfileHoursMonths(
+  sessions: HoursHistorySession[],
+  now: Date = new Date(),
+): string[] {
+  const current = currentJerusalemYearMonth(now);
+  const set = new Set<string>([current]);
+  for (const s of sessions) {
+    for (const ym of yearMonthsWithClippedHours(s)) set.add(ym);
+  }
+  return [...set].sort((a, b) => (a < b ? 1 : a > b ? -1 : 0));
 }
 
 export type HoursReportFilter = "all" | "punchers" | "one" | "employees";

@@ -14,8 +14,13 @@ import {
   normalizeEmployeeIds,
   personMatchesDepartment,
   personMatchesDepartments,
+  listProfileHoursMonths,
+  nextYearMonth,
   previousYearMonth,
   secondsToHours,
+  sumClippedSecondsForMonth,
+  yearMonthInclusiveRange,
+  yearMonthsWithClippedHours,
   secondsToMinutes,
   sessionOverlapsRange,
   sumHoursReportTotals,
@@ -29,6 +34,10 @@ test("month helpers use calendar dates", () => {
   assert.equal(yearMonthEndDate("2026-02"), "2026-02-28");
   assert.equal(previousYearMonth("2026-01"), "2025-12");
   assert.equal(previousYearMonth("2026-09"), "2026-08");
+  assert.equal(nextYearMonth("2026-12"), "2027-01");
+  assert.equal(nextYearMonth("2026-09"), "2026-10");
+  assert.deepEqual(yearMonthInclusiveRange("2026-11", "2027-01"), ["2026-11", "2026-12", "2027-01"]);
+  assert.deepEqual(yearMonthInclusiveRange("2026-10", "2026-09"), []);
 });
 
 test("Jerusalem inclusive range is [from 00:00, to+1 00:00)", () => {
@@ -166,6 +175,71 @@ test("current Jerusalem year-month is YYYY-MM", () => {
   const ym = currentJerusalemYearMonth(new Date("2026-09-17T22:00:00.000Z"));
   assert.match(ym, /^\d{4}-\d{2}$/);
   assert.equal(ym, "2026-09");
+});
+
+test("month-boundary session is listed in both Jerusalem months", () => {
+  const session = {
+    clockInAt: "2026-08-31T20:00:00.000Z", // 23:00 Aug 31 IDT
+    clockOutAt: "2026-08-31T22:30:00.000Z", // 01:30 Sep 1 IDT
+  };
+  assert.deepEqual(yearMonthsWithClippedHours(session), ["2026-08", "2026-09"]);
+  assert.equal(sumClippedSecondsForMonth([session], "2026-08"), 3600);
+  assert.equal(sumClippedSecondsForMonth([session], "2026-09"), 90 * 60);
+});
+
+test("session ending exactly at month start only counts the previous month", () => {
+  // Sep 1 00:00 IDT = 2026-08-31T21:00:00.000Z
+  const session = {
+    clockInAt: "2026-08-31T20:00:00.000Z", // 23:00 Aug 31
+    clockOutAt: "2026-08-31T21:00:00.000Z", // 00:00 Sep 1
+  };
+  assert.deepEqual(yearMonthsWithClippedHours(session), ["2026-08"]);
+  assert.equal(sumClippedSecondsForMonth([session], "2026-09"), 0);
+});
+
+test("open sessions are not listed as history months", () => {
+  assert.deepEqual(
+    yearMonthsWithClippedHours({
+      clockInAt: "2026-09-01T07:00:00.000Z",
+      clockOutAt: null,
+    }),
+    [],
+  );
+});
+
+test("new Jerusalem month resets current; previous months with hours stay viewable", () => {
+  const augustHours = {
+    clockInAt: "2026-08-03T07:00:00.000Z",
+    clockOutAt: "2026-08-03T15:00:00.000Z",
+  };
+  const sep1Jerusalem = new Date("2026-08-31T21:00:00.000Z"); // 2026-09-01 00:00 IDT
+  const months = listProfileHoursMonths([augustHours], sep1Jerusalem);
+  assert.equal(months[0], "2026-09");
+  assert.ok(months.includes("2026-08"));
+  assert.equal(sumClippedSecondsForMonth([augustHours], "2026-09"), 0);
+  assert.equal(secondsToHours(sumClippedSecondsForMonth([augustHours], "2026-08")), 8);
+});
+
+test("current month is listed even when this month has no closed hours yet", () => {
+  const months = listProfileHoursMonths([], new Date("2026-09-17T12:00:00.000Z"));
+  assert.deepEqual(months, ["2026-09"]);
+});
+
+test("profile months list is newest-first and does not invent extra months", () => {
+  const sessions = [
+    {
+      clockInAt: "2026-07-02T07:00:00.000Z",
+      clockOutAt: "2026-07-02T15:00:00.000Z",
+    },
+    {
+      clockInAt: "2026-09-04T07:00:00.000Z",
+      clockOutAt: "2026-09-04T11:00:00.000Z",
+    },
+  ];
+  assert.deepEqual(
+    listProfileHoursMonths(sessions, new Date("2026-09-17T12:00:00.000Z")),
+    ["2026-09", "2026-07"],
+  );
 });
 
 const MILK = "dept-milk";

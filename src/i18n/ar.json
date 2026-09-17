@@ -48,7 +48,14 @@
     "changePassword": "تغيير كلمة المرور",
     "leaveBalances": "أرصدة الإجازات",
     "noBalances": "لا توجد أرصدة مسجّلة",
-    "days": "أيام"
+    "days": "أيام",
+    "hoursHistory": "ساعات الحضور",
+    "hoursHistoryHint": "جلسات البصمة المغلقة بتوقيت القدس. يتحدّث المجموع بعد تسجيل الخروج.",
+    "hoursMonth": "الشهر",
+    "hoursThisMonth": "ساعات هذا الشهر",
+    "hoursSelectedMonth": "الساعات",
+    "estimatedPay": "تقدير الأجر",
+    "currentMonth": "الحالي"
   },
   "push": {
     "title": "إشعارات الجرس",

@@ -48,7 +48,14 @@
     "changePassword": "החלפת סיסמה",
     "leaveBalances": "יתרות חופשה",
     "noBalances": "אין יתרות רשומות",
-    "days": "ימים"
+    "days": "ימים",
+    "hoursHistory": "שעות נוכחות",
+    "hoursHistoryHint": "משמרות סגורות לפי שעון ירושלים. הסיכום מתעדכן אחרי יציאה.",
+    "hoursMonth": "חודש",
+    "hoursThisMonth": "שעות החודש",
+    "hoursSelectedMonth": "שעות",
+    "estimatedPay": "אומדן שכר",
+    "currentMonth": "נוכחי"
   },
   "push": {
     "title": "התראות פעמון",

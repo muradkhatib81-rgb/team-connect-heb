@@ -48,7 +48,14 @@
     "changePassword": "Change Password",
     "leaveBalances": "Leave Balances",
     "noBalances": "No balances recorded",
-    "days": "days"
+    "days": "days",
+    "hoursHistory": "Attendance hours",
+    "hoursHistoryHint": "Closed punch sessions in Asia/Jerusalem. Totals update when you clock out.",
+    "hoursMonth": "Month",
+    "hoursThisMonth": "Hours this month",
+    "hoursSelectedMonth": "Hours",
+    "estimatedPay": "Estimated pay",
+    "currentMonth": "Current"
   },
   "push": {
     "title": "Bell notifications",

@@ -10,10 +10,15 @@ import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
 import {
   clippedSessionSeconds,
+  currentJerusalemYearMonth,
+  estimatedPayFromSeconds,
   jerusalemMonthRange,
+  listProfileHoursMonths,
   previousYearMonth,
+  secondsToHours,
   secondsToMinutes,
   sessionOverlapsRange,
+  sumClippedSecondsForMonth,
 } from "@/lib/attendance-hours";
 
 async function assertPlatformOwner(supabase: any, userId: string) {
@@ -541,6 +546,141 @@ export const getMyAttendanceMonth = createServerFn({ method: "GET" })
     const open = sessions.find((s) => !s.clock_out_at) ?? null;
     const total_minutes = sessions.reduce((sum, s) => sum + (s.duration_minutes ?? 0), 0);
     return { sessions, total_minutes, open };
+  });
+
+export type AttendanceHoursHistory = {
+  visible: boolean;
+  yearMonth: string;
+  currentYearMonth: string;
+  months: string[];
+  total_seconds: number;
+  total_minutes: number;
+  total_hours: number;
+  hourly_rate: number | null;
+  estimated_pay: number | null;
+};
+
+function hiddenHoursHistory(yearMonth: string, currentYearMonth: string): AttendanceHoursHistory {
+  return {
+    visible: false,
+    yearMonth,
+    currentYearMonth,
+    months: [],
+    total_seconds: 0,
+    total_minutes: 0,
+    total_hours: 0,
+    hourly_rate: null,
+    estimated_pay: null,
+  };
+}
+
+function mapHoursHistory(raw: Record<string, unknown>, fallbackYm: string): AttendanceHoursHistory {
+  const yearMonth = typeof raw.year_month === "string" ? raw.year_month : fallbackYm;
+  const currentYearMonth =
+    typeof raw.current_year_month === "string" ? raw.current_year_month : currentJerusalemYearMonth();
+  const months = Array.isArray(raw.months)
+    ? raw.months.filter((m): m is string => typeof m === "string" && /^\d{4}-\d{2}$/.test(m))
+    : [];
+  const seconds = Number(raw.total_seconds ?? 0);
+  const rateRaw = raw.hourly_rate == null || raw.hourly_rate === "" ? null : Number(raw.hourly_rate);
+  const payRaw = raw.estimated_pay == null || raw.estimated_pay === "" ? null : Number(raw.estimated_pay);
+  return {
+    visible: !!raw.visible,
+    yearMonth,
+    currentYearMonth,
+    months,
+    total_seconds: Number.isFinite(seconds) ? seconds : 0,
+    total_minutes: Number(raw.total_minutes ?? secondsToMinutes(Number.isFinite(seconds) ? seconds : 0)) || 0,
+    total_hours: Number(raw.total_hours ?? secondsToHours(Number.isFinite(seconds) ? seconds : 0)) || 0,
+    hourly_rate: rateRaw != null && Number.isFinite(rateRaw) ? rateRaw : null,
+    estimated_pay: payRaw != null && Number.isFinite(payRaw) ? payRaw : null,
+  };
+}
+
+/**
+ * Own profile hours only (auth user). No employeeId — managers cannot
+ * snoop others via this function. Hidden unless attendance is enabled
+ * and show_employee_card (punch allow + feature), same as the punch card.
+ */
+export const getMyAttendanceHoursHistory = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator(
+    z.object({
+      yearMonth: z.string().regex(/^\d{4}-\d{2}$/).optional(),
+    }),
+  )
+  .handler(async ({ data, context }): Promise<AttendanceHoursHistory> => {
+    const { supabase, userId } = context as { supabase: any; userId: string };
+    const current = currentJerusalemYearMonth();
+    const yearMonth = data.yearMonth ?? current;
+
+    const rpc = await supabase.rpc("get_attendance_my_hours_history", {
+      _year_month: yearMonth,
+    });
+    if (!rpc.error) {
+      return mapHoursHistory((rpc.data ?? {}) as Record<string, unknown>, yearMonth);
+    }
+    if (!/does not exist|function/i.test(rpc.error.message)) {
+      throw new Error(rpc.error.message);
+    }
+
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("branch_id")
+      .eq("id", userId)
+      .maybeSingle();
+    const branchId = profile?.branch_id ?? null;
+    if (!branchId) return hiddenHoursHistory(yearMonth, current);
+
+    const caps = await supabase.rpc("get_attendance_my_capabilities", {
+      _branch_id: branchId,
+    });
+    if (caps.error && !/does not exist|function/i.test(caps.error.message)) {
+      throw new Error(caps.error.message);
+    }
+    const mapped = mapCaps(caps.data as Record<string, unknown>);
+    if (!mapped.enabled || !mapped.show_employee_card) {
+      return hiddenHoursHistory(yearMonth, current);
+    }
+
+    const { data: rows, error } = await supabase
+      .from("attendance_sessions")
+      .select("clock_in_at, clock_out_at")
+      .eq("user_id", userId)
+      .is("deleted_at", null);
+    if (error) {
+      if (/does not exist|relation/i.test(error.message)) {
+        return hiddenHoursHistory(yearMonth, current);
+      }
+      throw new Error(error.message);
+    }
+    const sessions = (rows ?? []).map((r: any) => ({
+      clockInAt: r.clock_in_at,
+      clockOutAt: r.clock_out_at,
+    }));
+    const months = listProfileHoursMonths(sessions);
+    const total_seconds = sumClippedSecondsForMonth(sessions, yearMonth);
+    let hourly_rate: number | null = null;
+    const wage = await supabase
+      .from("employee_hourly_wages")
+      .select("hourly_rate")
+      .eq("user_id", userId)
+      .maybeSingle();
+    if (!wage.error && wage.data?.hourly_rate != null) {
+      const n = Number(wage.data.hourly_rate);
+      if (Number.isFinite(n)) hourly_rate = n;
+    }
+    return {
+      visible: true,
+      yearMonth,
+      currentYearMonth: current,
+      months,
+      total_seconds,
+      total_minutes: secondsToMinutes(total_seconds),
+      total_hours: secondsToHours(total_seconds),
+      hourly_rate,
+      estimated_pay: estimatedPayFromSeconds(total_seconds, hourly_rate),
+    };
   });
 
 export const getAttendanceLookup = createServerFn({ method: "GET" })
