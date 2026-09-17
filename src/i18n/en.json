@@ -1029,6 +1029,7 @@
     "saveWage": "Save rate",
     "wageInvalid": "Enter a valid hourly rate (or leave empty to clear)",
     "noWageEmployees": "No employees in this scope",
+    "noEmployeeSearchResults": "No employees match your search",
     "myHours": "My hours",
     "monthTotal": "Month total",
     "clockIn": "Entered shift",

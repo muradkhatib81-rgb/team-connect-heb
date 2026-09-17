@@ -19,6 +19,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { SearchableSingleSelect } from "@/components/searchable-picker";
+import { EmployeeListSearch } from "@/components/employee-list-search";
+import { filterEmployeesByNameOrId } from "@/lib/employee-name";
 import { useCompanyContext } from "@/platform";
 import { branchService } from "@/modules/branches";
 import {
@@ -75,6 +77,8 @@ function PlatformAttendancePage() {
   const [wageCompanyId, setWageCompanyId] = useState("");
   const [wageBranchId, setWageBranchId] = useState("");
   const [wageDrafts, setWageDrafts] = useState<Record<string, string>>({});
+  const [wageSearch, setWageSearch] = useState("");
+  const [grantSearch, setGrantSearch] = useState("");
 
   const [geoBranchId, setGeoBranchId] = useState("");
   const [geoLat, setGeoLat] = useState("");
@@ -160,6 +164,12 @@ function PlatformAttendancePage() {
 
   const grantCompanyHasBranches = (branchesByCompany.get(grantCompanyId)?.length ?? 0) > 0;
   const wageCompanyHasBranches = (branchesByCompany.get(wageCompanyId)?.length ?? 0) > 0;
+  const grantRows = grantsQ.data ?? [];
+  const visibleGrantRows = useMemo(
+    () => filterEmployeesByNameOrId(grantRows, grantSearch),
+    [grantRows, grantSearch],
+  );
+  const wageScopeReady = !!wageBranchId || (!!wageCompanyId && !wageCompanyHasBranches);
   const grantBranchOptions = grantCompanyId
     ? (branchesByCompany.get(grantCompanyId) ?? [])
     : branchOptions;
@@ -169,7 +179,7 @@ function PlatformAttendancePage() {
 
   const wagesQ = useQuery({
     queryKey: ["attendance-wages", wageCompanyId, wageBranchId],
-    enabled: !!wageBranchId || (!!wageCompanyId && !wageCompanyHasBranches),
+    enabled: wageScopeReady,
     queryFn: () =>
       listWagesFn({
         data: wageBranchId
@@ -177,6 +187,11 @@ function PlatformAttendancePage() {
           : { companyId: wageCompanyId },
       }),
   });
+  const wageRows = wagesQ.data ?? [];
+  const visibleWageRows = useMemo(
+    () => filterEmployeesByNameOrId(wageRows, wageSearch),
+    [wageRows, wageSearch],
+  );
 
   const enableMut = useMutation({
     mutationFn: () =>
@@ -500,6 +515,7 @@ function PlatformAttendancePage() {
                   onChange={setGrantUserId}
                   disabled={!grantBranchId && !(grantCompanyId && !grantCompanyHasBranches)}
                   placeholder={t("attendance.choose")}
+                  searchPlaceholder={t("attendance.searchEmployees")}
                 />
               </div>
             </div>
@@ -558,7 +574,17 @@ function PlatformAttendancePage() {
           </Card>
 
           <div className="space-y-2">
-            {(grantsQ.data ?? []).map((g: any) => {
+            {grantRows.length > 0 ? (
+              <EmployeeListSearch
+                value={grantSearch}
+                onChange={setGrantSearch}
+                placeholder={t("attendance.searchEmployees")}
+              />
+            ) : null}
+            {grantRows.length > 0 && visibleGrantRows.length === 0 ? (
+              <p className="text-sm text-muted-foreground">{t("attendance.noEmployeeSearchResults")}</p>
+            ) : null}
+            {visibleGrantRows.map((g: any) => {
               const branchLabel = g.branch_id
                 ? branchOptions.find((b) => b.id === g.branch_id)?.label ?? g.branch_id
                 : t("attendance.wholeCompany");
@@ -603,6 +629,7 @@ function PlatformAttendancePage() {
                     setWageCompanyId(v);
                     setWageBranchId("");
                     setWageDrafts({});
+                    setWageSearch("");
                   }}
                   placeholder={t("attendance.choose")}
                 />
@@ -616,6 +643,7 @@ function PlatformAttendancePage() {
                     onChange={(v) => {
                       setWageBranchId(v);
                       setWageDrafts({});
+                      setWageSearch("");
                     }}
                     placeholder={t("attendance.choose")}
                   />
@@ -633,10 +661,20 @@ function PlatformAttendancePage() {
             </div>
           ) : (
             <div className="space-y-2">
-              {(wagesQ.data ?? []).length === 0 && (wageBranchId || (wageCompanyId && !wageCompanyHasBranches)) ? (
+              {wageRows.length > 0 ? (
+                <EmployeeListSearch
+                  value={wageSearch}
+                  onChange={setWageSearch}
+                  placeholder={t("attendance.searchEmployees")}
+                />
+              ) : null}
+              {wageRows.length === 0 && wageScopeReady ? (
                 <p className="text-sm text-muted-foreground">{t("attendance.noWageEmployees")}</p>
               ) : null}
-              {(wagesQ.data ?? []).map((row: any) => {
+              {wageRows.length > 0 && visibleWageRows.length === 0 ? (
+                <p className="text-sm text-muted-foreground">{t("attendance.noEmployeeSearchResults")}</p>
+              ) : null}
+              {visibleWageRows.map((row: any) => {
                 const draft =
                   wageDrafts[row.id] ?? (row.hourly_rate == null ? "" : String(row.hourly_rate));
                 return (

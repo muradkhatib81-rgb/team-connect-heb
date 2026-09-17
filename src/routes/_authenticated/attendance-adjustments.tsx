@@ -225,6 +225,7 @@ function AttendanceAdjustmentsPage() {
               onChange={setEmployeeId}
               disabled={!selected}
               placeholder={t("attendance.searchEmployees")}
+              searchPlaceholder={t("attendance.searchEmployees")}
             />
           </div>
           <div className="space-y-1.5">
