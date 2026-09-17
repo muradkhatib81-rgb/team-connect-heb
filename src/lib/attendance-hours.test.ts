@@ -8,12 +8,15 @@ import {
   formatAttendanceHoursFromSeconds,
   jerusalemInclusiveDateRange,
   jerusalemMonthRange,
+  normalizeDepartmentIds,
   personMatchesDepartment,
+  personMatchesDepartments,
   previousYearMonth,
   secondsToHours,
   secondsToMinutes,
   sessionOverlapsRange,
   sumHoursReportTotals,
+  sumHoursReportTotalsByDepartment,
   yearMonthEndDate,
   type HoursReportPerson,
 } from "./attendance-hours.ts";
@@ -249,4 +252,73 @@ test("unfiltered punchers still include every department", () => {
     rows.map((r) => r.userId),
     ["a", "b", "d", "e"],
   );
+});
+
+test("normalizeDepartmentIds de-dupes and treats empty as all", () => {
+  assert.deepEqual(normalizeDepartmentIds([]), []);
+  assert.deepEqual(normalizeDepartmentIds(null, MILK), [MILK]);
+  assert.deepEqual(normalizeDepartmentIds([MILK, MILK, MEAT]), [MILK, MEAT]);
+});
+
+test("multi-select departments is ANY-of (milk or meat), not only one", () => {
+  assert.equal(personMatchesDepartments(MILK, [MILK, MEAT]), true);
+  assert.equal(personMatchesDepartments(MEAT, [MILK, MEAT]), true);
+  assert.equal(personMatchesDepartments(null, [MILK, MEAT]), false);
+  const punchers = filterHoursReportPeople({
+    people: samplePeople(),
+    filter: "punchers",
+    departmentIds: [MILK, MEAT],
+  });
+  assert.deepEqual(
+    punchers.map((r) => r.userId),
+    ["a", "b", "d"],
+  );
+  const all = filterHoursReportPeople({
+    people: samplePeople(),
+    filter: "all",
+    departmentIds: [MILK, MEAT],
+  });
+  assert.deepEqual(
+    all.map((r) => r.userId),
+    ["a", "b", "c", "d"],
+  );
+});
+
+test("multi-select + one employee only if they belong to a selected dept", () => {
+  const inSet = filterHoursReportPeople({
+    people: samplePeople(),
+    filter: "one",
+    departmentIds: [MILK, MEAT],
+    employeeId: "d",
+  });
+  assert.deepEqual(
+    inSet.map((r) => r.userId),
+    ["d"],
+  );
+  const outside = filterHoursReportPeople({
+    people: samplePeople(),
+    filter: "one",
+    departmentIds: [MILK, MEAT],
+    employeeId: "e",
+  });
+  assert.equal(outside.length, 0);
+});
+
+test("selected-set totals cover all chosen departments; subtotals split by dept", () => {
+  const rows = filterHoursReportPeople({
+    people: samplePeople(),
+    filter: "punchers",
+    departmentIds: [MILK, MEAT],
+  });
+  const totals = sumHoursReportTotals(rows);
+  assert.equal(totals.total_hours, 18);
+  // 8×30 + 4×34 + 6×25 = 240 + 136 + 150 = 526
+  assert.equal(totals.estimated_pay, 526);
+  const sub = sumHoursReportTotalsByDepartment(rows);
+  const milk = sub.find((s) => s.departmentId === MILK);
+  const meat = sub.find((s) => s.departmentId === MEAT);
+  assert.equal(milk?.total_hours, 12);
+  assert.equal(milk?.estimated_pay, 376);
+  assert.equal(meat?.total_hours, 6);
+  assert.equal(meat?.estimated_pay, 150);
 });

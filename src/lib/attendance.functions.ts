@@ -706,6 +706,15 @@ export type AttendanceHoursReportRow = {
   estimated_pay: number | null;
 };
 
+export type AttendanceHoursReportDepartmentTotal = {
+  department_id: string | null;
+  department_name: string | null;
+  total_seconds: number;
+  total_minutes: number;
+  total_hours: number;
+  estimated_pay: number;
+};
+
 export type AttendanceHoursReport = {
   ok: boolean;
   from: string;
@@ -714,6 +723,8 @@ export type AttendanceHoursReport = {
   company_id: string | null;
   department_id?: string | null;
   department_name?: string | null;
+  department_ids?: string[];
+  departments?: Array<{ id: string; name: string }>;
   filter: string;
   rows: AttendanceHoursReportRow[];
   totals: {
@@ -722,6 +733,7 @@ export type AttendanceHoursReport = {
     total_hours: number;
     estimated_pay: number;
   };
+  department_totals?: AttendanceHoursReportDepartmentTotal[];
 };
 
 export type AttendanceReportDepartment = {
@@ -777,14 +789,18 @@ export const listAttendanceReportEmployees = createServerFn({ method: "GET" })
       branchId: z.string().uuid().optional(),
       companyId: z.string().uuid().optional(),
       departmentId: z.string().uuid().optional(),
+      departmentIds: z.array(z.string().uuid()).max(80).optional(),
     }),
   )
   .handler(async ({ data, context }) => {
     const { supabase } = context as { supabase: any };
+    const departmentIds = [
+      ...new Set([...(data.departmentIds ?? []), ...(data.departmentId ? [data.departmentId] : [])]),
+    ];
     const { data: rows, error } = await supabase.rpc("list_attendance_report_employees", {
       _branch_id: data.branchId ?? null,
       _company_id: data.companyId ?? null,
-      _department_id: data.departmentId ?? null,
+      _department_ids: departmentIds.length ? departmentIds : null,
     });
     if (error) throw new Error(error.message);
     return (Array.isArray(rows) ? rows : []) as Array<{
@@ -806,10 +822,14 @@ export const getAttendanceHoursReport = createServerFn({ method: "GET" })
       filter: z.enum(["all", "punchers", "one"]).default("punchers"),
       employeeId: z.string().uuid().optional(),
       departmentId: z.string().uuid().optional(),
+      departmentIds: z.array(z.string().uuid()).max(80).optional(),
     }),
   )
   .handler(async ({ data, context }): Promise<AttendanceHoursReport> => {
     const { supabase } = context as { supabase: any };
+    const departmentIds = [
+      ...new Set([...(data.departmentIds ?? []), ...(data.departmentId ? [data.departmentId] : [])]),
+    ];
     const { data: result, error } = await supabase.rpc("get_attendance_hours_report", {
       _from: data.from,
       _to: data.to,
@@ -817,7 +837,7 @@ export const getAttendanceHoursReport = createServerFn({ method: "GET" })
       _company_id: data.companyId ?? null,
       _filter: data.filter,
       _employee_id: data.employeeId ?? null,
-      _department_id: data.departmentId ?? null,
+      _department_ids: departmentIds.length ? departmentIds : null,
     });
     if (error) throw new Error(error.message);
     const payload = (result ?? {}) as AttendanceHoursReport;
@@ -827,8 +847,10 @@ export const getAttendanceHoursReport = createServerFn({ method: "GET" })
       to: payload.to ?? data.to,
       branch_id: payload.branch_id ?? null,
       company_id: payload.company_id ?? null,
-      department_id: payload.department_id ?? data.departmentId ?? null,
+      department_id: payload.department_id ?? (departmentIds.length === 1 ? departmentIds[0] : null),
       department_name: payload.department_name ?? null,
+      department_ids: Array.isArray(payload.department_ids) ? payload.department_ids : departmentIds,
+      departments: Array.isArray(payload.departments) ? payload.departments : [],
       filter: payload.filter ?? data.filter,
       rows: Array.isArray(payload.rows) ? payload.rows : [],
       totals: payload.totals ?? {
@@ -837,6 +859,7 @@ export const getAttendanceHoursReport = createServerFn({ method: "GET" })
         total_hours: 0,
         estimated_pay: 0,
       },
+      department_totals: Array.isArray(payload.department_totals) ? payload.department_totals : [],
     };
   });
 
@@ -993,6 +1016,10 @@ export function sessionsToExcelXml(sessions: AttendanceSession[]): string {
 }
 
 export function hoursReportToExcelXml(report: AttendanceHoursReport): string {
+  const selectedNames = (report.departments ?? [])
+    .map((d) => d.name)
+    .filter(Boolean)
+    .join(", ");
   const header = [
     "employee_name",
     "id_number",
@@ -1001,23 +1028,33 @@ export function hoursReportToExcelXml(report: AttendanceHoursReport): string {
     "hourly_rate",
     "estimated_pay",
   ];
-  const totalLabel = report.department_name
-    ? `DEPARTMENT TOTAL (${report.department_name})`
+  const totalLabel = selectedNames
+    ? `SELECTED DEPARTMENTS TOTAL (${selectedNames})`
     : "TOTAL";
   const rows = [
     header,
     ...report.rows.map((r) => [
       r.full_name ?? "",
       r.id_number ?? "",
-      r.department_name ?? report.department_name ?? "",
+      r.department_name ?? "",
       String(r.total_hours ?? ""),
       r.hourly_rate == null ? "" : String(r.hourly_rate),
       r.estimated_pay == null ? "" : String(r.estimated_pay),
     ]),
+    ...(report.department_totals ?? [])
+      .filter(() => (report.department_ids ?? []).length > 1)
+      .map((d) => [
+        `SUBTOTAL (${d.department_name ?? ""})`,
+        "",
+        d.department_name ?? "",
+        String(d.total_hours ?? 0),
+        "",
+        String(d.estimated_pay ?? 0),
+      ]),
     [
       totalLabel,
       "",
-      report.department_name ?? "",
+      selectedNames,
       String(report.totals.total_hours ?? 0),
       "",
       String(report.totals.estimated_pay ?? 0),

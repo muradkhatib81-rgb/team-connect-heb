@@ -188,32 +188,76 @@ export type HoursReportPerson = {
   hourlyRate: number | null;
 };
 
+/** Unique non-empty department ids. Empty means “all departments”. */
+export function normalizeDepartmentIds(
+  departmentIds?: Array<string | null | undefined> | null,
+  departmentId?: string | null,
+): string[] {
+  const fromArray = (departmentIds ?? []).filter((id): id is string => !!id);
+  const merged = fromArray.length > 0 ? fromArray : departmentId ? [departmentId] : [];
+  return [...new Set(merged)];
+}
+
+export function personMatchesDepartments(
+  departmentId: string | null | undefined,
+  selectedDepartmentIds?: Array<string | null | undefined> | null,
+): boolean {
+  const ids = normalizeDepartmentIds(selectedDepartmentIds);
+  if (ids.length === 0) return true;
+  return !!departmentId && ids.includes(departmentId);
+}
+
 export function personMatchesDepartment(
   departmentId: string | null | undefined,
   selectedDepartmentId: string | null | undefined,
 ): boolean {
-  if (selectedDepartmentId == null || selectedDepartmentId === "") return true;
-  return departmentId === selectedDepartmentId;
+  return personMatchesDepartments(departmentId, selectedDepartmentId ? [selectedDepartmentId] : []);
 }
 
 /**
- * Apply punchers/all/one plus optional live department filter.
+ * Apply punchers/all/one plus optional live department filter (one or many).
  * Department match uses the employee's current department assignment.
+ * An empty department list means all departments in the already-scoped population.
  */
 export function filterHoursReportPeople(args: {
   people: HoursReportPerson[];
   filter: HoursReportFilter;
   departmentId?: string | null;
+  departmentIds?: Array<string | null | undefined> | null;
   employeeId?: string | null;
 }): HoursReportPerson[] {
+  const departmentIds = normalizeDepartmentIds(args.departmentIds, args.departmentId);
   return args.people.filter((p) => {
-    if (!personMatchesDepartment(p.departmentId, args.departmentId)) return false;
+    if (!personMatchesDepartments(p.departmentId, departmentIds)) return false;
     if (args.filter === "one") {
       return !!args.employeeId && p.userId === args.employeeId;
     }
     if (args.filter === "punchers") return p.seconds > 0;
     return true;
   });
+}
+
+export type HoursReportDepartmentTotal = {
+  departmentId: string | null;
+  total_seconds: number;
+  total_minutes: number;
+  total_hours: number;
+  estimated_pay: number;
+};
+
+/** Optional per-department subtotals for a multi-select set. */
+export function sumHoursReportTotalsByDepartment(people: HoursReportPerson[]): HoursReportDepartmentTotal[] {
+  const byDept = new Map<string | null, HoursReportPerson[]>();
+  for (const p of people) {
+    const key = p.departmentId ?? null;
+    const list = byDept.get(key);
+    if (list) list.push(p);
+    else byDept.set(key, [p]);
+  }
+  return [...byDept.entries()].map(([departmentId, rows]) => ({
+    departmentId,
+    ...sumHoursReportTotals(rows),
+  }));
 }
 
 /** Totals for a filtered set (department footer or whole-scope footer). */
