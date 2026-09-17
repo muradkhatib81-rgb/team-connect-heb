@@ -2751,6 +2751,8 @@
     "removeDepartmentManager": "Remove department manager",
     "noEmployeesCanManage": "No employees in this department — click \"Add employee\" above.",
     "noEmployees": "No employees in this department.",
+    "searchEmployees": "Search by name or ID number",
+    "noEmployeeSearchResults": "No employees match your search",
     "departmentManager": "Department manager",
     "managerOfOther": "Manager of «{{dept}}»",
     "defaultEmployeeRole": "Employee",

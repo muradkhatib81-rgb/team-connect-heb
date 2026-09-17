@@ -2751,6 +2751,8 @@
     "removeDepartmentManager": "הסר אחראי מחלקה",
     "noEmployeesCanManage": "אין עובדים במחלקה — לחץ «הוסף עובד» למעלה.",
     "noEmployees": "אין עובדים במחלקה זו.",
+    "searchEmployees": "חיפוש לפי שם או מספר זהות",
+    "noEmployeeSearchResults": "לא נמצאו עובדים התואמים לחיפוש",
     "departmentManager": "אחראי מחלקה",
     "managerOfOther": "אחראי ב«{{dept}}»",
     "defaultEmployeeRole": "עובד",

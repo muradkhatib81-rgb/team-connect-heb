@@ -2751,6 +2751,8 @@
     "removeDepartmentManager": "إزالة مسؤول القسم",
     "noEmployeesCanManage": "لا يوجد موظفون في القسم — انقر «إضافة موظف» أعلاه.",
     "noEmployees": "لا يوجد موظفون في هذا القسم.",
+    "searchEmployees": "ابحث بالاسم أو رقم الهوية",
+    "noEmployeeSearchResults": "ما في موظفين مطابقين للبحث",
     "departmentManager": "مسؤول القسم",
     "managerOfOther": "مسؤول في «{{dept}}»",
     "defaultEmployeeRole": "موظف",
