@@ -1986,8 +1986,6 @@
     "whatsappNumber": "WhatsApp contact number (login screen)",
     "whatsappPlaceholder": "0501234567 or 972501234567",
     "whatsappHint": "Shown as a WhatsApp link at the bottom of the login screen. Leave empty to hide.",
-    "maintenanceMode": "Maintenance Mode",
-    "maintenanceHint": "When on, employees and managers cannot use the app. You keep full access (Feature Flags and billing) so you can turn it off.",
     "saveSettings": "Save settings",
     "pwaIconTitle": "App install icon (PWA)",
     "pwaIconDesc": "Only the platform owner can change this. Install name is set from the device system language (Hebrew / Arabic / English) before install and cannot be changed by users.",
