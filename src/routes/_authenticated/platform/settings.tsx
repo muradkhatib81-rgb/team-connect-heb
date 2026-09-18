@@ -8,7 +8,6 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
 import { usePlatformContext } from "@/platform";
 import { supabase } from "@/integrations/supabase/client";
@@ -20,16 +19,11 @@ import {
   fetchPlatformPwaIconUrl,
   uploadPlatformPwaIcon,
 } from "@/lib/pwa-branding";
-import { PLATFORM_FEATURE_FLAG_STATE_QUERY_KEY } from "@/core/config/platform-feature-flags";
-import { setPlatformFeatureFlagEnabled } from "@/lib/platform-feature-flags.functions";
-import { usePlatformFeatureFlagState } from "@/lib/use-platform-feature-flags";
-import { useServerFn } from "@tanstack/react-start";
 
 export const Route = createFileRoute("/_authenticated/platform/settings")({
   component: PlatformSettingsPage,
 });
 
-const MAINTENANCE_MODE_KEY = "maintenanceMode";
 const PLATFORM_SETTINGS_QUERY_KEY = ["platform-settings"] as const;
 
 function PlatformSettingsPage() {
@@ -38,12 +32,9 @@ function PlatformSettingsPage() {
   const qc = useQueryClient();
   const fileRef = useRef<HTMLInputElement>(null);
   const [supportEmail, setSupportEmail] = useState("");
-  const [maintenanceMode, setMaintenanceMode] = useState(false);
   const [whatsappNumber, setWhatsappNumber] = useState("");
   const [saving, setSaving] = useState(false);
   const [uploadingIcon, setUploadingIcon] = useState(false);
-  const flags = usePlatformFeatureFlagState();
-  const setFlagFn = useServerFn(setPlatformFeatureFlagEnabled);
 
   const settingsQ = useQuery({
     queryKey: PLATFORM_SETTINGS_QUERY_KEY,
@@ -67,10 +58,6 @@ function PlatformSettingsPage() {
   });
 
   useEffect(() => {
-    setMaintenanceMode(flags.maintenanceMode);
-  }, [flags.maintenanceMode]);
-
-  useEffect(() => {
     if (settingsQ.data !== undefined) {
       setWhatsappNumber(settingsQ.data.whatsappNumber);
       setSupportEmail(settingsQ.data.supportEmail);
@@ -88,13 +75,6 @@ function PlatformSettingsPage() {
     }
     setSaving(true);
     try {
-      runtime.setPlatformSetting(MAINTENANCE_MODE_KEY, maintenanceMode);
-      await setFlagFn({
-        data: { key: "platform.maintenance_mode", enabled: maintenanceMode },
-      });
-      await qc.invalidateQueries({ queryKey: PLATFORM_FEATURE_FLAG_STATE_QUERY_KEY });
-      await qc.invalidateQueries({ queryKey: ["platform-feature-flags"] });
-
       const { error } = await supabase
         .from("platform_settings")
         .update({
@@ -183,15 +163,6 @@ function PlatformSettingsPage() {
           <p className="text-xs text-muted-foreground">
             {t("platformSettings.whatsappHint")}
           </p>
-        </div>
-        <div className="flex items-center justify-between rounded-lg border p-3">
-          <div>
-            <p className="text-sm font-medium">{t("platformSettings.maintenanceMode")}</p>
-            <p className="text-xs text-muted-foreground">
-              {t("platformSettings.maintenanceHint")}
-            </p>
-          </div>
-          <Switch checked={maintenanceMode} onCheckedChange={setMaintenanceMode} />
         </div>
         <div className="flex justify-end">
           <Button onClick={handleSave} disabled={saving} size="sm" className="gap-2">
